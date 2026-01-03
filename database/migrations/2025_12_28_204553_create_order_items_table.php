@@ -1,0 +1,56 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('order_items', function (Blueprint $table) {
+            $table->id();
+
+            // FK
+            $table->foreignId('order_id')
+                ->constrained('orders')
+                ->cascadeOnDelete();
+
+            $table->foreignId('product_id')
+                ->nullable()
+                ->constrained('products')
+                ->nullOnDelete();
+
+            // Snapshot (щоб історія не ламалась якщо товар зміниться)
+            $table->string('product_title')->nullable();
+            $table->string('sku')->nullable();
+
+            // Варіанти
+            $table->string('size', 32)->nullable();
+            $table->string('color', 64)->nullable();
+
+            // Ціни
+            $table->decimal('price', 12, 2)->default(0);
+            $table->unsignedInteger('qty')->default(1);
+            $table->decimal('total', 12, 2)->default(0);
+
+            $table->timestamps();
+
+            // Індекси
+            $table->index('order_id');
+            $table->index('product_id');
+            $table->index('sku');
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('order_items');
+    }
+};

@@ -31,10 +31,10 @@ class Customer extends Model
     }
 
     /**
-     * На майбутнє: замовлення клієнта
+     * Замовлення цього клієнта.
      */
-    // public function orders()
-    // {
-    //     return $this->hasMany(Order::class);
-    // }
+    public function orders()
+    {
+        return $this->hasMany(Order::class);
+    }
 }

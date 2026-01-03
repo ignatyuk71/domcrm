@@ -10,6 +10,11 @@ class Product extends Model
     use HasFactory;
 
     /**
+     * Автододавані в JSON атрибути.
+     */
+    protected $appends = ['main_photo_url'];
+
+    /**
      * Масово заповнювані поля
      */
     protected $fillable = [
@@ -48,6 +53,26 @@ class Product extends Model
 
         'is_active'  => 'boolean',
     ];
+
+    /**
+     * Повний URL до головного фото (для фронту).
+     */
+    public function getMainPhotoUrlAttribute(): ?string
+    {
+        $path = $this->main_photo_path;
+        if (!$path) {
+            return null;
+        }
+
+        if (str_starts_with($path, 'http')) {
+            return $path;
+        }
+
+        $clean = ltrim($path, '/');
+        return str_starts_with($clean, 'storage/')
+            ? "/{$clean}"
+            : "/storage/{$clean}";
+    }
 
     /**
      * На майбутнє: позиції замовлень

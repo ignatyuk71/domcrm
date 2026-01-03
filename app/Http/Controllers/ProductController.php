@@ -1,0 +1,79 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Product;
+use Illuminate\Http\Request;
+
+class ProductController extends Controller
+{
+    public function index(Request $request)
+    {
+        if ($request->expectsJson()) {
+            $q = $request->get('q');
+            $products = Product::query()
+                ->when($q, function ($query) use ($q) {
+                    $query->where(function ($sub) use ($q) {
+                        $sub->where('title', 'like', '%' . $q . '%')
+                            ->orWhere('sku', 'like', '%' . $q . '%');
+                    });
+                })
+                ->orderByDesc('id')
+                ->limit(50)
+                ->get();
+            return response()->json($products);
+        }
+
+        return view('products.index');
+    }
+
+    public function create()
+    {
+        return view('products.form', ['product' => null]);
+    }
+
+    public function edit(Product $product)
+    {
+        return view('products.form', ['product' => $product]);
+    }
+
+    public function store(Request $request)
+    {
+        $data = $this->validateData($request);
+        if ($request->hasFile('main_photo')) {
+            $data['main_photo_path'] = $request->file('main_photo')->store('products', 'public');
+        }
+        $product = Product::create($data);
+        return response()->json(['data' => $product], 201);
+    }
+
+    public function update(Product $product, Request $request)
+    {
+        $data = $this->validateData($request);
+        if ($request->hasFile('main_photo')) {
+            $data['main_photo_path'] = $request->file('main_photo')->store('products', 'public');
+        }
+        $product->update($data);
+        return response()->json(['data' => $product]);
+    }
+
+    protected function validateData(Request $request): array
+    {
+        return $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'category' => ['nullable', 'string', 'max:255'],
+            'weight_g' => ['nullable', 'numeric', 'min:0'],
+            'length_cm' => ['nullable', 'numeric', 'min:0'],
+            'width_cm' => ['nullable', 'numeric', 'min:0'],
+            'height_cm' => ['nullable', 'numeric', 'min:0'],
+            'cost_price' => ['nullable', 'numeric', 'min:0'],
+            'sale_price' => ['nullable', 'numeric', 'min:0'],
+            'currency' => ['nullable', 'string', 'max:8'],
+            'sku' => ['nullable', 'string', 'max:64'],
+            'stock_qty' => ['nullable', 'integer', 'min:0'],
+            'min_stock' => ['nullable', 'integer', 'min:0'],
+            'description' => ['nullable', 'string'],
+            'main_photo' => ['nullable', 'image', 'max:5120'], // до 5 МБ
+        ]);
+    }
+}

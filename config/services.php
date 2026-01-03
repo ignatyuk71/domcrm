@@ -35,4 +35,13 @@ return [
         ],
     ],
 
+    'novaposhta' => [
+        'key' => env('NOVA_POSHTA_API_KEY'),
+    ],
+
+    // дубль зі snake_case для сервісу
+    'nova_poshta' => [
+        'api_key' => env('NOVA_POSHTA_API_KEY'),
+    ],
+
 ];
