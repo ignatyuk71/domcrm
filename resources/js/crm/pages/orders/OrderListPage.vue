@@ -288,41 +288,83 @@
                           </div>
 
                           <div class="col-12 col-lg-4 text-start">
-                            <div class="border rounded-4 p-3 bg-white h-100 shadow-sm border-light">
-                              <div class="d-flex justify-content-between align-items-center mb-3">
-                                <div class="section-title">Адресна доставка</div>
-                              </div>
-                              <div class="info-list">
-                                <div class="info-row column">
-                                  <span class="muted">Місто</span>
-                                  <span class="fw-bold text-dark">{{ order.city_name || '—' }}</span>
-                                </div>
-                                <div class="info-row column">
-                                  <span class="muted">Адреса доставки</span>
-                                  <span class="fw-semibold text-dark">{{ order.address }}</span>
-                                </div>
-                                <div class="info-row column">
-                                  <span class="muted">Служба доставки</span>
-                                  <span class="fw-bold text-dark">{{ order.delivery_carrier || '—' }}</span>
-                                </div>
-                                <div class="info-row column">
-                                  <span class="muted">Трекінг код</span>
-                                  <div class="d-flex align-items-center gap-2">
-                                    <span class="fw-bold fs-6 text-dark">{{ order.ttn || '—' }}</span>
-                                    <button
-                                      v-if="order.ttn"
-                                      class="btn btn-outline-secondary btn-sm rounded-circle copy-btn"
-                                      type="button"
-                                      @click.stop="copyTtn(order.ttn)"
-                                      :title="'Копіювати ТТН'"
-                                    >
-                                      <i class="bi bi-clipboard"></i>
-                                    </button>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
+    <div class="border rounded-4 p-3 bg-white h-100 shadow-sm border-light">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div class="section-title">Адресна доставка</div>
+        </div>
+        <div class="info-list">
+            <div class="info-row column">
+                <span class="muted">Місто</span>
+                <span class="fw-bold text-dark">{{ order.city_name || '—' }}</span>
+            </div>
+            <div class="info-row column">
+                <span class="muted">Адреса доставки</span>
+                <span class="fw-semibold text-dark">{{ order.address }}</span>
+            </div>
+            <div class="info-row column">
+                <span class="muted">Служба доставки</span>
+                <span class="fw-bold text-dark">{{ order.delivery_carrier || '—' }}</span>
+            </div>
+            <div class="info-row column">
+                <span class="muted">Платник доставки</span>
+                <span class="fw-bold text-dark">{{ order.delivery_payer }}</span>
+            </div>
+
+            <div class="info-row column">
+                <span class="muted">Трекінг код</span>
+                <div class="d-flex align-items-center gap-2 mt-1">
+                    <template v-if="order.ttn">
+                        <span class="fw-bold fs-6 text-dark">{{ order.ttn }}</span>
+                        
+                        <button
+                            class="btn btn-outline-secondary btn-sm rounded-circle shadow-sm"
+                            type="button"
+                            @click.stop="copyTtn(order.ttn)"
+                            title="Копіювати ТТН"
+                        >
+                            <i class="bi bi-clipboard"></i>
+                        </button>
+
+                        <button
+                            class="btn btn-primary btn-sm d-flex align-items-center gap-2 px-2 shadow-sm"
+                            type="button"
+                            @click.stop="printTtn(order)"
+                            title="Друкувати ТТН"
+                        >
+                            <i class="bi bi-printer"></i>
+                            <span>Друк</span>
+                        </button>
+
+                        <button
+                            class="btn btn-danger btn-sm d-flex align-items-center gap-2 px-2 shadow-sm"
+                            type="button"
+                            @click.stop="handleCancelTtn(order)"
+                            :disabled="order.loadingTtn"
+                            title="Анулювати ТТН"
+                        >
+                            <span v-if="order.loadingTtn" class="spinner-border spinner-border-sm"></span>
+                            <i v-else class="bi bi-trash"></i>
+                            <span>Видалити</span>
+                        </button>
+                    </template>
+
+                    <template v-else>
+                        <button 
+                            class="btn btn-success btn-sm d-flex align-items-center gap-2 shadow-sm px-3"
+                            type="button"
+                            @click.stop="generateTtn(order)"
+                            :disabled="order.loadingTtn"
+                        >
+                            <span v-if="order.loadingTtn" class="spinner-border spinner-border-sm"></span>
+                            <i v-else class="bi bi-plus-lg"></i>
+                            Створити ТТН
+                        </button>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
                         </div>
 
                         <div class="mt-4">
@@ -359,10 +401,10 @@
                           <div class="d-flex justify-content-end mt-4">
                             <div class="p-3 rounded-4 border bg-light shadow-sm" style="min-width: 280px;">
                               <div class="d-flex justify-content-between small mb-1"><span class="muted">Товари:</span><span class="text-dark fw-semibold">{{ formatCurrency(order.total, order.currency) }}</span></div>
-                              <div class="d-flex justify-content-between small mb-1"><span class="muted">Доставка:</span><span class="text-success fw-bold">{{ formatCurrency(order.delivery_cost, order.currency) }}</span></div>
+                              <div v-if="order.prepay_amount" class="d-flex justify-content-between small mb-1"><span class="muted">Передоплата:</span><span class="text-success fw-bold">- {{ formatCurrency(order.prepay_amount, order.currency) }}</span></div>
                               <hr class="my-2 opacity-10"/>
                               <div class="d-flex justify-content-between align-items-center fw-bold text-dark">
-                                <span>Разом:</span><span class="fs-5 text-primary">{{ formatCurrency(order.total + order.delivery_cost, order.currency) }}</span>
+                                <span>Разом:</span><span class="fs-5 text-primary">{{ formatCurrency(Math.max(0, order.total - order.prepay_amount), order.currency) }}</span>
                               </div>
                             </div>
                           </div>
@@ -502,416 +544,501 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue';
-import { listOrders, deleteOrder, updateOrderTags, updateOrderStatus } from '@/crm/api/orders';
-import { fetchTags } from '@/crm/api/tags';
-import { fetchStatuses } from '@/crm/api/statuses';
-
-const orders = ref([]);
-const expandedRows = ref(new Set());
-const loading = ref(false);
-const deletingId = ref(null);
-const tagsModalOpen = ref(false);
-const tagsModalLoading = ref(false);
-const tagsModalOrder = ref(null);
-const availableTags = ref([]);
-const selectedTags = ref([]);
-const statusesModalOpen = ref(false);
-const statusesModalLoading = ref(false);
-const statuses = ref([]);
-const statusesOrder = ref(null);
-const selectedStatusId = ref(null);
-const meta = ref({ current_page: 1, last_page: 1, total: 0 });
-const filters = reactive({ search: '', statuses: [], payment_status: '', page: 1, per_page: 20 });
-let searchTimer;
-
-const statusChips = ref([
-  { value: '', label: 'Всі', icon: 'bi-grid', color: null },
-]);
-
-const statusLabels = {
-  new: 'Новий',
-  confirmed: 'Підтверджено',
-  pending: 'Очікує підтвердження',
-  in_process: 'В обробці',
-  packed: 'Упаковане',
-  delivered: 'Доставлене',
-  returned: 'Повернене',
-  in_progress: 'В роботі',
-  done: 'Готово',
-  completed: 'Виконано',
-  cancelled: 'Скасовано',
-  shipped: 'Відправлено',
-};
-
-const paymentLabels = {
-  paid: 'Оплачено',
-  unpaid: 'Не оплачено',
-  prepaid: 'Передоплата',
-  prepayment: 'Передоплата',
-  refund: 'Повернення',
-};
-
-async function fetchData() {
-  loading.value = true;
-  try {
-    const { data } = await listOrders({
-      page: filters.page,
-      per_page: filters.per_page,
-      search: filters.search || undefined,
-      status: filters.statuses?.length ? filters.statuses : undefined,
-      payment_status: filters.payment_status || undefined,
-    });
-
-    const payload = data.data || data?.data?.data || [];
-    orders.value = payload.map(mapOrder);
-
-    const metaPayload = data.meta || data?.data?.meta || {};
-    meta.value = {
-      current_page: metaPayload.current_page ?? 1,
-      last_page: metaPayload.last_page ?? 1,
-      total: metaPayload.total ?? orders.value.length,
-    };
-    // Зберігаємо розгорнуті рядки, якщо це можливо, або очищаємо
-  } catch (error) {
-    console.error(error);
-  } finally {
-    loading.value = false;
-  }
-}
-
-function mapOrder(order) {
-  const customer = order.customer || {};
-  const delivery = order.delivery || {};
-  const statusRef = order.statusRef || order.status_ref || {};
-  const sourceRef = order.source || {};
-  return {
-    ...order,
-    order_number: order.order_number || order.id,
-    client: customer.full_name || [customer.first_name, customer.last_name].filter(Boolean).join(' ') || 'Гість',
-    phone: customer.phone || '',
-    email: customer.email || '',
-    source_code: sourceRef.code || order.source || '',
-    source_name: sourceRef.name || order.source || '—',
-    source_icon: sourceRef.icon ? `bi ${sourceRef.icon}` : '',
-    source_color: sourceRef.color || '',
-    status_key: statusRef.code || order.status || 'new',
-    status: statusRef.name || statusLabels[order.status] || order.status || '—',
-    status_icon: statusRef.icon || '',
-    status_color: statusRef.color || '',
-    payment_status: order.payment_status,
-    payment_status_label: paymentLabels[order.payment_status] || '—',
-    tags: order.tags || [],
-    itemsCount: order.items_count || (order.items ? order.items.length : 0),
-    items: (order.items || []).map((item) => ({
-      ...item,
-      title: item.product_title || item.title || 'Товар',
-      photo: buildPhotoUrl(
-        item.product?.main_photo_url ||
-        item.product?.main_photo_path ||
-        item.main_photo_url ||
-        item.main_photo_path ||
-        item.photo
-      ),
-      total: Number(item.total ?? (Number(item.qty || 0) * Number(item.price || 0))),
-    })),
-    total: Number(order.items_sum_total ?? order.total_sum ?? 0),
-    currency: order.currency || 'UAH',
-    ttn: delivery.ttn || '',
-    address: delivery.warehouse_name || [delivery.city_name, delivery.street_name].filter(Boolean).join(', ') || '—',
-    city_name: delivery.city_name || '',
-    delivery_carrier: delivery.carrier === 'nova_poshta' ? 'Нова Пошта' : (delivery.carrier || ''),
-    delivery_cost: Number(delivery.delivery_cost ?? 0),
-    comment: order.comment_internal || '',
-    created_at: order.created_at,
+  import { onMounted, reactive, ref } from 'vue';
+  import { listOrders, deleteOrder, updateOrderTags, updateOrderStatus } from '@/crm/api/orders';
+  import { fetchTags } from '@/crm/api/tags';
+  import { fetchStatuses } from '@/crm/api/statuses';
+  import axios from 'axios';
+  
+  const orders = ref([]);
+  const expandedRows = ref(new Set());
+  const loading = ref(false);
+  const deletingId = ref(null);
+  const tagsModalOpen = ref(false);
+  const tagsModalLoading = ref(false);
+  const tagsModalOrder = ref(null);
+  const availableTags = ref([]);
+  const selectedTags = ref([]);
+  const statusesModalOpen = ref(false);
+  const statusesModalLoading = ref(false);
+  const statuses = ref([]);
+  const statusesOrder = ref(null);
+  const selectedStatusId = ref(null);
+  const meta = ref({ current_page: 1, last_page: 1, total: 0 });
+  const filters = reactive({ search: '', statuses: [], payment_status: '', page: 1, per_page: 20 });
+  let searchTimer;
+  
+  const statusChips = ref([
+    { value: '', label: 'Всі', icon: 'bi-grid', color: null },
+  ]);
+  
+  const statusLabels = {
+    new: 'Новий',
+    confirmed: 'Підтверджено',
+    pending: 'Очікує підтвердження',
+    in_process: 'В обробці',
+    packed: 'Упаковане',
+    delivered: 'Доставлене',
+    returned: 'Повернене',
+    in_progress: 'В роботі',
+    done: 'Готово',
+    completed: 'Виконано',
+    cancelled: 'Скасовано',
+    shipped: 'Відправлено',
   };
-}
-
-function handleSearch() {
-  clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => {
+  
+  const paymentLabels = {
+    paid: 'Оплачено',
+    unpaid: 'Не оплачено',
+    prepaid: 'Передоплата',
+    prepayment: 'Передоплата',
+    refund: 'Повернення',
+  };
+  
+  /** ГЕНЕРАЦІЯ ТТН */
+  async function generateTtn(order) {
+    if (order.loadingTtn) return;
+    
+    order.loadingTtn = true;
+    try {
+      const response = await fetch(`/orders/${order.id}/generate-ttn`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content,
+          'Accept': 'application/json'
+        }
+      });
+  
+      const result = await response.json();
+  
+      if (result.success || result.ttn) {
+        const ttn = result.ttn || result.data[0].IntDocNumber;
+        const ref = result.ref || result.data[0].Ref;
+        
+        order.ttn = ttn;
+        order.ttn_ref = ref;
+        
+        alert(`ТТН ${ttn} створена успішно!`);
+        
+        if (ref) {
+          
+        }
+      } else {
+        const errorMsg = result.errors ? JSON.stringify(result.errors) : (result.message || 'Помилка API');
+        alert('Не вдалося створити ТТН: ' + errorMsg);
+      }
+    } catch (error) {
+      console.error(error);
+      alert('Помилка сервера при створенні ТТН');
+    } finally {
+      order.loadingTtn = false;
+    }
+  }
+  
+  /** АНУЛЮВАННЯ ТТН */
+  async function handleCancelTtn(order) {
+    if (!order.ttn) return;
+    if (!confirm('Ви впевнені, що хочете анулювати ТТН у системі Нової Пошти?')) return;
+  
+    order.loadingTtn = true;
+    try {
+      const response = await axios.post(`/orders/${order.id}/cancel-ttn`);
+      
+      if (response.data.success) {
+        order.ttn = null;
+        order.ttn_ref = null;
+        alert('ТТН успішно анульовано');
+      }
+    } catch (error) {
+      console.error(error);
+      alert(error.response?.data?.message || 'Помилка при анулюванні ТТН');
+    } finally {
+      order.loadingTtn = false;
+    }
+  }
+  
+  /** ДРУК ТТН */
+  async function printTtn(order) {
+    if (!order.ttn) return;
+    try {
+      const response = await axios.get(`/orders/${order.id}/print-ttn`);
+      if (response.data.success && response.data.print_url) {
+        window.open(response.data.print_url, '_blank');
+      } else {
+        alert('Не вдалося отримати посилання на друк');
+      }
+    } catch (error) {
+      console.error(error);
+      alert('Помилка при спробі друку');
+    }
+  }
+  
+  async function fetchData() {
+    loading.value = true;
+    try {
+      const { data } = await listOrders({
+        page: filters.page,
+        per_page: filters.per_page,
+        search: filters.search || undefined,
+        status: filters.statuses?.length ? filters.statuses : undefined,
+        payment_status: filters.payment_status || undefined,
+      });
+  
+      const payload = data.data || data?.data?.data || [];
+      orders.value = payload.map(mapOrder);
+  
+      const metaPayload = data.meta || data?.data?.meta || {};
+      meta.value = {
+        current_page: metaPayload.current_page ?? 1,
+        last_page: metaPayload.last_page ?? 1,
+        total: metaPayload.total ?? orders.value.length,
+      };
+    } catch (error) {
+      console.error(error);
+    } finally {
+      loading.value = false;
+    }
+  }
+  
+  function mapOrder(order) {
+    const customer = order.customer || {};
+    const delivery = order.delivery || {};
+    let payment = order.payment;
+    if (Array.isArray(payment)) payment = payment[0];
+    payment = payment || {};
+    const statusRef = order.statusRef || order.status_ref || {};
+    const sourceRef = order.source || {};
+    return {
+      ...order,
+      order_number: order.order_number || order.id,
+      client: customer.full_name || [customer.first_name, customer.last_name].filter(Boolean).join(' ') || 'Гість',
+      phone: customer.phone || '',
+      email: customer.email || '',
+      source_code: sourceRef.code || order.source || '',
+      source_name: sourceRef.name || order.source || '—',
+      source_icon: sourceRef.icon ? `bi ${sourceRef.icon}` : '',
+      source_color: sourceRef.color || '',
+      status_key: statusRef.code || order.status || 'new',
+      status: statusRef.name || statusLabels[order.status] || order.status || '—',
+      status_icon: statusRef.icon || '',
+      status_color: statusRef.color || '',
+      payment_status: order.payment_status,
+      payment_status_label: paymentLabels[order.payment_status] || '—',
+      tags: order.tags || [],
+      itemsCount: order.items_count || (order.items ? order.items.length : 0),
+      items: (order.items || []).map((item) => ({
+        ...item,
+        title: item.product_title || item.title || 'Товар',
+        photo: buildPhotoUrl(
+          item.product?.main_photo_url ||
+          item.product?.main_photo_path ||
+          item.main_photo_url ||
+          item.main_photo_path ||
+          item.photo
+        ),
+        total: Number(item.total ?? (Number(item.qty || 0) * Number(item.price || 0))),
+      })),
+      total: Number(order.items_sum_total ?? order.total_sum ?? 0),
+      currency: order.currency || 'UAH',
+      ttn: delivery.ttn || '',
+      ttn_ref: delivery.ttn_ref || '',
+      loadingTtn: false, // стан завантаження для кнопок ТТН
+      address: delivery.warehouse_name || [delivery.city_name, delivery.street_name].filter(Boolean).join(', ') || '—',
+      city_name: delivery.city_name || '',
+      delivery_carrier: delivery.carrier === 'nova_poshta' ? 'Нова Пошта' : (delivery.carrier || ''),
+      delivery_payer: delivery.delivery_payer === 'sender' ? 'Відправник' : 'Отримувач',
+      delivery_cost: Number(delivery.delivery_cost ?? 0),
+      prepay_amount: Number(payment.prepay_amount ?? 0),
+      comment: order.comment_internal || '',
+      created_at: order.created_at,
+    };
+  }
+  
+  function handleSearch() {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      filters.page = 1;
+      fetchData();
+    }, 300);
+  }
+  
+  function isStatusActive(val) {
+    if (!val) return !filters.statuses.length;
+    return filters.statuses.includes(val);
+  }
+  
+  function toggleStatus(value) {
+    if (!value) {
+      filters.statuses = [];
+    } else {
+      const next = new Set(filters.statuses);
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
+      filters.statuses = Array.from(next);
+    }
     filters.page = 1;
     fetchData();
-  }, 300);
-}
-
-function isStatusActive(val) {
-  if (!val) return !filters.statuses.length;
-  return filters.statuses.includes(val);
-}
-
-function toggleStatus(value) {
-  if (!value) {
-    filters.statuses = [];
-  } else {
-    const next = new Set(filters.statuses);
-    if (next.has(value)) next.delete(value);
-    else next.add(value);
-    filters.statuses = Array.from(next);
   }
-  filters.page = 1;
-  fetchData();
-}
-
-function changePage(page) {
-  if (page < 1 || page > meta.value.last_page) return;
-  filters.page = page;
-  fetchData();
-}
-
-async function copyTtn(ttn) {
-  if (!ttn || typeof navigator === 'undefined' || !navigator.clipboard) return;
-  try {
-    await navigator.clipboard.writeText(ttn);
-  } catch (err) {
-    console.error('Не вдалося скопіювати ТТН', err);
+  
+  function changePage(page) {
+    if (page < 1 || page > meta.value.last_page) return;
+    filters.page = page;
+    fetchData();
   }
-}
-
-async function openTagsModal(order) {
-  if (!order) return;
-  tagsModalOrder.value = order;
-  selectedTags.value = order.tags.map((t) => t.id);
-  tagsModalOpen.value = true;
-  if (!availableTags.value.length) {
-    await loadTags();
-  }
-}
-
-async function loadTags() {
-  tagsModalLoading.value = true;
-  try {
-    const { data } = await fetchTags();
-    const list = data?.data || data || [];
-    availableTags.value = Array.isArray(list) ? list : [];
-  } catch (e) {
-    console.error('Не вдалося завантажити теги', e);
-    availableTags.value = [];
-  } finally {
-    tagsModalLoading.value = false;
-  }
-}
-
-function closeTagsModal() {
-  tagsModalOpen.value = false;
-  tagsModalOrder.value = null;
-  selectedTags.value = [];
-}
-
-async function saveTags() {
-  if (!tagsModalOrder.value) return;
-  try {
-    const { data } = await updateOrderTags(tagsModalOrder.value.id, selectedTags.value);
-    const updatedTags = data?.data || data || [];
-    tagsModalOrder.value.tags = updatedTags;
-    const idx = orders.value.findIndex((o) => o.id === tagsModalOrder.value.id);
-    if (idx !== -1) orders.value[idx].tags = updatedTags;
-    closeTagsModal();
-  } catch (e) {
-    console.error('Не вдалося оновити теги', e);
-    alert('Не вдалося оновити теги');
-  }
-}
-
-async function handleDelete(order) {
-  if (!order?.id) return;
-  const confirmed = window.confirm(`Видалити замовлення #${order.order_number || order.id}?`);
-  if (!confirmed) return;
-  deletingId.value = order.id;
-  try {
-    await deleteOrder(order.id);
-    orders.value = orders.value.filter((o) => o.id !== order.id);
-    // оновлюємо лічильник
-    meta.value.total = Math.max(0, (meta.value.total || 1) - 1);
-    if (!orders.value.length && meta.value.current_page > 1) {
-      filters.page = Math.max(1, filters.page - 1);
-      await fetchData();
+  
+  async function copyTtn(ttn) {
+    if (!ttn || typeof navigator === 'undefined' || !navigator.clipboard) return;
+    try {
+      await navigator.clipboard.writeText(ttn);
+    } catch (err) {
+      console.error('Не вдалося скопіювати ТТН', err);
     }
-  } catch (error) {
-    console.error('Не вдалося видалити замовлення', error);
-    alert('Не вдалося видалити замовлення');
-  } finally {
-    deletingId.value = null;
   }
-}
-
-async function openStatusesModal(order) {
-  if (!order) return;
-  statusesOrder.value = order;
-  selectedStatusId.value = order.status_id || null;
-  statusesModalOpen.value = true;
-  if (!statuses.value.length) {
-    await loadStatuses();
+  
+  async function openTagsModal(order) {
+    if (!order) return;
+    tagsModalOrder.value = order;
+    selectedTags.value = order.tags.map((t) => t.id);
+    tagsModalOpen.value = true;
+    if (!availableTags.value.length) {
+      await loadTags();
+    }
   }
-}
-
-async function loadStatuses() {
-  statusesModalLoading.value = true;
-  try {
-    const { data } = await fetchStatuses({ type: 'order' });
-    const list = data?.data || data || [];
-    statuses.value = Array.isArray(list) ? list : [];
-    statusChips.value = [
-      { value: '', label: 'Всі', icon: 'bi-grid', color: null },
-      ...statuses.value.map((st) => ({
-        value: st.code,
-        label: st.name,
-        icon: st.icon,
-        color: st.color,
-      })),
-    ];
-  } catch (e) {
-    console.error('Не вдалося завантажити статуси', e);
-    statuses.value = [];
-  } finally {
-    statusesModalLoading.value = false;
+  
+  async function loadTags() {
+    tagsModalLoading.value = true;
+    try {
+      const { data } = await fetchTags();
+      const list = data?.data || data || [];
+      availableTags.value = Array.isArray(list) ? list : [];
+    } catch (e) {
+      console.error('Не вдалося завантажити теги', e);
+      availableTags.value = [];
+    } finally {
+      tagsModalLoading.value = false;
+    }
   }
-}
-
-function closeStatusesModal() {
-  statusesModalOpen.value = false;
-  statusesOrder.value = null;
-  selectedStatusId.value = null;
-}
-
-async function saveStatus() {
-  if (!statusesOrder.value || !selectedStatusId.value) return;
-  try {
-    const { data } = await updateOrderStatus(statusesOrder.value.id, selectedStatusId.value);
-    const status = data?.data || data || {};
-    const idx = orders.value.findIndex((o) => o.id === statusesOrder.value.id);
-    const target = idx !== -1 ? orders.value[idx] : statusesOrder.value;
-    target.status_id = status.id;
-    target.status_key = status.code;
-    target.status = status.name;
-    target.status_icon = status.icon;
-    target.status_color = status.color;
-    closeStatusesModal();
-  } catch (e) {
-    console.error('Не вдалося оновити статус', e);
-    alert('Не вдалося оновити статус');
+  
+  function closeTagsModal() {
+    tagsModalOpen.value = false;
+    tagsModalOrder.value = null;
+    selectedTags.value = [];
   }
-}
-
-function toggleRow(id) {
-  if (expandedRows.value.has(id)) expandedRows.value.delete(id);
-  else expandedRows.value.add(id);
-}
-
-function getStatusClass(status) {
-  const map = {
-    new: 'bg-warning-subtle text-warning-emphasis border-warning-subtle',
-    in_process: 'bg-success-subtle text-success-emphasis border-success-subtle',
-    confirmed: 'bg-info-subtle text-info-emphasis border-info-subtle',
-    in_progress: 'bg-primary-subtle text-primary-emphasis border-primary-subtle',
-    in_work: 'bg-primary-subtle text-primary-emphasis border-primary-subtle',
-    pending: 'bg-warning-subtle text-warning-emphasis border-warning-subtle',
-    packed: 'bg-secondary-subtle text-secondary-emphasis border-secondary-subtle',
-    delivered: 'bg-success-subtle text-success-emphasis border-success-subtle',
-    completed: 'bg-success-subtle text-success-emphasis border-success-subtle',
-    done: 'bg-success-subtle text-success-emphasis border-success-subtle',
-    cancelled: 'bg-secondary-subtle text-secondary-emphasis border-secondary-subtle',
-    canceled: 'bg-secondary-subtle text-secondary-emphasis border-secondary-subtle',
-    shipped: 'bg-indigo-subtle text-indigo-emphasis border-indigo-subtle',
-    returned: 'bg-danger-subtle text-danger-emphasis border-danger-subtle',
+  
+  async function saveTags() {
+    if (!tagsModalOrder.value) return;
+    try {
+      const { data } = await updateOrderTags(tagsModalOrder.value.id, selectedTags.value);
+      const updatedTags = data?.data || data || [];
+      tagsModalOrder.value.tags = updatedTags;
+      const idx = orders.value.findIndex((o) => o.id === tagsModalOrder.value.id);
+      if (idx !== -1) orders.value[idx].tags = updatedTags;
+      closeTagsModal();
+    } catch (e) {
+      console.error('Не вдалося оновити теги', e);
+      alert('Не вдалося оновити теги');
+    }
+  }
+  
+  async function handleDelete(order) {
+    if (!order?.id) return;
+    const confirmed = window.confirm(`Видалити замовлення #${order.order_number || order.id}?`);
+    if (!confirmed) return;
+    deletingId.value = order.id;
+    try {
+      await deleteOrder(order.id);
+      orders.value = orders.value.filter((o) => o.id !== order.id);
+      meta.value.total = Math.max(0, (meta.value.total || 1) - 1);
+      if (!orders.value.length && meta.value.current_page > 1) {
+        filters.page = Math.max(1, filters.page - 1);
+        await fetchData();
+      }
+    } catch (error) {
+      console.error('Не вдалося видалити замовлення', error);
+      alert('Не вдалося видалити замовлення');
+    } finally {
+      deletingId.value = null;
+    }
+  }
+  
+  async function openStatusesModal(order) {
+    if (!order) return;
+    statusesOrder.value = order;
+    selectedStatusId.value = order.status_id || null;
+    statusesModalOpen.value = true;
+    if (!statuses.value.length) {
+      await loadStatuses();
+    }
+  }
+  
+  async function loadStatuses() {
+    statusesModalLoading.value = true;
+    try {
+      const { data } = await fetchStatuses({ type: 'order' });
+      const list = data?.data || data || [];
+      statuses.value = Array.isArray(list) ? list : [];
+      statusChips.value = [
+        { value: '', label: 'Всі', icon: 'bi-grid', color: null },
+        ...statuses.value.map((st) => ({
+          value: st.code,
+          label: st.name,
+          icon: st.icon,
+          color: st.color,
+        })),
+      ];
+    } catch (e) {
+      console.error('Не вдалося завантажити статуси', e);
+      statuses.value = [];
+    } finally {
+      statusesModalLoading.value = false;
+    }
+  }
+  
+  function closeStatusesModal() {
+    statusesModalOpen.value = false;
+    statusesOrder.value = null;
+    selectedStatusId.value = null;
+  }
+  
+  async function saveStatus() {
+    if (!statusesOrder.value || !selectedStatusId.value) return;
+    try {
+      const { data } = await updateOrderStatus(statusesOrder.value.id, selectedStatusId.value);
+      const status = data?.data || data || {};
+      const idx = orders.value.findIndex((o) => o.id === statusesOrder.value.id);
+      const target = idx !== -1 ? orders.value[idx] : statusesOrder.value;
+      target.status_id = status.id;
+      target.status_key = status.code;
+      target.status = status.name;
+      target.status_icon = status.icon;
+      target.status_color = status.color;
+      closeStatusesModal();
+    } catch (e) {
+      console.error('Не вдалося оновити статус', e);
+      alert('Не вдалося оновити статус');
+    }
+  }
+  
+  function toggleRow(id) {
+    if (expandedRows.value.has(id)) expandedRows.value.delete(id);
+    else expandedRows.value.add(id);
+  }
+  
+  function getStatusClass(status) {
+    const map = {
+      new: 'bg-warning-subtle text-warning-emphasis border-warning-subtle',
+      in_process: 'bg-success-subtle text-success-emphasis border-success-subtle',
+      confirmed: 'bg-info-subtle text-info-emphasis border-info-subtle',
+      in_progress: 'bg-primary-subtle text-primary-emphasis border-primary-subtle',
+      in_work: 'bg-primary-subtle text-primary-emphasis border-primary-subtle',
+      pending: 'bg-warning-subtle text-warning-emphasis border-warning-subtle',
+      packed: 'bg-secondary-subtle text-secondary-emphasis border-secondary-subtle',
+      delivered: 'bg-success-subtle text-success-emphasis border-success-subtle',
+      completed: 'bg-success-subtle text-success-emphasis border-success-subtle',
+      done: 'bg-success-subtle text-success-emphasis border-success-subtle',
+      cancelled: 'bg-secondary-subtle text-secondary-emphasis border-secondary-subtle',
+      canceled: 'bg-secondary-subtle text-secondary-emphasis border-secondary-subtle',
+      shipped: 'bg-indigo-subtle text-indigo-emphasis border-indigo-subtle',
+      returned: 'bg-danger-subtle text-danger-emphasis border-danger-subtle',
+    };
+    return map[status] || 'bg-light text-dark border-light-subtle';
+  }
+  
+  function getStatusStyle(order) {
+    const color = order?.status_color || statusColorMap[order?.status_key];
+    if (!color) return {};
+    return {
+      backgroundColor: color,
+      borderColor: color,
+      color: '#0f172a',
+    };
+  }
+  
+  function getStatusIcon(status) {
+    const map = {
+      new: 'bi-circle',
+      confirmed: 'bi-check-circle',
+      pending: 'bi-hourglass-split',
+      packed: 'bi-box-seam',
+      delivered: 'bi-bag-check',
+      in_progress: 'bi-hourglass-split',
+      in_work: 'bi-hourglass-split',
+      done: 'bi-check2-circle',
+      completed: 'bi-check2-circle',
+      canceled: 'bi-x-circle',
+      cancelled: 'bi-x-circle',
+      shipped: 'bi-truck',
+    };
+    return map[status] || 'bi-dot';
+  }
+  
+  const statusColorMap = {
+    pending: '#fcd5b5',
+    in_process: '#c7f2d4',
+    in_progress: '#c7f2d4',
+    confirmed: '#b2ecf7',
+    packed: '#e4e6e9',
+    shipped: '#dcd9ff',
+    delivered: '#c6f1d4',
+    cancelled: '#e4e6e9',
+    canceled: '#e4e6e9',
+    returned: '#ffd6d6',
   };
-  return map[status] || 'bg-light text-dark border-light-subtle';
-}
-
-function getStatusStyle(order) {
-  const color = order?.status_color || statusColorMap[order?.status_key];
-  if (!color) return {};
-  return {
-    backgroundColor: color,
-    borderColor: color,
-    color: '#0f172a',
-  };
-}
-
-function getStatusIcon(status) {
-  const map = {
-    new: 'bi-circle',
-    confirmed: 'bi-check-circle',
-    pending: 'bi-hourglass-split',
-    packed: 'bi-box-seam',
-    delivered: 'bi-bag-check',
-    in_progress: 'bi-hourglass-split',
-    in_work: 'bi-hourglass-split',
-    done: 'bi-check2-circle',
-    completed: 'bi-check2-circle',
-    canceled: 'bi-x-circle',
-    cancelled: 'bi-x-circle',
-    shipped: 'bi-truck',
-  };
-  return map[status] || 'bi-dot';
-}
-
-const statusColorMap = {
-  pending: '#fcd5b5',
-  in_process: '#c7f2d4',
-  in_progress: '#c7f2d4',
-  confirmed: '#b2ecf7',
-  packed: '#e4e6e9',
-  shipped: '#dcd9ff',
-  delivered: '#c6f1d4',
-  cancelled: '#e4e6e9',
-  canceled: '#e4e6e9',
-  returned: '#ffd6d6',
-};
-
-function getPaymentClass(status) {
-  const map = {
-    paid: 'bg-success-subtle text-success-emphasis border-success-subtle',
-    unpaid: 'bg-danger-subtle text-danger-emphasis border-danger-subtle',
-    prepayment: 'bg-warning-subtle text-warning-emphasis border-warning-subtle',
-    refund: 'bg-dark-subtle text-dark-emphasis border-dark-subtle',
-  };
-  return map[status] || 'bg-light text-dark border-light-subtle';
-}
-
-function getPaymentIcon(status) {
-  const map = {
-    paid: 'bi-check-circle',
-    unpaid: 'bi-x-circle',
-    prepayment: 'bi-cash-stack',
-    refund: 'bi-arrow-counterclockwise',
-  };
-  return map[status] || 'bi-dot';
-}
-
-function formatCurrency(value, currency = 'UAH') {
-  return Number(value ?? 0).toLocaleString('uk-UA', { style: 'currency', currency });
-}
-
-function formatDate(value) {
-  if (!value) return '';
-  try {
-    return new Date(value).toLocaleString('uk-UA', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  } catch {
-    return value;
+  
+  function getPaymentClass(status) {
+    const map = {
+      paid: 'bg-success-subtle text-success-emphasis border-success-subtle',
+      unpaid: 'bg-danger-subtle text-danger-emphasis border-danger-subtle',
+      prepayment: 'bg-warning-subtle text-warning-emphasis border-warning-subtle',
+      refund: 'bg-dark-subtle text-dark-emphasis border-dark-subtle',
+    };
+    return map[status] || 'bg-light text-dark border-light-subtle';
   }
-}
-
-function buildPhotoUrl(path) {
-  if (!path) return '';
-  if (path.startsWith('http')) return path;
-  let clean = path.replace(/^\//, '');
-  if (clean.startsWith('public/')) {
-    clean = clean.replace(/^public\//, '');
+  
+  function getPaymentIcon(status) {
+    const map = {
+      paid: 'bi-check-circle',
+      unpaid: 'bi-x-circle',
+      prepayment: 'bi-cash-stack',
+      refund: 'bi-arrow-counterclockwise',
+    };
+    return map[status] || 'bi-dot';
   }
-  const urlPath = clean.startsWith('storage/') ? `/${clean}` : `/storage/${clean}`;
-  return urlPath;
-}
-
-onMounted(fetchData);
-onMounted(loadStatuses);
-</script>
+  
+  function formatCurrency(value, currency = 'UAH') {
+    return Number(value ?? 0).toLocaleString('uk-UA', { style: 'currency', currency });
+  }
+  
+  function formatDate(value) {
+    if (!value) return '';
+    try {
+      return new Date(value).toLocaleString('uk-UA', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch {
+      return value;
+    }
+  }
+  
+  function buildPhotoUrl(path) {
+    if (!path) return '';
+    if (path.startsWith('http')) return path;
+    let clean = path.replace(/^\//, '');
+    if (clean.startsWith('public/')) {
+      clean = clean.replace(/^public\//, '');
+    }
+    const urlPath = clean.startsWith('storage/') ? `/${clean}` : `/storage/${clean}`;
+    return urlPath;
+  }
+  
+  onMounted(fetchData);
+  onMounted(loadStatuses);
+  </script>
 
 <style scoped>
 /* Компактні чіпси статусів */

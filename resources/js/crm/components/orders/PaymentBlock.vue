@@ -52,8 +52,7 @@ const local = reactive({ method: 'cod', currency: 'UAH', ...model.value });
 
 const methods = [
   { value: 'cod', label: 'Накладений платіж', icon: 'bi-cash-coin' },
-  { value: 'card', label: 'Банківська картка', icon: 'bi-credit-card-2-front' },
-  { value: 'transfer', label: 'Банківський переказ', icon: 'bi-bank' },
+  { value: 'card', label: 'Банківський рахунок ФОП', icon: 'bi-credit-card-2-front' },
   { value: 'prepay', label: 'Передоплата', icon: 'bi-wallet2' },
 ];
 

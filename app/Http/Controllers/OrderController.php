@@ -68,6 +68,10 @@ class OrderController extends Controller
                 $q->where(function ($inner) use ($term) {
                     $inner->where('order_number', 'like', "%{$term}%")
                         ->orWhere('search_blob', 'like', "%{$term}%")
+                        // ДОДАНО: Пошук за номером ТТН
+                        ->orWhereHas('delivery', function ($dq) use ($term) {
+                            $dq->where('ttn', 'like', "%{$term}%");
+                        })
                         ->orWhereHas('customer', function ($cq) use ($term) {
                             $cq->where('first_name', 'like', "%{$term}%")
                                 ->orWhere('last_name', 'like', "%{$term}%")
@@ -189,7 +193,8 @@ class OrderController extends Controller
                 'manager_id' => $request->user()?->id,
                 'currency' => $data['order']['currency'] ?? 'UAH',
                 'comment_internal' => $data['order']['comment_internal'] ?? null,
-                'search_blob' => $this->buildSearchBlob($customer),
+                // ДОДАНО: передаємо ТТН у пошуковий блоб
+                'search_blob' => $this->buildSearchBlob($customer, $data['delivery']['ttn'] ?? null),
             ]);
 
             // Теги (звʼязок через pivot)
@@ -317,7 +322,8 @@ class OrderController extends Controller
                 'customer_id' => $customer->id,
                 'currency' => $data['order']['currency'] ?? 'UAH',
                 'comment_internal' => $data['order']['comment_internal'] ?? null,
-                'search_blob' => $this->buildSearchBlob($customer),
+                // ДОДАНО: передаємо ТТН у пошуковий блоб
+                'search_blob' => $this->buildSearchBlob($customer, $data['delivery']['ttn'] ?? null),
             ]);
 
             // Теги
@@ -417,14 +423,16 @@ class OrderController extends Controller
     }
 
     /** Формуємо пошуковий blob для швидких фільтрів. */
-    protected function buildSearchBlob(?Customer $customer): ?string
+    protected function buildSearchBlob(?Customer $customer, $ttn = null): ?string
     {
-        if (!$customer) return null;
+        if (!$customer) return $ttn;
 
+        // ОНОВЛЕНО: Додаємо ТТН в пошук
         return trim(implode(' ', array_filter([
             $customer->full_name,
             $customer->phone,
             $customer->email,
+            $ttn
         ])));
     }
 
@@ -462,6 +470,12 @@ class OrderController extends Controller
         return Status::where('code', $code)->where('type', $type)->value('id');
     }
 
+    protected function resolveStatusIdByCode(?string $code, string $type = 'order'): ?int
+    {
+        if (!$code) return null;
+        return Status::where('code', $code)->where('type', $type)->value('id');
+    }
+
     protected function resolveSourceId(?string $code): ?int
     {
         if (!$code) return null;
@@ -494,32 +508,109 @@ class OrderController extends Controller
         ]);
     }
 
-    public function generateTTN(\App\Models\Order $order, \App\Services\NovaPoshtaService $np)
+    /** ГЕНЕРАЦІЯ ТТН НОВОЇ ПОШТИ (З ПІДТРИМКОЮ TTN_REF) */
+    public function generateTTN(\App\Models\Order $order, \App\Services\NovaPoshtaService $np): JsonResponse
     {
-        // Перевіряємо, чи заповнені дані для доставки
+        // Примусово оновлюємо дані з бази, щоб побачити найсвіжіші зміни
+        $order->refresh();
+        $order->load(['delivery', 'customer', 'items.product']);
+
+        // 1. Перевіряємо, чи заповнені дані для доставки
         if (!$order->delivery || !$order->delivery->city_ref || !$order->delivery->warehouse_ref) {
-            return response()->json(['message' => 'Не заповнені дані міста або відділення'], 422);
+            return response()->json([
+                'message' => 'Не заповнені дані міста або відділення',
+                'details' => [
+                    'city' => $order->delivery->city_ref ?? 'null',
+                    'warehouse' => $order->delivery->warehouse_ref ?? 'null'
+                ]
+            ], 422);
         }
 
+        // 2. Викликаємо сервіс для створення накладної
         $result = $np->createWaybill($order);
 
         if (isset($result['success']) && $result['success']) {
             $ttnData = $result['data'][0];
             
-            // Оновлюємо ТТН у моделі доставки
+            $ttnNumber = $ttnData['IntDocNumber']; // Номер накладної (14 цифр)
+            $ttnRef    = $ttnData['Ref'];          // Внутрішній ідентифікатор НП (UUID)
+            
+            // 3. Оновлюємо ТТН та ТТН_REF у моделі доставки
             $order->delivery->update([
-                'ttn' => $ttnData['IntDocNumber']
+                'ttn'     => $ttnNumber,
+                'ttn_ref' => $ttnRef
+            ]);
+
+            // 4. Оновлюємо пошуковий блоб замовлення (для швидкого пошуку по ТТН)
+            $order->update([
+                'search_blob' => $this->buildSearchBlob($order->customer, $ttnNumber)
             ]);
 
             return response()->json([
                 'success' => true,
-                'ttn' => $ttnData['IntDocNumber'],
-                'ref' => $ttnData['Ref'] // UUID самої ТТН для друку в майбутньому
+                'ttn'     => $ttnNumber,
+                'ref'     => $ttnRef 
             ]);
         }
 
+        // Якщо помилка, повертаємо її разом з даними для перевірки
         $error = $result['errors'][0] ?? 'Помилка Нової Пошти';
-        return response()->json(['message' => $error], 400);
+        return response()->json([
+            'message' => $error,
+            'sent_data_check' => [
+                'city'  => $order->delivery->city_ref,
+                'phone' => $order->customer->phone
+            ]
+        ], 400);
     }
-    
+
+    /** АНУЛЮВАННЯ ТТН */
+    public function cancelTTN(\App\Models\Order $order, \App\Services\NovaPoshtaService $np): \Illuminate\Http\JsonResponse
+    {
+        $order->load('delivery');
+        $ttnRef = $order->delivery->ttn_ref;
+
+        if (!$ttnRef) {
+            return response()->json(['message' => 'Ref накладної не знайдено в базі'], 422);
+        }
+
+        $result = $np->deleteWaybill($ttnRef);
+
+        if (isset($result['success']) && $result['success']) {
+            // Очищаємо ТТН та Ref в базі
+            $order->delivery->update([
+                'ttn' => null,
+                'ttn_ref' => null
+            ]);
+
+            return response()->json([
+                'success' => true, 
+                'message' => 'ТТН успішно анульовано'
+            ]);
+        }
+
+        return response()->json([
+            'message' => $result['errors'][0] ?? 'Помилка Нової Пошти при видаленні'
+        ], 400);
+    }
+
+    /** ОТРИМАННЯ ПОСИЛАННЯ НА ДРУК МАЛЕНЬКИХ НАКЛЕЙОК (100х100) */
+    public function printTTN(\App\Models\Order $order, \App\Services\NovaPoshtaService $np): \Illuminate\Http\JsonResponse
+    {
+        $order->load('delivery');
+        $ttn = $order->delivery->ttn;
+
+        if (!$ttn) {
+            return response()->json(['message' => 'ТТН ще не створена'], 422);
+        }
+
+        // Параметр /type/pdf/zebra/1 генерує саме маленьку наклейку для термопринтера
+        $link = "https://my.novaposhta.ua/orders/printMarkings/orders[]/{$ttn}/type/pdf/zebra/1/apiKey/" . config('services.nova_poshta.api_key');
+
+        return response()->json([
+            'success' => true,
+            'print_url' => $link
+        ]);
+    }
+        
 }

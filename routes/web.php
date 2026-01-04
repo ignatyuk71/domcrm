@@ -14,7 +14,6 @@ use Illuminate\Support\Facades\Route;
 | Публічні маршрути
 |--------------------------------------------------------------------------
 */
-
 Route::get('/', function () {
     return view('welcome');
 });
@@ -28,7 +27,6 @@ Route::get('/dashboard', function () {
 | Маршрути з авторизацією (auth)
 |--------------------------------------------------------------------------
 */
-
 Route::middleware('auth')->group(function () {
 
     // --- ЗАМОВЛЕННЯ (Orders) ---
@@ -53,17 +51,19 @@ Route::middleware('auth')->group(function () {
         Route::patch('/orders/{order}/tags', 'updateTags')->name('orders.tags');
         Route::patch('/orders/{order}/status', 'updateStatus')->name('orders.updateStatus');
         
-        // Генерація ТТН (Нова Пошта)
+        // Нова Пошта: Генерація, Анулювання та Друк
         Route::post('/orders/{order}/generate-ttn', 'generateTTN')->name('orders.generateTTN');
+        Route::post('/orders/{order}/cancel-ttn', 'cancelTTN')->name('orders.cancelTTN');
+        Route::get('/orders/{order}/print-ttn', 'printTTN')->name('orders.printTTN');
     });
 
-    // --- НОВА ПОШТА (Nova Poshta) ---
+    // --- НОВА ПОШТА (Nova Poshta довідники) ---
     Route::controller(NovaPoshtaController::class)->prefix('nova-poshta')->name('novaPoshta.')->group(function () {
         Route::get('/cities', 'cities')->name('cities');
         Route::get('/warehouses', 'warehouses')->name('warehouses');
         Route::get('/streets', 'streets')->name('streets');
         
-        // Тимчасовий маршрут для отримання UUID відправника (після налаштування можна видалити)
+        // Debug маршрут для перевірки даних відправника
         Route::get('/debug-sender', fn(\App\Services\NovaPoshtaService $np) => $np->getSenderData())->name('debug');
     });
 
@@ -76,7 +76,7 @@ Route::middleware('auth')->group(function () {
         Route::put('/{product}', 'update')->name('update');
     });
 
-    // --- ДОВІДНИКИ ТА ТЕГИ ---
+    // --- ДОВІДНИКИ ---
     Route::get('/statuses', [StatusController::class, 'index'])->name('statuses.index');
     Route::get('/order-sources', [OrderSourceController::class, 'index'])->name('orderSources.index');
     Route::get('/tags', [TagController::class, 'index'])->name('tags.index');

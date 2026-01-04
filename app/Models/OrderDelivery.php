@@ -9,14 +9,14 @@ class OrderDelivery extends Model
 {
     /**
      * Масове заповнення для реквізитів доставки та одержувача.
-     * Включає привʼязку до замовлення, тип/перевізник і адресу (місто/склад або вулиця),
-     * а також хто платить за доставку і її вартість.
      */
     protected $fillable = [
         'order_id',
         'carrier',
         'delivery_type',
+        'service_type', 
         'ttn',
+        'ttn_ref', // ДОДАНО: Внутрішній ідентифікатор НП для видалення/редагування
 
         // хто платить / вартість доставки
         'delivery_payer',
@@ -47,7 +47,12 @@ class OrderDelivery extends Model
         return $this->belongsTo(Order::class);
     }
 
-    // (опційно) зручні константи, щоб не писати строки по коду
+    // Константи платника
     public const PAYER_SENDER = 'sender';
     public const PAYER_RECIPIENT = 'recipient';
+
+    // Константи типів сервісу Нової Пошти
+    public const SERVICE_WAREHOUSE = 'WarehouseWarehouse';
+    public const SERVICE_POSTOMAT = 'WarehousePostomat';
+    public const SERVICE_DOORS = 'WarehouseDoors';
 }
