@@ -5,13 +5,13 @@
       <section>
         <label class="form-label-custom">Спосіб доставки</label>
         <div class="delivery-toggle-group">
-          <input type="radio" class="btn-check" id="dt_warehouse" value="warehouse" v-model="local.delivery_type">
+          <input type="radio" class="btn-check" id="dt_warehouse" value="warehouse" v-model="local.delivery_type" @change="resetDeliveryFields">
           <label class="toggle-item" for="dt_warehouse">
             <i class="bi bi-box-seam"></i>
             <span>Відділення</span>
           </label>
 
-          <input type="radio" class="btn-check" id="dt_courier" value="courier" v-model="local.delivery_type">
+          <input type="radio" class="btn-check" id="dt_courier" value="courier" v-model="local.delivery_type" @change="resetDeliveryFields">
           <label class="toggle-item" for="dt_courier">
             <i class="bi bi-geo-fill"></i>
             <span>Курʼєр</span>
@@ -65,7 +65,7 @@
             class="form-control custom-input"
             :class="{ 'is-invalid': errors.warehouse_name }"
             v-model="warehouseQuery"
-            @focus="showWarehouseDropdown = true"
+            @focus="onWarehouseFocus"
             @blur="scheduleCloseWarehouse"
             :disabled="!local.city_ref"
             placeholder="Введіть номер або назву..."
@@ -100,14 +100,15 @@
       <section v-else class="animate-fade-in">
         <div class="mb-3 position-relative">
           <label class="form-label-custom">Вулиця</label>
-          <div class="input-wrapper">
+          <div class="input-wrapper" :class="{ 'opacity-50': !local.city_ref }">
             <i class="bi bi-signpost-split input-prefix"></i>
             <input
               class="form-control custom-input"
               :class="{ 'is-invalid': errors.street_name }"
               v-model="streetQuery"
-              @focus="showStreetDropdown = true"
+              @focus="onStreetFocus"
               @blur="scheduleCloseStreet"
+              :disabled="!local.city_ref"
               placeholder="Почніть вводити..."
             />
             <div v-if="streetLoading" class="input-suffix">
@@ -171,46 +172,58 @@ const local = reactive({
 const cityQuery = ref(local.city_name || '');
 const warehouseQuery = ref(local.warehouse_name || '');
 const streetQuery = ref(local.street_name || '');
+
 const cityOptions = ref([]);
 const warehouseOptions = ref([]);
 const streetOptions = ref([]);
+
 const showCityDropdown = ref(false);
 const showWarehouseDropdown = ref(false);
 const showStreetDropdown = ref(false);
+
 const cityLoading = ref(false);
 const warehouseLoading = ref(false);
 const streetLoading = ref(false);
 const cityError = ref('');
 
 let cityTimer, warehouseTimer, streetTimer;
-const skipCityFetch = ref(false);
-const skipWarehouseFetch = ref(false);
-const skipStreetFetch = ref(false);
+const skipFetch = reactive({ city: false, warehouse: false, street: false });
 
 watch(() => ({ ...local }), (val) => { model.value = val; }, { deep: true });
 
+// ПОШУК МІСТ: від 4 символів, затримка 1 сек
 watch(cityQuery, (val) => {
-  if (skipCityFetch.value) { skipCityFetch.value = false; return; }
+  if (skipFetch.city) { skipFetch.city = false; return; }
   local.city_name = val; local.city_ref = '';
+  resetDeliveryFields();
+
   if (cityTimer) clearTimeout(cityTimer);
-  if (!val || val.length < 2) { cityOptions.value = []; return; }
-  cityTimer = setTimeout(() => loadCities(val), 300);
+  if (!val || val.length < 4) { 
+    cityOptions.value = []; 
+    return; 
+  }
+  
+  cityTimer = setTimeout(() => loadCities(val), 1000); 
 });
 
+// ПОШУК ВІДДІЛЕНЬ: затримка 1 сек
 watch(warehouseQuery, (val) => {
-  if (skipWarehouseFetch.value) { skipWarehouseFetch.value = false; return; }
+  if (skipFetch.warehouse) { skipFetch.warehouse = false; return; }
   local.warehouse_name = val;
   if (warehouseTimer) clearTimeout(warehouseTimer);
   if (!local.city_ref) return;
-  warehouseTimer = setTimeout(() => loadWarehouses(val), 250);
+  
+  warehouseTimer = setTimeout(() => loadWarehouses(val), 1000);
 });
 
+// ПОШУК ВУЛИЦЬ: затримка 1 сек
 watch(streetQuery, (val) => {
-  if (skipStreetFetch.value) { skipStreetFetch.value = false; return; }
+  if (skipFetch.street) { skipFetch.street = false; return; }
   local.street_name = val;
   if (streetTimer) clearTimeout(streetTimer);
   if (!local.city_ref || local.delivery_type !== 'courier') return;
-  streetTimer = setTimeout(() => loadStreets(val), 300);
+  
+  streetTimer = setTimeout(() => loadStreets(val), 1000);
 });
 
 async function loadCities(query) {
@@ -239,20 +252,39 @@ async function loadStreets(query) {
 
 function selectCity(city) {
   local.city_ref = city.ref; local.city_name = city.name;
-  skipCityFetch.value = true; cityQuery.value = city.name;
-  showCityDropdown.value = false; warehouseQuery.value = '';
+  skipFetch.city = true; cityQuery.value = city.name;
+  showCityDropdown.value = false; 
+  
+  resetDeliveryFields();
   if (local.delivery_type !== 'courier') loadWarehouses('');
 }
 
 function selectWarehouse(wh) {
   local.warehouse_ref = wh.ref; local.warehouse_name = wh.name;
-  skipWarehouseFetch.value = true; warehouseQuery.value = wh.name;
+  skipFetch.warehouse = true; warehouseQuery.value = wh.name;
   showWarehouseDropdown.value = false;
 }
 
 function selectStreet(street) {
-  local.street_name = street.name; skipStreetFetch.value = true;
+  local.street_name = street.name; skipFetch.street = true;
   streetQuery.value = street.name; showStreetDropdown.value = false;
+}
+
+function onWarehouseFocus() {
+  showWarehouseDropdown.value = true;
+  if (local.city_ref && !warehouseOptions.value.length) loadWarehouses('');
+}
+
+function onStreetFocus() {
+  showStreetDropdown.value = true;
+  if (local.city_ref && !streetOptions.value.length) loadStreets('');
+}
+
+function resetDeliveryFields() {
+  local.warehouse_ref = ''; local.warehouse_name = '';
+  local.street_name = ''; local.building = ''; local.apartment = '';
+  warehouseQuery.value = ''; streetQuery.value = '';
+  warehouseOptions.value = []; streetOptions.value = [];
 }
 
 const scheduleCloseCity = () => setTimeout(() => showCityDropdown.value = false, 200);
@@ -263,49 +295,29 @@ const scheduleCloseStreet = () => setTimeout(() => showStreetDropdown.value = fa
 <style scoped>
 .delivery-card { max-width: 100%; background: #fdfdfd; }
 .form-label-custom { font-size: 0.7rem; font-weight: 800; text-transform: uppercase; color: #8898aa; margin-bottom: 0.4rem; display: block; }
-
 .input-wrapper { position: relative; display: flex; align-items: center; }
-
 .custom-input { 
   border-radius: 10px; 
-  padding: 0.65rem 2.6rem 0.65rem 2.4rem; /* Збільшений правий педінг для спінера */
+  padding: 0.65rem 2.6rem 0.65rem 2.4rem; 
   border: 1px solid #e9ecef; 
   transition: all 0.2s; 
   font-size: 0.9rem; 
   width: 100%;
 }
 .custom-input:focus { border-color: #0d6efd; box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.08); background: #fff; }
-
 .input-prefix { position: absolute; left: 0.9rem; color: #adb5bd; z-index: 4; }
-
-.input-suffix { 
-  position: absolute; 
-  right: 0.8rem; 
-  display: flex; 
-  align-items: center; 
-  justify-content: center; 
-  pointer-events: none; 
-  z-index: 5;
-}
-
-.custom-spinner { 
-  width: 1.1rem; 
-  height: 1.1rem; 
-  border-width: 0.15em; 
-}
-
+.input-suffix { position: absolute; right: 0.8rem; display: flex; align-items: center; justify-content: center; z-index: 5; }
+.custom-spinner { width: 1.1rem; height: 1.1rem; border-width: 0.15em; }
 .delivery-toggle-group { display: flex; background: #f4f6f9; padding: 4px; border-radius: 12px; gap: 4px; }
 .toggle-item { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px; border-radius: 9px; cursor: pointer; transition: all 0.2s; font-weight: 600; color: #6c757d; font-size: 0.9rem; margin-bottom: 0; }
 .btn-check:checked + .toggle-item { background: #fff; color: #0d6efd; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
-
 .custom-dropdown { position: absolute; top: 100%; left: 0; right: 0; z-index: 1000; background: white; border-radius: 10px; margin-top: 5px; max-height: 250px; overflow-y: auto; border: 1px solid #eee; box-shadow: 0 10px 15px rgba(0,0,0,0.05); }
 .dropdown-item { padding: 10px 14px; border: none; background: none; width: 100%; text-align: left; transition: background 0.15s; border-bottom: 1px solid #f8f9fa; font-size: 0.85rem; }
 .dropdown-item:hover { background: #f1f7ff; }
-
 .payer-selector { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .payer-option { border: 1px solid #e9ecef; padding: 10px; border-radius: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; transition: 0.2s; background: white; color: #6c757d; font-weight: 500; font-size: 0.9rem; }
 .payer-option.active { border-color: #0d6efd; background: #f0f7ff; color: #0d6efd; }
-
 .animate-fade-in { animation: fadeIn 0.2s ease; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.custom-input-small { border-radius: 8px; border: 1px solid #e9ecef; padding: 0.5rem; font-size: 0.85rem; width: 100%; }
 </style>

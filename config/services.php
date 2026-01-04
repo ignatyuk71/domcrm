@@ -6,12 +6,6 @@ return [
     |--------------------------------------------------------------------------
     | Third Party Services
     |--------------------------------------------------------------------------
-    |
-    | This file is for storing the credentials for third party services such
-    | as Mailgun, Postmark, AWS and more. This file provides the de facto
-    | location for this type of information, allowing packages to have
-    | a conventional file to locate the various service credentials.
-    |
     */
 
     'postmark' => [
@@ -35,13 +29,22 @@ return [
         ],
     ],
 
-    'novaposhta' => [
-        'key' => env('NOVA_POSHTA_API_KEY'),
-    ],
-
-    // дубль зі snake_case для сервісу
+    /*
+    |--------------------------------------------------------------------------
+    | Nova Poshta API Settings
+    |--------------------------------------------------------------------------
+    */
     'nova_poshta' => [
-        'api_key' => env('NOVA_POSHTA_API_KEY'),
+        'api_key'          => env('NOVA_POSHTA_API_KEY'),
+        
+        // Дані відправника (ФОП/Компанія)
+        'sender_ref'       => env('NP_SENDER_REF'),
+        'contact_ref'      => env('NP_CONTACT_REF'),
+        'sender_phone'     => env('NP_SENDER_PHONE'),
+        
+        // Локація відправки (Точка виїзду посилок)
+        'sender_city'      => env('NP_SENDER_CITY'),
+        'sender_warehouse' => env('NP_SENDER_WAREHOUSE'),
     ],
 
 ];

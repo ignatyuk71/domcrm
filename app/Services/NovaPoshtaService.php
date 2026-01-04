@@ -18,182 +18,161 @@ class NovaPoshtaService
     }
 
     /**
-     * Пошук населених пунктів (autocomplete).
+     * Загальний метод для виконання запитів
+     */
+    private function makeRequest(string $model, string $method, array $properties = [])
+    {
+        if (!$this->apiKey) {
+            Log::error("NovaPoshta: API key missing");
+            return null;
+        }
+
+        try {
+            $response = Http::timeout(12)->post($this->endpoint, [
+                'apiKey' => $this->apiKey,
+                'modelName' => $model,
+                'calledMethod' => $method,
+                'methodProperties' => $properties,
+            ]);
+
+            if (!$response->successful()) {
+                Log::error("NovaPoshta API error: {$model}/{$method}", [
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                ]);
+                return null;
+            }
+
+            return $response->json();
+        } catch (\Throwable $e) {
+            Log::error("NovaPoshta exception: {$model}/{$method}", ['message' => $e->getMessage()]);
+            return null;
+        }
+    }
+
+    /**
+     * Пошук міст
      */
     public function searchCities(string $query, int $limit = 20): array
     {
-        if (!$this->apiKey) {
-            Log::error('NovaPoshta: API key missing');
-            return [];
-        }
+        $resp = $this->makeRequest('Address', 'searchSettlements', [
+            'CityName' => $query,
+            'Page' => 1,
+            'Limit' => $limit,
+        ]);
 
-        try {
-            $resp = Http::timeout(12)->post($this->endpoint, [
-                'apiKey' => $this->apiKey,
-                'modelName' => 'Address',
-                'calledMethod' => 'searchSettlements',
-                'methodProperties' => [
-                    'CityName' => $query,
-                    'Page' => 1,
-                    'Limit' => $limit,
-                ],
-            ]);
+        $addresses = $resp['data'][0]['Addresses'] ?? [];
 
-            if (!$resp->successful()) {
-                Log::error('NovaPoshta searchCities error', [
-                    'status' => $resp->status(),
-                    'body' => $resp->body(),
-                ]);
-                return [];
-            }
-
-            $addresses = $resp->json('data.0.Addresses', []);
-            return collect($addresses)->map(function ($item) {
-                // searchSettlements повертає DeliveryCity (CityRef) та SettlementRef
-                $ref = $item['DeliveryCity'] ?? $item['Ref'] ?? $item['SettlementRef'] ?? null;
-                return [
-                    'ref' => $ref,
-                    'name' => $item['Present'] ?? $item['MainDescription'] ?? '',
-                    'area' => $item['Area'] ?? $item['Region'] ?? null,
-                ];
-            })->filter(fn ($row) => !empty($row['ref']))->values()->all();
-        } catch (\Throwable $e) {
-            Log::error('NovaPoshta searchCities exception', ['message' => $e->getMessage()]);
-            return [];
-        }
+        return collect($addresses)->map(function ($item) {
+            return [
+                'ref' => $item['DeliveryCity'] ?? $item['Ref'] ?? $item['SettlementRef'] ?? null,
+                'name' => $item['Present'] ?? '',
+                'area' => $item['Area'] ?? $item['Region'] ?? null,
+            ];
+        })->filter(fn($row) => !empty($row['ref']))->values()->all();
     }
 
     /**
-     * Відділення/поштомати за містом.
+     * Відділення/поштомати
      */
     public function getWarehouses(string $cityRef, ?string $query = null, int $limit = 50): array
     {
-        if (!$this->apiKey) {
-            Log::error('NovaPoshta: API key missing');
-            return [];
-        }
+        $resp = $this->makeRequest('AddressGeneral', 'getWarehouses', [
+            'CityRef' => $cityRef,
+            'FindByString' => $query ?? '',
+            'Page' => 1,
+            'Limit' => $limit,
+        ]);
 
-        try {
-            $resp = Http::timeout(12)->post($this->endpoint, [
-                'apiKey' => $this->apiKey,
-                'modelName' => 'AddressGeneral',
-                'calledMethod' => 'getWarehouses',
-                'methodProperties' => [
-                    'CityRef' => $cityRef,
-                    'FindByString' => $query ?? '',
-                    'Page' => 1,
-                    'Limit' => $limit,
-                ],
-            ]);
-
-            if (!$resp->successful()) {
-                Log::error('NovaPoshta getWarehouses error', [
-                    'status' => $resp->status(),
-                    'body' => $resp->body(),
-                ]);
-                return [];
-            }
-
-            return collect($resp->json('data', []))->map(function ($item) {
-                return [
-                    'ref' => $item['Ref'] ?? null,
-                    'name' => $item['Description'] ?? '',
-                    'number' => $item['Number'] ?? null,
-                    'type' => $item['TypeOfWarehouse'] ?? null,
-                    'short_address' => $item['ShortAddress'] ?? null,
-                ];
-            })->values()->all();
-        } catch (\Throwable $e) {
-            Log::error('NovaPoshta getWarehouses exception', ['message' => $e->getMessage()]);
-            return [];
-        }
+        return collect($resp['data'] ?? [])->map(function ($item) {
+            return [
+                'ref' => $item['Ref'] ?? null,
+                'name' => $item['Description'] ?? '',
+                'number' => $item['Number'] ?? null,
+                'type' => $item['TypeOfWarehouse'] ?? null,
+                'category' => $item['Category'] ?? null,
+                'short_address' => $item['ShortAddress'] ?? null,
+            ];
+        })->values()->all();
     }
 
     /**
-     * Пошук вулиць за містом.
+     * Пошук вулиць
      */
     public function searchStreets(string $cityRef, string $query, int $limit = 30): array
     {
-        if (!$this->apiKey || !$cityRef) {
-            return [];
-        }
+        $resp = $this->makeRequest('Address', 'getStreet', [
+            'CityRef' => $cityRef,
+            'FindByString' => $query,
+            'Limit' => $limit,
+        ]);
 
-        try {
-            $resp = Http::timeout(12)->post($this->endpoint, [
-                'apiKey' => $this->apiKey,
-                'modelName' => 'Address',
-                'calledMethod' => 'getStreet',
-                'methodProperties' => [
-                    'CityRef' => $cityRef,
-                    'FindByString' => $query,
-                    'Limit' => $limit,
-                ],
-            ]);
-
-            if (!$resp->successful()) {
-                Log::error('NovaPoshta searchStreets error', [
-                    'status' => $resp->status(),
-                    'body' => $resp->body(),
-                ]);
-                return [];
-            }
-
-            return collect($resp->json('data', []))->map(function ($item) {
-                return [
-                    'ref' => $item['Ref'] ?? $item['StreetRef'] ?? null,
-                    'name' => $item['Description'] ?? '',
-                ];
-            })->values()->all();
-        } catch (\Throwable $e) {
-            Log::error('NovaPoshta searchStreets exception', ['message' => $e->getMessage()]);
-            return [];
-        }
+        return collect($resp['data'] ?? [])->map(function ($item) {
+            return [
+                'ref' => $item['Ref'] ?? null,
+                'name' => $item['Description'] ?? '',
+            ];
+        })->values()->all();
     }
 
     /**
-     * Одне відділення по Ref.
+     * Одне відділення по Ref
      */
     public function getWarehouseByRef(string $ref): ?array
     {
-        if (!$this->apiKey) {
-            Log::error('NovaPoshta: API key missing');
-            return null;
+        $resp = $this->makeRequest('AddressGeneral', 'getWarehouses', [
+            'Ref' => $ref,
+            'Page' => 1,
+            'Limit' => 1,
+        ]);
+
+        $row = $resp['data'][0] ?? null;
+        if (!$row) return null;
+
+        return [
+            'ref' => $row['Ref'] ?? null,
+            'name' => $row['Description'] ?? '',
+            'short_address' => $row['ShortAddress'] ?? null,
+            'category' => $row['Category'] ?? null,
+            'type' => $row['TypeOfWarehouse'] ?? null,
+        ];
+    }
+
+    /**
+     * ОТРИМАННЯ ДАНИХ ВІДПРАВНИКА ДЛЯ .ENV
+     * Викликайте цей метод один раз, щоб отримати UUID для налаштувань
+     */
+    public function getSenderData(): array
+    {
+        // 1. Отримуємо Контрагента (Ваш ФОП або Компанія)
+        $counterparties = $this->makeRequest('Counterparty', 'getCounterparties', [
+            'CounterpartyProperty' => 'Sender',
+            'Page' => 1
+        ]);
+
+        $sender = $counterparties['data'][0] ?? null;
+
+        if (!$sender) {
+            return ['error' => 'Відправника не знайдено. Перевірте API ключ.'];
         }
 
-        try {
-            $resp = Http::timeout(12)->post($this->endpoint, [
-                'apiKey' => $this->apiKey,
-                'modelName' => 'AddressGeneral',
-                'calledMethod' => 'getWarehouses',
-                'methodProperties' => [
-                    'Ref' => $ref,
-                    'Page' => 1,
-                    'Limit' => 1,
-                ],
-            ]);
+        // 2. Отримуємо Контактну особу
+        $contacts = $this->makeRequest('Counterparty', 'getCounterpartyContactPersons', [
+            'Ref' => $sender['Ref'],
+            'Page' => 1
+        ]);
 
-            if (!$resp->successful()) {
-                Log::error('NovaPoshta getWarehouseByRef error', [
-                    'status' => $resp->status(),
-                    'body' => $resp->body(),
-                ]);
-                return null;
-            }
+        $contact = $contacts['data'][0] ?? null;
 
-            $row = $resp->json('data.0');
-            if (!$row) {
-                return null;
-            }
-
-            return [
-                'ref' => $row['Ref'] ?? null,
-                'name' => $row['Description'] ?? '',
-                'short_address' => $row['ShortAddress'] ?? null,
-                'type' => $row['TypeOfWarehouse'] ?? null,
-            ];
-        } catch (\Throwable $e) {
-            Log::error('NovaPoshta getWarehouseByRef exception', ['message' => $e->getMessage()]);
-            return null;
-        }
+        return [
+            'INFO' => 'Скопіюйте ці значення у ваш .env файл',
+            'DATA' => [
+                'NP_SENDER_REF'    => $sender['Ref'],
+                'NP_SENDER_NAME'   => $sender['Description'],
+                'NP_CONTACT_REF'   => $contact['Ref'] ?? 'Не знайдено',
+                'NP_CONTACT_NAME'  => $contact['Description'] ?? 'Не знайдено',
+                'NP_SENDER_PHONE'  => $contact['Phones'] ?? 'Не знайдено',
+            ]
+        ];
     }
 }

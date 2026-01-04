@@ -9,6 +9,12 @@ use App\Http\Controllers\NovaPoshtaController;
 use App\Http\Controllers\OrderSourceController;
 use Illuminate\Support\Facades\Route;
 
+/*
+|--------------------------------------------------------------------------
+| Публічні маршрути
+|--------------------------------------------------------------------------
+*/
+
 Route::get('/', function () {
     return view('welcome');
 });
@@ -17,42 +23,70 @@ Route::get('/dashboard', function () {
     return view('dashboard');
 })->middleware(['auth', 'verified'])->name('dashboard');
 
+/*
+|--------------------------------------------------------------------------
+| Маршрути з авторизацією (auth)
+|--------------------------------------------------------------------------
+*/
+
 Route::middleware('auth')->group(function () {
-    Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
-    Route::get('/orders/list', [OrderController::class, 'list'])->name('orders.list');
 
-    Route::get('/orders/create', function () {
-        return view('orders.create');
-    })->name('orders.create');
+    // --- ЗАМОВЛЕННЯ (Orders) ---
+    Route::controller(OrderController::class)->group(function () {
+        Route::get('/orders', 'index')->name('orders.index');
+        Route::get('/orders/list', 'list')->name('orders.list');
+        
+        Route::get('/orders/create', function () {
+            return view('orders.create');
+        })->name('orders.create');
 
-    Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.show');
-    Route::get('/orders/{order}/edit', function (\App\Models\Order $order) {
-        return view('orders.edit', ['orderId' => $order->id]);
-    })->name('orders.edit');
-    Route::post('/orders', [OrderController::class, 'store'])->name('orders.store');
-    Route::put('/orders/{order}', [OrderController::class, 'update'])->name('orders.update');
-    Route::delete('/orders/{order}', [OrderController::class, 'destroy'])->name('orders.destroy');
-    Route::patch('/orders/{order}/tags', [OrderController::class, 'updateTags'])->name('orders.tags');
-    Route::patch('/orders/{order}/status', [OrderController::class, 'updateStatus'])->name('orders.updateStatus');
+        Route::get('/orders/{order}', 'show')->name('orders.show');
+        Route::get('/orders/{order}/edit', function (\App\Models\Order $order) {
+            return view('orders.edit', ['orderId' => $order->id]);
+        })->name('orders.edit');
 
-    // Nova Poshta lookups
-    Route::get('/nova-poshta/cities', [NovaPoshtaController::class, 'cities'])->name('novaPoshta.cities');
-    Route::get('/nova-poshta/warehouses', [NovaPoshtaController::class, 'warehouses'])->name('novaPoshta.warehouses');
-    Route::get('/nova-poshta/streets', [NovaPoshtaController::class, 'streets'])->name('novaPoshta.streets');
+        Route::post('/orders', 'store')->name('orders.store');
+        Route::put('/orders/{order}', 'update')->name('orders.update');
+        Route::delete('/orders/{order}', 'destroy')->name('orders.destroy');
+        
+        // Додаткові дії з замовленням
+        Route::patch('/orders/{order}/tags', 'updateTags')->name('orders.tags');
+        Route::patch('/orders/{order}/status', 'updateStatus')->name('orders.updateStatus');
+        
+        // Генерація ТТН (Нова Пошта)
+        Route::post('/orders/{order}/generate-ttn', 'generateTTN')->name('orders.generateTTN');
+    });
 
+    // --- НОВА ПОШТА (Nova Poshta) ---
+    Route::controller(NovaPoshtaController::class)->prefix('nova-poshta')->name('novaPoshta.')->group(function () {
+        Route::get('/cities', 'cities')->name('cities');
+        Route::get('/warehouses', 'warehouses')->name('warehouses');
+        Route::get('/streets', 'streets')->name('streets');
+        
+        // Тимчасовий маршрут для отримання UUID відправника (після налаштування можна видалити)
+        Route::get('/debug-sender', fn(\App\Services\NovaPoshtaService $np) => $np->getSenderData())->name('debug');
+    });
+
+    // --- ТОВАРИ (Products) ---
+    Route::controller(ProductController::class)->prefix('products')->name('products.')->group(function () {
+        Route::get('/', 'index')->name('index');
+        Route::get('/create', 'create')->name('create');
+        Route::post('/', 'store')->name('store');
+        Route::get('/{product}/edit', 'edit')->name('edit');
+        Route::put('/{product}', 'update')->name('update');
+    });
+
+    // --- ДОВІДНИКИ ТА ТЕГИ ---
     Route::get('/statuses', [StatusController::class, 'index'])->name('statuses.index');
     Route::get('/order-sources', [OrderSourceController::class, 'index'])->name('orderSources.index');
-
-    Route::get('/products', [ProductController::class, 'index'])->name('products.index');
-    Route::get('/products/create', [ProductController::class, 'create'])->name('products.create');
-    Route::get('/products/{product}/edit', [ProductController::class, 'edit'])->name('products.edit');
-    Route::post('/products', [ProductController::class, 'store'])->name('products.store');
-    Route::put('/products/{product}', [ProductController::class, 'update'])->name('products.update');
     Route::get('/tags', [TagController::class, 'index'])->name('tags.index');
 
-    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
-    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+    // --- ПРОФІЛЬ КОРИСТУВАЧА ---
+    Route::controller(ProfileController::class)->prefix('profile')->name('profile.')->group(function () {
+        Route::get('/', 'edit')->name('edit');
+        Route::patch('/', 'update')->name('update');
+        Route::delete('/', 'destroy')->name('destroy');
+    });
 });
 
 require __DIR__.'/auth.php';

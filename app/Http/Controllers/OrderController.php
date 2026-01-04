@@ -493,4 +493,33 @@ class OrderController extends Controller
             ],
         ]);
     }
+
+    public function generateTTN(\App\Models\Order $order, \App\Services\NovaPoshtaService $np)
+    {
+        // Перевіряємо, чи заповнені дані для доставки
+        if (!$order->delivery || !$order->delivery->city_ref || !$order->delivery->warehouse_ref) {
+            return response()->json(['message' => 'Не заповнені дані міста або відділення'], 422);
+        }
+
+        $result = $np->createWaybill($order);
+
+        if (isset($result['success']) && $result['success']) {
+            $ttnData = $result['data'][0];
+            
+            // Оновлюємо ТТН у моделі доставки
+            $order->delivery->update([
+                'ttn' => $ttnData['IntDocNumber']
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'ttn' => $ttnData['IntDocNumber'],
+                'ref' => $ttnData['Ref'] // UUID самої ТТН для друку в майбутньому
+            ]);
+        }
+
+        $error = $result['errors'][0] ?? 'Помилка Нової Пошти';
+        return response()->json(['message' => $error], 400);
+    }
+    
 }
