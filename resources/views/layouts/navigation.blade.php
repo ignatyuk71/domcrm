@@ -1,47 +1,119 @@
-<nav class="navbar navbar-expand-md navbar-light bg-white border-bottom sticky-top">
+<style>
+    /* Гарний шрифт, щоб букви не були розтягнуті */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+
+    .navbar-static {
+        font-family: 'Inter', sans-serif;
+        background-color: #ffffff;
+        border-bottom: 1px solid #e5e7eb; /* Тонка лінія знизу */
+        height: 70px;
+    }
+
+    /* Стиль для аватарки (кружечок) */
+    .user-avatar-circle {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 2px solid #f8fafc;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        transition: transform 0.2s;
+    }
+
+    .nav-link:hover .user-avatar-circle {
+        border-color: #6366f1; /* Синій обідок при наведенні */
+        transform: scale(1.05);
+    }
+
+    /* Дропдаун (Випадаюче меню) */
+    .dropdown-menu-clean {
+        border: none;
+        border-radius: 12px;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        margin-top: 10px;
+        padding: 8px;
+    }
+
+    .dropdown-item {
+        border-radius: 8px;
+        padding: 8px 16px;
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: #374151;
+    }
+
+    .dropdown-item:hover {
+        background-color: #f3f4f6;
+        color: #111827;
+    }
+
+    .dropdown-item.text-danger:hover {
+        background-color: #fef2f2;
+        color: #dc2626;
+    }
+</style>
+
+<nav class="navbar navbar-expand-md navbar-light bg-white navbar-static">
     <div class="container-fluid px-4">
-        <!-- Mobile Toggler & Brand -->
+        
         <div class="d-flex align-items-center d-md-none w-100">
-            <button class="navbar-toggler border-0 p-0 me-3" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent" aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
+            <button class="navbar-toggler border-0 p-0 me-3" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <span class="navbar-brand fw-bold text-dark">DomCRM</span>
+            <button class="btn btn-sm btn-light border ms-auto" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileSidebar">
+                <i class="bi bi-list fs-5"></i>
+            </button>
         </div>
 
         <div class="collapse navbar-collapse" id="navbarContent">
-            <!-- Left Side: Desktop Nav Links -->
-            <ul class="navbar-nav me-auto mb-2 mb-md-0">
+            
+            <ul class="navbar-nav me-auto">
                 <li class="nav-item">
-                    <a class="nav-link {{ request()->routeIs('dashboard') ? 'active fw-bold text-primary' : 'text-secondary' }}" href="{{ route('dashboard') }}">
-                        Dashboard
-                    </a>
+                    <span class="nav-link text-muted fw-medium" style="font-size: 0.9rem;">
+                        {{ now()->translatedFormat('d F Y') }}
+                    </span>
                 </li>
             </ul>
 
-            <!-- Right Side: User Dropdown -->
-            <ul class="navbar-nav ms-auto">
+            <ul class="navbar-nav ms-auto align-items-center">
                 <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle d-flex align-items-center text-secondary" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <div class="d-flex align-items-center justify-content-center bg-primary-subtle text-primary rounded border border-primary-subtle fw-bold me-2" style="width: 32px; height: 32px;">
-                            {{ mb_strtoupper(mb_substr(Auth::user()->name, 0, 1)) }}
+                    <a class="nav-link dropdown-toggle d-flex align-items-center gap-2" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        
+                        <div class="d-none d-md-block text-end lh-1">
+                            <div class="fw-bold text-dark" style="font-size: 0.9rem;">{{ Auth::user()->name }}</div>
+                            <small class="text-muted" style="font-size: 0.75rem;">Адміністратор</small>
                         </div>
-                        <span class="d-none d-md-inline">{{ Auth::user()->name }}</span>
+
+                        <img src="https://ui-avatars.com/api/?name={{ urlencode(Auth::user()->name) }}&background=6366f1&color=fff&bold=true" 
+                             class="user-avatar-circle" 
+                             alt="Avatar">
                     </a>
-                    <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0 mt-2" aria-labelledby="userDropdown">
-                        <li>
-                            <h6 class="dropdown-header text-muted small">
-                                Signed in as <br>
-                                <strong class="text-dark">{{ Auth::user()->name }}</strong>
-                            </h6>
+
+                    <ul class="dropdown-menu dropdown-menu-end dropdown-menu-clean" aria-labelledby="userDropdown">
+                        <li class="px-3 py-2 border-bottom mb-2 d-md-none">
+                            <span class="fw-bold text-dark">{{ Auth::user()->name }}</span>
                         </li>
-                        <li><a class="dropdown-item" href="{{ route('profile.edit') }}">Profile</a></li>
-                        <li><hr class="dropdown-divider"></li>
+
+                        <li>
+                            <a class="dropdown-item" href="{{ route('profile.edit') }}">
+                                <i class="bi bi-person me-2 text-secondary"></i> Мій профіль
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="#">
+                                <i class="bi bi-gear me-2 text-secondary"></i> Налаштування
+                            </a>
+                        </li>
+                        
+                        <li><hr class="dropdown-divider my-2"></li>
+                        
                         <li>
                             <form method="POST" action="{{ route('logout') }}">
                                 @csrf
-                                <a class="dropdown-item text-danger" href="{{ route('logout') }}" onclick="event.preventDefault(); this.closest('form').submit();">
-                                    Log Out
-                                </a>
+                                <button type="submit" class="dropdown-item text-danger fw-bold">
+                                    <i class="bi bi-box-arrow-right me-2"></i> Вийти
+                                </button>
                             </form>
                         </li>
                     </ul>

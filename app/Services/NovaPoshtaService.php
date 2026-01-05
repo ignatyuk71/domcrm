@@ -124,7 +124,8 @@ class NovaPoshtaService
         // --- ПІДГОТОВКА ПАРАМЕТРІВ ТТН ---
         $dbPayer = strtolower($delivery->delivery_payer ?? 'recipient');
         $payerType = ($dbPayer === 'sender') ? 'Sender' : 'Recipient';
-    
+
+        
         $params = [
             'Sender'             => config('services.nova_poshta.sender_ref'),
             'CitySender'         => config('services.nova_poshta.sender_city'),
@@ -140,7 +141,7 @@ class NovaPoshtaService
             
             'PayerType'          => $payerType, 
             'PaymentMethod'      => 'Cash',
-            'DateTime'           => now()->format('d.m.Y'),
+            
             'CargoType'          => 'Cargo',
             'ServiceType'        => $delivery->service_type ?? 'WarehouseWarehouse', 
             
@@ -257,5 +258,29 @@ class NovaPoshtaService
     {
         // Використовуємо printMarkings та zebra/1 для термопринтера
         return "https://my.novaposhta.ua/orders/printMarkings/orders[]/{$ttn}/type/pdf/zebra/1/apiKey/{$this->apiKey}";
+    }
+
+    /**
+     * Отримання статусів відправлень (масовий трекінг).
+     *
+     * @param array<int, array<string, string|null>> $documents
+     * @return array|null
+     */
+    public function getStatuses(array $documents): ?array
+    {
+        if (empty($documents)) {
+            return null;
+        }
+
+        $payload = [
+            'Documents' => array_map(function (array $doc) {
+                return [
+                    'DocumentNumber' => $doc['DocumentNumber'] ?? $doc['ttn'] ?? $doc['number'] ?? null,
+                    'Phone' => $doc['Phone'] ?? $doc['phone'] ?? null,
+                ];
+            }, $documents),
+        ];
+
+        return $this->makeRequest('TrackingDocument', 'getStatusDocuments', $payload);
     }
 }

@@ -55,6 +55,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/orders/{order}/generate-ttn', 'generateTTN')->name('orders.generateTTN');
         Route::post('/orders/{order}/cancel-ttn', 'cancelTTN')->name('orders.cancelTTN');
         Route::get('/orders/{order}/print-ttn', 'printTTN')->name('orders.printTTN');
+        Route::post('/orders/{order}/track-delivery', 'trackDelivery')->name('orders.trackDelivery');
     });
 
     // --- НОВА ПОШТА (Nova Poshta довідники) ---

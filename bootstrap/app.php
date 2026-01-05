@@ -10,6 +10,9 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
+    ->withCommands([
+        \App\Console\Commands\SyncDeliveryStatuses::class,
+    ])
     ->withMiddleware(function (Middleware $middleware) {
         // Вимикаємо перевірку CSRF для маршрутів генерації ТТН
         $middleware->validateCsrfTokens(except: [

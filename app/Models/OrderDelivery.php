@@ -35,10 +35,21 @@ class OrderDelivery extends Model
 
         'recipient_name',
         'recipient_phone',
+
+        // Статус доставки (оновлюється через трекінг)
+        'delivery_status_code',
+        'delivery_status_label',
+        'delivery_status_description',
+        'delivery_status_color',
+        'delivery_status_icon',
+        'delivery_status_updated_at',
+        'last_tracked_at',
     ];
 
     protected $casts = [
         'delivery_cost' => 'decimal:2',
+        'delivery_status_updated_at' => 'datetime',
+        'last_tracked_at' => 'datetime',
     ];
 
     /** Доставка належить замовленню. */

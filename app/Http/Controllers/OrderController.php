@@ -10,10 +10,12 @@ use App\Models\OrderPayment;
 use App\Models\Tag;
 use App\Models\Status;
 use App\Models\OrderSource;
+use App\Support\DeliveryStatusMapper;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 
 class OrderController extends Controller
 {
@@ -39,6 +41,7 @@ class OrderController extends Controller
                 'source',
                 'tags',
                 'delivery',
+                'payment:id,order_id,prepay_amount,currency,method',
                 'items' => fn ($q) => $q
                     ->select('id', 'order_id', 'product_id', 'product_title', 'sku', 'size', 'price', 'qty', 'total')
                     ->with('product:id,main_photo_path'),
@@ -392,6 +395,10 @@ class OrderController extends Controller
 
         DB::transaction(function () use ($order) {
             $order->tags()->detach();
+            // Видаляємо повʼязане, щоб очистити всі статуси доставки/оплати/позиції
+            $order->delivery()->delete();
+            $order->payment()->delete();
+            $order->items()->delete();
             $order->delete();
         });
 
@@ -580,7 +587,14 @@ class OrderController extends Controller
             // Очищаємо ТТН та Ref в базі
             $order->delivery->update([
                 'ttn' => null,
-                'ttn_ref' => null
+                'ttn_ref' => null,
+                'delivery_status_code' => null,
+                'delivery_status_label' => null,
+                'delivery_status_description' => null,
+                'delivery_status_color' => null,
+                'delivery_status_icon' => null,
+                'delivery_status_updated_at' => null,
+                'last_tracked_at' => null,
             ]);
 
             return response()->json([
@@ -612,5 +626,63 @@ class OrderController extends Controller
             'print_url' => $link
         ]);
     }
-        
+
+    /** Ручне оновлення статусу доставки за ТТН (без очікування cron). */
+    public function trackDelivery(Order $order, \App\Services\NovaPoshtaService $np): JsonResponse
+    {
+        $order->load('delivery', 'customer');
+        $delivery = $order->delivery;
+
+        if (!$delivery || !$delivery->ttn) {
+            return response()->json(['message' => 'ТТН відсутня'], 422);
+        }
+
+        $response = $np->getStatuses([
+            [
+                'DocumentNumber' => $delivery->ttn,
+                'Phone' => $delivery->recipient_phone ?? $order->customer?->phone,
+            ],
+        ]);
+
+        if (!($response['success'] ?? false)) {
+            Log::warning('NovaPoshta tracking error (manual)', [
+                'order_id' => $order->id,
+                'ttn' => $delivery->ttn,
+                'errors' => $response['errors'] ?? ['unknown'],
+            ]);
+
+            return response()->json([
+                'message' => $response['errors'][0] ?? 'Помилка Нової Пошти',
+            ], 400);
+        }
+
+        $data = $response['data'][0] ?? null;
+        if (!$data) {
+            return response()->json([
+                'message' => 'Статус не знайдено для цієї ТТН',
+            ], 404);
+        }
+
+        $normalized = DeliveryStatusMapper::map($data);
+        $delivery->forceFill([
+            'delivery_status_code' => $normalized['code'],
+            'delivery_status_label' => $normalized['label'],
+            'delivery_status_description' => $normalized['description'],
+            'delivery_status_color' => $normalized['color'],
+            'delivery_status_icon' => $normalized['icon'],
+            'delivery_status_updated_at' => now(),
+            'last_tracked_at' => now(),
+        ])->saveQuietly();
+
+        return response()->json([
+            'success' => true,
+            'delivery_status_code' => $delivery->delivery_status_code,
+            'delivery_status_label' => $delivery->delivery_status_label,
+            'delivery_status_description' => $delivery->delivery_status_description,
+            'delivery_status_color' => $delivery->delivery_status_color,
+            'delivery_status_icon' => $delivery->delivery_status_icon,
+            'delivery_status_updated_at' => $delivery->delivery_status_updated_at,
+            'last_tracked_at' => $delivery->last_tracked_at,
+        ]);
+    }
 }
