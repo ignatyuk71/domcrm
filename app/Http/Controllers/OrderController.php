@@ -36,7 +36,7 @@ class OrderController extends Controller
 
         $orders = Order::query()
             ->with([
-                'customer',
+                'customer' => fn ($q) => $q->withCount('orders'),
                 'statusRef',
                 'source',
                 'tags',
@@ -98,7 +98,7 @@ class OrderController extends Controller
     public function show(Order $order): JsonResponse
     {
         $order->load([
-            'customer',
+            'customer' => fn ($q) => $q->withCount('orders'),
             'statusRef',
             'tags',
             'delivery',
@@ -252,7 +252,13 @@ class OrderController extends Controller
         });
 
         return response()->json([
-            'data' => $order->load(['customer', 'items', 'payment', 'delivery', 'tags']),
+            'data' => $order->load([
+                'customer' => fn ($q) => $q->withCount('orders'),
+                'items',
+                'payment',
+                'delivery',
+                'tags'
+            ]),
         ], 201);
     }
 
@@ -381,7 +387,14 @@ class OrderController extends Controller
         });
 
         return response()->json([
-            'data' => $order->load(['customer', 'items', 'payment', 'delivery', 'tags', 'statusRef']),
+            'data' => $order->load([
+                'customer' => fn ($q) => $q->withCount('orders'),
+                'items',
+                'payment',
+                'delivery',
+                'tags',
+                'statusRef'
+            ]),
         ]);
     }
 

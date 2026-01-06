@@ -1,0 +1,93 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Customer;
+use App\Models\Order;
+use App\Models\OrderItem;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+
+class CustomerController extends Controller
+{
+    /**
+     * Пошук покупців за телефоном/імʼям/email для підказок у формі замовлення.
+     */
+    public function index(Request $request): JsonResponse
+    {
+        $query = trim((string) $request->get('q', ''));
+
+        $customers = Customer::query()
+            ->when($query, function ($q) use ($query) {
+                $normalizedPhone = preg_replace('/\D+/', '', $query);
+                $like = '%' . $query . '%';
+
+                $q->where(function ($inner) use ($like, $normalizedPhone) {
+                    $inner->where('first_name', 'like', $like)
+                        ->orWhere('last_name', 'like', $like)
+                        ->orWhere('email', 'like', $like)
+                        ->orWhere('phone', 'like', $like);
+
+                    if ($normalizedPhone !== '') {
+                        // Спрощене нормалізоване порівняння номера без спеціальних символів
+                        $inner->orWhereRaw(
+                            'REPLACE(REPLACE(REPLACE(REPLACE(phone, "+", ""), "-", ""), " ", ""), "(", "") LIKE ?',
+                            ['%' . $normalizedPhone . '%']
+                        );
+                    }
+                });
+            })
+            ->latest('id')
+            ->limit(10)
+            ->get(['id', 'first_name', 'last_name', 'phone', 'email']);
+
+        return response()->json(['data' => $customers]);
+    }
+
+    /**
+     * Детальна інформація про клієнта + останні замовлення (для quick-view оффканвасу).
+     */
+    public function show(Customer $customer): JsonResponse
+    {
+        $customer->loadCount('orders');
+
+        $recentOrders = Order::query()
+            ->where('customer_id', $customer->id)
+            ->with([
+                'delivery:id,order_id,ttn,delivery_status_label,delivery_status_code,city_name,warehouse_name',
+                'statusRef:id,code,name,icon,color',
+            ])
+            ->withSum('items', 'total')
+            ->latest('id')
+            ->limit(10)
+            ->get([
+                'id',
+                'order_number',
+                'status',
+                'status_id',
+                'payment_status',
+                'currency',
+                'customer_id',
+                'created_at',
+            ]);
+
+        $totalSpent = OrderItem::query()
+            ->whereHas('order', fn ($q) => $q->where('customer_id', $customer->id))
+            ->sum(DB::raw('total'));
+
+        $lastOrderAt = Order::where('customer_id', $customer->id)->latest('id')->value('created_at');
+
+        return response()->json([
+            'data' => [
+                'customer' => $customer,
+                'metrics' => [
+                    'orders_count' => $customer->orders_count,
+                    'total_spent' => (float) $totalSpent,
+                    'last_order_at' => $lastOrderAt,
+                ],
+                'recent_orders' => $recentOrders,
+            ],
+        ]);
+    }
+}

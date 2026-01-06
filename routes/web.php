@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\OrderController;
+use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\TagController;
 use App\Http\Controllers\StatusController;
 use App\Http\Controllers\ProductController;
@@ -57,6 +58,10 @@ Route::middleware('auth')->group(function () {
         Route::get('/orders/{order}/print-ttn', 'printTTN')->name('orders.printTTN');
         Route::post('/orders/{order}/track-delivery', 'trackDelivery')->name('orders.trackDelivery');
     });
+
+    // --- КЛІЄНТИ (Customers) ---
+    Route::get('/customers', [CustomerController::class, 'index'])->name('customers.index');
+    Route::get('/customers/{customer}', [CustomerController::class, 'show'])->name('customers.show');
 
     // --- НОВА ПОШТА (Nova Poshta довідники) ---
     Route::controller(NovaPoshtaController::class)->prefix('nova-poshta')->name('novaPoshta.')->group(function () {

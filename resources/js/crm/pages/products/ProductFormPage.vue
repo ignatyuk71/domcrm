@@ -1,263 +1,285 @@
 <template>
-  <div class="container py-5">
-    <div class="mx-auto" style="max-width: 1140px;">
+  <div class="container-fluid p-4">
+    <div class="mx-auto" style="max-width: 1200px;">
 
-      <!-- Header -->
       <div class="d-flex flex-column flex-sm-row align-items-start align-items-sm-center justify-content-between gap-3 mb-4">
         <div>
-          <h1 class="h3 mb-1 fw-bold text-dark">
-            {{ isEdit ? 'Редагування товару' : 'Додавання товару' }}
-          </h1>
-          <p class="text-muted mb-0">Заповніть інформацію про товар для каталогу.</p>
+          <div class="d-flex align-items-center gap-2 mb-1">
+            <a href="/products" class="btn btn-icon-back text-muted p-0 me-2">
+              <i class="bi bi-arrow-left fs-5"></i>
+            </a>
+            <h1 class="h4 fw-bold text-dark m-0">
+              {{ isEdit ? 'Редагування товару' : 'Новий товар' }}
+            </h1>
+          </div>
+          <p class="text-muted small mb-0 ms-4 ps-2">Заповніть інформацію, щоб додати товар до каталогу.</p>
         </div>
+        
         <div class="d-flex gap-2">
-          <a href="/products" class="btn btn-light border">
-            Скасувати
-          </a>
-          <button type="button" @click="openPreview" class="btn btn-outline-primary">
-            👁️ Попередній перегляд
+          <button type="button" @click="openPreview" class="btn btn-white border shadow-sm">
+            <i class="bi bi-eye me-2 text-secondary"></i>
+            <span class="d-none d-md-inline">Перегляд</span>
           </button>
-          <button @click="handleSubmit" :disabled="loading" class="btn btn-primary d-flex align-items-center gap-2">
+          
+          <button @click="handleSubmit" :disabled="loading" class="btn btn-primary-gradient shadow-sm d-flex align-items-center gap-2 px-4">
             <span v-if="loading" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-            <span>{{ loading ? 'Збереження...' : 'Зберегти товар' }}</span>
+            <i v-else class="bi bi-check-lg"></i>
+            <span>{{ loading ? 'Збереження...' : 'Зберегти' }}</span>
           </button>
         </div>
       </div>
 
-      <form @submit.prevent="handleSubmit" class="row g-4">
+      <form @submit.prevent="handleSubmit">
+        <div class="row g-4">
 
-        <!-- Left Column -->
-        <div class="col-lg-8">
-
-          <!-- Basic Info Card -->
-          <div class="card border-0 shadow-sm mb-4">
-            <div class="card-body p-4">
-              <h5 class="card-title fw-bold mb-4">Основна інформація</h5>
-              <div class="mb-3">
-                <label class="form-label">Назва товару</label>
+          <div class="col-lg-8">
+            
+            <div class="clean-card mb-4">
+              <div class="card-title-section">
+                <i class="bi bi-info-circle text-primary me-2"></i>Основна інформація
+              </div>
+              
+              <div class="mb-4">
+                <label class="form-label-custom">Назва товару</label>
                 <input
                   v-model.trim="form.title"
                   type="text"
-                  class="form-control"
+                  class="form-control form-control-modern"
                   :class="{ 'is-invalid': errors.title }"
-                  placeholder="Наприклад: Кросівки Nike Air"
+                  placeholder="Наприклад: Кросівки Nike Air Max"
                 >
                 <div v-if="errors.title" class="invalid-feedback">{{ errors.title }}</div>
               </div>
 
-              <div class="mb-3">
-                <label class="form-label">Опис</label>
+              <div class="row g-3 mb-4">
+                 <div class="col-md-6">
+                    <label class="form-label-custom">Категорія</label>
+                    <div class="position-relative">
+                      <select v-model="form.category" class="form-select form-select-modern">
+                        <option disabled value="">Оберіть категорію...</option>
+                        <option>Пухнасті тапки</option>
+                        <option>Тапки дитячі</option>
+                        <option>Капці (непухнасті)</option>
+                        <option>Аксесуари</option>
+                      </select>
+                    </div>
+                 </div>
+                 <div class="col-md-6">
+                    <label class="form-label-custom">SKU (Артикул)</label>
+                    <input
+                      v-model.trim="form.sku"
+                      type="text"
+                      class="form-control form-control-modern"
+                      placeholder="AUT-001"
+                    >
+                 </div>
+              </div>
+
+              <div>
+                <label class="form-label-custom">Опис</label>
                 <textarea
                   v-model.trim="form.description"
                   rows="4"
-                  class="form-control"
-                  placeholder="Детальний опис товару..."
+                  class="form-control form-control-modern"
+                  placeholder="Детальний опис товару, характеристики..."
                 ></textarea>
-              </div>
-
-              <div class="mb-3">
-                <label class="form-label">Категорія</label>
-                <select
-                  v-model="form.category"
-                  class="form-select"
-                >
-                  <option disabled value="">Виберіть категорію</option>
-                  <option>Пухнасті тапки</option>
-                  <option>Тапки дитячі</option>
-                  <option>Капці (непухнасті)</option>
-                  <option>Аксесуари</option>
-                </select>
+                <div class="form-text text-end">{{ form.description.length }} символів</div>
               </div>
             </div>
-          </div>
 
-          <!-- Pricing Card -->
-          <div class="card border-0 shadow-sm mb-4">
-            <div class="card-body p-4">
-              <h5 class="card-title fw-bold mb-4">Ціноутворення</h5>
-              <div class="row g-3">
-                <div class="col-sm-4">
-                  <label class="form-label">Валюта</label>
-                  <select
-                    v-model="form.currency"
-                    class="form-select"
-                  >
+            <div class="clean-card mb-4">
+              <div class="card-title-section">
+                <i class="bi bi-currency-dollar text-success me-2"></i>Ціна та Склад
+              </div>
+
+              <div class="row g-4">
+                <div class="col-md-4">
+                  <label class="form-label-custom">Валюта</label>
+                  <select v-model="form.currency" class="form-select form-select-modern">
                     <option value="UAH">UAH (₴)</option>
                     <option value="USD">USD ($)</option>
                     <option value="EUR">EUR (€)</option>
-                    <option value="PLN">PLN (zł)</option>
                   </select>
                 </div>
-                <div class="col-sm-4">
-                  <label class="form-label">Закупівельна ціна</label>
-                  <div class="input-group">
+
+                <div class="col-md-4">
+                  <label class="form-label-custom">Закупівельна ціна</label>
+                  <div class="input-group input-group-modern">
                     <input
                       v-model.number="form.cost_price"
                       type="number" min="0" step="0.01"
-                      class="form-control"
+                      class="form-control border-0"
                       placeholder="0.00"
                     >
-                    <span class="input-group-text">{{ form.currency }}</span>
+                    <span class="input-group-text bg-transparent border-0 text-muted">{{ form.currency }}</span>
                   </div>
                 </div>
-                <div class="col-sm-4">
-                  <label class="form-label">Ціна продажу</label>
-                  <div class="input-group">
+
+                <div class="col-md-4">
+                  <label class="form-label-custom">Ціна продажу</label>
+                  <div class="input-group input-group-modern focused-group">
                     <input
                       v-model.number="form.sale_price"
                       type="number" min="0" step="0.01"
-                      class="form-control"
+                      class="form-control border-0 fw-bold"
                       placeholder="0.00"
                     >
-                    <span class="input-group-text">{{ form.currency }}</span>
+                    <span class="input-group-text bg-transparent border-0 text-muted">{{ form.currency }}</span>
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
+              
+              <hr class="border-light my-4">
 
-          <!-- Inventory Card -->
-          <div class="card border-0 shadow-sm mb-4">
-            <div class="card-body p-4">
-              <h5 class="card-title fw-bold mb-4">Склад та артикул</h5>
-              <div class="row g-3">
-                <div class="col-sm-4">
-                  <label class="form-label">SKU (Артикул)</label>
-                  <input
-                    v-model.trim="form.sku"
-                    type="text"
-                    class="form-control"
-                  >
-                </div>
-                <div class="col-sm-4">
-                  <label class="form-label">Кількість</label>
+              <div class="row g-4">
+                <div class="col-md-6">
+                  <label class="form-label-custom">Кількість на складі</label>
                   <input
                     v-model.number="form.stock_qty"
                     type="number" min="0" step="1"
-                    class="form-control"
+                    class="form-control form-control-modern"
+                    placeholder="0"
                   >
                 </div>
-                <div class="col-sm-4">
-                  <label class="form-label">Мін. залишок</label>
+                <div class="col-md-6">
+                  <label class="form-label-custom">Мін. залишок (для сповіщень)</label>
                   <input
                     v-model.number="form.min_stock"
                     type="number" min="0" step="1"
-                    class="form-control"
+                    class="form-control form-control-modern"
+                    placeholder="0"
                   >
                 </div>
               </div>
             </div>
           </div>
 
-        </div>
-
-        <!-- Right Column -->
-        <div class="col-lg-4">
-
-          <!-- Media Card -->
-          <div class="card border-0 shadow-sm mb-4">
-            <div class="card-body p-4">
-              <h5 class="card-title fw-bold mb-4">Медіа</h5>
-              <div
-                class="border rounded-3 p-4 text-center cursor-pointer bg-light"
-                :class="{'border-primary bg-primary-subtle': previewUrl}"
-                style="border-style: dashed !important;"
+          <div class="col-lg-4">
+            
+            <div class="clean-card mb-4">
+              <div class="card-title-section">
+                <i class="bi bi-image text-purple me-2"></i>Фото товару
+              </div>
+              
+              <div 
+                class="upload-area"
+                :class="{'has-image': previewUrl}"
                 @click="pickFile"
                 @dragover.prevent
                 @drop.prevent="onFileDrop"
               >
-                <div v-if="previewUrl" class="position-relative mb-3">
-                  <img :src="previewUrl" class="img-fluid rounded" style="max-height: 200px; object-fit: contain;">
-                  <button @click.stop="removeImage" type="button" class="btn btn-danger btn-sm position-absolute top-0 end-0 m-1 rounded-circle p-1 lh-1">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                  </button>
-                </div>
-                <div v-else>
-                  <div class="mb-3 text-muted">
-                    <svg class="mx-auto" width="48" height="48" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                      <path fill-rule="evenodd" d="M1.5 6a2.25 2.25 0 012.25-2.25h16.5A2.25 2.25 0 0122.5 6v12a2.25 2.25 0 01-2.25 2.25H3.75A2.25 2.25 0 011.5 18V6zM3 16.06V18c0 .414.336.75.75.75h16.5A.75.75 0 0021 18v-1.94l-2.69-2.689a1.5 1.5 0 00-2.12 0l-.88.879.97.97a.75.75 0 11-1.06 1.06l-5.16-5.159a1.5 1.5 0 00-2.12 0L3 16.061zm10.125-7.81a1.125 1.125 0 112.25 0 1.125 1.125 0 01-2.25 0z" clip-rule="evenodd" />
-                    </svg>
+                <div v-if="previewUrl" class="image-preview-wrapper">
+                  <img :src="previewUrl" class="uploaded-img">
+                  <div class="overlay">
+                     <button @click.stop="removeImage" type="button" class="btn btn-danger btn-sm rounded-circle shadow">
+                       <i class="bi bi-trash"></i>
+                     </button>
+                     <button type="button" class="btn btn-light btn-sm rounded-pill shadow px-3 mt-2 fw-medium">
+                       Змінити
+                     </button>
                   </div>
-                  <div class="text-primary fw-semibold">Завантажити фото</div>
-                  <div class="small text-muted">PNG, JPG, GIF до 10MB</div>
                 </div>
+
+                <div v-else class="placeholder-content">
+                  <div class="icon-circle mb-3">
+                    <i class="bi bi-cloud-arrow-up text-primary fs-4"></i>
+                  </div>
+                  <div class="fw-bold text-dark mb-1">Завантажити фото</div>
+                  <div class="small text-muted mb-3">Drag & drop або клікніть</div>
+                  <div class="badge bg-light text-secondary border fw-normal">JPG, PNG, WEBP</div>
+                </div>
+
                 <input ref="fileInput" type="file" class="d-none" accept="image/*" @change="onFileChange">
               </div>
             </div>
-          </div>
 
-          <!-- Dimensions Card -->
-          <div class="card border-0 shadow-sm mb-4">
-            <div class="card-body p-4">
-              <h5 class="card-title fw-bold mb-4">Габарити</h5>
-              <div class="vstack gap-3">
-                <div v-for="dim in dimensions" :key="dim.key">
-                  <label class="form-label small text-muted mb-1">{{ dim.label }}</label>
-                  <div class="input-group input-group-sm">
-                    <input
-                      v-model.number="form[dim.key]"
-                      type="number" min="0" :step="dim.step"
-                      class="form-control"
-                    >
-                    <span class="input-group-text">{{ dim.unit }}</span>
-                  </div>
+            <div class="clean-card">
+              <div class="card-title-section">
+                <i class="bi bi-box-seam text-warning me-2"></i>Габарити
+              </div>
+              
+              <div class="row g-3">
+                <div class="col-12">
+                   <label class="form-label-custom">Вага</label>
+                   <div class="input-group input-group-modern input-group-sm">
+                      <input v-model.number="form.weight_g" type="number" class="form-control border-0" placeholder="0">
+                      <span class="input-group-text border-0 bg-transparent text-muted">г</span>
+                   </div>
+                </div>
+                <div class="col-4" v-for="dim in dimensions.slice(1)" :key="dim.key">
+                   <label class="form-label-custom text-truncate">{{ dim.label }}</label>
+                   <div class="input-group input-group-modern input-group-sm">
+                      <input v-model.number="form[dim.key]" type="number" :step="dim.step" class="form-control border-0 px-1 text-center" placeholder="0">
+                   </div>
                 </div>
               </div>
-              <div class="form-text mt-3">Використовується для розрахунку доставки.</div>
+              <div class="mt-3 small text-muted fst-italic">
+                <i class="bi bi-info-circle me-1"></i>
+                Використовується для розрахунку ТТН
+              </div>
             </div>
-          </div>
 
+          </div>
         </div>
       </form>
     </div>
 
-    <!-- Preview Modal -->
-    <div v-if="showPreview" class="modal fade show" style="display: block; background-color: rgba(0,0,0,0.5);" tabindex="-1" role="dialog">
-      <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title">Попередній перегляд</h5>
+    <div v-if="showPreview" class="modal-backdrop fade show bg-dark bg-opacity-50"></div>
+    <div v-if="showPreview" class="modal fade show d-block" tabindex="-1" @click.self="closePreview">
+      <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+          <div class="modal-header border-bottom-0">
+            <h5 class="modal-title fw-bold">Попередній перегляд</h5>
             <button type="button" class="btn-close" @click="closePreview"></button>
           </div>
-          <div class="modal-body">
-            <div class="row">
-              <div class="col-md-6 text-center mb-3 mb-md-0">
-                <div class="bg-light rounded d-flex align-items-center justify-content-center" style="height: 300px;">
+          <div class="modal-body p-4">
+            <div class="row align-items-center">
+              <div class="col-md-5 text-center mb-3 mb-md-0">
+                <div class="bg-light rounded-4 d-flex align-items-center justify-content-center overflow-hidden" style="height: 300px;">
                   <img v-if="previewUrl" :src="previewUrl" class="img-fluid" style="max-height: 100%; object-fit: contain;">
-                  <span v-else class="text-muted">Немає фото</span>
+                  <i v-else class="bi bi-image text-muted" style="font-size: 4rem;"></i>
                 </div>
               </div>
-              <div class="col-md-6">
-                <h4>{{ pv.title }}</h4>
-                <p class="text-muted">{{ pv.category }}</p>
-                <h3 class="text-primary">{{ pv.price }}</h3>
-                <p class="mt-3">{{ pv.description }}</p>
+              <div class="col-md-7">
+                <span class="badge bg-primary bg-opacity-10 text-primary mb-2">{{ pv.category }}</span>
+                <h3 class="fw-bold text-dark mb-2">{{ pv.title }}</h3>
+                <div class="fs-4 fw-bold text-success mb-3">{{ pv.price }}</div>
+                
+                <div class="d-flex gap-3 mb-4">
+                   <div class="border rounded px-3 py-1 bg-light">
+                     <small class="text-muted d-block">SKU</small>
+                     <span class="fw-bold text-dark">{{ pv.sku }}</span>
+                   </div>
+                   <div class="border rounded px-3 py-1 bg-light">
+                     <small class="text-muted d-block">Склад</small>
+                     <span class="fw-bold text-dark">{{ pv.stock }}</span>
+                   </div>
+                </div>
+
+                <p class="text-muted small">{{ pv.description }}</p>
               </div>
             </div>
           </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" @click="closePreview">Закрити</button>
+          <div class="modal-footer border-top-0">
+            <button type="button" class="btn btn-light border rounded-3" @click="closePreview">Закрити</button>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Confirm Modal -->
-    <div v-if="showConfirmModal" class="modal fade show" style="display: block; background-color: rgba(0,0,0,0.5);" tabindex="-1">
+    <div v-if="showConfirmModal" class="modal-backdrop fade show bg-dark bg-opacity-50"></div>
+    <div v-if="showConfirmModal" class="modal fade show d-block" tabindex="-1">
       <div class="modal-dialog modal-dialog-centered modal-sm">
-        <div class="modal-content">
+        <div class="modal-content border-0 shadow-lg rounded-4">
           <div class="modal-body text-center p-4">
-            <div class="mb-3 text-primary">
-              <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor" class="bi bi-check-circle" viewBox="0 0 16 16">
-                <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
-                <path d="M10.97 4.97a.235.235 0 0 0-.02.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-1.071-1.05z"/>
-              </svg>
+            <div class="mb-3 d-inline-flex align-items-center justify-content-center rounded-circle bg-success bg-opacity-10 text-success" style="width: 60px; height: 60px;">
+              <i class="bi bi-check-lg fs-2"></i>
             </div>
-            <h5 class="mb-2">Зберегти зміни?</h5>
-            <p class="text-muted small mb-4">Ви впевнені, що хочете зберегти цей товар?</p>
+            <h5 class="mb-2 fw-bold">Зберегти товар?</h5>
+            <p class="text-muted small mb-4">Перевірте правильність введених даних перед збереженням.</p>
             <div class="d-grid gap-2">
-              <button type="button" class="btn btn-primary" @click="performSave">Так, зберегти</button>
-              <button type="button" class="btn btn-light" @click="showConfirmModal = false">Скасувати</button>
+              <button type="button" class="btn btn-primary-gradient shadow-sm" @click="performSave">Зберегти</button>
+              <button type="button" class="btn btn-light text-muted" @click="showConfirmModal = false">Скасувати</button>
             </div>
           </div>
         </div>
@@ -281,6 +303,7 @@ const previewUrl = ref(
   props.initialProduct?.main_photo_path ? `/storage/${props.initialProduct.main_photo_path}` : ''
 )
 const showConfirmModal = ref(false)
+const showPreview = ref(false)
 
 const form = reactive({
   id: props.initialProduct?.id ?? null,
@@ -299,9 +322,8 @@ const form = reactive({
   description: props.initialProduct?.description ?? '',
   main_photo_path: props.initialProduct?.main_photo_path ?? '',
 })
-const errors = reactive({
-  title: '',
-})
+
+const errors = reactive({ title: '' })
 
 const dimensions = [
   { key: 'weight_g', label: 'Вага', unit: 'г', step: 1 },
@@ -312,22 +334,22 @@ const dimensions = [
 
 const isEdit = computed(() => !!form.id)
 const currencyShort = computed(() => form.currency || 'UAH')
+
 const pv = computed(() => {
-  const title = form.title?.trim() || '—'
-  const category = form.category?.trim() || '—'
-  const description = form.description?.trim() || '—'
+  const title = form.title?.trim() || 'Без назви'
+  const category = form.category?.trim() || 'Без категорії'
+  const description = form.description?.trim() || 'Опис відсутній'
   const price =
     form.sale_price !== null && form.sale_price !== undefined && form.sale_price !== ''
       ? `${form.sale_price} ${currencyShort.value}`
-      : '—'
+      : '0.00'
   const sku = form.sku?.trim() || '—'
   const stock =
     form.stock_qty !== null && form.stock_qty !== undefined && form.stock_qty !== ''
-      ? `${form.stock_qty} шт`
-      : '—'
+      ? `${form.stock_qty} шт.`
+      : '0'
   return { title, category, description, price, sku, stock }
 })
-const showPreview = ref(false)
 
 function pickFile() {
   fileInput.value?.click()
@@ -350,6 +372,7 @@ function onFileDrop(e) {
 function removeImage() {
   imageFile.value = null
   previewUrl.value = ''
+  // Якщо треба видалити стару фотку на сервері, тут можна додати логіку
 }
 
 function openPreview() {
@@ -362,11 +385,9 @@ function closePreview() {
 
 function validateForm() {
   errors.title = ''
-
   if (!form.title || !form.title.trim()) {
-    errors.title = 'Укажіть назву товару'
+    errors.title = 'Вкажіть назву товару'
   }
-
   return !errors.title
 }
 
@@ -397,10 +418,166 @@ async function performSave() {
 
     window.location.href = '/products'
   } catch (e) {
-    console.error('Не вдалося зберегти товар', e)
-    alert('Не вдалося зберегти товар. Перевір консоль/бекенд-відповідь.')
+    console.error('Save error', e)
+    alert('Помилка при збереженні')
   } finally {
     loading.value = false
   }
 }
 </script>
+
+<style scoped>
+/* --- Global & Layout --- */
+.clean-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+}
+
+.card-title-section {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+}
+
+/* --- Form Controls --- */
+.form-label-custom {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #64748b;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.form-control-modern, .form-select-modern {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.95rem;
+  transition: all 0.2s;
+  background-color: #fcfcfc;
+}
+
+.form-control-modern:focus, .form-select-modern:focus {
+  border-color: #6366f1;
+  background-color: #fff;
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+  color: #1e293b;
+}
+
+/* Input Group Modern */
+.input-group-modern {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background-color: #fcfcfc;
+  overflow: hidden;
+  transition: all 0.2s;
+}
+.input-group-modern:focus-within {
+  border-color: #6366f1;
+  background-color: #fff;
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+}
+.input-group-modern .form-control {
+  background: transparent;
+  padding: 10px 12px;
+  font-size: 0.95rem;
+}
+
+/* --- Media Upload --- */
+.upload-area {
+  border: 2px dashed #cbd5e1;
+  border-radius: 12px;
+  min-height: 240px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: #f8fafc;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+.upload-area:hover {
+  border-color: #6366f1;
+  background-color: #f1f5f9;
+}
+.upload-area.has-image {
+  border-style: solid;
+  border-color: #e2e8f0;
+  padding: 0;
+  background: #fff;
+}
+
+.icon-circle {
+  width: 50px;
+  height: 50px;
+  background: #eff6ff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image-preview-wrapper {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.uploaded-img {
+  width: 100%;
+  height: auto;
+  max-height: 240px;
+  object-fit: contain;
+}
+.overlay {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.upload-area:hover .overlay {
+  opacity: 1;
+}
+
+/* --- Buttons --- */
+.btn-primary-gradient {
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  border: none;
+  color: white;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+.btn-primary-gradient:hover:not(:disabled) {
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);
+  transform: translateY(-1px);
+  color: white;
+}
+.btn-white {
+  background: #fff;
+  color: #475569;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+.btn-white:hover {
+  background: #f8fafc;
+  color: #1e293b;
+}
+
+.text-purple { color: #8b5cf6; }
+</style>

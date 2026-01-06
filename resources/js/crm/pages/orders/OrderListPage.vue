@@ -23,6 +23,7 @@
         @print-ttn="printTtn"
         @cancel-ttn="handleCancelTtn"
         @refresh-delivery="refreshDeliveryStatus"
+        @open-customer="openCustomer"
       />
 
       <OrdersPagination v-if="meta.last_page > 1" :meta="meta" @change-page="changePage" />
@@ -45,6 +46,14 @@
       @close="closeStatusesModal"
       @save="saveStatus"
     />
+
+    <CustomerQuickView
+      :open="customerPanelOpen"
+      :data="customerData"
+      :loading="customerLoading"
+      :error="customerError"
+      @close="closeCustomerPanel"
+    />
   </section>
 </template>
 
@@ -56,9 +65,11 @@ import OrdersTopbar from '@/crm/components/orders/list/OrdersTopbar.vue';
 import OrdersPagination from '@/crm/components/orders/list/OrdersPagination.vue';
 import OrderTagsModal from '@/crm/components/orders/list/OrderTagsModal.vue';
 import OrderStatusesModal from '@/crm/components/orders/list/OrderStatusesModal.vue';
+import CustomerQuickView from '@/crm/components/orders/list/CustomerQuickView.vue';
 import { listOrders, deleteOrder, updateOrderTags, updateOrderStatus } from '@/crm/api/orders';
 import { fetchTags } from '@/crm/api/tags';
 import { fetchStatuses } from '@/crm/api/statuses';
+import { getCustomer } from '@/crm/api/customers';
 import {
   buildPhotoUrl,
   paymentLabels,
@@ -69,6 +80,10 @@ const orders = ref([]);
 const expandedRows = ref(new Set());
 const loading = ref(false);
 const deletingId = ref(null);
+const customerPanelOpen = ref(false);
+const customerLoading = ref(false);
+const customerError = ref('');
+const customerData = ref(null);
 const tagsModalOpen = ref(false);
 const tagsModalLoading = ref(false);
 const tagsModalOrder = ref(null);
@@ -220,8 +235,10 @@ function mapOrder(order) {
   const sourceRef = order.source || {};
   return {
     ...order,
+    customer_id: order.customer_id || customer.id || null,
     order_number: order.order_number || order.id,
     client: customer.full_name || [customer.first_name, customer.last_name].filter(Boolean).join(' ') || 'Гість',
+    customer_orders_count: Number(customer.orders_count ?? 1),
     phone: customer.phone || '',
     email: customer.email || '',
     source_code: sourceRef.code || order.source || '',
@@ -439,6 +456,27 @@ async function saveStatus() {
     console.error('Не вдалося оновити статус', e);
     alert('Не вдалося оновити статус');
   }
+}
+
+async function openCustomer(order) {
+  if (!order?.customer_id) return;
+  customerPanelOpen.value = true;
+  customerLoading.value = true;
+  customerError.value = '';
+  customerData.value = null;
+  try {
+    const { data } = await getCustomer(order.customer_id);
+    customerData.value = data?.data || data || null;
+  } catch (e) {
+    console.error('Не вдалося завантажити клієнта', e);
+    customerError.value = e.response?.data?.message || 'Не вдалося завантажити дані клієнта';
+  } finally {
+    customerLoading.value = false;
+  }
+}
+
+function closeCustomerPanel() {
+  customerPanelOpen.value = false;
 }
 
 function toggleRow(id) {

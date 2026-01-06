@@ -1,81 +1,121 @@
 <template>
   <div class="container-fluid p-4">
-    <div class="card border-0 shadow-sm rounded-3 overflow-hidden">
-      <div class="card-header bg-white p-4 border-bottom d-flex flex-column flex-sm-row align-items-start align-items-sm-center justify-content-between gap-3">
-        <div class="d-flex align-items-center">
-          <!-- Icon: Shopping Cart -->
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-primary me-2"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
-          <h1 class="h4 mb-0 fw-bold text-dark">Товари</h1>
-        </div>
-        <a class="btn btn-primary d-inline-flex align-items-center gap-2 px-4" href="/products/create">
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-          <span>Додати товар</span>
-        </a>
-      </div>
+    <div class="clean-card overflow-hidden">
+      
+      <div class="p-4 border-bottom">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+          
+          <div class="d-flex flex-column gap-3 w-100">
+            <div class="d-flex align-items-center justify-content-between">
+              <h1 class="h5 fw-bold text-dark m-0 d-flex align-items-center gap-2">
+                <i class="bi bi-box-seam text-primary"></i>
+                Товари
+              </h1>
+              
+              <a href="/products/create" class="btn btn-primary d-md-none btn-sm shadow-sm">
+                <i class="bi bi-plus-lg"></i>
+              </a>
+            </div>
 
-      <div class="p-4 bg-light border-bottom">
-        <div class="input-group" style="max-width: 320px;">
-          <span class="input-group-text bg-white border-end-0 text-muted ps-3">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          </span>
-          <input
-            v-model.trim="query"
-            type="text"
-            class="form-control border-start-0 ps-2 shadow-none"
-            placeholder="Пошук за назвою або артикулом…"
-            @input="debouncedLoad"
-          />
+            <div class="d-flex gap-3 w-100">
+              <div class="search-wrapper w-100" style="max-width: 400px;">
+                <i class="bi bi-search search-icon"></i>
+                <input
+                  v-model.trim="query"
+                  type="text"
+                  class="form-control search-input"
+                  placeholder="Пошук за назвою, SKU..."
+                  @input="debouncedLoad"
+                />
+              </div>
+            </div>
+          </div>
+
+          <a href="/products/create" class="btn btn-create d-none d-md-flex shadow-sm">
+            <i class="bi bi-plus-lg me-2"></i>
+            <span>Додати товар</span>
+          </a>
         </div>
       </div>
 
       <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0 text-nowrap">
-          <thead class="bg-light text-uppercase text-secondary small fw-bold">
+        <table class="table align-middle mb-0 clean-table">
+          <thead>
             <tr>
-              <th class="px-4 py-3 border-bottom">Фото</th>
-              <th class="px-4 py-3 border-bottom">Назва</th>
-              <th class="px-4 py-3 border-bottom">SKU</th>
-              <th class="px-4 py-3 border-bottom">Ціна</th>
-              <th class="px-4 py-3 border-bottom">Запас</th>
-              <th class="px-4 py-3 border-bottom">Категорія</th>
-              <th class="px-4 py-3 border-bottom text-end">Дії</th>
+              <th class="ps-4" style="width: 80px;">Фото</th>
+              <th style="min-width: 200px;">Назва товару</th>
+              <th style="min-width: 120px;">SKU (Артикул)</th>
+              <th style="min-width: 120px;">Категорія</th>
+              <th class="text-center" style="min-width: 100px;">Запас</th>
+              <th class="text-end" style="min-width: 120px;">Ціна</th>
+              <th class="text-end pe-4" style="width: 100px;">Дії</th>
             </tr>
           </thead>
-          <tbody :class="{ 'opacity-50 pe-none': isLoading }">
-            <tr v-for="p in products" :key="p.id">
-              <td class="px-4 py-3">
-                <div class="d-flex align-items-center justify-content-center bg-light border rounded" style="width: 48px; height: 48px;">
-                  <template v-if="p.imageUrl">
-                    <img :src="p.imageUrl" alt="Фото" class="w-100 h-100 object-fit-cover rounded" />
-                  </template>
-                  <template v-else>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-secondary"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
-                  </template>
+          <tbody :class="{ 'opacity-50': isLoading }">
+            <tr v-for="p in products" :key="p.id" class="product-row">
+              <td class="ps-4">
+                <div class="product-thumb">
+                  <img v-if="p.imageUrl" :src="p.imageUrl" alt="Фото" />
+                  <i v-else class="bi bi-image text-muted fs-5"></i>
                 </div>
               </td>
-              <td class="px-4 py-3">
-                <div class="fw-bold text-dark">{{ p.title }}</div>
-                <div class="text-muted small text-truncate" style="max-width: 250px;" v-if="p.description">{{ p.description }}</div>
+              
+              <td>
+                <div class="fw-bold text-dark text-truncate" style="max-width: 300px;" :title="p.title">
+                  {{ p.title }}
+                </div>
+                <div class="small text-muted text-truncate" style="max-width: 250px;" v-if="p.description">
+                  {{ p.description }}
+                </div>
               </td>
-              <td class="px-4 py-3 font-monospace small text-muted">{{ p.sku || '—' }}</td>
-              <td class="px-4 py-3 fw-medium text-dark">{{ formatPrice(p.sale_price, p.currency) }}</td>
-              <td class="px-4 py-3">
-                <span class="badge rounded-pill" :class="p.stock_qty > 0 ? 'bg-success-subtle text-success border border-success-subtle' : 'bg-danger-subtle text-danger border border-danger-subtle'">
-                  {{ p.stock_qty ?? '0' }}
+
+              <td>
+                <span class="font-monospace text-secondary small bg-light px-2 py-1 rounded border">
+                  {{ p.sku || '—' }}
                 </span>
               </td>
-              <td class="px-4 py-3 text-secondary">{{ p.category || '—' }}</td>
-              <td class="px-4 py-3 text-end">
-                <a class="btn btn-sm btn-light text-primary border" :href="`/products/${p.id}/edit`" title="Редагувати">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+
+              <td>
+                <span class="text-dark small fw-medium">
+                  {{ p.category || '—' }}
+                </span>
+              </td>
+
+              <td class="text-center">
+                <span 
+                  class="badge-stock" 
+                  :class="p.stock_qty > 0 ? 'stock-ok' : 'stock-low'"
+                >
+                  <i class="bi" :class="p.stock_qty > 0 ? 'bi-check-circle-fill' : 'bi-exclamation-circle-fill'"></i>
+                  {{ p.stock_qty ?? '0' }} шт.
+                </span>
+              </td>
+
+              <td class="text-end">
+                <span class="fw-bold text-dark">
+                  {{ formatPrice(p.sale_price, p.currency) }}
+                </span>
+              </td>
+
+              <td class="text-end pe-4">
+                <a 
+                  :href="`/products/${p.id}/edit`" 
+                  class="btn-icon-action" 
+                  title="Редагувати"
+                >
+                  <i class="bi bi-pencil"></i>
                 </a>
               </td>
             </tr>
+
             <tr v-if="products.length === 0 && !isLoading">
-              <td colspan="7" class="text-center py-5 text-muted">
-                <div class="d-flex flex-column align-items-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="mb-3 text-secondary"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                  <span>Товарів не знайдено</span>
+              <td colspan="7" class="text-center py-5">
+                <div class="empty-state">
+                  <div class="empty-icon mb-3">
+                    <i class="bi bi-box-seam"></i>
+                  </div>
+                  <h6 class="fw-bold text-dark">Товарів не знайдено</h6>
+                  <p class="text-muted small">Спробуйте змінити пошуковий запит або створіть новий товар.</p>
                 </div>
               </td>
             </tr>
@@ -83,21 +123,28 @@
         </table>
       </div>
 
-        <!-- Pagination -->
-      <div v-if="pagination.last_page > 1" class="card-footer bg-white p-4 border-top d-flex align-items-center justify-content-between">
+      <div v-if="pagination.last_page > 1" class="d-flex align-items-center justify-content-between p-4 border-top bg-light bg-opacity-10">
         <div class="text-muted small d-none d-sm-block">
-          Показано <span class="fw-bold text-dark">{{ (pagination.current_page - 1) * pagination.per_page + 1 }}</span> до <span class="fw-bold text-dark">{{ Math.min(pagination.current_page * pagination.per_page, pagination.total) }}</span> з <span class="fw-bold text-dark">{{ pagination.total }}</span> результатів
+          Показано <span class="fw-bold text-dark">{{ (pagination.current_page - 1) * pagination.per_page + 1 }}</span> - <span class="fw-bold text-dark">{{ Math.min(pagination.current_page * pagination.per_page, pagination.total) }}</span> з <span class="fw-bold text-dark">{{ pagination.total }}</span>
         </div>
+        
         <nav>
-          <ul class="pagination mb-0">
+          <ul class="pagination mb-0 gap-1">
             <li class="page-item" :class="{ disabled: pagination.current_page <= 1 }">
-              <button class="page-link" @click="changePage(pagination.current_page - 1)" aria-label="Попередня">
-                <span aria-hidden="true">&laquo;</span>
+              <button class="page-link page-btn" @click="changePage(pagination.current_page - 1)">
+                <i class="bi bi-chevron-left"></i>
               </button>
             </li>
+            
+            <li class="page-item disabled">
+              <span class="page-link page-info border-0 bg-transparent text-dark fw-bold">
+                {{ pagination.current_page }}
+              </span>
+            </li>
+
             <li class="page-item" :class="{ disabled: pagination.current_page >= pagination.last_page }">
-              <button class="page-link" @click="changePage(pagination.current_page + 1)" aria-label="Наступна">
-                <span aria-hidden="true">&raquo;</span>
+              <button class="page-link page-btn" @click="changePage(pagination.current_page + 1)">
+                <i class="bi bi-chevron-right"></i>
               </button>
             </li>
           </ul>
@@ -173,3 +220,175 @@ onUnmounted(() => {
   if (timer) clearTimeout(timer)
 })
 </script>
+
+<style scoped>
+/* --- Card Container --- */
+.clean-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px; /* Rounded-4 equivalent */
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+/* --- Search Input --- */
+.search-wrapper {
+  position: relative;
+}
+.search-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #94a3b8;
+  font-size: 0.9rem;
+  pointer-events: none;
+}
+.search-input {
+  padding-left: 38px;
+  padding-right: 16px;
+  height: 42px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+.search-input:focus {
+  background: #fff;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+  color: #1e293b;
+}
+
+/* --- Create Button --- */
+.btn-create {
+  height: 42px;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  border: none;
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+.btn-create:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);
+  color: #fff;
+}
+
+/* --- Table Styles --- */
+.clean-table th {
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 12px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.clean-table td {
+  padding: 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+.product-row:hover {
+  background: #fdfdfd;
+}
+.product-row:last-child td {
+  border-bottom: none;
+}
+
+/* --- Product Thumb --- */
+.product-thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.product-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* --- Stock Badges --- */
+.badge-stock {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.stock-ok {
+  background: #dcfce7;
+  color: #166534;
+}
+.stock-low {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* --- Action Buttons --- */
+.btn-icon-action {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  border: 1px solid transparent;
+  transition: all 0.2s;
+  background: #fff;
+}
+.btn-icon-action:hover {
+  background: #f1f5f9;
+  color: #3b82f6;
+  border-color: #e2e8f0;
+}
+
+/* --- Empty State --- */
+.empty-icon {
+  width: 64px;
+  height: 64px;
+  background: #f1f5f9;
+  color: #94a3b8;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+}
+
+/* --- Pagination Buttons --- */
+.page-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #64748b;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+}
+.page-btn:hover:not(:disabled) {
+  background: #f1f5f9;
+  color: #334155;
+  border-color: #cbd5e1;
+}
+</style>

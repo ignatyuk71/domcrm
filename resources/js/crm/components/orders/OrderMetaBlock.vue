@@ -1,144 +1,156 @@
 <template>
-  <div class="d-flex flex-column gap-3">
+  <div class="d-flex flex-column gap-3 position-relative">
     
-    <div class="p-2 bg-light rounded-2 border d-flex justify-content-between align-items-center shadow-sm">
-      <div>
-        <label class="form-label small text-muted fw-bold text-uppercase mb-0" style="font-size: 0.65rem;">№ замовлення</label>
-        <div class="fw-bold">{{ local.id || 'Автоматичний' }}</div>
+    <div class="info-card">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <label class="info-label">№ замовлення</label>
+          <div class="info-value">{{ local.id || 'Автоматичний' }}</div>
+        </div>
+        <div class="icon-circle bg-light text-muted">
+          <i class="bi bi-hash"></i>
+        </div>
       </div>
-      <i class="bi bi-hash text-muted fs-5"></i>
+    </div>
+
+    <div>
+      <label class="info-label mb-1">Джерело</label>
+      <div class="custom-select-trigger" @click="openPicker('source')">
+        <div class="d-flex align-items-center gap-2">
+          <div class="icon-mini" :style="{ backgroundColor: '#6366f120', color: '#6366f1' }">
+            <i :class="getSourceIcon(local.source)"></i>
+          </div>
+          <span class="fw-medium text-dark">{{ getSourceLabel(local.source) }}</span>
+        </div>
+        <i class="bi bi-chevron-down text-muted small"></i>
+      </div>
     </div>
 
     <div class="row g-2">
-      <div class="col-12">
-        <label class="form-label small text-muted fw-bold text-uppercase mb-1" style="font-size: 0.65rem;">Джерело</label>
-        <div 
-          class="picker-btn border rounded-2 d-flex justify-content-between align-items-center bg-white shadow-sm"
-          @click="openPicker('source')"
-        >
-          <div class="d-flex align-items-center gap-2">
-            <div class="icon-box bg-primary-subtle text-primary">
-              <i :class="getSourceIcon(local.source)"></i>
-            </div>
-            <span class="small fw-bold text-dark">{{ getSourceLabel(local.source) }}</span>
-          </div>
-          <i class="bi bi-chevron-expand text-muted"></i>
+      <div class="col-6">
+        <label class="info-label mb-1">Статус</label>
+        <div class="status-card" :style="getStatusStyle(local.status)" @click="openPicker('status')">
+          <i :class="getStatusIcon(local.status)" class="fs-5"></i>
+          <span class="text-truncate">{{ getStatusName(local.status) }}</span>
         </div>
       </div>
 
       <div class="col-6">
-        <label class="form-label small text-muted fw-bold text-uppercase mb-1" style="font-size: 0.65rem;">Статус</label>
-        <div 
-          class="picker-btn border rounded-2 d-flex justify-content-between align-items-center shadow-sm text-white"
-          :style="statusCardStyle"
-          @click="openPicker('status')"
-        >
-          <div class="d-flex align-items-center gap-2 text-truncate">
-            <i :class="getCurrentStatusIcon" class="fs-6 text-white"></i>
-            <span class="small fw-bold text-truncate text-uppercase">{{ getStatusName(local.status) }}</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="col-6">
-        <label class="form-label small text-muted fw-bold text-uppercase mb-1" style="font-size: 0.65rem;">Оплата</label>
-        <div 
-          class="picker-btn border rounded-2 d-flex justify-content-between align-items-center shadow-sm text-white"
-          :class="paymentCardClass"
-          @click="openPicker('payment_status')"
-        >
-          <div class="d-flex align-items-center gap-2 text-truncate">
-            <i class="bi bi-credit-card-fill text-white"></i>
-            <span class="small fw-bold text-truncate text-uppercase">{{ getPaymentLabel(local.payment_status) }}</span>
-          </div>
+        <label class="info-label mb-1">Оплата</label>
+        <div class="status-card" :class="getPaymentClass(local.payment_status)" @click="openPicker('payment_status')">
+          <i class="bi bi-credit-card-fill fs-5"></i>
+          <span class="text-truncate">{{ getPaymentLabel(local.payment_status) }}</span>
         </div>
       </div>
     </div>
 
-    <div class="pt-2 border-top">
-      <div class="d-flex justify-content-between align-items-center mb-2">
-        <label class="form-label small text-muted fw-bold text-uppercase mb-0">Теги</label>
-        <button class="btn btn-sm btn-light border text-primary py-0 px-2 fw-bold" type="button" @click="tagsModal = true">
-          <i class="bi bi-gear-fill me-1"></i> Керувати
-        </button>
-      </div>
-      <div class="d-flex flex-wrap gap-2">
-        <template v-if="selectedTags.length">
-          <div v-for="tag in selectedTags" :key="tag.id" class="badge d-flex align-items-center gap-2 p-2 border fw-normal text-dark shadow-sm" :style="styleTagBadge(tag)">
-            <i :class="`bi ${tag.icon}`"></i>
+    <hr class="border-light my-1 opacity-50">
+
+    <div>
+      <label class="info-label mb-2">Теги</label>
+      
+      <div class="d-flex flex-wrap gap-2 align-items-center position-relative">
+        
+        <div 
+          v-for="tag in selectedTags" 
+          :key="tag.id" 
+          class="tag-badge animate-fade"
+          :style="styleTagBadge(tag)"
+        >
+          <div class="d-flex align-items-center gap-1">
+            <i :class="['bi', tag.icon]" v-if="tag.icon" :style="{ color: tag.color }"></i>
             <span>{{ tag.name }}</span>
           </div>
-        </template>
-        <div v-else class="text-muted small fst-italic py-2 bg-light w-100 text-center rounded border-dashed">Теги відсутні</div>
-      </div>
-    </div>
+          <button type="button" class="remove-tag-btn" @click.stop="toggleTag(tag.id)">
+            <i class="bi bi-x"></i>
+          </button>
+        </div>
 
-    <div v-if="picker.isOpen">
-      <div class="modal-backdrop fade show"></div>
-      <div class="modal fade show d-block" tabindex="-1" @click.self="closePicker">
-        <div class="modal-dialog modal-dialog-centered modal-sm">
-          <div class="modal-content border-0 shadow-lg overflow-hidden">
-            <div class="modal-header py-2 px-3 bg-dark text-white">
-              <h6 class="modal-title fw-bold m-0 small text-uppercase tracking-wider">{{ picker.title }}</h6>
-              <button type="button" class="btn-close btn-close-white" style="font-size: 0.6rem;" @click="closePicker"></button>
+        <div class="position-relative">
+          <button 
+            type="button" 
+            class="btn-add-tag"
+            @click.stop="toggleTagsMenu"
+            :class="{ 'active': tagsMenuOpen }"
+          >
+            <i class="bi bi-plus-lg"></i>
+            <span>Додати</span>
+          </button>
+
+          <div v-if="tagsMenuOpen" class="tags-popover shadow-lg">
+            <div class="popover-header">
+              <span class="small fw-bold text-muted text-uppercase">Оберіть зі списку</span>
+              <button type="button" class="btn-close-mini" @click="tagsMenuOpen = false">
+                <i class="bi bi-x-lg"></i>
+              </button>
             </div>
-            <div class="modal-body p-2 bg-light" style="max-height: 400px; overflow-y: auto;">
-              <div class="list-group list-group-flush gap-1">
-                <button 
-                  v-for="option in picker.options" 
-                  :key="option.value" 
-                  class="list-group-item list-group-item-action border rounded-2 d-flex justify-content-between align-items-center py-2 px-3 shadow-sm mb-1"
-                  :class="{ 'bg-primary text-white border-primary': isOptionSelected(option.value), 'bg-white': !isOptionSelected(option.value) }"
-                  @click="selectOption(option.value)"
-                >
-                  <div class="d-flex align-items-center gap-3">
-                    <i v-if="option.icon" :class="option.icon" :style="{ color: isOptionSelected(option.value) ? '#fff' : (option.color || 'inherit') }"></i>
-                    <div v-else-if="option.color" class="rounded-circle" :style="{ width: '12px', height: '12px', backgroundColor: option.color, border: '1px solid rgba(0,0,0,0.1)' }"></div>
-                    <span class="small fw-medium">{{ option.label }}</span>
-                  </div>
-                  <i v-if="isOptionSelected(option.value)" class="bi bi-check-circle-fill text-white"></i>
-                </button>
+            
+            <div class="popover-body custom-scrollbar">
+              <div 
+                v-for="tag in tags" 
+                :key="tag.id"
+                class="popover-item"
+                :class="{ 'selected': tagIdsSet.has(tag.id) }"
+                @click="toggleTag(tag.id)"
+              >
+                <div class="custom-checkbox me-2" :class="{ 'checked': tagIdsSet.has(tag.id) }">
+                  <i class="bi bi-check text-white" v-if="tagIdsSet.has(tag.id)"></i>
+                </div>
+                
+                <div class="tag-preview" :style="styleTagBadge(tag)">
+                  <i :class="['bi', tag.icon]" v-if="tag.icon"></i>
+                  {{ tag.name }}
+                </div>
+              </div>
+              
+              <div v-if="tags.length === 0" class="text-center text-muted small py-3">
+                Список порожній
               </div>
             </div>
           </div>
         </div>
+
       </div>
     </div>
 
-    <div v-if="tagsModal">
-        <div class="modal-backdrop fade show"></div>
-        <div class="modal fade show d-block" tabindex="-1" @click.self="closeModal">
-          <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
-            <div class="modal-content border-0 shadow">
-              <div class="modal-header bg-light">
-                <h5 class="modal-title fw-bold">Керування тегами</h5>
-                <button type="button" class="btn-close" @click="closeModal"></button>
+    <div v-if="tagsMenuOpen" class="fixed-overlay" @click="tagsMenuOpen = false"></div>
+
+    <Teleport to="body">
+      <div v-if="picker.isOpen">
+        <div class="modal-backdrop fade show bg-dark bg-opacity-25" style="backdrop-filter: blur(2px);"></div>
+        <div class="modal fade show d-block" tabindex="-1" @click.self="closePicker">
+          <div class="modal-dialog modal-dialog-centered modal-sm">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+              <div class="modal-header border-bottom-0 pb-0 px-4 pt-4">
+                <h6 class="modal-title fw-bold text-uppercase text-muted small">{{ picker.title }}</h6>
+                <button type="button" class="btn-close shadow-none" @click="closePicker"></button>
               </div>
-              <div class="modal-body p-0">
-                <div class="list-group list-group-flush">
+              <div class="modal-body p-2">
+                <div class="d-flex flex-column gap-1">
                   <button 
-                    v-for="tag in tags" 
-                    :key="tag.id" 
-                    class="list-group-item list-group-item-action d-flex align-items-center gap-3 py-3 px-4 border-bottom"
-                    :class="{ 'bg-primary-subtle text-primary fw-bold': tagIdsSet.has(tag.id) }"
-                    @click="toggleTag(tag.id)"
+                    v-for="opt in picker.options" 
+                    :key="opt.value" 
+                    type="button"
+                    class="picker-option"
+                    :class="{ 'selected': isOptionSelected(opt.value) }"
+                    @click="selectOption(opt.value)"
                   >
-                    <div class="d-flex align-items-center justify-content-center rounded-circle border shadow-sm" :style="styleTagIconInModal(tag)">
-                      <i :class="`bi ${tag.icon}`"></i>
+                    <div class="d-flex align-items-center gap-3">
+                      <div class="option-icon" :style="opt.color ? { backgroundColor: opt.color + '20', color: opt.color } : {}">
+                        <i :class="opt.icon || 'bi-circle-fill'"></i>
+                      </div>
+                      <span class="fw-medium">{{ opt.label }}</span>
                     </div>
-                    <span class="flex-grow-1">{{ tag.name }}</span>
-                    <i v-if="tagIdsSet.has(tag.id)" class="bi bi-check-circle-fill fs-5"></i>
-                    <i v-else class="bi bi-circle text-muted fs-5"></i>
+                    <i v-if="isOptionSelected(opt.value)" class="bi bi-check-circle-fill text-primary"></i>
                   </button>
                 </div>
               </div>
-              <div class="modal-footer bg-light p-2 border-0">
-                <button class="btn btn-primary w-100 fw-bold py-2" @click="closeModal">ЗБЕРЕГТИ ЗМІНИ</button>
-              </div>
             </div>
           </div>
         </div>
-    </div>
+      </div>
+    </Teleport>
+
   </div>
 </template>
 
@@ -153,32 +165,55 @@ const model = defineModel({ type: Object, default: () => ({ id: '', source: 'sit
 const tagModel = defineModel('tagIds', { type: Array, default: () => [] });
 
 const local = reactive({ ...model.value });
-const tagsModal = ref(false);
 const tags = ref([]);
 const statuses = ref([]);
+const sources = ref([]);
 const picker = reactive({ isOpen: false, type: '', title: '', options: [] });
 
-const sources = ref([]);
+// Стан меню тегів
+const tagsMenuOpen = ref(false);
 
+// Static data
 const payments = [
-  { value: 'unpaid', label: 'Не оплачено', color: '#dc3545', class: 'bg-danger' },
-  { value: 'prepayment', label: 'Передоплата', color: '#f59e0b', class: 'bg-warning' },
-  { value: 'paid', label: 'Оплачено', color: '#198754', class: 'bg-success' },
-  { value: 'refund', label: 'Повернення', color: '#6c757d', class: 'bg-secondary' }
+  { value: 'unpaid', label: 'Не оплачено', color: '#dc3545', icon: 'bi-x-circle' },
+  { value: 'prepayment', label: 'Передоплата', color: '#f59e0b', icon: 'bi-wallet2' },
+  { value: 'paid', label: 'Оплачено', color: '#198754', icon: 'bi-check-circle' },
+  { value: 'refund', label: 'Повернення', color: '#6c757d', icon: 'bi-arrow-counterclockwise' }
 ];
 
+// --- Helpers ---
+const getSourceLabel = (val) => sources.value.find(s => s.value === val)?.label || val;
+const getSourceIcon = (val) => sources.value.find(s => s.value === val)?.icon || 'bi-share';
+
+const getStatusName = (val) => statuses.value.find(s => s.code === val)?.name || '...';
+const getStatusIcon = (val) => statuses.value.find(s => s.code === val)?.icon || 'bi-circle';
+const getStatusStyle = (val) => {
+    const s = statuses.value.find(s => s.code === val);
+    return s?.color ? { backgroundColor: s.color, borderColor: s.color, color: '#fff' } : { backgroundColor: '#6c757d', color: '#fff' };
+}
+
+const getPaymentLabel = (val) => payments.find(p => p.value === val)?.label || val;
+const getPaymentClass = (val) => {
+    const map = {
+        'unpaid': 'bg-danger text-white border-danger',
+        'prepayment': 'bg-warning text-dark border-warning',
+        'paid': 'bg-success text-white border-success',
+        'refund': 'bg-secondary text-white border-secondary'
+    };
+    return map[val] || 'bg-light text-dark';
+}
+
+// --- Picker Logic ---
 function openPicker(type) {
   picker.type = type;
   picker.isOpen = true;
   if (type === 'source') { 
     picker.title = 'Оберіть джерело'; 
-    picker.options = sources.value; 
+    picker.options = sources.value.map(s => ({ ...s, color: '#6366f1' })); 
   }
   else if (type === 'status') { 
-    picker.title = 'Статус замовлення'; 
-    picker.options = statuses.value.map(s => ({ 
-        value: s.code, label: s.name, icon: s.icon, color: s.color 
-    })); 
+    picker.title = 'Змінити статус'; 
+    picker.options = statuses.value.map(s => ({ value: s.code, label: s.name, icon: s.icon, color: s.color })); 
   }
   else if (type === 'payment_status') { 
     picker.title = 'Статус оплати'; 
@@ -190,53 +225,41 @@ function selectOption(value) {
   local[picker.type] = value;
   closePicker();
 }
-
 const closePicker = () => picker.isOpen = false;
 const isOptionSelected = (val) => local[picker.type] === val;
-const getSourceLabel = (val) => sources.value.find(s => s.value === val)?.label || val;
-const getSourceIcon = (val) => sources.value.find(s => s.value === val)?.icon || 'bi-share';
-const getStatusName = (val) => statuses.value.find(s => s.code === val)?.name || '...';
-const getCurrentStatusIcon = computed(() => statuses.value.find(s => s.code === local.status)?.icon || 'bi-info-circle');
-const getPaymentLabel = (val) => payments.find(p => p.value === val)?.label || val;
 
-// --- ЯСКРАВІ СТИЛІ ---
-const statusCardStyle = computed(() => {
-  const st = statuses.value.find((s) => s.code === local.status);
-  return st?.color ? { 
-    backgroundColor: st.color, 
-    borderColor: st.color,
-    textShadow: '0 1px 2px rgba(0,0,0,0.2)'
-  } : { backgroundColor: '#6c757d' };
-});
-
-const paymentCardClass = computed(() => {
-  const p = payments.find(p => p.value === local.payment_status);
-  return p ? `${p.class} border-${p.value}` : 'bg-secondary';
-});
-
-// Логіка Тегів
+// --- Tags Logic ---
 const tagIdsSet = computed(() => new Set(tagModel.value || []));
 const selectedTags = computed(() => tags.value.filter((t) => tagIdsSet.value.has(t.id)));
+
+function toggleTagsMenu() {
+  tagsMenuOpen.value = !tagsMenuOpen.value;
+}
+
 function toggleTag(id) {
   const next = new Set(tagIdsSet.value);
   if (next.has(id)) next.delete(id); else next.add(id);
   tagModel.value = Array.from(next);
 }
-function closeModal() { tagsModal.value = false; }
-function hexToRgba(color) {
-  const map = { red: '#ff4d6d', blue: '#6d5efc', amber: '#ffb020', teal: '#27c2a0', pink: '#ff85a1' };
-  return map[color] || color || '#6c757d';
-}
+
+// Функція стилізації для тегів (пастельні кольори)
 function styleTagBadge(tag) {
-  const c = hexToRgba(tag.color);
-  return { backgroundColor: `${c}15`, color: c, borderColor: `${c}40` };
-}
-function styleTagIconInModal(tag) {
-  const c = hexToRgba(tag.color);
-  return { width: '32px', height: '32px', backgroundColor: `${c}15`, color: c, borderColor: `${c}30` };
+  const c = tag.color || '#6c757d';
+  const isHex = c.startsWith('#');
+  
+  if (isHex) {
+    return { 
+      backgroundColor: c + '26', // 15% opacity
+      color: c, 
+      borderColor: c + '4d'      // 30% opacity
+    };
+  }
+  return { backgroundColor: '#f1f5f9', color: '#64748b', borderColor: '#e2e8f0' };
 }
 
+// Watchers & Init
 watch(local, (val) => { Object.assign(model.value, val); }, { deep: true });
+
 onMounted(async () => {
   try {
     const [tagsRes, statusesRes, sourcesRes] = await Promise.all([
@@ -246,8 +269,8 @@ onMounted(async () => {
     ]);
     tags.value = Array.isArray(tagsRes.data?.data) ? tagsRes.data.data : (tagsRes.data ?? []);
     statuses.value = Array.isArray(statusesRes.data?.data) ? statusesRes.data.data : (statusesRes.data ?? []);
+    
     const src = Array.isArray(sourcesRes.data?.data) ? sourcesRes.data.data : (sourcesRes.data ?? []);
-    // normalize to value/label/icon/color
     sources.value = src.map((s) => ({
       value: s.code,
       label: s.name,
@@ -259,28 +282,205 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.picker-btn {
-  padding: 8px 12px;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  min-height: 42px;
+/* Info Cards & General */
+.info-card {
+  padding: 12px;
+  background: #f8fafc;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
 }
-.picker-btn:hover { filter: contrast(1.1) brightness(1.05); transform: translateY(-1px); }
-.picker-btn:active { transform: translateY(0); }
-
-.icon-box {
-  width: 26px; height: 26px;
+.info-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: #94a3b8;
+  letter-spacing: 0.02em;
+}
+.info-value {
+  font-weight: 700;
+  color: #1e293b;
+  font-size: 0.95rem;
+}
+.icon-circle {
+  width: 32px; height: 32px;
+  border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  border-radius: 6px; font-size: 0.9rem;
 }
 
-.border-dashed { border: 1px dashed #ced4da; }
-.tracking-wider { letter-spacing: 0.05em; }
-.modal-backdrop { opacity: 0.4; backdrop-filter: blur(2px); }
+/* Custom Select Trigger */
+.custom-select-trigger {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.custom-select-trigger:hover {
+  border-color: #cbd5e1;
+  background: #fdfdfd;
+}
+.icon-mini {
+  width: 24px; height: 24px;
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.8rem;
+}
 
-/* Плавний перехід для списків */
-.list-group-item {
-  transition: all 0.15s ease;
-  border: 1px solid transparent !important;
+/* Status Cards */
+.status-card {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.1s;
+  border: 1px solid transparent;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+.status-card:active { transform: scale(0.98); }
+
+/* --- NEW TAGS STYLES --- */
+.tag-badge {
+  display: inline-flex; align-items: center;
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border: 1px solid transparent;
+  cursor: default;
+  gap: 6px;
+}
+
+.remove-tag-btn {
+  background: none; border: none; padding: 0;
+  display: flex; align-items: center;
+  color: inherit;
+  opacity: 0.6;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.remove-tag-btn:hover { opacity: 1; }
+
+.btn-add-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: #fff;
+  color: #64748b;
+  border: 1px dashed #cbd5e1;
+  transition: all 0.2s;
+}
+.btn-add-tag:hover, .btn-add-tag.active {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  color: #334155;
+}
+
+/* Popover Menu */
+.tags-popover {
+  position: absolute;
+  top: calc(100% + 8px); left: 0;
+  width: 260px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  z-index: 1005; /* Вище оверлею */
+  display: flex; flex-direction: column;
+}
+
+.popover-header {
+  padding: 10px 12px;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.btn-close-mini {
+  background: none; border: none; padding: 2px; color: #94a3b8; cursor: pointer;
+  font-size: 0.9rem; border-radius: 4px; display: flex;
+}
+.btn-close-mini:hover { color: #64748b; background: #f1f5f9; }
+
+.popover-body {
+  padding: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.popover-item {
+  padding: 6px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex; align-items: center;
+  transition: background 0.1s;
+}
+.popover-item:hover { background: #f8fafc; }
+.popover-item.selected { background: #f0f7ff; }
+
+.custom-checkbox {
+  width: 18px; height: 18px;
+  border: 2px solid #cbd5e1;
+  border-radius: 5px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.custom-checkbox.checked {
+  background: #6366f1;
+  border-color: #6366f1;
+}
+.custom-checkbox i { font-size: 0.9rem; }
+
+.tag-preview {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 8px; border-radius: 6px;
+  font-size: 0.75rem; font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Overlay */
+.fixed-overlay {
+  position: fixed;
+  top: 0; left: 0; width: 100vw; height: 100vh;
+  z-index: 1000;
+  background: transparent;
+}
+
+/* Animations & Scrollbar */
+.animate-fade { animation: fadeIn 0.2s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+
+/* Picker Modal Options Styles */
+.picker-option {
+  width: 100%;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: #334155;
+}
+.picker-option:hover { background: #f8fafc; }
+.picker-option.selected { background: #eff6ff; color: #4f46e5; }
+.option-icon {
+  width: 28px; height: 28px;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.9rem;
+  background: #f1f5f9;
+  color: #64748b;
 }
 </style>

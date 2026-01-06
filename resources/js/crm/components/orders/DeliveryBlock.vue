@@ -24,6 +24,8 @@
         <div class="input-wrapper">
           <i class="bi bi-search input-prefix"></i>
           <input
+            type="text"
+            autocomplete="off"
             class="form-control custom-input"
             :class="{ 'is-invalid': errors.city_name }"
             v-model="cityQuery"
@@ -43,7 +45,7 @@
             :key="city.ref"
             type="button"
             class="dropdown-item"
-            @mousedown="selectCity(city)"
+            @mousedown.prevent="selectCity(city)"
           >
             <div class="d-flex align-items-center">
               <i class="bi bi-geo-alt me-2 text-muted"></i>
@@ -57,11 +59,13 @@
         <div class="invalid-feedback d-block" v-if="errors.city_name">{{ errors.city_name }}</div>
       </section>
 
-      <section v-if="local.delivery_type !== 'courier'" class="position-relative">
+      <section v-if="local.delivery_type !== 'courier'" class="position-relative animate-fade-in">
         <label class="form-label-custom">Відділення або поштомат</label>
         <div class="input-wrapper" :class="{ 'opacity-50': !local.city_ref }">
           <i class="bi bi-building-up input-prefix"></i>
           <input
+            type="text"
+            autocomplete="off"
             class="form-control custom-input"
             :class="{ 'is-invalid': errors.warehouse_name }"
             v-model="warehouseQuery"
@@ -81,7 +85,7 @@
             :key="wh.ref || wh.name"
             type="button"
             class="dropdown-item"
-            @mousedown="selectWarehouse(wh)"
+            @mousedown.prevent="selectWarehouse(wh)"
           >
             <div class="d-flex gap-2 text-start">
               <i class="bi" :class="wh.name.includes('Поштомат') ? 'bi-mailbox text-info' : 'bi-door-open text-primary'"></i>
@@ -103,6 +107,8 @@
           <div class="input-wrapper" :class="{ 'opacity-50': !local.city_ref }">
             <i class="bi bi-signpost-split input-prefix"></i>
             <input
+              type="text"
+              autocomplete="off"
               class="form-control custom-input"
               :class="{ 'is-invalid': errors.street_name }"
               v-model="streetQuery"
@@ -116,7 +122,13 @@
             </div>
           </div>
           <div v-if="showStreetDropdown && streetOptions.length" class="custom-dropdown shadow">
-            <button v-for="s in streetOptions" :key="s.ref" class="dropdown-item" @mousedown="selectStreet(s)">
+            <button 
+              v-for="s in streetOptions" 
+              :key="s.ref" 
+              type="button"
+              class="dropdown-item" 
+              @mousedown.prevent="selectStreet(s)"
+            >
               {{ s.name }}
             </button>
           </div>
@@ -153,19 +165,28 @@
 </template>
 
 <script setup>
-import { reactive, ref, watch } from 'vue';
+import { reactive, ref, watch, onMounted } from 'vue';
 import { fetchCities, fetchWarehouses, fetchStreets } from '@/crm/api/novaPoshta';
 
 const props = defineProps({
   errors: { type: Object, default: () => ({}) },
 });
 
+// Використовуємо defineModel для двостороннього зв'язку
 const model = defineModel({ type: Object, default: () => ({}) });
 
 const local = reactive({
-  city_ref: '', city_name: '', warehouse_ref: '', warehouse_name: '',
-  delivery_type: 'warehouse', carrier: 'nova_poshta', payer: 'recipient',
-  street_name: '', building: '', apartment: '', address_note: '',
+  city_ref: '', 
+  city_name: '', 
+  warehouse_ref: '', 
+  warehouse_name: '',
+  delivery_type: 'warehouse', 
+  carrier: 'nova_poshta', 
+  payer: 'recipient',
+  street_name: '', 
+  building: '', 
+  apartment: '', 
+  address_note: '',
   ...model.value,
 });
 
@@ -189,55 +210,94 @@ const cityError = ref('');
 let cityTimer, warehouseTimer, streetTimer;
 const skipFetch = reactive({ city: false, warehouse: false, street: false });
 
-watch(() => ({ ...local }), (val) => { model.value = val; }, { deep: true });
+// 1. Слідкуємо за змінами в local -> оновлюємо батьківську модель
+watch(() => ({ ...local }), (val) => { 
+  model.value = val; 
+}, { deep: true });
 
-// ПОШУК МІСТ: від 4 символів, затримка 1 сек
+// 2. Слідкуємо за змінами props.model -> оновлюємо local (на випадок редагування)
+watch(() => model.value, (newVal) => {
+  if (newVal) {
+    Object.assign(local, newVal);
+    // Синхронізуємо інпути пошуку, якщо дані прийшли ззовні
+    if (newVal.city_name && newVal.city_name !== cityQuery.value) {
+      skipFetch.city = true;
+      cityQuery.value = newVal.city_name;
+    }
+    if (newVal.warehouse_name && newVal.warehouse_name !== warehouseQuery.value) {
+      skipFetch.warehouse = true;
+      warehouseQuery.value = newVal.warehouse_name;
+    }
+    if (newVal.street_name && newVal.street_name !== streetQuery.value) {
+      skipFetch.street = true;
+      streetQuery.value = newVal.street_name;
+    }
+  }
+}, { deep: true, immediate: true });
+
+// ПОШУК МІСТ
 watch(cityQuery, (val) => {
   if (skipFetch.city) { skipFetch.city = false; return; }
-  local.city_name = val; local.city_ref = '';
-  resetDeliveryFields();
+  
+  local.city_name = val; 
+  // Якщо користувач почав стирати назву міста - скидаємо Ref
+  if (!val || val !== local.city_name) {
+     local.city_ref = '';
+     resetDeliveryFields();
+  }
 
   if (cityTimer) clearTimeout(cityTimer);
-  if (!val || val.length < 4) { 
+  // Змінив ліміт з 4 на 2 символи
+  if (!val || val.length < 3) { 
     cityOptions.value = []; 
     return; 
   }
   
-  cityTimer = setTimeout(() => loadCities(val), 1000); 
+  cityTimer = setTimeout(() => loadCities(val), 800); 
 });
 
-// ПОШУК ВІДДІЛЕНЬ: затримка 1 сек
+// ПОШУК ВІДДІЛЕНЬ
 watch(warehouseQuery, (val) => {
   if (skipFetch.warehouse) { skipFetch.warehouse = false; return; }
   local.warehouse_name = val;
+  local.warehouse_ref = ''; // Скидаємо ref при ручному вводі
+
   if (warehouseTimer) clearTimeout(warehouseTimer);
   if (!local.city_ref) return;
   
-  warehouseTimer = setTimeout(() => loadWarehouses(val), 1000);
+  warehouseTimer = setTimeout(() => loadWarehouses(val), 800);
 });
 
-// ПОШУК ВУЛИЦЬ: затримка 1 сек
+// ПОШУК ВУЛИЦЬ
 watch(streetQuery, (val) => {
   if (skipFetch.street) { skipFetch.street = false; return; }
   local.street_name = val;
+
   if (streetTimer) clearTimeout(streetTimer);
   if (!local.city_ref || local.delivery_type !== 'courier') return;
   
-  streetTimer = setTimeout(() => loadStreets(val), 1000);
+  streetTimer = setTimeout(() => loadStreets(val), 800);
 });
 
 async function loadCities(query) {
   cityLoading.value = true;
+  cityError.value = '';
   try {
     const { data } = await fetchCities(query);
     cityOptions.value = data?.data || data || [];
-  } finally { cityLoading.value = false; }
+  } catch (e) {
+    console.error(e);
+    cityError.value = 'Помилка завантаження';
+  } finally { 
+    cityLoading.value = false; 
+  }
 }
 
 async function loadWarehouses(query) {
   warehouseLoading.value = true;
   try {
-    const { data } = await fetchWarehouses({ cityRef: local.city_ref, query, limit: 50 });
+    // limit 50 іноді замало, але ок
+    const { data } = await fetchWarehouses({ cityRef: local.city_ref, query, limit: 100 });
     warehouseOptions.value = data?.data || data || [];
   } finally { warehouseLoading.value = false; }
 }
@@ -251,27 +311,35 @@ async function loadStreets(query) {
 }
 
 function selectCity(city) {
-  local.city_ref = city.ref; local.city_name = city.name;
-  skipFetch.city = true; cityQuery.value = city.name;
+  local.city_ref = city.ref; 
+  local.city_name = city.name;
+  skipFetch.city = true; 
+  cityQuery.value = city.name;
   showCityDropdown.value = false; 
   
   resetDeliveryFields();
+  // Автоматично завантажуємо список відділень після вибору міста
   if (local.delivery_type !== 'courier') loadWarehouses('');
 }
 
 function selectWarehouse(wh) {
-  local.warehouse_ref = wh.ref; local.warehouse_name = wh.name;
-  skipFetch.warehouse = true; warehouseQuery.value = wh.name;
+  local.warehouse_ref = wh.ref; 
+  local.warehouse_name = wh.name;
+  skipFetch.warehouse = true; 
+  warehouseQuery.value = wh.name;
   showWarehouseDropdown.value = false;
 }
 
 function selectStreet(street) {
-  local.street_name = street.name; skipFetch.street = true;
-  streetQuery.value = street.name; showStreetDropdown.value = false;
+  local.street_name = street.name; 
+  skipFetch.street = true;
+  streetQuery.value = street.name; 
+  showStreetDropdown.value = false;
 }
 
 function onWarehouseFocus() {
   showWarehouseDropdown.value = true;
+  // Якщо поле пусте, але місто обране - вантажимо список
   if (local.city_ref && !warehouseOptions.value.length) loadWarehouses('');
 }
 
@@ -281,6 +349,7 @@ function onStreetFocus() {
 }
 
 function resetDeliveryFields() {
+  // Не стираємо місто, тільки дочірні поля
   local.warehouse_ref = ''; local.warehouse_name = '';
   local.street_name = ''; local.building = ''; local.apartment = '';
   warehouseQuery.value = ''; streetQuery.value = '';
@@ -311,13 +380,13 @@ const scheduleCloseStreet = () => setTimeout(() => showStreetDropdown.value = fa
 .delivery-toggle-group { display: flex; background: #f4f6f9; padding: 4px; border-radius: 12px; gap: 4px; }
 .toggle-item { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px; border-radius: 9px; cursor: pointer; transition: all 0.2s; font-weight: 600; color: #6c757d; font-size: 0.9rem; margin-bottom: 0; }
 .btn-check:checked + .toggle-item { background: #fff; color: #0d6efd; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
-.custom-dropdown { position: absolute; top: 100%; left: 0; right: 0; z-index: 1000; background: white; border-radius: 10px; margin-top: 5px; max-height: 250px; overflow-y: auto; border: 1px solid #eee; box-shadow: 0 10px 15px rgba(0,0,0,0.05); }
-.dropdown-item { padding: 10px 14px; border: none; background: none; width: 100%; text-align: left; transition: background 0.15s; border-bottom: 1px solid #f8f9fa; font-size: 0.85rem; }
+.custom-dropdown { position: absolute; top: 105%; left: 0; right: 0; z-index: 1050; background: white; border-radius: 10px; max-height: 250px; overflow-y: auto; border: 1px solid #eee; box-shadow: 0 10px 15px rgba(0,0,0,0.05); }
+.dropdown-item { padding: 10px 14px; border: none; background: none; width: 100%; text-align: left; transition: background 0.15s; border-bottom: 1px solid #f8f9fa; font-size: 0.85rem; cursor: pointer; }
 .dropdown-item:hover { background: #f1f7ff; }
 .payer-selector { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .payer-option { border: 1px solid #e9ecef; padding: 10px; border-radius: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; transition: 0.2s; background: white; color: #6c757d; font-weight: 500; font-size: 0.9rem; }
 .payer-option.active { border-color: #0d6efd; background: #f0f7ff; color: #0d6efd; }
-.animate-fade-in { animation: fadeIn 0.2s ease; }
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.animate-fade-in { animation: fadeIn 0.3s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
 .custom-input-small { border-radius: 8px; border: 1px solid #e9ecef; padding: 0.5rem; font-size: 0.85rem; width: 100%; }
 </style>

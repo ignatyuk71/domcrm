@@ -1,50 +1,69 @@
 <template>
   <div v-if="open">
-    <div class="modal-backdrop fade show"></div>
+    <div class="modal-backdrop fade show bg-dark bg-opacity-25"></div>
+    
     <div class="modal fade show d-block" tabindex="-1" @click.self="$emit('close')">
-      <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow-lg">
-          <div class="modal-header">
-            <h5 class="modal-title fw-bold">Змінити статус</h5>
-            <button type="button" class="btn-close" @click="$emit('close')"></button>
+      <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content border-0 shadow-xl rounded-4 overflow-hidden">
+          
+          <div class="modal-header border-bottom-0 pb-0 px-4 pt-4">
+            <h5 class="modal-title fw-bold text-dark fs-5">Змінити статус</h5>
+            <button type="button" class="btn-close shadow-none" @click="$emit('close')"></button>
           </div>
-          <div class="modal-body">
-            <div v-if="loading" class="text-center py-4 text-muted">
-              <div class="spinner-border text-primary mb-2" role="status"></div>
-              <div>Завантаження статусів…</div>
+
+          <div class="modal-body px-4 py-3">
+            <div v-if="loading" class="text-center py-5 text-muted">
+              <div class="spinner-border text-primary mb-3" role="status"></div>
+              <div class="small fw-medium">Завантаження...</div>
             </div>
-            <div v-else class="d-flex flex-column gap-2">
-              <label
+
+            <div v-else class="d-flex flex-column gap-2 status-list">
+              <div
                 v-for="st in statuses"
                 :key="st.id"
-                class="d-flex align-items-center justify-content-between border rounded-3 px-3 py-2 tag-check"
+                class="status-option"
+                :class="{ 'selected': selected === st.id }"
+                @click="selected = st.id"
               >
-                <div class="d-flex align-items-center gap-2">
-                  <span
-                    class="tag-icon shadow-sm"
-                    :class="'tag-' + (st.color ? '' : 'gray')"
-                    :style="st.color ? { backgroundColor: st.color, borderColor: st.color } : {}"
-                  >
-                    <i :class="'bi ' + st.icon"></i>
-                    <span class="tag-text">{{ st.name }}</span>
-                  </span>
+                <div 
+                  class="status-chip"
+                  :style="st.color ? { 
+                    backgroundColor: st.color + '15', 
+                    color: st.color 
+                  } : { 
+                    backgroundColor: '#f1f5f9', 
+                    color: '#64748b' 
+                  }"
+                >
+                  <i v-if="st.icon" :class="['bi', st.icon]"></i>
+                  <span>{{ st.name }}</span>
                 </div>
-                <input
-                  class="form-check-input"
-                  type="radio"
-                  v-model="selected"
-                  :value="st.id"
-                  name="status-select"
-                />
-              </label>
-              <div v-if="!statuses.length" class="text-muted small">Статуси відсутні</div>
+
+                <div class="check-icon">
+                  <i class="bi bi-check-circle-fill text-primary"></i>
+                </div>
+              </div>
+
+              <div v-if="!statuses.length" class="text-center text-muted py-4 small">
+                Статуси не знайдено
+              </div>
             </div>
           </div>
-          <div class="modal-footer">
-            <button class="btn btn-light border" type="button" @click="$emit('close')">Скасувати</button>
-            <button class="btn btn-primary" type="button" @click="$emit('save')" :disabled="loading || !selected">
-              Зберегти
-            </button>
+
+          <div class="modal-footer border-top-0 px-4 pb-4 pt-0">
+            <div class="d-grid gap-2 w-100 d-flex">
+              <button class="btn btn-light border w-50 fw-medium rounded-3" type="button" @click="$emit('close')">
+                Скасувати
+              </button>
+              <button 
+                class="btn btn-primary w-50 fw-bold rounded-3 shadow-sm" 
+                type="button" 
+                @click="$emit('save')" 
+                :disabled="loading || !selected"
+              >
+                Зберегти
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -71,29 +90,78 @@ const selected = computed({
 </script>
 
 <style scoped>
-.tag-icon {
+/* Backdrop Blur */
+.modal-backdrop {
+  backdrop-filter: blur(4px);
+}
+
+/* Status Option Card */
+.status-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  cursor: pointer;
+  background: #fff;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.status-option:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+/* Selected State */
+.status-option.selected {
+  border-color: #6366f1; /* Primary color */
+  background: #eff6ff;
+  box-shadow: 0 0 0 1px #6366f1; /* Double border effect */
+}
+
+/* Status Chip Design */
+.status-chip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 8px;
+  gap: 8px;
+  padding: 6px 12px;
   border-radius: 8px;
-  border: 2px solid rgba(17, 24, 39, 0.14);
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 10px 24px rgba(17, 24, 39, 0.08);
-  font-weight: 500;
-  font-size: 0.7rem;
-  color: rgba(17, 24, 39, 0.9);
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1;
 }
-.tag-text {
-  white-space: nowrap;
-  font-size: 0.7rem;
+
+/* Check Icon Animation */
+.check-icon {
+  opacity: 0;
+  transform: scale(0.8);
+  transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  font-size: 1.1rem;
 }
-.tag-check {
-  cursor: pointer;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+.status-option.selected .check-icon {
+  opacity: 1;
+  transform: scale(1);
 }
-.tag-check:hover {
-  border-color: rgba(109, 94, 252, 0.35);
-  box-shadow: 0 8px 20px rgba(17, 24, 39, 0.08);
+
+/* Scrollable area if many statuses */
+.status-list {
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 4px; /* Space for scrollbar */
+}
+
+/* Custom Scrollbar */
+.status-list::-webkit-scrollbar {
+  width: 4px;
+}
+.status-list::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+.status-list::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
 }
 </style>

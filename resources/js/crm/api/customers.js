@@ -7,3 +7,7 @@ export function searchCustomers(query) {
 export function createCustomer(payload) {
     return http.post('/customers', payload);
 }
+
+export function getCustomer(customerId) {
+    return http.get(`/customers/${customerId}`);
+}
