@@ -233,8 +233,10 @@ function mapOrder(order) {
   payment = payment || {};
   const statusRef = order.statusRef || order.status_ref || {};
   const sourceRef = order.source || {};
+  const latestReceipt = order.latest_fiscal_receipt || order.latestFiscalReceipt || null;
   return {
     ...order,
+    payment_method: payment.method || order.payment_method || '',
     customer_id: order.customer_id || customer.id || null,
     order_number: order.order_number || order.id,
     client: customer.full_name || [customer.first_name, customer.last_name].filter(Boolean).join(' ') || 'Гість',
@@ -290,6 +292,7 @@ function mapOrder(order) {
     ),
     comment: order.comment_internal || '',
     created_at: order.created_at,
+    latestFiscalReceipt: latestReceipt,
   };
 }
 

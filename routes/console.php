@@ -13,3 +13,9 @@ Schedule::command('delivery:sync-statuses')
     ->withoutOverlapping()
     ->onOneServer()
     ->description('Автооновлення статусів доставки (НП) кожну годину');
+
+Schedule::command('fiscal:delivered')
+    ->hourly()
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->description('Автофіскалізація доставлених замовлень та переведення у статус оплачених');

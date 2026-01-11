@@ -17,6 +17,8 @@ class Customer extends Model
         'last_name',
         'phone',
         'email',
+        'fb_user_id',
+        'fb_profile_pic',
         'note',
     ];
 
@@ -36,5 +38,13 @@ class Customer extends Model
     public function orders()
     {
         return $this->hasMany(Order::class);
+    }
+
+    /**
+     * Повідомлення клієнта з Facebook.
+     */
+    public function fbMessages(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(FacebookMessage::class)->orderBy('created_at', 'asc');
     }
 }

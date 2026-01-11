@@ -8,6 +8,12 @@ use App\Http\Controllers\StatusController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\NovaPoshtaController;
 use App\Http\Controllers\OrderSourceController;
+use App\Http\Controllers\FiscalController;
+use App\Http\Controllers\Facebook\WebhookController;
+use App\Http\Controllers\PackingController;
+use App\Models\Order;
+use App\Models\OrderItem;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -19,8 +25,91 @@ Route::get('/', function () {
     return view('welcome');
 });
 
+Route::get('/api/fb-webhook', [WebhookController::class, 'verify']);
+Route::post('/api/fb-webhook', [WebhookController::class, 'handle']);
+
 Route::get('/dashboard', function () {
-    return view('dashboard');
+    $today = Carbon::today();
+
+    $newOrdersCount = Order::whereDate('created_at', $today)->count();
+    $inWorkCount = Order::where('packing_status', 'processing')->count();
+    $readyToShipCount = Order::where('packing_status', 'packed')->count();
+
+    $revenueToday = OrderItem::query()
+        ->join('orders', 'orders.id', '=', 'order_items.order_id')
+        ->whereDate('orders.created_at', $today)
+        ->sum('order_items.total');
+
+    $recentOrders = Order::query()
+        ->with(['customer', 'statusRef'])
+        ->withSum('items', 'total')
+        ->orderByDesc('created_at')
+        ->limit(5)
+        ->get();
+
+    $startDate = $today->copy()->subDays(6)->startOfDay();
+    $endDate = $today->copy()->endOfDay();
+    $salesByDate = OrderItem::query()
+        ->join('orders', 'orders.id', '=', 'order_items.order_id')
+        ->whereBetween('orders.created_at', [$startDate, $endDate])
+        ->selectRaw('DATE(orders.created_at) as date, SUM(order_items.total) as total')
+        ->groupBy('date')
+        ->pluck('total', 'date');
+
+    $chartLabels = [];
+    $chartValues = [];
+    for ($i = 6; $i >= 0; $i--) {
+        $date = $today->copy()->subDays($i);
+        $key = $date->toDateString();
+        $chartLabels[] = $date->format('d.m');
+        $chartValues[] = (float) ($salesByDate[$key] ?? 0);
+    }
+
+    $stats = [
+        [
+            'label' => 'Нові замовлення',
+            'value' => (string) $newOrdersCount,
+            'sub' => 'за сьогодні',
+            'bg' => 'linear-gradient(135deg, #eff6ff, #ffffff)',
+            'icon_bg' => '#dbeafe',
+            'icon_color' => '#2563eb',
+            'icon' => 'bi-cart-plus-fill',
+        ],
+        [
+            'label' => 'В роботі',
+            'value' => (string) $inWorkCount,
+            'sub' => 'у пакуванні',
+            'bg' => 'linear-gradient(135deg, #fffbeb, #ffffff)',
+            'icon_bg' => '#fef3c7',
+            'icon_color' => '#d97706',
+            'icon' => 'bi-fire',
+        ],
+        [
+            'label' => 'Готові до відправки',
+            'value' => (string) $readyToShipCount,
+            'sub' => 'пакування завершено',
+            'bg' => 'linear-gradient(135deg, #f0fdf4, #ffffff)',
+            'icon_bg' => '#dcfce7',
+            'icon_color' => '#16a34a',
+            'icon' => 'bi-box-seam-fill',
+        ],
+        [
+            'label' => 'Дохід за день',
+            'value' => number_format((float) $revenueToday, 0, '.', ' ') . ' ₴',
+            'sub' => 'сьогодні',
+            'bg' => 'linear-gradient(135deg, #f5f3ff, #ffffff)',
+            'icon_bg' => '#ede9fe',
+            'icon_color' => '#7c3aed',
+            'icon' => 'bi-wallet-fill',
+        ],
+    ];
+
+    return view('dashboard', [
+        'stats' => $stats,
+        'recentOrders' => $recentOrders,
+        'chartLabels' => $chartLabels,
+        'chartValues' => $chartValues,
+    ]);
 })->middleware(['auth', 'verified'])->name('dashboard');
 
 /*
@@ -86,6 +175,26 @@ Route::middleware('auth')->group(function () {
     Route::get('/statuses', [StatusController::class, 'index'])->name('statuses.index');
     Route::get('/order-sources', [OrderSourceController::class, 'index'])->name('orderSources.index');
     Route::get('/tags', [TagController::class, 'index'])->name('tags.index');
+
+    // --- ФІСКАЛІЗАЦІЯ (Checkbox) ---
+    Route::controller(FiscalController::class)->prefix('api')->name('fiscal.')->group(function () {
+        Route::post('/orders/{order}/fiscalize', 'fiscalize')->name('fiscalize');
+        Route::post('/orders/{order}/refund', 'refund')->name('refund');
+        Route::get('/orders/{order}/fiscal-status', 'status')->name('status');
+    });
+
+    // --- ПАКУВАННЯ ---
+    Route::prefix('packing')->name('packing.')->controller(PackingController::class)->group(function () {
+        Route::get('/list', 'index')->name('list');
+        Route::get('/{order}', 'show')->name('show');
+        Route::post('/{order}/start', 'start')->name('start');
+        Route::post('/{order}/finish', 'finish')->name('finish');
+        Route::post('/{order}/pause', 'pause')->name('pause');
+        Route::post('/{order}/problem', 'problem')->name('problem');
+    });
+
+    Route::get('/api/packing/list', [PackingController::class, 'list'])->name('packing.api.list');
+    Route::get('/api/packing/history', [PackingController::class, 'history'])->name('packing.api.history');
 
     // --- ПРОФІЛЬ КОРИСТУВАЧА ---
     Route::controller(ProfileController::class)->prefix('profile')->name('profile.')->group(function () {

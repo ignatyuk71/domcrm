@@ -12,11 +12,13 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withCommands([
         \App\Console\Commands\SyncDeliveryStatuses::class,
+        \App\Console\Commands\FiscalizeDeliveredOrders::class,
     ])
     ->withMiddleware(function (Middleware $middleware) {
         // Вимикаємо перевірку CSRF для маршрутів генерації ТТН
         $middleware->validateCsrfTokens(except: [
             'orders/*/generate-ttn',
+            'api/fb-webhook',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

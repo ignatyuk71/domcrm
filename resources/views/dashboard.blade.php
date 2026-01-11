@@ -175,15 +175,6 @@
 
             {{-- --- STATS GRID --- --}}
             <div class="row g-4 mb-5">
-                @php
-                    $stats = [
-                        ['label' => 'Нові замовлення', 'value' => '12', 'sub' => '+2 за годину', 'bg' => 'linear-gradient(135deg, #eff6ff, #ffffff)', 'icon_bg' => '#dbeafe', 'icon_color' => '#2563eb', 'icon' => 'bi-cart-plus-fill'],
-                        ['label' => 'В роботі', 'value' => '45', 'sub' => '80% навантаження', 'bg' => 'linear-gradient(135deg, #fffbeb, #ffffff)', 'icon_bg' => '#fef3c7', 'icon_color' => '#d97706', 'icon' => 'bi-fire'],
-                        ['label' => 'Готові до відправки', 'value' => '8', 'sub' => 'Терміново: 3', 'bg' => 'linear-gradient(135deg, #f0fdf4, #ffffff)', 'icon_bg' => '#dcfce7', 'icon_color' => '#16a34a', 'icon' => 'bi-box-seam-fill'],
-                        ['label' => 'Дохід за день', 'value' => '24.5k', 'sub' => '+15% до вчора', 'bg' => 'linear-gradient(135deg, #f5f3ff, #ffffff)', 'icon_bg' => '#ede9fe', 'icon_color' => '#7c3aed', 'icon' => 'bi-wallet-fill'],
-                    ];
-                @endphp
-
                 @foreach($stats as $s)
                     <div class="col-12 col-sm-6 col-lg-3">
                         <div class="premium-card h-100 p-4 d-flex align-items-center justify-content-between" style="background: {{ $s['bg'] }}">
@@ -283,33 +274,49 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach([
-                                ['id' => '#10234', 'date' => 'Сьогодні, 14:30', 'name' => 'Олена Петрівна', 'status' => 'Новий', 'badge' => 'badge-primary', 'total' => '1,250 ₴', 'img' => 'https://ui-avatars.com/api/?name=O+P&background=6366f1&color=fff'],
-                                ['id' => '#10233', 'date' => 'Сьогодні, 12:15', 'name' => 'Ігор Коваленко', 'status' => 'В роботі', 'badge' => 'badge-warning', 'total' => '3,400 ₴', 'img' => 'https://ui-avatars.com/api/?name=I+K&background=f59e0b&color=fff'],
-                                ['id' => '#10232', 'date' => 'Вчора, 18:45', 'name' => 'Марія Сидоренко', 'status' => 'Відправлено', 'badge' => 'badge-info', 'total' => '890 ₴', 'img' => 'https://ui-avatars.com/api/?name=M+S&background=0ea5e9&color=fff'],
-                                ['id' => '#10231', 'date' => 'Вчора, 16:20', 'name' => 'ТОВ "БудМайстер"', 'status' => 'Виконано', 'badge' => 'badge-success', 'total' => '12,500 ₴', 'img' => 'https://ui-avatars.com/api/?name=B+M&background=22c55e&color=fff'],
-                            ] as $order)
+                            @php
+                                $badgeMap = [
+                                    'new' => 'badge-primary',
+                                    'processing' => 'badge-warning',
+                                    'packed' => 'badge-info',
+                                    'shipped' => 'badge-info',
+                                    'completed' => 'badge-success',
+                                    'done' => 'badge-success',
+                                ];
+                            @endphp
+
+                            @foreach($recentOrders as $order)
+                                @php
+                                    $customerName = $order->customer?->full_name ?: trim(($order->customer?->first_name ?? '') . ' ' . ($order->customer?->last_name ?? ''));
+                                    $customerName = $customerName !== '' ? $customerName : 'Клієнт';
+                                    $statusName = $order->statusRef?->name ?? ($order->status ?? '—');
+                                    $statusCode = $order->statusRef?->code ?? ($order->status ?? 'default');
+                                    $badgeClass = $badgeMap[$statusCode] ?? 'badge-primary';
+                                    $total = number_format((float) ($order->items_sum_total ?? 0), 0, '.', ' ') . ' ₴';
+                                    $dateLabel = $order->created_at ? $order->created_at->format('d.m H:i') : '—';
+                                    $avatarUrl = 'https://ui-avatars.com/api/?name=' . urlencode($customerName) . '&background=6366f1&color=fff';
+                                @endphp
                                 <tr>
                                     <td class="ps-4">
-                                        <span class="fw-bold text-dark">{{ $order['id'] }}</span>
+                                        <span class="fw-bold text-dark">#{{ $order->order_number ?? $order->id }}</span>
                                     </td>
                                     <td>
                                         <div class="d-flex align-items-center gap-3">
-                                            <img src="{{ $order['img'] }}" class="rounded-circle shadow-sm" width="36" height="36" alt="">
+                                            <img src="{{ $avatarUrl }}" class="rounded-circle shadow-sm" width="36" height="36" alt="">
                                             <div>
-                                                <div class="fw-bold text-dark small">{{ $order['name'] }}</div>
+                                                <div class="fw-bold text-dark small">{{ $customerName }}</div>
                                                 <div class="text-muted" style="font-size: 0.75rem;">Постійний клієнт</div>
                                             </div>
                                         </div>
                                     </td>
                                     <td>
-                                        <span class="status-pill {{ $order['badge'] }}">
-                                            {{ $order['status'] }}
+                                        <span class="status-pill {{ $badgeClass }}">
+                                            {{ $statusName }}
                                         </span>
                                     </td>
-                                    <td class="text-muted small">{{ $order['date'] }}</td>
+                                    <td class="text-muted small">{{ $dateLabel }}</td>
                                     <td class="text-end pe-4">
-                                        <span class="fw-black text-dark">{{ $order['total'] }}</span>
+                                        <span class="fw-black text-dark">{{ $total }}</span>
                                     </td>
                                 </tr>
                             @endforeach
@@ -340,10 +347,10 @@
             new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'],
+                    labels: @json($chartLabels),
                     datasets: [{
                         label: 'Дохід (₴)',
-                        data: [12500, 19000, 15000, 24000, 18000, 32000, 25000],
+                        data: @json($chartValues),
                         borderColor: '#6366f1', // Яскравий індиго
                         borderWidth: 4,
                         backgroundColor: gradient,

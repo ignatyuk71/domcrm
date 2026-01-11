@@ -13,8 +13,10 @@ use App\Models\OrderDelivery;
 use App\Models\OrderItem;
 use App\Models\OrderPayment;
 use App\Models\OrderSource;
+use App\Models\PackingSession;
 use App\Models\Tag;
 use App\Models\Status;
+use App\Models\FiscalReceipt;
 
 class Order extends Model
 {
@@ -23,6 +25,8 @@ class Order extends Model
         'source',
         'status',
         'payment_status',
+        'packing_status',
+        'is_priority',
         'status_id',
         'customer_id',
         'manager_id',
@@ -91,5 +95,35 @@ class Order extends Model
     public function delivery(): HasOne
     {
         return $this->hasOne(OrderDelivery::class);
+    }
+
+    /** Усі фіскальні чеки по замовленню. */
+    public function fiscalReceipts(): HasMany
+    {
+        return $this->hasMany(FiscalReceipt::class);
+    }
+
+    /** Останній чек (для швидкого відображення статусу). */
+    public function latestFiscalReceipt(): HasOne
+    {
+        return $this->hasOne(FiscalReceipt::class)->latestOfMany();
+    }
+
+    /** Історія запитів/логів фіскалізації по замовленню. */
+    public function fiscalLogs(): HasMany
+    {
+        return $this->hasMany(FiscalLog::class);
+    }
+
+    /** Історія сесій пакування замовлення. */
+    public function packingSessions(): HasMany
+    {
+        return $this->hasMany(PackingSession::class);
+    }
+
+    /** Поточна активна сесія (якщо є). */
+    public function activePackingSession(): HasOne
+    {
+        return $this->hasOne(PackingSession::class)->whereNull('finished_at');
     }
 }

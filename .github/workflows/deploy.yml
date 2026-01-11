@@ -1,0 +1,25 @@
+name: Deploy to Mirohost
+on:
+  push:
+    branches:
+      - main  # Переконайтеся, що ваша головна гілка називається саме main
+jobs:
+  web-deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    steps:
+    - name: Get latest code
+      uses: actions/checkout@v3
+    
+    - name: Sync files to Mirohost
+      uses: SamKirkland/FTP-Deploy-Action@v4.3.4
+      with:
+        server: ovh21.mirohost.net
+        username: ${{ secrets.FTP_USERNAME }}
+        password: ${{ secrets.FTP_PASSWORD }}
+        server-dir: /www/
+        exclude: |
+          **/.git*
+          **/node_modules/**
+          **/vendor/**
+          .github/workflows/**

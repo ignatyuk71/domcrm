@@ -23,5 +23,6 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $this->call(StatusesSeeder::class);
+        $this->call(FiscalLookupSeeder::class);
     }
 }

@@ -28,16 +28,19 @@
               <span class="value-text">{{ formatDate(order.created_at) }}</span>
             </div>
 
-            <div class="d-flex justify-content-between align-items-center">
+            <div class="d-flex justify-content-between align-items-center" style="min-height: 28px;">
               <span class="label-text">Статус</span>
+              
               <button
-                class="status-trigger"
-                :class="getStatusClass(order.status_key)"
+                class="status-pill-btn"
                 :style="getStatusStyle(order)"
                 @click.prevent.stop="$emit('open-statuses')"
               >
-                <i class="bi" :class="order.status_icon || getStatusIcon(order.status_key)"></i>
-                <span>{{ order.status }}</span>
+                <i v-if="order.status_icon" :class="order.status_icon" class="me-1"></i>
+                <span v-else class="status-dot"></span>
+                
+                <span class="status-label">{{ order.status }}</span>
+                <i class="bi bi-chevron-down ms-2 opacity-50" style="font-size: 0.75em;"></i>
               </button>
             </div>
 
@@ -150,6 +153,12 @@
                <i class="bi bi-person-check text-muted"></i>
                <span class="text-dark small">Платник: <strong>{{ order.delivery_payer }}</strong></span>
              </div>
+            <div v-if="order.payment_method" class="info-row-sm">
+              <i class="bi bi-credit-card text-muted"></i>
+              <span class="text-dark small">
+                Спосіб оплати: <strong>{{ paymentLabel(order.payment_method) }}</strong>
+              </span>
+            </div>
           </div>
 
           <div class="ttn-section">
@@ -233,8 +242,18 @@
           </table>
         </div>
 
-        <div class="d-flex justify-content-end p-4 bg-light bg-opacity-25 border-top">
-          <div class="summary-box">
+        <div class="d-flex flex-column flex-lg-row justify-content-between gap-3 p-4 bg-light bg-opacity-25 border-top">
+          <div class="fiscal-slot order-1 order-lg-1 me-lg-auto">
+            <FiscalBlock
+              :order-id="order.id"
+              :receipt="order.latestFiscalReceipt"
+              :payment-method="order.payment_method"
+              :prepay-amount="order.prepay_amount"
+              :total-amount="order.total"
+            />
+          </div>
+
+          <div class="summary-box flex-grow-1 order-2 order-lg-2">
             <div class="d-flex justify-content-between mb-1 text-sm">
               <span class="text-muted">Товари:</span>
               <span class="fw-bold text-dark">{{ formatCurrency(order.total, order.currency) }}</span>
@@ -263,10 +282,24 @@ import {
   formatDate,
   getPaymentClass,
   getPaymentIcon,
-  getStatusClass,
+  // getStatusClass більше не потрібен у шаблоні, але не видаляю з імпорту, щоб не ламати логіку, якщо використовується десь ще
+  getStatusClass, 
   getStatusIcon,
   getStatusStyle,
 } from '@/crm/utils/orderDisplay';
+import FiscalBlock from '@/crm/components/orders/list/FiscalBlock.vue';
+
+const paymentLabels = {
+  cod: 'Накладений платіж',
+  card: 'На рахунок IBAN',
+  prepay: 'Часткова передоплата',
+  cash: 'Готівка',
+  cashless: 'Безготівковий',
+};
+
+function paymentLabel(value) {
+  return paymentLabels[value] || value || '—';
+}
 
 defineProps({
   order: { type: Object, required: true },
@@ -284,257 +317,302 @@ defineEmits([
 </script>
 
 <style scoped>
-/* WRAPPER */
-.details-wrapper {
-  padding: 24px;
-  background: #f8fafc; /* Світлий фон як у всій системі */
-  border-top: 1px solid #e2e8f0;
-}
+  /* --- WRAPPER & LAYOUT --- */
+  .details-wrapper {
+    padding: 24px;
+    background: #f8fafc;
+    border-top: 1px solid #e2e8f0;
+  }
+  
+  .clean-card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    height: 100%;
+  }
+  
+  .divider {
+    height: 1px;
+    background: #f1f5f9;
+    margin: 16px 0;
+  }
+  
+  /* --- TYPOGRAPHY --- */
+  .card-section-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin-bottom: 16px;
+  }
+  
+  .label-text {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: #94a3b8;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  
+  .value-text {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #334155;
+  }
+  
+  /* --- BADGES & STATUSES --- */
+  .source-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    border: 1px solid;
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+  
+  .payment-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+  
+  /* --- ОНОВЛЕНИЙ СТИЛЬ ДЛЯ СТАТУСУ --- */
+  .status-pill-btn {
+    /* Базові стилі (якщо немає кольору в базі) */
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+    
+    /* Розміри та вирівнювання */
+    padding: 6px 12px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    
+    /* Текст */
+    font-weight: 600;
+    font-size: 0.85rem;
+    line-height: 1.2;
+    text-align: center;
+    
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
 
-/* CARDS */
-.clean-card {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.04); /* Легка тінь */
-}
+  /* Ефект наведення */
+  .status-pill-btn:hover {
+    filter: brightness(0.96);
+    transform: translateY(-1px);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  }
+  
+  .status-pill-btn:active {
+    transform: translateY(0);
+    filter: brightness(0.92);
+    box-shadow: none;
+  }
 
-/* TYPOGRAPHY */
-.card-section-title {
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: #1e293b;
-  margin-bottom: 16px;
-}
+  /* Крапка статусу */
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: currentColor;
+    opacity: 0.8;
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.4);
+  }
 
-.label-text {
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  color: #94a3b8;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-
-.value-text {
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: #334155;
-}
-
-.divider {
-  height: 1px;
-  background: #f1f5f9;
-  margin: 16px 0;
-}
-
-/* BADGES & CHIPS */
-.source-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 8px;
-  border-radius: 6px;
-  border: 1px solid;
-  font-size: 0.8rem;
-  font-weight: 600;
-}
-
-.status-trigger {
-  background: none;
-  border: none;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: 600;
-  font-size: 0.9rem;
-  text-decoration: underline;
-  text-decoration-color: transparent;
-  transition: all 0.2s;
-}
-.status-trigger:hover {
-  text-decoration-color: currentColor;
-  opacity: 0.8;
-}
-
-.payment-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-
-/* TAGS */
-.tags-wrapper {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.tag-chip {
-  font-size: 0.75rem;
-  padding: 4px 10px;
-  border-radius: 20px;
-  font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  background: #f1f5f9;
-  color: #64748b;
-}
-.btn-add-tag {
-  font-size: 0.75rem;
-  padding: 4px 10px;
-  border-radius: 20px;
-  border: 1px dashed #cbd5e1;
-  background: transparent;
-  color: #64748b;
-  transition: all 0.2s;
-}
-.btn-add-tag:hover {
-  border-color: #6366f1;
-  color: #6366f1;
-}
-
-/* CLIENT SECTION */
-.btn-white {
-  background: #fff;
-  color: #475569;
-}
-.btn-white:hover {
-  background: #f8fafc;
-  color: #1e293b;
-}
-.avatar-box {
-  width: 42px;
-  height: 42px;
-  background: #eff6ff;
-  color: #3b82f6;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 1.1rem;
-}
-.comment-box {
-  background: #fffbeb;
-  border: 1px solid #fef3c7;
-  color: #b45309;
-  padding: 10px;
-  border-radius: 8px;
-  font-size: 0.85rem;
-  display: flex;
-  align-items: start;
-}
-
-/* DELIVERY SECTION */
-.carrier-badge {
-  background: #0f172a;
-  color: #fff;
-  font-size: 0.7rem;
-  font-weight: 600;
-  padding: 4px 10px;
-  border-radius: 6px;
-  display: inline-flex;
-  align-items: center;
-}
-.delivery-status-box {
-  background: #f8fafc;
-  border-left: 3px solid #cbd5e1;
-  padding: 10px 12px;
-  border-radius: 6px;
-}
-.btn-icon-refresh {
-  border: none;
-  background: #fff;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #3b82f6;
-  cursor: pointer;
-}
-.spin { animation: spin 1s linear infinite; }
-@keyframes spin { 100% { transform: rotate(360deg); } }
-
-.info-row-sm {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.9rem;
-}
-
-.ttn-section {
-  background: #fff;
-  border: 1px solid #f1f5f9;
-  border-radius: 8px;
-  padding: 12px;
-  margin-top: 16px;
-}
-.ttn-display {
-  background: #f8fafc;
-  border-radius: 6px;
-  padding: 2px;
-  display: flex;
-  margin-bottom: 8px;
-  border: 1px solid #e2e8f0;
-}
-.ttn-display span {
-  flex-grow: 1;
-  padding: 6px 10px;
-}
-.btn-copy {
-  background: #fff;
-  border: none;
-  border-left: 1px solid #e2e8f0;
-  width: 32px;
-  color: #64748b;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-top-right-radius: 6px;
-  border-bottom-right-radius: 6px;
-}
-.btn-copy:hover { color: #3b82f6; background: #eff6ff; }
-
-/* TABLE */
-.clean-table th {
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  color: #64748b;
-  font-weight: 700;
-  padding: 12px;
-  border-bottom: 1px solid #e2e8f0;
-}
-.clean-table td {
-  padding: 12px;
-  border-bottom: 1px solid #f8fafc;
-  font-size: 0.9rem;
-}
-.product-thumb {
-  width: 48px;
-  height: 48px;
-  border-radius: 8px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-.product-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.summary-box {
-  min-width: 280px;
-}
-.text-sm { font-size: 0.85rem; }
-.extra-small { font-size: 0.7rem; }
+  .status-label {
+    white-space: nowrap;
+  }
+  
+  /* --- TAGS --- */
+  .tags-wrapper {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .tag-chip {
+    font-size: 0.75rem;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: #f1f5f9;
+    color: #64748b;
+  }
+  .btn-add-tag {
+    font-size: 0.75rem;
+    padding: 4px 10px;
+    border-radius: 20px;
+    border: 1px dashed #cbd5e1;
+    background: transparent;
+    color: #64748b;
+    transition: all 0.2s;
+    cursor: pointer;
+  }
+  .btn-add-tag:hover {
+    border-color: #6366f1;
+    color: #6366f1;
+  }
+  
+  /* --- CLIENT & INFO BLOCKS --- */
+  .btn-white {
+    background: #fff;
+    color: #475569;
+  }
+  .btn-white:hover {
+    background: #f8fafc;
+    color: #1e293b;
+  }
+  
+  .avatar-box {
+    width: 42px;
+    height: 42px;
+    background: #eff6ff;
+    color: #3b82f6;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 1.1rem;
+  }
+  
+  .comment-box {
+    background: #fffbeb;
+    border: 1px solid #fef3c7;
+    color: #b45309;
+    padding: 10px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: start;
+  }
+  
+  .info-row-sm {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+  }
+  
+  /* --- DELIVERY & TTN --- */
+  .carrier-badge {
+    background: #0f172a;
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+  }
+  
+  .delivery-status-box {
+    background: #f8fafc;
+    border-left: 3px solid #cbd5e1;
+    padding: 10px 12px;
+    border-radius: 6px;
+  }
+  
+  .btn-icon-refresh {
+    border: none;
+    background: #fff;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #3b82f6;
+    cursor: pointer;
+  }
+  .spin { animation: spin 1s linear infinite; }
+  @keyframes spin { 100% { transform: rotate(360deg); } }
+  
+  .ttn-section {
+    background: #fff;
+    border: 1px solid #f1f5f9;
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 16px;
+  }
+  .ttn-display {
+    background: #f8fafc;
+    border-radius: 6px;
+    padding: 2px;
+    display: flex;
+    margin-bottom: 8px;
+    border: 1px solid #e2e8f0;
+  }
+  .ttn-display span {
+    flex-grow: 1;
+    padding: 6px 10px;
+  }
+  .btn-copy {
+    background: #fff;
+    border: none;
+    border-left: 1px solid #e2e8f0;
+    width: 32px;
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-top-right-radius: 6px;
+    border-bottom-right-radius: 6px;
+    cursor: pointer;
+  }
+  .btn-copy:hover { color: #3b82f6; background: #eff6ff; }
+  
+  /* --- TABLE & PRODUCTS --- */
+  .clean-table th {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: #64748b;
+    font-weight: 700;
+    padding: 12px;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .clean-table td {
+    padding: 12px;
+    border-bottom: 1px solid #f8fafc;
+    font-size: 0.9rem;
+  }
+  .product-thumb {
+    width: 48px;
+    height: 48px;
+    border-radius: 8px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .product-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  
+  /* --- FOOTER SUMMARY --- */
+  .fiscal-slot {
+    min-width: 280px;
+    max-width: 360px;
+  }
+  .summary-box {
+    min-width: 280px;
+  }
+  .text-sm { font-size: 0.85rem; }
+  .extra-small { font-size: 0.7rem; }
 </style>

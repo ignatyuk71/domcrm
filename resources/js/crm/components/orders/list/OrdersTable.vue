@@ -105,7 +105,7 @@
               <td>
                 <div 
                   class="status-badge"
-                  :class="getStatusClass(order.status_key)"
+                  :class="order.status_color ? '' : getStatusClass(order.status_key)"
                   :style="getStatusStyle(order)"
                 >
                   <i class="bi" :class="order.status_icon || getStatusIcon(order.status_key)"></i>
@@ -358,7 +358,7 @@
   vertical-align: middle;
 }
 .order-row:hover {
-  background: #f8fafc;
+  background: #bdd4eb;
   transform: translateY(-1px);
   box-shadow: 0 2px 8px rgba(0,0,0,0.02);
   z-index: 2;
@@ -367,7 +367,7 @@
 
 /* Активний (розгорнутий) рядок */
 .row-expanded {
-  background: #f8fafc !important;
+  background: #bdd4eb !important;
   border-bottom-color: transparent;
 }
 .row-expanded td {
@@ -411,7 +411,7 @@
 
 .date-text {
   font-size: 0.8rem;
-  color: #94a3b8;
+  
 }
 
 /* =========================================

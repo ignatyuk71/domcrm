@@ -45,6 +45,18 @@ class OrderController extends Controller
                 'items' => fn ($q) => $q
                     ->select('id', 'order_id', 'product_id', 'product_title', 'sku', 'size', 'price', 'qty', 'total')
                     ->with('product:id,main_photo_path'),
+                'latestFiscalReceipt' => fn ($q) => $q->select(
+                    'fiscal_receipts.id',
+                    'fiscal_receipts.order_id',
+                    'fiscal_receipts.status',
+                    'fiscal_receipts.type',
+                    'fiscal_receipts.fiscal_code',
+                    'fiscal_receipts.check_link',
+                    'fiscal_receipts.error_message',
+                    'fiscal_receipts.uuid',
+                    'fiscal_receipts.total_amount',
+                    'fiscal_receipts.created_at'
+                ),
             ])
             ->withSum('items', 'total')
             ->withCount('items')
@@ -104,6 +116,18 @@ class OrderController extends Controller
             'delivery',
             'items.product',
             'payment',
+            'latestFiscalReceipt' => fn ($q) => $q->select(
+                'fiscal_receipts.id',
+                'fiscal_receipts.order_id',
+                'fiscal_receipts.status',
+                'fiscal_receipts.type',
+                'fiscal_receipts.fiscal_code',
+                'fiscal_receipts.check_link',
+                'fiscal_receipts.error_message',
+                'fiscal_receipts.uuid',
+                'fiscal_receipts.total_amount',
+                'fiscal_receipts.created_at'
+            ),
         ]);
 
         return response()->json(['data' => $order]);
@@ -178,7 +202,7 @@ class OrderController extends Controller
                 ]);
             }
 
-            // Генерація номера замовлення
+            // Генерація тимчасового номера (потім замінюємо на індекс)
             $orderNumber = $this->generateOrderNumber();
             $statusCode = $data['order']['status'] ?? 'new';
             $statusId = $this->resolveStatusId($statusCode, 'order');
@@ -199,6 +223,9 @@ class OrderController extends Controller
                 // ДОДАНО: передаємо ТТН у пошуковий блоб
                 'search_blob' => $this->buildSearchBlob($customer, $data['delivery']['ttn'] ?? null),
             ]);
+
+            // Використовуємо індекс як номер замовлення
+            $order->update(['order_number' => (string) $order->id]);
 
             // Теги (звʼязок через pivot)
             if (!empty($data['tag_ids'])) {
@@ -436,10 +463,10 @@ class OrderController extends Controller
         return response()->json(['data' => $tags]);
     }
 
-    /** Простіший генератор унікального номера замовлення. */
+    /** Тимчасовий номер (замінимо на id після створення). */
     protected function generateOrderNumber(): string
     {
-        return 'DM-' . now()->format('Ymd-His') . '-' . random_int(100, 999);
+        return 'TMP-' . now()->format('YmdHis') . '-' . random_int(100, 999);
     }
 
     /** Формуємо пошуковий blob для швидких фільтрів. */

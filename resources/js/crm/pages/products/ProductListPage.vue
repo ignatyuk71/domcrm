@@ -1,5 +1,5 @@
 <template>
-  <div class="container-fluid p-4">
+  <div class="container-fluid p-0 p-md-4">
     <div class="clean-card overflow-hidden">
       
       <div class="p-4 border-bottom">

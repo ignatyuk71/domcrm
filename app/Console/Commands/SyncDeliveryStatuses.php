@@ -27,14 +27,16 @@ class SyncDeliveryStatuses extends Command
 
     /**
      * Фінальні статуси замовлення (не треба опитувати доставку).
+     * Сюди додано 'delivered_paid' (ID 11), щоб зупинити опитування після отримання.
      */
     protected array $finalOrderStatuses = [
         'completed',
         'done',
-        'delivered',
-        'returned',
-        'cancelled',
+        'delivered',      // ID 6 (залежить від логіки, іноді тут ще чекають отримання)
+        'returned',       // ID 8
+        'cancelled',      // ID 7
         'canceled',
+        'delivered_paid', // <--- ID 11 (Успішно завершено/Забрано). Додано для економії запитів.
     ];
 
     public function handle(NovaPoshtaService $novaPoshta): int
@@ -42,8 +44,9 @@ class SyncDeliveryStatuses extends Command
         $chunk = (int) $this->option('chunk') ?: 200;
         $chunk = max(1, $chunk);
 
+        // Шукаємо тільки ті замовлення, статус яких НЕ у списку $finalOrderStatuses
         $query = Order::query()
-            ->whereNotIn('status', $this->finalOrderStatuses)
+            ->whereNotIn('status', $this->finalOrderStatuses) // Тут фільтрується ID 11 (delivered_paid)
             ->whereHas('delivery', function ($q) {
                 $q->where('carrier', 'nova_poshta')
                     ->whereNotNull('ttn');
@@ -68,7 +71,10 @@ class SyncDeliveryStatuses extends Command
                     continue;
                 }
                 $documents[] = ['DocumentNumber' => $delivery->ttn, 'Phone' => $delivery->recipient_phone];
-                $mapByTtn[$delivery->ttn] = $delivery;
+                $mapByTtn[$delivery->ttn] = [
+                    'delivery' => $delivery,
+                    'order' => $order,
+                ];
             }
 
             if (empty($documents)) {
@@ -94,7 +100,10 @@ class SyncDeliveryStatuses extends Command
                 }
 
                 $normalized = DeliveryStatusMapper::map($row);
-                $delivery = $mapByTtn[$ttn];
+                $entry = $mapByTtn[$ttn];
+                $delivery = $entry['delivery'];
+                
+                // Оновлюємо інформацію про доставку (текст, іконку)
                 $delivery->forceFill([
                     'delivery_status_code' => $normalized['code'],
                     'delivery_status_label' => $normalized['label'],
@@ -104,6 +113,19 @@ class SyncDeliveryStatuses extends Command
                     'delivery_status_updated_at' => $now,
                     'last_tracked_at' => $now,
                 ])->saveQuietly();
+
+                // Отримуємо ID статусу для CRM через Mapper
+                $npCode = (int) ($row['StatusCode'] ?? $row['Status'] ?? 0);
+                $newStatusId = DeliveryStatusMapper::getCrmStatusId($npCode);
+
+                if ($newStatusId) {
+                    $order = $entry['order'];
+                    // Якщо статус змінився - оновлюємо
+                    if ($order->status_id !== $newStatusId) {
+                        $order->update(['status_id' => $newStatusId]);
+                        // Тут можна додати Log::info, щоб бачити зміни в консолі/логах
+                    }
+                }
 
                 $updated++;
             }

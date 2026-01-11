@@ -54,7 +54,7 @@
 </style>
 
 <nav class="navbar navbar-expand-md navbar-light bg-white navbar-static">
-    <div class="container-fluid px-4">
+    <div class="container-fluid">
         
         <div class="d-flex align-items-center d-md-none w-100">
             <button class="navbar-toggler border-0 p-0 me-3" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent">

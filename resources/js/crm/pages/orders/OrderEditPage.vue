@@ -1,5 +1,5 @@
 <template>
-  <div class="container-fluid p-4">
+  <div class="container-fluid p-0 p-md-4">
     <div class="mx-auto" style="max-width: 1600px;">
       
       <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 gap-3">

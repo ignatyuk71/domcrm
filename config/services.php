@@ -31,6 +31,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Checkbox PRRO API Settings
+    |--------------------------------------------------------------------------
+    */
+    'checkbox' => [
+        'api_url' => env('CHECKBOX_API_URL'),
+        'license_key' => env('CHECKBOX_LICENSE_KEY'),
+        'login' => env('CHECKBOX_LOGIN') ?: env('CHECKBOX_CASHIER_LOGIN'),
+        'password' => env('CHECKBOX_PASSWORD') ?: env('CHECKBOX_CASHIER_PASSWORD'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Nova Poshta API Settings
     |--------------------------------------------------------------------------
     */
