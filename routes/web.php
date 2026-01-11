@@ -11,6 +11,7 @@ use App\Http\Controllers\OrderSourceController;
 use App\Http\Controllers\FiscalController;
 use App\Http\Controllers\Facebook\WebhookController;
 use App\Http\Controllers\PackingController;
+use App\Http\Controllers\ChatController;
 use App\Models\Order;
 use App\Models\OrderItem;
 use Carbon\Carbon;
@@ -151,6 +152,10 @@ Route::middleware('auth')->group(function () {
     // --- КЛІЄНТИ (Customers) ---
     Route::get('/customers', [CustomerController::class, 'index'])->name('customers.index');
     Route::get('/customers/{customer}', [CustomerController::class, 'show'])->name('customers.show');
+
+    // --- ЧАТ ---
+    Route::get('/chat', [ChatController::class, 'index'])->name('chat.index');
+    Route::get('/chat/{id}', [ChatController::class, 'getMessages'])->name('chat.messages');
 
     // --- НОВА ПОШТА (Nova Poshta довідники) ---
     Route::controller(NovaPoshtaController::class)->prefix('nova-poshta')->name('novaPoshta.')->group(function () {
