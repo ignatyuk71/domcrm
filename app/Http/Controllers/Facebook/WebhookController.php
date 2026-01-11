@@ -8,6 +8,7 @@ use App\Models\FacebookMessage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 class WebhookController extends Controller
 {
@@ -80,6 +81,7 @@ class WebhookController extends Controller
 
         $fbUserId = $event['sender']['id'];
         $message = $event['message'];
+        $textColumn = Schema::hasColumn('facebook_messages', 'message_text') ? 'message_text' : 'text';
 
         // Шукаємо або створюємо клієнта за його FB ID
         $customer = Customer::firstOrCreate(
@@ -94,7 +96,7 @@ class WebhookController extends Controller
         FacebookMessage::create([
             'customer_id' => $customer->id,
             'mid' => $message['mid'] ?? null,
-            'text' => $message['text'] ?? null,
+            $textColumn => $message['text'] ?? null,
             'attachments' => $message['attachments'] ?? null,
             'platform' => $platform,
             'type' => 'message',
@@ -107,6 +109,7 @@ class WebhookController extends Controller
     {
         $fbUserId = $value['from']['id'] ?? null;
         $item = $value['item'] ?? null;
+        $textColumn = Schema::hasColumn('facebook_messages', 'message_text') ? 'message_text' : 'text';
 
         if (!$fbUserId || $item !== 'comment') {
             return;
@@ -121,7 +124,7 @@ class WebhookController extends Controller
             'customer_id' => $customer->id,
             'mid' => $value['comment_id'] ?? null,
             'parent_id' => $value['parent_id'] ?? null,
-            'text' => $value['message'] ?? null,
+            $textColumn => $value['message'] ?? null,
             'type' => 'comment',
             'platform' => $platform,
             'is_from_customer' => true,

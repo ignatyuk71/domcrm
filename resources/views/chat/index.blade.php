@@ -7,18 +7,25 @@
                         Клієнти
                     </div>
                     <div class="list-group list-group-flush" id="chatCustomerList">
-                        @forelse ($customers as $customer)
+                        @forelse ($chats as $chat)
                             <button
                                 type="button"
                                 class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
-                                data-customer-id="{{ $customer->id }}"
-                                data-customer-name="{{ trim(($customer->first_name ?? '') . ' ' . ($customer->last_name ?? '')) }}"
+                                data-customer-id="{{ $chat['customer_id'] }}"
+                                data-customer-name="{{ $chat['name'] }}"
                             >
-                                <span class="text-truncate">
-                                    {{ trim(($customer->first_name ?? '') . ' ' . ($customer->last_name ?? '')) ?: 'Social User' }}
+                                <span class="text-truncate d-flex align-items-center gap-2">
+                                    <span>
+                                        @if ($chat['platform'] === 'instagram')
+                                            IG
+                                        @else
+                                            FB
+                                        @endif
+                                    </span>
+                                    <span>{{ $chat['name'] }}</span>
                                 </span>
                                 <span class="badge bg-light text-muted">
-                                    {{ \Carbon\Carbon::parse($customer->last_msg)->diffForHumans() }}
+                                    {{ \Carbon\Carbon::parse($chat['time'])->diffForHumans() }}
                                 </span>
                             </button>
                         @empty
