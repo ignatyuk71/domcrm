@@ -1,6 +1,4 @@
-cat <<EOT > .htaccess
 <IfModule mod_rewrite.c>
     RewriteEngine On
-    RewriteRule ^(.*)$ public/\$1 [L]
+    RewriteRule ^(.*)$ public/$1 [L]
 </IfModule>
-EOT
