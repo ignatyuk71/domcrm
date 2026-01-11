@@ -19,7 +19,7 @@ class ChatController extends Controller
             ->orderByDesc('m1.created_at')
             ->get();
 
-        $chats = $latestMessages->map(function ($message) {
+        $chats = $latestMessages->map(function ($message) use ($textColumn) {
             $customer = DB::table('customers')->where('id', $message->customer_id)->first();
             $firstName = $customer->first_name ?? '';
             $lastName = $customer->last_name ?? '';
