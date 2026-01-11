@@ -4,13 +4,11 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 class ChatController extends Controller
 {
     public function index()
     {
-        $textColumn = Schema::hasColumn('facebook_messages', 'message_text') ? 'message_text' : 'text';
         $latestMessages = DB::table('facebook_messages as m1')
             ->select('m1.*')
             ->whereRaw(
@@ -19,7 +17,7 @@ class ChatController extends Controller
             ->orderByDesc('m1.created_at')
             ->get();
 
-        $chats = $latestMessages->map(function ($message) use ($textColumn) {
+        $chats = $latestMessages->map(function ($message) {
             $customer = DB::table('customers')->where('id', $message->customer_id)->first();
             $firstName = $customer->first_name ?? '';
             $lastName = $customer->last_name ?? '';
@@ -28,7 +26,7 @@ class ChatController extends Controller
             return [
                 'customer_id' => $message->customer_id,
                 'name' => $name !== '' ? $name : 'Невідомий клієнт',
-                'text' => $message->{$textColumn} ?? null,
+                'text' => $message->text ?? null,
                 'platform' => $message->platform,
                 'time' => $message->created_at,
             ];
@@ -39,13 +37,12 @@ class ChatController extends Controller
 
     public function getMessages($id)
     {
-        $textColumn = Schema::hasColumn('facebook_messages', 'message_text') ? 'message_text' : 'text';
         $messages = DB::table('facebook_messages')
             ->where('customer_id', $id)
             ->orderBy('created_at', 'asc')
             ->get()
-            ->map(function ($message) use ($textColumn) {
-                $message->text = $message->{$textColumn} ?? null;
+            ->map(function ($message) {
+                $message->text = $message->text ?? null;
                 return $message;
             });
 
