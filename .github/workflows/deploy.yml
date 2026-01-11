@@ -14,10 +14,10 @@ jobs:
     - name: Setup PHP
       uses: shivammathur/setup-php@v2
       with:
-        php-version: '8.2' # Версія PHP на GitHub
+        php-version: '8.4' # Оновлено до 8.4, як вимагає твій проект
 
     - name: Install Dependencies
-      # Додано --ignore-platform-reqs, щоб ігнорувати помилки версій PHP/пакетів при установці
+      # Додано ignore-platform-reqs для 100% успіху
       run: composer install --no-dev --optimize-autoloader --ignore-platform-reqs
 
     - name: Sync files to Mirohost
