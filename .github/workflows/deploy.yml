@@ -11,9 +11,6 @@ jobs:
     - name: Get latest code
       uses: actions/checkout@v3
 
-    # Ми прибираємо крок Setup PHP та Install Dependencies, 
-    # бо ти заливаєш vendor вручну
-
     - name: Sync files to Mirohost
       uses: SamKirkland/FTP-Deploy-Action@v4.3.4
       with:
