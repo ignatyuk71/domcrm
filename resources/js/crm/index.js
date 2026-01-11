@@ -6,8 +6,8 @@ import OrderListPage from './pages/orders/OrderListPage.vue';
 import ProductListPage from './pages/products/ProductListPage.vue';
 import ProductFormPage from './pages/products/ProductFormPage.vue';
 import './styles/crm.css';
-import PackingListPage from './pages/packing/PackingList.vue';
-import PackingWorkspacePage from './pages/packing/PackingWorkspace.vue';
+import PackingListPage from '../Pages/Packing/PackingList.vue';
+import PackingWorkspacePage from '../Pages/Packing/PackingWorkspace.vue';
 
 export function mountOrderCreate(selector = '#crm-order-create') {
     const el = document.querySelector(selector);
