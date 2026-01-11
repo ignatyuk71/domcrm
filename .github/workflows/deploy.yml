@@ -10,7 +10,15 @@ jobs:
     steps:
     - name: Get latest code
       uses: actions/checkout@v3
-    
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.2' # Версія PHP має співпадати з вашим Laravel
+
+    - name: Install Dependencies
+      run: composer install --no-dev --optimize-autoloader # Це створить папку vendor
+
     - name: Sync files to Mirohost
       uses: SamKirkland/FTP-Deploy-Action@v4.3.4
       with:
@@ -22,5 +30,4 @@ jobs:
           **/.git/**
           **/.git*
           **/node_modules/**
-          **/vendor/**
           .github/workflows/**
