@@ -11,12 +11,8 @@ jobs:
     - name: Get latest code
       uses: actions/checkout@v3
 
-    - name: Setup PHP
-      uses: shivammathur/setup-php@v2
-      with:
-        php-version: '8.3' # Ставимо 8.3, як на сервері
-        extensions: mbstring, xml, ctype, iconv, mysql, zip
-
+    # Ми прибираємо крок Setup PHP та Install Dependencies, 
+    # бо ти заливаєш vendor вручну
 
     - name: Sync files to Mirohost
       uses: SamKirkland/FTP-Deploy-Action@v4.3.4
@@ -29,5 +25,6 @@ jobs:
           **/.git/**
           **/.git*
           **/node_modules/**
+          **/vendor/**
           .github/workflows/**
           .env
