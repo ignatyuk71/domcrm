@@ -14,11 +14,12 @@ jobs:
     - name: Setup PHP
       uses: shivammathur/setup-php@v2
       with:
-        php-version: '8.4' # Оновлено до 8.4, як вимагає твій проект
+        php-version: '8.3' # Ставимо 8.3, як на сервері
+        extensions: mbstring, xml, ctype, iconv, mysql, zip
 
     - name: Install Dependencies
-      # Додано ignore-platform-reqs для 100% успіху
-      run: composer install --no-dev --optimize-autoloader --ignore-platform-reqs
+      # Використовуємо update замість install, щоб перезібрати lock-файл під 8.3
+      run: composer update --no-dev --optimize-autoloader --ignore-platform-reqs
 
     - name: Sync files to Mirohost
       uses: SamKirkland/FTP-Deploy-Action@v4.3.4
