@@ -23,7 +23,6 @@ jobs:
           **/.git*
           **/node_modules/**
           **/vendor/**
-          **/public/build/**
           **/storage/**
           .github/workflows/**
           .env
