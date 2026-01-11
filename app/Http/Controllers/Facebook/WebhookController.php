@@ -42,23 +42,31 @@ class WebhookController extends Controller
     public function handle(Request $request)
     {
         $data = $request->all();
-        // Логуємо все для відладки
-        Log::info('Facebook Webhook Received', $data);
+        // Логуємо все для відладки, щоб бачити, що саме приходить з Meta.
+        Log::info('Facebook Webhook Headers', $request->headers->all());
+        Log::info('Facebook Webhook Body', $data);
 
-        $platform = ($data['object'] ?? '') === 'instagram' ? 'instagram' : 'messenger';
+        try {
+            $platform = ($data['object'] ?? '') === 'instagram' ? 'instagram' : 'messenger';
 
-        foreach ($data['entry'] ?? [] as $entry) {
-            // Обробка приватних повідомлень (Direct/Messenger)
-            foreach ($entry['messaging'] ?? [] as $event) {
-                $this->processMessage($event, $platform);
-            }
+            foreach ($data['entry'] ?? [] as $entry) {
+                // Обробка приватних повідомлень (Direct/Messenger)
+                foreach ($entry['messaging'] ?? [] as $event) {
+                    $this->processMessage($event, $platform);
+                }
 
-            // Обробка публічних коментарів (Feed)
-            foreach ($entry['changes'] ?? [] as $change) {
-                if (in_array($change['field'] ?? '', ['feed', 'comments'], true)) {
-                    $this->processComment($change['value'] ?? [], $platform);
+                // Обробка публічних коментарів (Feed)
+                foreach ($entry['changes'] ?? [] as $change) {
+                    if (in_array($change['field'] ?? '', ['feed', 'comments'], true)) {
+                        $this->processComment($change['value'] ?? [], $platform);
+                    }
                 }
             }
+        } catch (\Throwable $e) {
+            Log::error('Facebook Webhook Error: '.$e->getMessage(), [
+                'exception' => $e,
+            ]);
+            return response('Error', 500);
         }
 
         return response('EVENT_RECEIVED', 200);
