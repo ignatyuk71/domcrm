@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Log;
 class WebhookController extends Controller
 {
     /**
-     * Підтвердження Webhook (Verification)
+     * Підтвердження Webhook (Verification)fsdfgdsfgdd sdf gsdg sdfg
      */
     public function verify(Request $request)
     {
