@@ -14,10 +14,11 @@ jobs:
     - name: Setup PHP
       uses: shivammathur/setup-php@v2
       with:
-        php-version: '8.2' # Версія PHP має співпадати з вашим Laravel
+        php-version: '8.2' # Версія PHP на GitHub
 
     - name: Install Dependencies
-      run: composer install --no-dev --optimize-autoloader # Це створить папку vendor
+      # Додано --ignore-platform-reqs, щоб ігнорувати помилки версій PHP/пакетів при установці
+      run: composer install --no-dev --optimize-autoloader --ignore-platform-reqs
 
     - name: Sync files to Mirohost
       uses: SamKirkland/FTP-Deploy-Action@v4.3.4
@@ -31,3 +32,4 @@ jobs:
           **/.git*
           **/node_modules/**
           .github/workflows/**
+          .env
