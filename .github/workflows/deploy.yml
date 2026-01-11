@@ -2,7 +2,7 @@ name: Deploy to Mirohost
 on:
   push:
     branches:
-      - main  # Переконайтеся, що ваша головна гілка називається саме main
+      - main
 jobs:
   web-deploy:
     name: Deploy
@@ -17,8 +17,9 @@ jobs:
         server: ovh21.mirohost.net
         username: ${{ secrets.FTP_USERNAME }}
         password: ${{ secrets.FTP_PASSWORD }}
-        server-dir: /www/
+        server-dir: /domcrm.com.ua/
         exclude: |
+          **/.git/**
           **/.git*
           **/node_modules/**
           **/vendor/**
