@@ -204,6 +204,16 @@ Route::middleware('auth')->group(function () {
         Route::patch('/', 'update')->name('update');
         Route::delete('/', 'destroy')->name('destroy');
     });
+
+
+    Route::get('/clear-everything', function () {
+        Artisan::call('route:clear');
+        Artisan::call('config:clear');
+        Artisan::call('cache:clear');
+        return 'Кеш, маршрути та конфіги очищено! Тепер все чисто.';
+    });
+
+    
 });
 
 require __DIR__.'/auth.php';
