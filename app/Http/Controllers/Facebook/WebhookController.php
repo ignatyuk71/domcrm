@@ -74,23 +74,45 @@ class WebhookController extends Controller
 
     private function processMessage(array $event, string $platform): void
     {
+        // Перевірка наявності даних
         if (!isset($event['message']) || !isset($event['sender']['id'])) {
             return;
         }
 
-        $fbUserId = $event['sender']['id'];
+        $senderId = (string) $event['sender']['id'];
         $message = $event['message'];
 
-        // Шукаємо або створюємо клієнта за його FB ID
-        $customer = Customer::firstOrCreate(
-            ['fb_user_id' => (string) $fbUserId],
-            ['first_name' => 'Social', 'last_name' => 'User']
-        );
+        // --- ЛОГІКА РОЗПОДІЛУ КЛІЄНТІВ ---
+        if ($platform === 'instagram') {
+            // ВАРІАНТ А: Це Instagram
+            // Шукаємо або створюємо клієнта по instagram_user_id
+            $customer = Customer::firstOrCreate(
+                ['instagram_user_id' => $senderId],
+                [
+                    'first_name' => 'Instagram User',
+                    'last_name' => '',
+                    'note' => 'Створено автоматично через Instagram Direct',
+                ]
+            );
+        } else {
+            // ВАРІАНТ Б: Це Facebook (Messenger)
+            // Шукаємо або створюємо клієнта по fb_user_id
+            $customer = Customer::firstOrCreate(
+                ['fb_user_id' => $senderId],
+                [
+                    'first_name' => 'Facebook User',
+                    'last_name' => '',
+                    'note' => 'Створено автоматично через Facebook Messenger',
+                ]
+            );
+        }
 
+        // Ігноруємо "відлуння" (echo), якщо ми самі собі відправили повідомлення
         if ($message['is_echo'] ?? false) {
             return;
         }
 
+        // Зберігаємо саме повідомлення
         FacebookMessage::create([
             'customer_id' => $customer->id,
             'mid' => $message['mid'] ?? null,

@@ -9,7 +9,6 @@ use App\Http\Controllers\ProductController;
 use App\Http\Controllers\NovaPoshtaController;
 use App\Http\Controllers\OrderSourceController;
 use App\Http\Controllers\FiscalController;
-use App\Http\Controllers\Facebook\WebhookController;
 use App\Http\Controllers\PackingController;
 use App\Http\Controllers\ChatController;
 use App\Models\Order;
@@ -26,8 +25,6 @@ Route::get('/', function () {
     return view('welcome');
 });
 
-Route::get('/api/fb-webhook', [WebhookController::class, 'verify']);
-Route::post('/api/fb-webhook', [WebhookController::class, 'handle']);
 
 Route::get('/dashboard', function () {
     $today = Carbon::today();

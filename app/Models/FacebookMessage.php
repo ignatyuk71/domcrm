@@ -12,7 +12,6 @@ class FacebookMessage extends Model
         'mid',
         'parent_id',
         'text',
-        'message_text',
         'attachments',
         'type',
         'is_from_customer',

@@ -18,6 +18,8 @@ class Customer extends Model
         'phone',
         'email',
         'fb_user_id',
+        'instagram_user_id',
+        'instagram_username',
         'fb_profile_pic',
         'note',
     ];
