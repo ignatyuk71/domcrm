@@ -217,6 +217,20 @@ Route::middleware('auth')->group(function () {
 
     Route::view('/privacy', 'privacy');
 
+    Route::get('/check-logs', function () {
+        $path = storage_path('logs/laravel.log');
+        if (!file_exists($path)) return "Файл логів ще не створено.";
+        
+        $lines = file($path);
+        $lastLines = array_slice($lines, -20);
+        
+        echo "<h3>Останні записи в логах:</h3><pre>";
+        foreach ($lastLines as $line) {
+            echo htmlspecialchars($line);
+        }
+        echo "</pre>";
+    });
+
 
 });
 
