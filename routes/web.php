@@ -15,6 +15,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Artisan; // Додано для роботи з командами
 
 /*
 |--------------------------------------------------------------------------
@@ -205,12 +206,22 @@ Route::middleware('auth')->group(function () {
         Route::delete('/', 'destroy')->name('destroy');
     });
 
-
+    // --- ОБСЛУГОВУВАННЯ СИСТЕМИ ---
     Route::get('/clear-everything', function () {
         Artisan::call('route:clear');
         Artisan::call('config:clear');
         Artisan::call('cache:clear');
         return 'Кеш, маршрути та конфіги очищено! Тепер все чисто.';
+    });
+
+    // ДОДАНО: Створення символічного посилання для картинок
+    Route::get('/setup-storage', function () {
+        try {
+            Artisan::call('storage:link');
+            return 'Символічне посилання створено успішно! Картинки мають запрацювати.';
+        } catch (\Exception $e) {
+            return 'Помилка при створенні посилання: ' . $e->getMessage();
+        }
     });
 
     Route::view('/privacy', 'privacy');
