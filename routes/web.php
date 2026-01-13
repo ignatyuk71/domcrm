@@ -215,12 +215,25 @@ Route::middleware('auth')->group(function () {
     });
 
     // ДОДАНО: Створення символічного посилання для картинок
+    // Оновлений варіант створення посилання без використання exec()
     Route::get('/setup-storage', function () {
+        $target = storage_path('app/public');
+        $link = public_path('storage');
+
+        // Перевіряємо, чи посилання вже існує
+        if (file_exists($link)) {
+            return 'Папка або посилання "storage" вже існує в public. Якщо картинки не роблять, видаліть її через FTP/Files Manager і запустіть цей маршрут знову.';
+        }
+
         try {
-            Artisan::call('storage:link');
-            return 'Символічне посилання створено успішно! Картинки мають запрацювати.';
+            // Використовуємо пряму функцію PHP для створення симлінку
+            if (symlink($target, $link)) {
+                return 'Символічне посилання створено успішно через symlink()! Перевірте картинки.';
+            } else {
+                return 'Не вдалося створити посилання. Спробуйте видалити папку storage з public вручну.';
+            }
         } catch (\Exception $e) {
-            return 'Помилка при створенні посилання: ' . $e->getMessage();
+            return 'Помилка: ' . $e->getMessage();
         }
     });
 
