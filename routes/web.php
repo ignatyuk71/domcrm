@@ -231,21 +231,7 @@ Route::middleware('auth')->group(function () {
         echo "</pre>";
     });
 
-    Route::get('/test-cron-manual', function () {
-        echo "Починаємо тест...<br>";
-        
-        // Запускаємо команду синхронізації
-        $exitCode1 = Artisan::call('delivery:sync-statuses');
-        echo "Синхронізація НП виконана. Код: $exitCode1 <br>";
-        echo "Результат: " . Artisan::output() . "<br><hr>";
-    
-        // Запускаємо команду фіскалізації
-        $exitCode2 = Artisan::call('fiscal:delivered');
-        echo "Фіскалізація виконана. Код: $exitCode2 <br>";
-        echo "Результат: " . Artisan::output() . "<br>";
-    
-        return "Тест завершено. Перевірте оновлення замовлень.";
-    });
+
 
 
 });
