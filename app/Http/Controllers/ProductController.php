@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Product;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class ProductController extends Controller
 {
@@ -41,7 +42,7 @@ class ProductController extends Controller
     {
         $data = $this->validateData($request);
         if ($request->hasFile('main_photo')) {
-            $data['main_photo_path'] = $request->file('main_photo')->store('products', 'public');
+            $data['main_photo_path'] = $this->storeMainPhoto($request);
         }
         $product = Product::create($data);
         return response()->json(['data' => $product], 201);
@@ -51,7 +52,7 @@ class ProductController extends Controller
     {
         $data = $this->validateData($request);
         if ($request->hasFile('main_photo')) {
-            $data['main_photo_path'] = $request->file('main_photo')->store('products', 'public');
+            $data['main_photo_path'] = $this->storeMainPhoto($request);
         }
         $product->update($data);
         return response()->json(['data' => $product]);
@@ -75,5 +76,20 @@ class ProductController extends Controller
             'description' => ['nullable', 'string'],
             'main_photo' => ['nullable', 'image', 'max:5120'], // до 5 МБ
         ]);
+    }
+
+    private function storeMainPhoto(Request $request): string
+    {
+        $file = $request->file('main_photo');
+        $dir = public_path('storage/products');
+        if (!is_dir($dir)) {
+            mkdir($dir, 0775, true);
+        }
+
+        $extension = $file->getClientOriginalExtension();
+        $filename = Str::random(40) . ($extension ? '.' . $extension : '');
+        $file->move($dir, $filename);
+
+        return 'products/' . $filename;
     }
 }
