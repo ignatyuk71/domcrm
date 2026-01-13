@@ -214,23 +214,10 @@ Route::middleware('auth')->group(function () {
         return 'Кеш, маршрути та конфіги очищено! Тепер все чисто.';
     });
 
-    // Маршрут-заглушка, який буде читати файл безпосередньо з папки storage
-    Route::get('/storage/{path}', function ($path) {
-        $fullPath = storage_path('app/public/' . $path);
 
-        if (!file_exists($fullPath)) {
-            abort(404);
-        }
-
-        $file = file_get_contents($fullPath);
-        $type = mime_content_type($fullPath);
-
-        return response($file)->header('Content-Type', $type);
-    })->where('path', '.*');
-
-        Route::view('/privacy', 'privacy');
+    Route::view('/privacy', 'privacy');
 
 
-    });
+});
 
 require __DIR__.'/auth.php';
