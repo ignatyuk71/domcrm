@@ -8,14 +8,19 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
+/**
+ * Оскільки на Mirohost Cron налаштовано на кожні 5 хвилин,
+ * ми міняємо hourly() на everyFiveMinutes(), щоб система працювала синхронно.
+ */
+
 Schedule::command('delivery:sync-statuses')
-    ->hourly()
+    ->everyFiveMinutes()
     ->withoutOverlapping()
     ->onOneServer()
-    ->description('Автооновлення статусів доставки (НП) кожну годину');
+    ->description('Автооновлення статусів доставки (НП) кожні 5 хвилин');
 
 Schedule::command('fiscal:delivered')
-    ->hourly()
+    ->everyFiveMinutes()
     ->withoutOverlapping()
     ->onOneServer()
-    ->description('Автофіскалізація доставлених замовлень та переведення у статус оплачених');
+    ->description('Автофіскалізація доставлених замовлень кожні 5 хвилин');
