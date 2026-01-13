@@ -55,13 +55,13 @@
     <h2>6. Контакти</h2>
     <p>Якщо у вас виникли запитання щодо цієї Політики конфіденційності, будь ласка, зв'яжіться з нами:</p>
     <p>
-        Компанія: Dream v Doma<br>
+        Компанія:  DomCRM<br>
         Email: support@domcrm.com.ua<br>
         Вебсайт: https://domcrm.com.ua
     </p>
 
     <div class="footer">
-        &copy; 2026 Dream v Doma. Всі права захищені.
+        &copy; 2026 DomCRM. Всі права захищені.
     </div>
 
 </body>
