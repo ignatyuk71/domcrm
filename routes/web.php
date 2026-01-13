@@ -214,32 +214,23 @@ Route::middleware('auth')->group(function () {
         return 'Кеш, маршрути та конфіги очищено! Тепер все чисто.';
     });
 
-    // ДОДАНО: Створення символічного посилання для картинок
-    // Оновлений варіант створення посилання без використання exec()
-    Route::get('/setup-storage', function () {
-        $target = storage_path('app/public');
-        $link = public_path('storage');
+    // Маршрут-заглушка, який буде читати файл безпосередньо з папки storage
+    Route::get('/storage/{path}', function ($path) {
+        $fullPath = storage_path('app/public/' . $path);
 
-        // Перевіряємо, чи посилання вже існує
-        if (file_exists($link)) {
-            return 'Папка або посилання "storage" вже існує в public. Якщо картинки не роблять, видаліть її через FTP/Files Manager і запустіть цей маршрут знову.';
+        if (!file_exists($fullPath)) {
+            abort(404);
         }
 
-        try {
-            // Використовуємо пряму функцію PHP для створення симлінку
-            if (symlink($target, $link)) {
-                return 'Символічне посилання створено успішно через symlink()! Перевірте картинки.';
-            } else {
-                return 'Не вдалося створити посилання. Спробуйте видалити папку storage з public вручну.';
-            }
-        } catch (\Exception $e) {
-            return 'Помилка: ' . $e->getMessage();
-        }
+        $file = file_get_contents($fullPath);
+        $type = mime_content_type($fullPath);
+
+        return response($file)->header('Content-Type', $type);
+    })->where('path', '.*');
+
+        Route::view('/privacy', 'privacy');
+
+
     });
-
-    Route::view('/privacy', 'privacy');
-
-
-});
 
 require __DIR__.'/auth.php';
