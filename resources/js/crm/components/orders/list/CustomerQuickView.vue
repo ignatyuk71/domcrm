@@ -197,7 +197,7 @@
             >
               <div class="template-info">
                 <div class="template-title">{{ tpl.title }}</div>
-                <div class="template-text">{{ tpl.processedText }}</div>
+                <div class="template-text">{{ truncateText(tpl.processedText, 80) }}</div>
               </div>
               <button class="btn-copy-template" @click="copyTemplate(tpl.processedText)">
                 <i class="bi bi-clipboard-check"></i>
@@ -319,6 +319,12 @@ const copyTemplate = async (text) => {
     console.error('Помилка копіювання', err);
     showToast('Помилка копіювання');
   }
+};
+
+const truncateText = (text, limit) => {
+  if (!text) return '';
+  if (text.length <= limit) return text;
+  return `${text.slice(0, limit)}...`;
 };
 
 function close() {
