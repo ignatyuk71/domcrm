@@ -37,8 +37,8 @@
   
   <template>
     <div class="details-wrapper">
-      <!-- Top Row: 3 Columns (Order, Customer, Delivery) -->
-      <div class="row g-3">
+      <!-- Grid Layout: 1 col mobile (g-2), larger screens (g-3) -->
+      <div class="row g-2 g-md-3 m-0"> <!-- m-0 для фіксу горизонтального скролу -->
         
         <!-- 1. ORDER INFO -->
         <div class="col-12 col-md-6 col-xl-4">
@@ -48,7 +48,7 @@
               <span class="order-number font-monospace">#{{ order.order_number }}</span>
             </div>
             
-            <div class="d-flex flex-column gap-2 mt-3">
+            <div class="d-flex flex-column gap-2 mt-2 mt-md-3">
               <!-- Source -->
               <div class="info-row">
                 <span class="label-text">Джерело</span>
@@ -95,7 +95,7 @@
             <div class="divider"></div>
   
             <!-- Tags -->
-            <div class="d-flex flex-column gap-2">
+            <div class="d-flex flex-column gap-1 gap-md-2">
               <span class="label-text">Теги</span>
               <div class="tags-wrapper">
                 <span
@@ -118,22 +118,22 @@
         <!-- 2. CUSTOMER INFO -->
         <div class="col-12 col-md-6 col-xl-4">
           <div class="clean-card h-100">
-            <div class="card-header-simple mb-3">
+            <div class="card-header-simple mb-2 mb-md-3">
               <span class="card-title">Покупець</span>
               <button class="btn-icon-soft" title="Профіль клієнта">
                 <i class="bi bi-box-arrow-up-right"></i>
               </button>
             </div>
   
-            <div class="d-flex flex-column gap-3">
+            <div class="d-flex flex-column gap-2 gap-md-3">
               <!-- Client Avatar & Name -->
               <div class="client-card">
                 <div class="avatar-box">
                   {{ order.client ? order.client.charAt(0).toUpperCase() : '?' }}
                 </div>
                 <div class="overflow-hidden">
-                  <div class="fw-bold text-dark text-truncate">{{ order.client }}</div>
-                  <div class="small text-muted">Одержувач</div>
+                  <div class="fw-bold text-dark text-truncate client-name">{{ order.client }}</div>
+                  <div class="small text-muted" style="font-size: 0.75rem;">Одержувач</div>
                 </div>
               </div>
   
@@ -152,7 +152,7 @@
               <!-- Comment -->
               <div v-if="order.comment" class="comment-box">
                 <i class="bi bi-chat-left-text-fill text-warning me-2 mt-1"></i>
-                <span class="fst-italic text-dark small">{{ order.comment }}</span>
+                <span class="fst-italic text-dark small comment-text">{{ order.comment }}</span>
               </div>
             </div>
           </div>
@@ -161,7 +161,7 @@
         <!-- 3. DELIVERY INFO -->
         <div class="col-12 col-xl-4">
           <div class="clean-card h-100 border-primary-subtle">
-            <div class="card-header-simple mb-3">
+            <div class="card-header-simple mb-2 mb-md-3">
               <span class="card-title">Доставка</span>
               <span class="carrier-badge">
                 <i class="bi bi-truck me-1"></i>
@@ -170,11 +170,11 @@
             </div>
   
             <!-- Status Widget -->
-            <div class="delivery-status-box mb-3">
+            <div class="delivery-status-box mb-2 mb-md-3">
               <div class="d-flex justify-content-between align-items-center mb-1">
                 <div class="d-flex align-items-center gap-2" :style="{ color: order.delivery_status_color || '#64748b' }">
                   <i v-if="order.delivery_status_icon" :class="['bi', order.delivery_status_icon]"></i>
-                  <span class="fw-bold" style="font-size: 0.85rem;">{{ order.delivery_status || 'Статус невідомий' }}</span>
+                  <span class="fw-bold delivery-status-text">{{ order.delivery_status || 'Статус невідомий' }}</span>
                 </div>
                 <button 
                   class="btn-refresh" 
@@ -191,7 +191,7 @@
             </div>
   
             <!-- Address Info -->
-            <div class="address-block mb-3">
+            <div class="address-block mb-2 mb-md-3">
                <div class="address-row">
                  <i class="bi bi-geo-alt-fill text-muted"></i>
                  <span class="text-dark fw-medium">{{ order.city_name || '—' }}</span>
@@ -222,7 +222,7 @@
                     <i class="bi bi-printer"></i> Друк
                   </button>
                   <button class="btn-action-light text-danger flex-grow-1" @click.stop="$emit('cancel-ttn')" :disabled="order.loadingTtn">
-                    <i class="bi bi-trash"></i> Видалити
+                    <i class="bi bi-trash"></i> Вид.
                   </button>
                 </div>
               </div>
@@ -244,13 +244,13 @@
       </div>
   
       <!-- 4. PRODUCTS & TOTALS -->
-      <div class="row mt-3">
+      <div class="row mt-2 mt-md-3 g-0"> <!-- g-0 для уникнення відступів по краях -->
         <div class="col-12">
           <div class="clean-card p-0 overflow-hidden">
             <!-- Table Header -->
-            <div class="p-3 border-bottom bg-light bg-opacity-50 d-flex justify-content-between align-items-center">
-              <span class="fw-bold text-dark small">Товари</span>
-              <span class="badge bg-secondary bg-opacity-10 text-secondary" style="font-size: 0.7rem;">{{ order.items?.length || 0 }} шт.</span>
+            <div class="p-2 px-3 border-bottom bg-light bg-opacity-50 d-flex justify-content-between align-items-center">
+              <span class="fw-bold text-dark small-header">Товари</span>
+              <span class="badge bg-secondary bg-opacity-10 text-secondary count-badge">{{ order.items?.length || 0 }} шт.</span>
             </div>
   
             <!-- Table -->
@@ -258,33 +258,33 @@
               <table class="table align-middle mb-0 clean-table">
                 <thead>
                   <tr>
-                    <th class="ps-4" style="width: 60px;">Фото</th>
-                    <th style="min-width: 150px;">Товар</th>
+                    <th class="ps-3 ps-md-4" style="width: 50px;">Фото</th>
+                    <th style="min-width: 140px;">Товар</th>
                     <th class="text-center">Розмір</th>
                     <th class="text-center">К-сть</th>
                     <th class="text-end" style="white-space: nowrap;">Ціна</th>
-                    <th class="text-end pe-4" style="white-space: nowrap;">Сума</th>
+                    <th class="text-end pe-3 pe-md-4" style="white-space: nowrap;">Сума</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr v-for="item in order.items" :key="item.id">
-                    <td class="ps-4">
+                    <td class="ps-3 ps-md-4">
                       <div class="product-thumb-lg">
                         <img v-if="item.photo" :src="item.photo" alt="product" />
-                        <i v-else class="bi bi-image text-muted fs-5"></i>
+                        <i v-else class="bi bi-image text-muted fs-6"></i>
                       </div>
                     </td>
                     <td>
-                      <div class="fw-bold text-dark text-break small">{{ item.sku }}</div>
-                      <div class="small text-muted text-break" style="font-size: 0.75rem;">{{ item.title }}</div>
+                      <div class="fw-bold text-dark text-break item-sku">{{ item.sku }}</div>
+                      <div class="small text-muted text-break item-title">{{ item.title }}</div>
                     </td>
                     <td class="text-center">
-                      <span class="badge bg-light text-dark border fw-normal" style="font-size: 0.7rem;" v-if="item.size">{{ item.size }}</span>
+                      <span class="badge bg-light text-dark border fw-normal size-badge" v-if="item.size">{{ item.size }}</span>
                       <span class="text-muted small" v-else>—</span>
                     </td>
                     <td class="text-center fw-bold text-dark small">{{ item.qty }}</td>
                     <td class="text-end text-muted small">{{ formatCurrency(item.price, order.currency) }}</td>
-                    <td class="text-end fw-bold pe-4 text-dark small">{{ formatCurrency(item.total, order.currency) }}</td>
+                    <td class="text-end fw-bold pe-3 pe-md-4 text-dark small">{{ formatCurrency(item.total, order.currency) }}</td>
                   </tr>
                 </tbody>
               </table>
@@ -292,7 +292,7 @@
   
             <!-- Footer: Fiscal & Summary -->
             <div class="footer-section">
-              <!-- Left: Fiscal Widget -->
+              <!-- Left: Fiscal Widget (Reusable) -->
               <div class="fiscal-wrapper">
                 <FiscalBlock
                   :order-id="order.id"
@@ -302,25 +302,25 @@
                 />
               </div>
   
-              <!-- Right: Totals (NEW DESIGN) -->
+              <!-- Right: Totals -->
               <div class="summary-wrapper">
                 <!-- Calculation Rows -->
                 <div class="calc-group">
-                  <div class="calc-row mb-2">
-                    <span class="text-muted small">Вартість товарів</span>
-                    <span class="fw-bold text-dark">{{ formatCurrency(order.total, order.currency) }}</span>
+                  <div class="calc-row mb-1 mb-md-2">
+                    <span class="text-muted label-small">Вартість товарів</span>
+                    <span class="fw-bold text-dark value-small">{{ formatCurrency(order.total, order.currency) }}</span>
                   </div>
                   <div v-if="order.prepay_amount" class="calc-row">
-                    <span class="text-success small d-flex align-items-center"><i class="bi bi-check-all me-1"></i>Передплата</span>
-                    <span class="fw-bold text-success">-{{ formatCurrency(order.prepay_amount, order.currency) }}</span>
+                    <span class="text-success label-small d-flex align-items-center"><i class="bi bi-check-all me-1"></i>Передплата</span>
+                    <span class="fw-bold text-success value-small">-{{ formatCurrency(order.prepay_amount, order.currency) }}</span>
                   </div>
                 </div>
                 
                 <!-- Total Box -->
-                <div class="total-box mt-3">
+                <div class="total-box mt-2 mt-md-3">
                   <div class="d-flex justify-content-between align-items-end w-100">
                     <span class="label text-muted text-uppercase fw-bold" style="font-size: 0.65rem; letter-spacing: 0.05em; margin-bottom: 2px;">До сплати</span>
-                    <span class="amount text-primary fw-800 fs-5 lh-1">{{ formatCurrency(Math.max(0, order.total - order.prepay_amount), order.currency) }}</span>
+                    <span class="amount text-primary fw-800 lh-1 total-amount-text">{{ formatCurrency(Math.max(0, order.total - order.prepay_amount), order.currency) }}</span>
                   </div>
                 </div>
               </div>
@@ -337,6 +337,10 @@
     padding: 16px;
     background: #f8fafc;
     border-top: 1px solid #e2e8f0;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden; /* Забороняємо горизонтальний скрол */
+    box-sizing: border-box;
   }
   
   .clean-card {
@@ -346,9 +350,11 @@
     padding: 16px;
     box-shadow: 0 1px 2px rgba(0,0,0,0.03);
     height: 100%;
+    box-sizing: border-box; /* Важливо для розрахунку ширини */
   }
   
   .divider { height: 1px; background: #f1f5f9; margin: 12px 0; }
+  .divider-dashed { height: 1px; border-top: 1px dashed #cbd5e1; margin: 10px 0; }
   
   /* --- HEADER STYLES --- */
   .card-header-simple {
@@ -500,20 +506,20 @@
     max-width: 420px;
   }
   
-  /* --- SUMMARY BOX (NEW DESIGN) --- */
+  /* --- SUMMARY BOX --- */
   .summary-wrapper {
     flex: 1;
     background: #fff;
     border: 1px solid #e2e8f0;
-    border-radius: 12px; /* Smooth corners */
+    border-radius: 12px;
     padding: 12px;
     display: flex;
     flex-direction: column;
-    justify-content: space-between; /* Space content */
+    justify-content: space-between;
   }
   
   .calc-group {
-    padding: 4px 8px; /* Inner padding */
+    padding: 4px 8px;
   }
   
   .calc-row {
@@ -524,7 +530,7 @@
   }
   
   .total-box {
-    background: #f8fafc; /* Distinct background for total */
+    background: #f8fafc;
     border: 1px solid #e2e8f0;
     border-radius: 8px;
     padding: 10px 12px;
@@ -533,26 +539,27 @@
   }
   
   .fw-800 { font-weight: 800; }
+  .label-small { font-size: 0.75rem; }
   
-  /* --- MOBILE RESPONSIVE TWEAKS --- */
-  @media (max-width: 991px) {
-    .footer-section {
-      flex-direction: column;
-    }
-    .fiscal-wrapper, .summary-wrapper {
-      width: 100%;
-      max-width: none;
-      min-width: 0;
-    }
-  }
-  
-  @media (max-width: 768px) {
-    .details-wrapper { padding: 12px; }
-    .clean-card { padding: 12px; }
+  /* --- MOBILE RESPONSIVE --- */
+  @media (max-width: 767.98px) {
+    .details-wrapper { padding: 0; margin-top: -1px; /* Стиковка з карткою */ }
+    .clean-card { border-radius: 0; border-left: none; border-right: none; margin-bottom: 8px; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; box-shadow: none; padding: 12px; }
     
-    .table-responsive {
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-    }
+    .card-title { font-size: 0.8rem; }
+    .value-text { font-size: 0.85rem; }
+    
+    /* Compact Table */
+    .clean-table th, .clean-table td { padding: 8px 6px; font-size: 0.75rem; }
+    .product-thumb-lg { width: 40px; height: 40px; }
+    .item-sku { font-size: 0.8rem; }
+    .item-title { font-size: 0.7rem; }
+    .size-badge { font-size: 0.65rem !important; }
+    
+    /* Stacked Footer */
+    .footer-section { flex-direction: column; padding: 12px; gap: 12px; }
+    .fiscal-wrapper, .summary-wrapper { width: 100%; min-width: 0; max-width: none; }
+    .summary-wrapper { padding: 12px; }
+    .total-amount-text { font-size: 1.1rem; }
   }
   </style>
