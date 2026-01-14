@@ -17,19 +17,16 @@
       <table class="table align-middle orders-table mb-0">
         <thead>
           <tr>
-            <th class="th-w-40"></th>
-            <th class="th-w-70">ID</th>
+            <th class="th-w-40"></th> <th class="th-w-70">ID</th>
             <th class="th-w-200">Клієнт / Джерело</th>
             <th class="th-w-150">Теги</th>
             <th class="th-w-140">Контакт</th>
             <th class="th-w-140">Статус</th>
             <th class="th-w-150">Товари</th>
-            <th class="th-w-100 text-end pe-3">Сума</th>
-            <th class="th-w-140">ТТН</th>
+            <th class="th-w-100 text-end pe-3">Сума</th> <th class="th-w-140">ТТН</th>
             <th class="th-w-150">Доставка</th>
             <th class="th-w-120">Дата</th>
-            <th class="th-w-50"></th>
-          </tr>
+            <th class="th-w-50"></th> </tr>
         </thead>
         <tbody>
           <template v-for="order in orders" :key="order.id">
@@ -53,35 +50,35 @@
               </td>
 
               <td>
-  <div class="d-flex flex-column justify-content-center" style="min-height: 40px;">
-    <div class="d-flex align-items-center gap-2 mb-1">
-      <button
-        type="button"
-        class="client-name text-truncate btn btn-link p-0 text-start"
-        :title="order.client"
-        @click.stop="$emit('open-customer', order)"
-      >
-        {{ order.client }}
-      </button>
-      
-      <div
-        v-if="order.customer_orders_count > 1"
-        class="loyalty-pill"
-        :class="order.customer_orders_count > 5 ? 'is-vip' : 'is-repeat'"
-        data-bs-toggle="tooltip"
-        :title="`Це ${order.customer_orders_count}-те замовлення клієнта`"
-      >
-        <i class="bi" :class="order.customer_orders_count > 5 ? 'bi-trophy-fill' : 'bi-bag-check-fill'"></i>
-        <span>{{ order.customer_orders_count }}</span>
-      </div>
-    </div>
+                <div class="d-flex flex-column justify-content-center" style="min-height: 40px;">
+                  <div class="d-flex align-items-center gap-2 mb-1">
+                    <button
+                      type="button"
+                      class="client-name text-truncate btn btn-link p-0 text-start"
+                      :title="order.client"
+                      @click.stop="$emit('open-customer', order)"
+                    >
+                      {{ order.client }}
+                    </button>
+                    
+                    <div
+                      v-if="order.customer_orders_count > 1"
+                      class="loyalty-pill"
+                      :class="order.customer_orders_count > 5 ? 'is-vip' : 'is-repeat'"
+                      data-bs-toggle="tooltip"
+                      :title="`Це ${order.customer_orders_count}-те замовлення клієнта`"
+                    >
+                      <i class="bi" :class="order.customer_orders_count > 5 ? 'bi-trophy-fill' : 'bi-bag-check-fill'"></i>
+                      <span>{{ order.customer_orders_count }}</span>
+                    </div>
+                  </div>
 
-    <div v-if="order.source_name" class="source-tag" :style="getSourceStyle(order.source_color)">
-      <i v-if="order.source_icon" :class="order.source_icon" class="source-icon"></i>
-      {{ order.source_name }}
-    </div>
-  </div>
-</td>
+                  <div v-if="order.source_name" class="source-tag" :style="getSourceStyle(order.source_color)">
+                    <i v-if="order.source_icon" :class="order.source_icon" class="source-icon"></i>
+                    {{ order.source_name }}
+                  </div>
+                </div>
+              </td>
 
               <td>
                 <div class="tags-wrapper">
@@ -126,7 +123,57 @@
               </td>
 
               <td class="text-end pe-3">
-                <span class="price-text">{{ formatCurrency(order.total, order.currency) }}</span>
+                
+                <a 
+                  v-if="order.latestFiscalReceipt?.status === 'success' && order.latestFiscalReceipt?.type === 'sell'"
+                  :href="order.latestFiscalReceipt?.check_link"
+                  target="_blank"
+                  class="fiscal-widget widget-success text-decoration-none"
+                  title="Відкрити фіскальний чек у новій вкладці"
+                  @click.stop
+                >
+                  <div class="d-flex align-items-center justify-content-between w-100 gap-2">
+                    <span class="widget-price">{{ formatCurrency(order.total, order.currency) }}</span>
+                    <div class="widget-icon-box">
+                       <i class="bi bi-box-arrow-up-right" style="font-size: 0.65rem;"></i>
+                    </div>
+                  </div>
+                  <div class="widget-label">
+                    Фіскалізовано
+                  </div>
+                </a>
+
+                <a 
+                  v-else-if="order.latestFiscalReceipt?.status === 'success' && order.latestFiscalReceipt?.type === 'return'"
+                  :href="order.latestFiscalReceipt?.check_link"
+                  target="_blank"
+                  class="fiscal-widget widget-return text-decoration-none"
+                  title="Відкрити чек повернення"
+                  @click.stop
+                >
+                  <div class="d-flex align-items-center justify-content-between w-100 gap-2">
+                    <span class="widget-price">{{ formatCurrency(order.total, order.currency) }}</span>
+                    <i class="bi bi-arrow-counterclockwise widget-icon"></i>
+                  </div>
+                  <div class="widget-label">Повернення</div>
+                </a>
+
+                <div 
+                  v-else 
+                  class="fiscal-widget widget-empty"
+                  :class="{'widget-error': order.latestFiscalReceipt?.status === 'error'}"
+                  title="Натисніть, щоб фіскалізувати"
+                  role="button"
+                  @click.stop="$emit('quick-fiscalize', order)"
+                >
+                  <div class="d-flex align-items-center justify-content-between w-100 gap-2">
+                    <span class="widget-price">{{ formatCurrency(order.total, order.currency) }}</span>
+                    <i class="bi bi-receipt widget-icon-muted"></i>
+                  </div>
+                  <div class="widget-label">
+                    {{ order.latestFiscalReceipt?.status === 'error' ? 'Помилка' : 'Створити чек' }}
+                  </div>
+                </div>
               </td>
 
               <td>
@@ -218,41 +265,166 @@
   
   defineEmits({
     'toggle-row': null,
-    'toggleRow': null,
     delete: null,
     'open-tags': null,
-    openTags: null,
     'open-statuses': null,
-    openStatuses: null,
     'copy-ttn': null,
-    copyTtn: null,
     'generate-ttn': null,
-    generateTtn: null,
-  'print-ttn': null,
-  printTtn: null,
-  'cancel-ttn': null,
-  cancelTtn: null,
-  'refresh-delivery': null,
-  refreshDelivery: null,
-  'open-customer': null,
-  openCustomer: null,
-});
+    'print-ttn': null,
+    'cancel-ttn': null,
+    'refresh-delivery': null,
+    'open-customer': null,
+    'quick-fiscalize': null, // Нова подія для швидкої фіскалізації
+  });
   
-  // --- Додана функція для стилізації джерела замовлення ---
+  // Функція для стилізації джерела замовлення
   const getSourceStyle = (colorHex) => {
-    const color = colorHex || '#64748b'; // Сірий за замовчуванням
+    const color = colorHex || '#64748b';
     return {
       color: color,
-      borderColor: color + '40', // Додаємо 25% прозорості для рамки (якщо вона є в дизайні)
+      borderColor: color + '40', // 25% прозорості для рамки
     };
   };
-  </script>
+</script>
+
 <style scoped>
 /* =========================================
-   1. КЛІЄНТ ТА ЛОЯЛЬНІСТЬ (Новий дизайн)
+   1. INTERACTIVE FISCAL WIDGET (MODERN)
    ========================================= */
 
-/* Ім'я клієнта */
+.fiscal-widget {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end; /* Текст праворуч */
+  justify-content: center;
+  padding: 6px 12px;
+  border-radius: 10px;
+  min-width: 105px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid transparent;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+/* Ефект "піднімання" при наведенні */
+.fiscal-widget:hover {
+  transform: translateY(-2px); 
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+.fiscal-widget:active {
+  transform: translateY(0);
+}
+
+.widget-price {
+  font-weight: 700;
+  font-size: 0.95rem;
+  line-height: 1.1;
+  white-space: nowrap;
+  color: inherit;
+}
+
+.widget-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-top: 3px;
+  display: flex;
+  align-items: center;
+}
+
+.widget-icon {
+  font-size: 1rem;
+  opacity: 0.8;
+}
+
+/* --- СТИЛЬ 1: УСПІХ (Interactive) --- */
+.widget-success {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+
+.widget-success:hover {
+  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+  border-color: #86efac;
+}
+
+.widget-icon-box {
+  background: rgba(255, 255, 255, 0.8);
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #15803d;
+  transition: transform 0.2s;
+}
+
+.widget-success:hover .widget-icon-box {
+  transform: rotate(45deg) scale(1.1); /* Анімація іконки */
+  background: #fff;
+}
+
+/* --- СТИЛЬ 2: ПОВЕРНЕННЯ --- */
+.widget-return {
+  background: #fffbeb;
+  color: #b45309;
+  border: 1px solid #fcd34d;
+  border-left: 3px solid #f59e0b;
+}
+.widget-return:hover {
+  background: #fef3c7;
+}
+
+/* --- СТИЛЬ 3: ДІЯ "СТВОРИТИ ЧЕК" --- */
+.widget-empty {
+  background: #ffffff;
+  color: #64748b;
+  border: 1px dashed #cbd5e1;
+}
+
+/* При наведенні стає "активним" */
+.widget-empty:hover {
+  background: #f8fafc;
+  border-color: #3b82f6;
+  border-style: solid; 
+  color: #3b82f6;
+}
+
+.widget-empty:hover .widget-price {
+  color: #1e293b;
+}
+
+.widget-icon-muted {
+  font-size: 0.9rem;
+  opacity: 0.4;
+  transition: color 0.2s;
+}
+
+.widget-empty:hover .widget-icon-muted {
+  color: #3b82f6;
+  opacity: 1;
+}
+
+/* Помилка */
+.widget-empty.widget-error {
+  background: #fef2f2;
+  color: #b91c1c;
+  border-color: #fca5a5;
+  border-style: solid;
+}
+.widget-empty.widget-error:hover {
+  background: #fee2e2;
+  border-color: #ef4444;
+}
+
+/* =========================================
+   2. КЛІЄНТ ТА ЛОЯЛЬНІСТЬ
+   ========================================= */
+
 .client-name {
   font-weight: 700;
   font-size: 0.95rem;
@@ -265,7 +437,6 @@
   color: #3b82f6;
 }
 
-/* Бейдж лояльності (Pill) */
 .loyalty-pill {
   display: inline-flex;
   align-items: center;
@@ -286,8 +457,6 @@
 .loyalty-pill i {
   font-size: 0.7rem;
 }
-
-/* Кольори бейджів */
 .loyalty-pill.is-repeat {
   background-color: #ecfdf5;
   color: #059669;
@@ -299,7 +468,6 @@
   border: 1px solid #fed7aa;
 }
 
-/* Джерело замовлення */
 .source-tag {
   display: inline-flex;
   align-items: center;
@@ -316,7 +484,7 @@
 }
 
 /* =========================================
-   2. ОСНОВНА ТАБЛИЦЯ
+   3. ОСНОВНА ТАБЛИЦЯ
    ========================================= */
 
 .orders-container {
@@ -346,7 +514,6 @@
   white-space: nowrap;
 }
 
-/* Рядки таблиці */
 .order-row {
   transition: all 0.2s ease;
   cursor: pointer;
@@ -358,16 +525,15 @@
   vertical-align: middle;
 }
 .order-row:hover {
-  background: #bdd4eb;
+  background: #f8fafc;
   transform: translateY(-1px);
   box-shadow: 0 2px 8px rgba(0,0,0,0.02);
   z-index: 2;
   position: relative;
 }
 
-/* Активний (розгорнутий) рядок */
 .row-expanded {
-  background: #bdd4eb !important;
+  background: #f1f5f9 !important;
   border-bottom-color: transparent;
 }
 .row-expanded td {
@@ -375,7 +541,7 @@
 }
 
 /* =========================================
-   3. ТИПОГРАФІКА ТА КОЛОНКИ
+   4. ТИПОГРАФІКА
    ========================================= */
 
 .order-id {
@@ -395,12 +561,6 @@
   letter-spacing: -0.5px;
 }
 
-.price-text {
-  font-weight: 700;
-  color: #0f172a;
-  font-size: 0.95rem;
-}
-
 .ttn-text {
   font-size: 0.8rem;
   color: #475569;
@@ -411,14 +571,12 @@
 
 .date-text {
   font-size: 0.8rem;
-  
 }
 
 /* =========================================
-   4. ЕЛЕМЕНТИ (Теги, Статуси, Товари)
+   5. ЕЛЕМЕНТИ (Теги, Статуси, Товари)
    ========================================= */
 
-/* Теги */
 .tags-wrapper {
   display: flex;
   flex-wrap: wrap;
@@ -441,14 +599,12 @@
   background: currentColor;
   opacity: 0.6;
 }
-/* Кольори тегів */
 .tag-red { background: #fee2e2; color: #b91c1c; }
 .tag-blue { background: #dbeafe; color: #1d4ed8; }
 .tag-green { background: #dcfce7; color: #15803d; }
 .tag-amber { background: #fef3c7; color: #b45309; }
 .tag-gray { background: #f3f4f6; color: #4b5563; }
 
-/* Статус замовлення */
 .status-badge {
   display: inline-flex;
   align-items: center;
@@ -460,7 +616,6 @@
   border: 1px solid rgba(0,0,0,0.03);
 }
 
-/* Стек товарів (Product Stack) */
 .product-stack {
   display: flex;
   align-items: center;
@@ -512,7 +667,7 @@
 }
 
 /* =========================================
-   5. КНОПКИ ТА УПРАВЛІННЯ
+   6. КНОПКИ ТА ІНШЕ
    ========================================= */
 
 .btn-expand {
@@ -554,10 +709,6 @@
   color: #334155;
 }
 
-/* =========================================
-   6. РІЗНЕ (Empty State, Animation)
-   ========================================= */
-
 .details-wrapper {
   background: #f8fafc;
   border-top: 1px solid #e2e8f0;
@@ -587,7 +738,6 @@
   color: #94a3b8;
 }
 
-/* Ширини колонок для десктопу */
 @media (min-width: 992px) {
   .th-w-40 { width: 40px; }
   .th-w-50 { width: 50px; }
