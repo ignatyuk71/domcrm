@@ -231,25 +231,6 @@ Route::middleware('auth')->group(function () {
         echo "</pre>";
     });
 
-    Route::get('/cron-run-tasks', function () {
-        // 1. Спроба оновити статуси НП
-        try {
-            \Illuminate\Support\Facades\Artisan::call('delivery:sync-statuses');
-        } catch (\Exception $e) {
-            // ігноруємо помилки, щоб не зупиняти процес
-        }
-    
-        // 2. Спроба фіскалізації
-        try {
-            \Illuminate\Support\Facades\Artisan::call('fiscal:delivered');
-        } catch (\Exception $e) {
-            // ігноруємо помилки
-        }
-    
-        return "TASKS EXECUTED";
-    });
-
-
 
 
 });
