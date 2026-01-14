@@ -29,8 +29,8 @@ class DeliveryStatusMapper
      * Використовується для відображення лейблів в адмінці.
      */
     private const NP_STATUS_MAP = [
-        '1' => ['code' => 'created', 'label' => 'Створена накладна', 'color' => '#4f46e5', 'icon' => 'bi-file-earmark'],
-        '2' => ['code' => 'deleted', 'label' => 'Видалено', 'color' => '#9ca3af', 'icon' => 'bi-trash'], // Виправлено лейбл
+        '1' => ['code' => 'created', 'label' => 'Створена накладна', 'color' => '#37caec', 'icon' => 'bi-file-earmark'],
+        '2' => ['code' => 'deleted', 'label' => 'Видалено', 'color' => '#8d9fa3', 'icon' => 'bi-trash'], // Виправлено лейбл
         
         // У дорозі
         '4' => ['code' => 'in_transit', 'label' => 'У місті відправника', 'color' => '#2563eb', 'icon' => 'bi-truck'],

@@ -70,7 +70,7 @@
             <th class="th-w-140">Контакт</th>
             <th class="th-w-140">Статус</th>
             <th class="th-w-150">Товари</th>
-            <th class="th-w-100 text-end pe-3">Сума</th>
+            <th class="th-w-100">Сума</th>
             <th class="th-w-180">Доставка</th>
             <th class="th-w-120">Дата</th>
             <th class="th-w-50"></th>
