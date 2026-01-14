@@ -259,6 +259,11 @@
             <!-- Бейдж повідомлень (червоний) - статичний для прикладу -->
             <span class="badge bg-danger rounded-pill ms-auto me-3" style="font-size: 0.7rem;">3</span>
         </a>
+
+        <a href="{{ route('templates.index') }}" class="sidebar-link {{ request()->is('templates*') ? 'active' : '' }}">
+            <span class="icon-frame"><i class="bi bi-chat-text-fill"></i></span>
+            <span class="item-text">Шаблони</span>
+        </a>
     </nav>
 
     <!-- Футер -->
