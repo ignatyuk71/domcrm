@@ -11,6 +11,8 @@ use App\Http\Controllers\OrderSourceController;
 use App\Http\Controllers\FiscalController;
 use App\Http\Controllers\PackingController;
 use App\Http\Controllers\ChatController;
+use App\Http\Controllers\MessageTemplateController;
+use App\Models\MessageTemplate;
 use App\Models\Order;
 use App\Models\OrderItem;
 use Carbon\Carbon;
@@ -178,6 +180,12 @@ Route::middleware('auth')->group(function () {
     Route::get('/statuses', [StatusController::class, 'index'])->name('statuses.index');
     Route::get('/order-sources', [OrderSourceController::class, 'index'])->name('orderSources.index');
     Route::get('/tags', [TagController::class, 'index'])->name('tags.index');
+    Route::resource('templates', MessageTemplateController::class);
+    Route::get('/api/templates-list', function () {
+        return MessageTemplate::where('is_active', true)
+            ->orderBy('sort_order', 'desc')
+            ->get(['id', 'title', 'content']);
+    })->name('templates.list');
 
     // --- ФІСКАЛІЗАЦІЯ (Checkbox) ---
     Route::controller(FiscalController::class)->prefix('api')->name('fiscal.')->group(function () {

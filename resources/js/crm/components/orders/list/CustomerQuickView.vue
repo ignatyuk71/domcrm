@@ -116,6 +116,14 @@
                   </button>
                 </div>
               </div>
+
+              <button
+                class="btn btn-light w-100 d-flex align-items-center justify-content-center gap-2 py-2 border text-primary fw-medium mt-3"
+                @click="openTemplates"
+              >
+                <i class="bi bi-chat-text-fill"></i>
+                Обрати шаблон повідомлення
+              </button>
             </section>
 
             <!-- Recent Orders Section -->
@@ -162,13 +170,56 @@
 
           </div>
         </div>
+
+        <div v-if="showTemplates" class="templates-overlay">
+          <div class="templates-header">
+            <h6 class="mb-0 fw-bold">Шаблони повідомлень</h6>
+            <button class="btn-close-custom sm" @click="showTemplates = false">
+              <i class="bi bi-arrow-right"></i>
+            </button>
+          </div>
+
+          <div class="templates-body custom-scroll">
+            <div v-if="loadingTemplates" class="text-center py-4 text-muted">
+              <div class="spinner-border spinner-border-sm mb-2"></div>
+              <div>Завантаження...</div>
+            </div>
+
+            <div v-else-if="processedTemplates.length === 0" class="text-center py-4 text-muted">
+              Шаблонів немає. Додайте їх в налаштуваннях.
+            </div>
+
+            <div
+              v-else
+              v-for="tpl in processedTemplates"
+              :key="tpl.id"
+              class="template-card"
+            >
+              <div class="template-info">
+                <div class="template-title">{{ tpl.title }}</div>
+                <div class="template-text">{{ tpl.processedText }}</div>
+              </div>
+              <button class="btn-copy-template" @click="copyTemplate(tpl.processedText)">
+                <i class="bi bi-clipboard-check"></i>
+                Копіювати
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <Transition name="toast">
+          <div v-if="toastMessage" class="toast-notification">
+            <i class="bi bi-check-circle-fill"></i> {{ toastMessage }}
+          </div>
+        </Transition>
       </div>
     </div>
   </Teleport>
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
+import axios from 'axios';
 import { formatCurrency, formatDate } from '@/crm/utils/orderDisplay';
 
 const props = defineProps({
@@ -191,6 +242,12 @@ const customerName = computed(() =>
 const customerPhone = computed(() => customer.value.phone || '');
 const customerEmail = computed(() => customer.value.email || '');
 
+// --- Templates ---
+const showTemplates = ref(false);
+const rawTemplates = ref([]);
+const loadingTemplates = ref(false);
+const toastMessage = ref(null);
+
 // --- Helpers ---
 const normalizePhone = (ph) => ph?.replace(/\D/g, '');
 
@@ -203,8 +260,70 @@ const copy = (text) => {
   navigator.clipboard.writeText(text);
 };
 
+const fetchTemplates = async () => {
+  if (rawTemplates.value.length > 0) return;
+
+  loadingTemplates.value = true;
+  try {
+    const response = await axios.get('/api/templates-list');
+    rawTemplates.value = response.data?.data ?? response.data ?? [];
+  } catch (e) {
+    console.error('Не вдалося завантажити шаблони', e);
+  } finally {
+    loadingTemplates.value = false;
+  }
+};
+
+const openTemplates = () => {
+  showTemplates.value = true;
+  fetchTemplates();
+};
+
+const processedTemplates = computed(() => {
+  const lastOrder = recentOrders.value.length > 0 ? recentOrders.value[0] : null;
+
+  const replacements = {
+    '{{name}}': customerName.value || 'немає даних',
+    '{{ttn}}': lastOrder?.delivery?.ttn || 'немає даних',
+    '{{amount}}': lastOrder ? formatCurrency(lastOrder.items_sum_total, lastOrder.currency) : 'немає даних',
+    '{{price}}': lastOrder ? formatCurrency(lastOrder.items_sum_total, lastOrder.currency) : 'немає даних',
+    '{{order_id}}': lastOrder?.id || 'немає даних',
+  };
+
+  return rawTemplates.value.map((tpl) => {
+    let text = tpl.content || '';
+
+    for (const [key, value] of Object.entries(replacements)) {
+      text = text.replaceAll(key, value);
+    }
+
+    return {
+      ...tpl,
+      processedText: text,
+    };
+  });
+});
+
+const showToast = (msg) => {
+  toastMessage.value = msg;
+  setTimeout(() => {
+    toastMessage.value = null;
+  }, 2000);
+};
+
+const copyTemplate = async (text) => {
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast('Текст скопійовано');
+  } catch (err) {
+    console.error('Помилка копіювання', err);
+    showToast('Помилка копіювання');
+  }
+};
+
 function close() {
   emit('close');
+  showTemplates.value = false;
 }
 </script>
 
@@ -413,6 +532,108 @@ function close() {
 .btn-viber:hover { border-color: #8b5cf6; color: #8b5cf6; background: #f5f3ff; }
 .btn-telegram:hover { border-color: #0ea5e9; color: #0ea5e9; background: #e0f2fe; }
 .btn-copy:hover { border-color: #cbd5e1; color: #334155; background: #f1f5f9; }
+
+/* --- TEMPLATES --- */
+.btn-light {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  transition: all 0.2s;
+}
+.btn-light:hover { background: #eff6ff; border-color: #3b82f6; color: #3b82f6; }
+
+.templates-overlay {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  animation: slideUp 0.25s ease-out;
+}
+
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+.templates-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #fff;
+}
+
+.templates-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.template-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: all 0.2s;
+}
+.template-card:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.08);
+}
+
+.template-title { font-weight: 700; color: #1e293b; font-size: 0.9rem; }
+.template-text {
+  font-size: 0.85rem;
+  color: #475569;
+  white-space: pre-line;
+  background: #f1f5f9;
+  padding: 10px;
+  border-radius: 8px;
+  font-family: monospace;
+}
+
+.btn-copy-template {
+  align-self: flex-end;
+  background: #3b82f6;
+  color: #fff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-copy-template:hover { background: #2563eb; }
+
+.toast-notification {
+  position: absolute;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e293b;
+  color: #fff;
+  padding: 10px 24px;
+  border-radius: 50px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+  font-size: 0.9rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 100;
+}
+.toast-enter-active, .toast-leave-active { transition: all 0.3s ease; }
+.toast-enter-from, .toast-leave-to { opacity: 0; transform: translate(-50%, 20px); }
 
 /* --- ORDER HISTORY --- */
 .orders-list { display: flex; flex-direction: column; gap: 8px; }
