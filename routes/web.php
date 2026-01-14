@@ -211,7 +211,7 @@ Route::middleware('auth')->group(function () {
         Artisan::call('route:clear');
         Artisan::call('config:clear');
         Artisan::call('cache:clear');
-        return 'Кеш, маршрути та конфіги очищено! Тепер все чисто.';
+        return response('ok');
     });
 
 
