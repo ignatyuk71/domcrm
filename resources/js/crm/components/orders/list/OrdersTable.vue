@@ -1,9 +1,51 @@
+<script setup>
+  import OrderDetails from '@/crm/components/orders/list/OrderDetails.vue';
+  import {
+    formatCurrency,
+    formatDate,
+    getStatusClass,
+    getStatusIcon,
+    getStatusStyle,
+  } from '@/crm/utils/orderDisplay';
+  
+  defineProps({
+    orders: { type: Array, default: () => [] },
+    expandedRows: { type: Object, required: true },
+    deletingId: { type: [Number, String, null], default: null },
+    loading: { type: Boolean, default: false },
+  });
+  
+  defineEmits({
+    'toggle-row': null,
+    delete: null,
+    'open-tags': null,
+    'open-statuses': null,
+    'copy-ttn': null,
+    'generate-ttn': null,
+    'print-ttn': null,
+    'cancel-ttn': null,
+    'refresh-delivery': null,
+    'open-customer': null,
+    'quick-fiscalize': null,
+  });
+  
+  const getSourceStyle = (colorHex) => {
+    const color = colorHex || '#64748b';
+    return {
+      color: color,
+      borderColor: color + '40',
+    };
+  };
+</script>
+
 <template>
+  <!-- Стан завантаження -->
   <div v-if="loading && !orders.length" class="d-flex flex-column align-items-center justify-content-center p-5 text-muted">
     <div class="spinner-border text-primary mb-3" role="status"></div>
     <div class="fw-medium">Завантаження даних...</div>
   </div>
 
+  <!-- Порожній стан -->
   <div v-else-if="!orders.length" class="empty-state p-5 text-center">
     <div class="empty-icon mb-3">
       <i class="bi bi-inbox"></i>
@@ -12,21 +54,24 @@
     <p class="text-secondary mb-0">Замовлень поки немає. Спробуйте змінити фільтри.</p>
   </div>
 
+  <!-- Таблиця -->
   <div v-else class="orders-container">
     <div class="table-responsive">
       <table class="table align-middle orders-table mb-0">
         <thead>
           <tr>
-            <th class="th-w-40"></th> <th class="th-w-70">ID</th>
+            <th class="th-w-40"></th>
+            <th class="th-w-70">ID</th>
             <th class="th-w-200">Клієнт / Джерело</th>
-            <th class="th-w-150">Теги</th>
+            <th class="th-w-110">Теги</th>
             <th class="th-w-140">Контакт</th>
             <th class="th-w-140">Статус</th>
             <th class="th-w-150">Товари</th>
-            <th class="th-w-100 text-end pe-3">Сума</th> <th class="th-w-140">ТТН</th>
-            <th class="th-w-150">Доставка</th>
+            <th class="th-w-100 text-end pe-3">Сума</th>
+            <th class="th-w-180">Доставка</th>
             <th class="th-w-120">Дата</th>
-            <th class="th-w-50"></th> </tr>
+            <th class="th-w-50"></th>
+          </tr>
         </thead>
         <tbody>
           <template v-for="order in orders" :key="order.id">
@@ -35,6 +80,7 @@
               :class="{ 'row-expanded': expandedRows.has(order.id) }"
               @click="$emit('toggle-row', order.id)"
             >
+              <!-- 1. Розгортання -->
               <td class="text-center ps-3">
                 <button 
                   class="btn-expand" 
@@ -45,10 +91,12 @@
                 </button>
               </td>
 
+              <!-- 2. ID -->
               <td>
                 <span class="order-id">#{{ order.id }}</span>
               </td>
 
+              <!-- 3. Клієнт -->
               <td>
                 <div class="d-flex flex-column justify-content-center" style="min-height: 40px;">
                   <div class="d-flex align-items-center gap-2 mb-1">
@@ -80,6 +128,7 @@
                 </div>
               </td>
 
+              <!-- 4. Теги -->
               <td>
                 <div class="tags-wrapper">
                   <span
@@ -95,10 +144,12 @@
                 </div>
               </td>
 
+              <!-- 5. Телефон -->
               <td>
                 <span class="phone-text">{{ order.phone }}</span>
               </td>
 
+              <!-- 6. Статус -->
               <td>
                 <div 
                   class="status-badge"
@@ -110,8 +161,9 @@
                 </div>
               </td>
 
+              <!-- 7. Товари (Fan Effect) -->
               <td>
-                <div class="product-stack">
+                <div class="product-stack hover-fan">
                   <div v-for="(item, index) in order.items.slice(0, 4)" :key="item.id" class="product-thumb" :style="{ zIndex: 10 - index }">
                     <img v-if="item.photo" :src="item.photo" alt="Item" />
                     <div v-else class="no-photo"><i class="bi bi-image"></i></div>
@@ -122,13 +174,13 @@
                 </div>
               </td>
 
+              <!-- 8. СУМА (GLASS WIDGET) -->
               <td class="text-end pe-3">
-                
                 <a 
                   v-if="order.latestFiscalReceipt?.status === 'success' && order.latestFiscalReceipt?.type === 'sell'"
                   :href="order.latestFiscalReceipt?.check_link"
                   target="_blank"
-                  class="fiscal-widget widget-success text-decoration-none"
+                  class="fiscal-widget widget-success glass-effect text-decoration-none"
                   title="Відкрити фіскальний чек у новій вкладці"
                   @click.stop
                 >
@@ -176,25 +228,52 @@
                 </div>
               </td>
 
+              <!-- 9. ДОСТАВКА (SMART WIDGET) -->
               <td>
-                <span v-if="order.ttn" class="ttn-text">
-                  <i class="bi bi-upc-scan me-1"></i> {{ order.ttn }}
-                </span>
-                <span v-else class="text-muted opacity-25">—</span>
-              </td>
-
-              <td>
-                <div v-if="order.delivery_status" class="delivery-status" :style="{ color: order.delivery_status_color || '#6c757d' }">
-                  <i v-if="order.delivery_status_icon" :class="['bi', order.delivery_status_icon]"></i>
-                  <span>{{ order.delivery_status }}</span>
+                <div v-if="order.ttn" class="delivery-widget">
+                  <div class="d-flex align-items-center gap-2 mb-1">
+                    <i 
+                       v-if="order.delivery_status_icon" 
+                       :class="['bi', order.delivery_status_icon]"
+                       :style="{color: order.delivery_status_color}"
+                       style="font-size: 0.8rem;"
+                    ></i>
+                    <span 
+                      class="delivery-status-text text-truncate"
+                      :style="{color: order.delivery_status_color || '#475569'}"
+                      :title="order.delivery_status"
+                    >
+                      {{ order.delivery_status }}
+                    </span>
+                  </div>
+                  
+                  <div class="d-flex align-items-center gap-2 ttn-row" @click.stop="$emit('copy-ttn', order.ttn)" title="Копіювати ТТН">
+                    <i class="bi bi-upc-scan text-muted" style="font-size: 0.85rem;"></i>
+                    <span class="ttn-number">{{ order.ttn }}</span>
+                    <i class="bi bi-copy ttn-copy-icon"></i>
+                  </div>
                 </div>
-                <span v-else class="text-muted opacity-25">—</span>
+
+                <div 
+                  v-else 
+                  class="delivery-widget delivery-empty"
+                  role="button"
+                  @click.stop="$emit('generate-ttn', order)"
+                  title="Створити ТТН"
+                >
+                  <div class="d-flex align-items-center justify-content-center gap-2 text-muted">
+                    <i class="bi bi-box-seam"></i>
+                    <span>Створити ТТН</span>
+                  </div>
+                </div>
               </td>
 
+              <!-- 10. Дата -->
               <td>
                 <span class="date-text">{{ formatDate(order.created_at) }}</span>
               </td>
 
+              <!-- 11. Меню -->
               <td class="text-end pe-3">
                 <div class="dropdown" @click.stop>
                   <button class="btn-action" data-bs-toggle="dropdown">
@@ -223,8 +302,9 @@
               </td>
             </tr>
 
+            <!-- Розгорнутий рядок з деталями -->
             <tr v-if="expandedRows.has(order.id)" class="details-row">
-              <td colspan="12" class="p-0 border-0">
+              <td colspan="11" class="p-0 border-0">
                 <div class="details-wrapper">
                     <OrderDetails
                         :order="order"
@@ -246,506 +326,155 @@
   </div>
 </template>
 
-<script setup>
-  import OrderDetails from '@/crm/components/orders/list/OrderDetails.vue';
-  import {
-    formatCurrency,
-    formatDate,
-    getStatusClass,
-    getStatusIcon,
-    getStatusStyle,
-  } from '@/crm/utils/orderDisplay';
-  
-  defineProps({
-    orders: { type: Array, default: () => [] },
-    expandedRows: { type: Object, required: true },
-    deletingId: { type: [Number, String, null], default: null },
-    loading: { type: Boolean, default: false },
-  });
-  
-  defineEmits({
-    'toggle-row': null,
-    delete: null,
-    'open-tags': null,
-    'open-statuses': null,
-    'copy-ttn': null,
-    'generate-ttn': null,
-    'print-ttn': null,
-    'cancel-ttn': null,
-    'refresh-delivery': null,
-    'open-customer': null,
-    'quick-fiscalize': null, // Нова подія для швидкої фіскалізації
-  });
-  
-  // Функція для стилізації джерела замовлення
-  const getSourceStyle = (colorHex) => {
-    const color = colorHex || '#64748b';
-    return {
-      color: color,
-      borderColor: color + '40', // 25% прозорості для рамки
-    };
-  };
-</script>
-
 <style scoped>
 /* =========================================
-   1. INTERACTIVE FISCAL WIDGET (MODERN)
+   1. ANIMATIONS & INTERACTIONS
+   ========================================= */
+
+/* Анімація товарів "Віяло" при наведенні */
+.product-stack.hover-fan {
+  transition: all 0.3s ease;
+}
+.product-stack.hover-fan:hover .product-thumb {
+  margin-left: -2px; /* Зменшуємо перекриття */
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  transform: translateY(-3px) scale(1.05); /* Піднімаємо */
+}
+.product-stack.hover-fan:hover .product-thumb:first-child {
+  margin-left: 0;
+}
+
+/* Glassmorphism Effect for Widget */
+.glass-effect {
+  background: rgba(220, 252, 231, 0.7) !important; /* Напівпрозорий м'ятний */
+  backdrop-filter: blur(8px); /* Розмиття фону під віджетом */
+  border: 1px solid rgba(187, 247, 208, 0.6) !important;
+}
+.order-row:hover .glass-effect {
+  background: rgba(220, 252, 231, 0.9) !important;
+}
+
+/* =========================================
+   2. WIDGETS
    ========================================= */
 
 .fiscal-widget {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end; /* Текст праворуч */
-  justify-content: center;
-  padding: 6px 12px;
-  border-radius: 10px;
-  min-width: 105px;
+  display: flex; flex-direction: column; align-items: flex-end; justify-content: center;
+  padding: 6px 12px; border-radius: 10px; min-width: 105px;
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  border: 1px solid transparent;
-  position: relative;
-  overflow: hidden;
-  cursor: pointer;
+  border: 1px solid transparent; position: relative; overflow: hidden; cursor: pointer;
 }
+.fiscal-widget:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); }
+.fiscal-widget:active { transform: translateY(0); }
 
-/* Ефект "піднімання" при наведенні */
-.fiscal-widget:hover {
-  transform: translateY(-2px); 
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-}
-.fiscal-widget:active {
-  transform: translateY(0);
-}
+.widget-price { font-weight: 700; font-size: 0.95rem; line-height: 1.1; white-space: nowrap; color: inherit; }
+.widget-label { font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; margin-top: 3px; display: flex; align-items: center; }
+.widget-icon { font-size: 1rem; opacity: 0.8; }
 
-.widget-price {
-  font-weight: 700;
-  font-size: 0.95rem;
-  line-height: 1.1;
-  white-space: nowrap;
-  color: inherit;
-}
+.widget-icon-box { background: rgba(255, 255, 255, 0.8); width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #15803d; transition: transform 0.2s; }
+.widget-success:hover .widget-icon-box { transform: rotate(45deg) scale(1.1); background: #fff; }
 
-.widget-label {
-  font-size: 0.65rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  margin-top: 3px;
-  display: flex;
-  align-items: center;
-}
+.widget-success { color: #166534; } /* Фон задається через glass-effect */
+.widget-return { background: #fffbeb; color: #b45309; border: 1px solid #fcd34d; border-left: 3px solid #f59e0b; }
+.widget-return:hover { background: #fef3c7; }
+.widget-empty { background: #ffffff; color: #64748b; border: 1px dashed #cbd5e1; }
+.widget-empty:hover { background: #f8fafc; border-color: #3b82f6; border-style: solid; color: #3b82f6; }
+.widget-empty:hover .widget-price { color: #1e293b; }
+.widget-icon-muted { font-size: 0.9rem; opacity: 0.4; transition: color 0.2s; }
+.widget-empty:hover .widget-icon-muted { color: #3b82f6; opacity: 1; }
+.widget-empty.widget-error { background: #fef2f2; color: #b91c1c; border-color: #fca5a5; border-style: solid; }
 
-.widget-icon {
-  font-size: 1rem;
-  opacity: 0.8;
+/* Delivery Widget */
+.delivery-widget {
+  display: flex; flex-direction: column; justify-content: center;
+  padding: 6px 10px; background: #fff; border-radius: 8px; border: 1px solid #e2e8f0;
+  min-height: 48px; transition: all 0.2s; max-width: 180px;
 }
+.delivery-widget:hover { border-color: #cbd5e1; box-shadow: 0 2px 5px rgba(0,0,0,0.03); }
 
-/* --- СТИЛЬ 1: УСПІХ (Interactive) --- */
-.widget-success {
-  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-  color: #166534;
-  border: 1px solid #bbf7d0;
-}
+.delivery-status-text { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; line-height: 1.2; }
 
-.widget-success:hover {
-  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
-  border-color: #86efac;
-}
+.ttn-row { cursor: copy; }
+.ttn-number { font-family: 'Consolas', 'Monaco', monospace; font-weight: 600; font-size: 0.85rem; color: #1e293b; letter-spacing: -0.02em; }
+.ttn-copy-icon { font-size: 0.75rem; color: #94a3b8; opacity: 0; transition: all 0.2s; transform: scale(0.8); }
+.ttn-row:hover .ttn-copy-icon { opacity: 1; transform: scale(1); color: #3b82f6; }
+.ttn-row:active .ttn-copy-icon { transform: scale(0.9); }
 
-.widget-icon-box {
-  background: rgba(255, 255, 255, 0.8);
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #15803d;
-  transition: transform 0.2s;
-}
-
-.widget-success:hover .widget-icon-box {
-  transform: rotate(45deg) scale(1.1); /* Анімація іконки */
-  background: #fff;
-}
-
-/* --- СТИЛЬ 2: ПОВЕРНЕННЯ --- */
-.widget-return {
-  background: #fffbeb;
-  color: #b45309;
-  border: 1px solid #fcd34d;
-  border-left: 3px solid #f59e0b;
-}
-.widget-return:hover {
-  background: #fef3c7;
-}
-
-/* --- СТИЛЬ 3: ДІЯ "СТВОРИТИ ЧЕК" --- */
-.widget-empty {
-  background: #ffffff;
-  color: #64748b;
-  border: 1px dashed #cbd5e1;
-}
-
-/* При наведенні стає "активним" */
-.widget-empty:hover {
-  background: #f8fafc;
-  border-color: #3b82f6;
-  border-style: solid; 
-  color: #3b82f6;
-}
-
-.widget-empty:hover .widget-price {
-  color: #1e293b;
-}
-
-.widget-icon-muted {
-  font-size: 0.9rem;
-  opacity: 0.4;
-  transition: color 0.2s;
-}
-
-.widget-empty:hover .widget-icon-muted {
-  color: #3b82f6;
-  opacity: 1;
-}
-
-/* Помилка */
-.widget-empty.widget-error {
-  background: #fef2f2;
-  color: #b91c1c;
-  border-color: #fca5a5;
-  border-style: solid;
-}
-.widget-empty.widget-error:hover {
-  background: #fee2e2;
-  border-color: #ef4444;
-}
+.delivery-empty { background: #f8fafc; border: 1px dashed #cbd5e1; cursor: pointer; align-items: center; }
+.delivery-empty:hover { background: #f1f5f9; border-color: #3b82f6; color: #3b82f6 !important; }
+.delivery-empty .text-muted { transition: color 0.2s; font-size: 0.8rem; font-weight: 600; }
+.delivery-empty:hover .text-muted { color: #3b82f6 !important; }
 
 /* =========================================
-   2. КЛІЄНТ ТА ЛОЯЛЬНІСТЬ
+   3. BASIC STYLES
    ========================================= */
 
-.client-name {
-  font-weight: 700;
-  font-size: 0.95rem;
-  color: #1e293b;
-  cursor: pointer;
-  transition: color 0.2s;
-  max-width: 150px;
-}
-.client-name:hover {
-  color: #3b82f6;
-}
+.client-name { font-weight: 700; font-size: 0.95rem; color: #1e293b; cursor: pointer; transition: color 0.2s; max-width: 150px; }
+.client-name:hover { color: #3b82f6; }
 
-.loyalty-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  border-radius: 6px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: 0.02em;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-  cursor: help;
-  transition: transform 0.2s;
-}
-.loyalty-pill:hover {
-  transform: translateY(-1px);
-}
-.loyalty-pill i {
-  font-size: 0.7rem;
-}
-.loyalty-pill.is-repeat {
-  background-color: #ecfdf5;
-  color: #059669;
-  border: 1px solid #d1fae5;
-}
-.loyalty-pill.is-vip {
-  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
-  color: #c2410c;
-  border: 1px solid #fed7aa;
-}
+.loyalty-pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; line-height: 1; letter-spacing: 0.02em; box-shadow: 0 1px 2px rgba(0,0,0,0.05); cursor: help; transition: transform 0.2s; }
+.loyalty-pill:hover { transform: translateY(-1px); }
+.loyalty-pill i { font-size: 0.7rem; }
+.loyalty-pill.is-repeat { background-color: #ecfdf5; color: #059669; border: 1px solid #d1fae5; }
+.loyalty-pill.is-vip { background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%); color: #c2410c; border: 1px solid #fed7aa; }
 
-.source-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 0.7rem;
-  font-weight: 600;
-  padding: 2px 0;
-  color: #64748b;
-  opacity: 0.9;
-}
-.source-icon {
-  font-size: 0.75rem;
-  opacity: 0.8;
-}
+.source-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 0.7rem; font-weight: 600; padding: 2px 0; color: #64748b; opacity: 0.9; }
+.source-icon { font-size: 0.75rem; opacity: 0.8; }
 
-/* =========================================
-   3. ОСНОВНА ТАБЛИЦЯ
-   ========================================= */
+.orders-container { background: #fff; border-radius: 16px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03); overflow: hidden; border: 1px solid rgba(0, 0, 0, 0.04); }
+.orders-table { --bs-table-bg: transparent; width: 100%; border-collapse: separate; border-spacing: 0; }
+.orders-table thead th { background: #f8fafc; color: #64748b; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #e2e8f0; padding: 16px 12px; white-space: nowrap; }
 
-.orders-container {
-  background: #fff;
-  border-radius: 16px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
-  overflow: hidden;
-  border: 1px solid rgba(0, 0, 0, 0.04);
-}
+.order-row { transition: all 0.2s ease; cursor: pointer; background: #fff; }
+.order-row td { padding: 8px 7px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+.order-row:hover { background: #f8fafc; transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,0,0,0.02); z-index: 2; position: relative; }
+.row-expanded { background: #f1f5f9 !important; border-bottom-color: transparent; }
+.row-expanded td { border-bottom: none; }
 
-.orders-table {
-  --bs-table-bg: transparent;
-  width: 100%;
-  border-collapse: separate; 
-  border-spacing: 0;
-}
+.order-id { font-family: 'Courier New', monospace; font-weight: 700; color: #3b82f6; background: rgba(59, 130, 246, 0.08); padding: 2px 6px; border-radius: 4px; font-size: 0.85rem; }
+.phone-text { font-family: 'Consolas', monospace; color: #475569; font-size: 0.85rem; letter-spacing: -0.5px; }
+.date-text { font-size: 0.8rem; }
 
-.orders-table thead th {
-  background: #f8fafc;
-  color: #64748b;
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  border-bottom: 1px solid #e2e8f0;
-  padding: 16px 12px;
-  white-space: nowrap;
-}
-
-.order-row {
-  transition: all 0.2s ease;
-  cursor: pointer;
-  background: #fff;
-}
-.order-row td {
-  padding: 8px 7px;
-  border-bottom: 1px solid #f1f5f9;
-  vertical-align: middle;
-}
-.order-row:hover {
-  background: #f8fafc;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.02);
-  z-index: 2;
-  position: relative;
-}
-
-.row-expanded {
-  background: #f1f5f9 !important;
-  border-bottom-color: transparent;
-}
-.row-expanded td {
-  border-bottom: none;
-}
-
-/* =========================================
-   4. ТИПОГРАФІКА
-   ========================================= */
-
-.order-id {
-  font-family: 'Courier New', monospace;
-  font-weight: 700;
-  color: #3b82f6;
-  background: rgba(59, 130, 246, 0.08);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 0.85rem;
-}
-
-.phone-text {
-  font-family: 'Consolas', monospace;
-  color: #475569;
-  font-size: 0.85rem;
-  letter-spacing: -0.5px;
-}
-
-.ttn-text {
-  font-size: 0.8rem;
-  color: #475569;
-  background: #f1f5f9;
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-.date-text {
-  font-size: 0.8rem;
-}
-
-/* =========================================
-   5. ЕЛЕМЕНТИ (Теги, Статуси, Товари)
-   ========================================= */
-
-.tags-wrapper {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-.tag-pill {
-  font-size: 0.7rem;
-  padding: 3px 8px;
-  border-radius: 12px;
-  font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  border: 1px solid transparent;
-}
-.tag-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: 0.6;
-}
+.tags-wrapper { display: flex; flex-wrap: wrap; gap: 4px; }
+.tag-pill { font-size: 0.7rem; padding: 3px 8px; border-radius: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; border: 1px solid transparent; }
+.tag-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0.6; }
 .tag-red { background: #fee2e2; color: #b91c1c; }
 .tag-blue { background: #dbeafe; color: #1d4ed8; }
 .tag-green { background: #dcfce7; color: #15803d; }
 .tag-amber { background: #fef3c7; color: #b45309; }
 .tag-gray { background: #f3f4f6; color: #4b5563; }
 
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
-  border-radius: 8px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  border: 1px solid rgba(0,0,0,0.03);
-}
+.status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 8px; font-size: 0.8rem; font-weight: 600; border: 1px solid rgba(0,0,0,0.03); }
 
-.product-stack {
-  display: flex;
-  align-items: center;
-  padding-left: 8px;
-}
-.product-thumb {
-  width: 62px;
-  height: 62px;
-  border-radius: 10px;
-  border: 2px solid #fff;
-  overflow: hidden;
-  margin-left: -10px;
-  background: #fff;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.08);
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.product-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.no-photo {
-  background: #f1f5f9;
-  color: #cbd5e1;
-  font-size: 1.2rem;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.product-more {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: #f8fafc;
-  color: #64748b;
-  border: 2px solid #fff;
-  font-size: 0.75rem;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-left: -8px;
-  z-index: 1;
-}
+.product-stack { display: flex; align-items: center; padding-left: 8px; }
+.product-thumb { width: 62px; height: 62px; border-radius: 10px; border: 2px solid #fff; overflow: hidden; margin-left: -10px; background: #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.08); position: relative; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease; }
+.product-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.no-photo { background: #f1f5f9; color: #cbd5e1; font-size: 1.2rem; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+.product-more { width: 32px; height: 32px; border-radius: 50%; background: #f8fafc; color: #64748b; border: 2px solid #fff; font-size: 0.75rem; font-weight: 700; display: flex; align-items: center; justify-content: center; margin-left: -8px; z-index: 1; }
 
-/* =========================================
-   6. КНОПКИ ТА ІНШЕ
-   ========================================= */
+.btn-expand { width: 28px; height: 28px; border-radius: 50%; border: 1px solid #e2e8f0; background: #fff; color: #64748b; display: flex; align-items: center; justify-content: center; transition: all 0.2s; font-size: 0.75rem; }
+.btn-expand:hover { border-color: #3b82f6; color: #3b82f6; background: #eff6ff; }
+.btn-expand.active { background: #3b82f6; border-color: #3b82f6; color: white; transform: rotate(90deg); }
 
-.btn-expand {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: 1px solid #e2e8f0;
-  background: #fff;
-  color: #64748b;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-  font-size: 0.75rem;
-}
-.btn-expand:hover {
-  border-color: #3b82f6;
-  color: #3b82f6;
-  background: #eff6ff;
-}
-.btn-expand.active {
-  background: #3b82f6;
-  border-color: #3b82f6;
-  color: white;
-  transform: rotate(90deg);
-}
+.btn-action { border: none; background: transparent; width: 32px; height: 32px; border-radius: 8px; color: #94a3b8; transition: all 0.2s; }
+.btn-action:hover { background: #f1f5f9; color: #334155; }
 
-.btn-action {
-  border: none;
-  background: transparent;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  color: #94a3b8;
-  transition: all 0.2s;
-}
-.btn-action:hover {
-  background: #f1f5f9;
-  color: #334155;
-}
+.details-wrapper { background: #f8fafc; border-top: 1px solid #e2e8f0; box-shadow: inset 0 4px 6px -4px rgba(0,0,0,0.05); animation: slideDown 0.3s ease-out; }
+@keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
 
-.details-wrapper {
-  background: #f8fafc;
-  border-top: 1px solid #e2e8f0;
-  box-shadow: inset 0 4px 6px -4px rgba(0,0,0,0.05);
-  animation: slideDown 0.3s ease-out;
-}
-
-@keyframes slideDown {
-  from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.empty-state {
-  background: #fff;
-  border-radius: 16px;
-  border: 2px dashed #e2e8f0;
-}
-.empty-icon {
-  width: 64px;
-  height: 64px;
-  background: #f8fafc;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.8rem;
-  color: #94a3b8;
-}
+.empty-state { background: #fff; border-radius: 16px; border: 2px dashed #e2e8f0; }
+.empty-icon { width: 64px; height: 64px; background: #f8fafc; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 1.8rem; color: #94a3b8; }
 
 @media (min-width: 992px) {
   .th-w-40 { width: 40px; }
   .th-w-50 { width: 50px; }
   .th-w-70 { width: 70px; }
   .th-w-100 { width: 100px; }
+  .th-w-110 { width: 110px; }
   .th-w-120 { width: 120px; }
   .th-w-140 { width: 140px; }
   .th-w-150 { width: 150px; }
+  .th-w-180 { width: 180px; }
   .th-w-200 { width: 200px; }
 }
 </style>
