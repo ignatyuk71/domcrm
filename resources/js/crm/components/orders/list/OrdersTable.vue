@@ -305,10 +305,6 @@
             <!-- Розгорнутий рядок з деталями -->
             <tr v-if="expandedRows.has(order.id)" class="details-row">
               <td colspan="11" class="p-0 border-0">
-                <!-- 
-                  FIX: Wrapper на мобільному не має додаткових відступів і
-                  прибирає заокруглення зверху, щоб злитися з карткою.
-                -->
                 <div class="details-wrapper">
                     <OrderDetails
                         :order="order"
@@ -449,15 +445,12 @@
   
   .order-row {
     display: grid !important;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1.4fr 1.2fr;
     grid-template-areas:
-      "id status"
-      "client client"
+      "id client"
+      "status status"
       "phone phone"
-      "tags tags"
-      "products products"
-      "fiscal delivery"
-      "date actions";
+      "fiscal fiscal";
     gap: 10px;
     margin-bottom: 12px;
     border: 1px solid #e2e8f0;
@@ -467,68 +460,71 @@
     box-shadow: 0 1px 3px rgba(0,0,0,0.02);
   }
 
-  /* Виправляємо розрив при відкритті: якщо row-expanded, прибираємо нижній радіус і margin */
   .order-row.row-expanded {
     margin-bottom: 0;
     border-bottom: none;
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
-    box-shadow: none; /* Тінь прибираємо, щоб не було стику */
+    box-shadow: none;
     z-index: 10;
   }
 
-  .order-row td { display: block; border: none; padding: 0 !important; width: 100% !important; box-sizing: border-box; }
+  .order-row td { 
+    display: block; 
+    border: none; 
+    padding: 0 !important; 
+    width: 100% !important; 
+    box-sizing: border-box; 
+  }
 
-  /* Прив'язка комірок до областей */
   .cell-expand { display: none !important; }
-  .cell-id { grid-area: id; align-self: center; }
-  .cell-status { grid-area: status; justify-self: end; }
-  .cell-client { grid-area: client; margin-bottom: 4px; }
-  .cell-phone { grid-area: phone; font-size: 0.9rem; margin-bottom: 4px; }
-  .cell-tags { grid-area: tags; margin-bottom: 4px; }
-  .cell-products { grid-area: products; margin-bottom: 8px; }
-  
+
+  .cell-id { 
+    grid-area: id; 
+    align-self: center; 
+  }
+
+  .cell-client { 
+    grid-area: client; 
+    margin-bottom: 0; 
+  }
+
+  .cell-status { 
+    grid-area: status; 
+    justify-self: flex-start; 
+  }
+
+  .cell-phone { 
+    grid-area: phone; 
+    font-size: 0.9rem; 
+  }
+
   .cell-fiscal { 
     grid-area: fiscal; 
     text-align: left !important;
   }
+
   .cell-fiscal .fiscal-widget {
     align-items: flex-start !important;
     min-width: 0;
   }
-  
-  .cell-delivery { 
-    grid-area: delivery; 
-  }
-  .cell-delivery .delivery-widget {
-    min-width: 0;
-    max-width: none;
-  }
 
-  .cell-date { grid-area: date; align-self: center; color: #94a3b8; font-size: 0.75rem; }
-  .cell-actions { grid-area: actions; justify-self: end; }
-
-  @media (max-width: 480px) {
-    .order-row {
-      grid-template-columns: 1fr;
-      grid-template-areas:
-        "id"
-        "status"
-        "client"
-        "phone"
-        "tags"
-        "products"
-        "fiscal"
-        "delivery"
-        "actions"
-        "date";
-    }
-    .cell-status, .cell-actions { justify-self: start; margin-top: 4px; }
-    .cell-date { margin-top: 8px; }
+  /* ховаємо зайве на мобільній */
+  .cell-tags,
+  .cell-products,
+  .cell-delivery,
+  .cell-date,
+  .cell-actions {
+    display: none !important;
   }
 
-  /* Блок деталей */
-  .details-row { display: block; border: none; width: 100%; box-sizing: border-box; }
+  .details-row { 
+    display: block; 
+    border: none; 
+    width: 100%; 
+    box-sizing: border-box; 
+  }
+
   .details-row td { 
     display: block; 
     width: 100%; 
@@ -536,15 +532,31 @@
     box-sizing: border-box; 
   }
 
-  /* Стилізація контейнера деталей, щоб він виглядав як продовження картки */
   .details-wrapper {
     margin-bottom: 12px;
-    border-radius: 0 0 12px 12px; /* Закругляємо тільки низ */
+    border-radius: 0 0 12px 12px;
     border: 1px solid #e2e8f0;
-    border-top: none; /* Прибираємо верхню межу */
-    background: #fff; /* Фон як у картки */
-    box-shadow: 0 2px 4px rgba(0,0,0,0.02); /* Повертаємо тінь знизу */
-    overflow: hidden; /* Щоб внутрішні елементи не вилазили */
+    border-top: none;
+    background: #fff;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+    overflow: hidden;
+  }
+
+  @media (max-width: 480px) {
+    .order-row {
+      grid-template-columns: 1fr;
+      grid-template-areas:
+        "id"
+        "client"
+        "status"
+        "phone"
+        "fiscal";
+    }
+
+    .cell-status { 
+      justify-self: start; 
+      margin-top: 4px; 
+    }
   }
 }
 </style>
