@@ -258,7 +258,7 @@
                     {{
                       order.latestFiscalReceipt?.status === 'error'
                         ? 'Помилка'
-                        : 'Створити чек'
+                        : 'Не фіскалізовано'
                     }}
                   </div>
                 </div>
