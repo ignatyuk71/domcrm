@@ -665,14 +665,14 @@
   vertical-align: middle;
 }
 .order-row:hover {
-  background: #f8fafc;
+  background: #e8f1fb;
   transform: translateY(-1px);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
   z-index: 2;
   position: relative;
 }
 .row-expanded {
-  background: #f1f5f9 !important;
+  background: #bcd9f6 !important;
   border-bottom-color: transparent;
 }
 .row-expanded td {
@@ -836,7 +836,7 @@
   color: #334155;
 }
 .details-wrapper {
-  background: #f8fafc;
+  background: #bcd9f6;
   border-top: 1px solid #e2e8f0;
   box-shadow: inset 0 4px 6px -4px rgba(0, 0, 0, 0.05);
   animation: slideDown 0.3s ease-out;
@@ -1017,10 +1017,10 @@
   }
 
   .details-wrapper {
-    margin-bottom: 12px;
+    margin-bottom: 9px;
     border-radius: 0 0 12px 12px;
     border: none;
-    background: #f1f5f9;
+    background: #bcd9f6;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
     overflow: hidden;
     padding-left: 10px;

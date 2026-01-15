@@ -483,8 +483,12 @@ function closeCustomerPanel() {
 }
 
 function toggleRow(id) {
-  if (expandedRows.value.has(id)) expandedRows.value.delete(id);
-  else expandedRows.value.add(id);
+  if (expandedRows.value.has(id)) {
+    expandedRows.value = new Set();
+    return;
+  }
+
+  expandedRows.value = new Set([id]);
 }
 
 onMounted(fetchData);
