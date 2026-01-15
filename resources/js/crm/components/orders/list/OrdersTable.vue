@@ -191,9 +191,51 @@
                 <a
                   v-if="
                     order.latestFiscalReceipt?.status === 'success' &&
+                    order.latestFiscalReceipt?.type === 'return'
+                  "
+                  :href="order.latestFiscalReceipt?.check_link"
+                  target="_blank"
+                  class="fiscal-widget widget-return text-decoration-none"
+                  title="Відкрити чек повернення"
+                  @click.stop
+                >
+                  <div class="d-flex align-items-center justify-content-between w-100 gap-2">
+                    <span class="widget-price">
+                      {{ formatCurrency(order.total, order.currency) }}
+                    </span>
+                    <i class="bi bi-arrow-counterclockwise widget-icon"></i>
+                  </div>
+                  <div class="widget-label">Повернення</div>
+                </a>
+
+                <a
+                  v-else-if="
+                    order.latestFiscalReceipt?.status === 'success' &&
                     order.latestFiscalReceipt?.type === 'sell' &&
-                    order.prepay_amount > 0 &&
-                    order.prepay_amount < order.total
+                    (order.payment_status === 'paid' || (order.paid_amount && order.paid_amount >= order.total))
+                  "
+                  :href="order.latestFiscalReceipt?.check_link"
+                  target="_blank"
+                  class="fiscal-widget widget-success glass-effect text-decoration-none"
+                  title="Замовлення повністю фіскалізовано"
+                  @click.stop
+                >
+                  <div class="d-flex align-items-center justify-content-between w-100 gap-2">
+                    <span class="widget-price">
+                      {{ formatCurrency(order.total, order.currency) }}
+                    </span>
+                    <div class="widget-icon-box">
+                      <i class="bi bi-check-lg" style="font-size: 0.75rem;"></i>
+                    </div>
+                  </div>
+                  <div class="widget-label">Фіскалізовано</div>
+                </a>
+
+                <a
+                  v-else-if="
+                    order.latestFiscalReceipt?.status === 'success' &&
+                    order.latestFiscalReceipt?.type === 'sell' &&
+                    order.prepay_amount > 0
                   "
                   :href="order.latestFiscalReceipt?.check_link"
                   target="_blank"
@@ -214,13 +256,13 @@
 
                 <a
                   v-else-if="
-                    order.latestFiscalReceipt?.status === 'success' &&
-                    order.latestFiscalReceipt?.type === 'sell'
+                     order.latestFiscalReceipt?.status === 'success' &&
+                     order.latestFiscalReceipt?.type === 'sell'
                   "
                   :href="order.latestFiscalReceipt?.check_link"
                   target="_blank"
                   class="fiscal-widget widget-success glass-effect text-decoration-none"
-                  title="Фіскалізовано повністю"
+                  title="Фіскалізовано"
                   @click.stop
                 >
                   <div class="d-flex align-items-center justify-content-between w-100 gap-2">
@@ -232,26 +274,6 @@
                     </div>
                   </div>
                   <div class="widget-label">Фіскалізовано</div>
-                </a>
-
-                <a
-                  v-else-if="
-                    order.latestFiscalReceipt?.status === 'success' &&
-                    order.latestFiscalReceipt?.type === 'return'
-                  "
-                  :href="order.latestFiscalReceipt?.check_link"
-                  target="_blank"
-                  class="fiscal-widget widget-return text-decoration-none"
-                  title="Відкрити чек повернення"
-                  @click.stop
-                >
-                  <div class="d-flex align-items-center justify-content-between w-100 gap-2">
-                    <span class="widget-price">
-                      {{ formatCurrency(order.total, order.currency) }}
-                    </span>
-                    <i class="bi bi-arrow-counterclockwise widget-icon"></i>
-                  </div>
-                  <div class="widget-label">Повернення</div>
                 </a>
 
                 <div
@@ -480,7 +502,7 @@
   background: #fef3c7;
 }
 
-/* --- НОВИЙ СТИЛЬ: ЧАСТКОВА ОПЛАТА --- */
+/* --- СТИЛЬ: ЧАСТКОВА ОПЛАТА --- */
 .widget-partial {
   background: #fffbeb; /* Світло-жовтий */
   color: #b45309;      /* Помаранчевий */
