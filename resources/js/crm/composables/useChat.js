@@ -90,12 +90,22 @@ export function useChat() {
     if (!customerId) return;
     isSyncing.value = true;
     try {
-      await axios.post(`/api/chat/${customerId}/sync`);
+      const { data } = await axios.post(`/api/chat/${customerId}/sync`);
       await selectChat(customerId);
       await fetchConversations();
+      return {
+        success: true,
+        message: data?.message || 'Синхронізація виконана',
+      };
     } catch (e) {
       console.error('Помилка синхронізації:', e);
-      alert('Не вдалося синхронізувати. Перевірте, чи є активний діалог.');
+      return {
+        success: false,
+        message:
+          e.response?.data?.message ||
+          e.response?.data?.error ||
+          'Не вдалося синхронізувати. Перевірте, чи є активний діалог.',
+      };
     } finally {
       isSyncing.value = false;
     }

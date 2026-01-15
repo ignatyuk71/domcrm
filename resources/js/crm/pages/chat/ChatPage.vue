@@ -31,6 +31,12 @@
         <ChatCustomerProfile :chat="activeChat" />
       </template>
     </ChatLayout>
+
+    <Transition name="toast">
+      <div v-if="toastMessage" class="toast-notification" :class="toastType">
+        {{ toastMessage }}
+      </div>
+    </Transition>
   </section>
 </template>
 
@@ -44,6 +50,8 @@ import { useChat } from '@/crm/composables/useChat';
 
 const search = ref('');
 const activeTab = ref('all');
+const toastMessage = ref('');
+const toastType = ref('toast-success');
 const tabs = [
   { value: 'all', label: 'Всі' },
   { value: 'messenger', label: 'Messenger' },
@@ -88,7 +96,14 @@ function handleSend(text) {
 
 function handleSync() {
   if (!activeChat.value) return;
-  syncHistory(activeChat.value.customer_id);
+  syncHistory(activeChat.value.customer_id).then((result) => {
+    if (!result) return;
+    toastType.value = result.success ? 'toast-success' : 'toast-error';
+    toastMessage.value = result.message;
+    setTimeout(() => {
+      toastMessage.value = '';
+    }, 3000);
+  });
 }
 
 onMounted(fetchConversations);
