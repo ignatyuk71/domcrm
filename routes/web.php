@@ -160,6 +160,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/api/chat/list', [ChatApiController::class, 'list'])->name('chat.list');
     Route::get('/api/chat/{id}/messages', [ChatApiController::class, 'messages'])->name('chat.messages.api');
     Route::post('/api/chat/send', [ChatApiController::class, 'send'])->name('chat.send');
+    Route::post('/api/chat/{id}/sync', [ChatApiController::class, 'sync'])->name('chat.sync');
 
     // --- НОВА ПОШТА (Nova Poshta довідники) ---
     Route::controller(NovaPoshtaController::class)->prefix('nova-poshta')->name('novaPoshta.')->group(function () {

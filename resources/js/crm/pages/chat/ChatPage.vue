@@ -20,9 +20,11 @@
           :active-chat="activeChat"
           :messages="messages"
           :sending="isSending"
+          :is-syncing="isSyncing"
           :title="activeChat?.customer_name"
           :subtitle="activeChat?.last_message_time"
           @send="handleSend"
+          @sync="handleSync"
         />
       </template>
       <template #profile>
@@ -55,10 +57,12 @@ const {
   messages,
   isSending,
   hasMore,
+  isSyncing,
   fetchConversations,
   loadMore,
   selectChat,
   sendMessage,
+  syncHistory,
 } = useChat();
 
 const filteredConversations = computed(() => {
@@ -80,6 +84,11 @@ function handleSend(text) {
     customer_id: activeChat.value.customer_id,
     message: text,
   });
+}
+
+function handleSync() {
+  if (!activeChat.value) return;
+  syncHistory(activeChat.value.customer_id);
 }
 
 onMounted(fetchConversations);

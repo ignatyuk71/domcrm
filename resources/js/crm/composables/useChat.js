@@ -1,4 +1,5 @@
 import { computed, ref } from 'vue';
+import axios from 'axios';
 import { getConversations, getMessages, sendMessage as apiSendMessage } from '@/crm/services/chatApi';
 
 export function useChat() {
@@ -10,6 +11,7 @@ export function useChat() {
   const error = ref('');
   const page = ref(1);
   const hasMore = ref(false);
+  const isSyncing = ref(false);
 
   const activeChat = computed(() =>
     conversations.value.find((chat) => chat.customer_id === activeChatId.value) || null
@@ -84,6 +86,21 @@ export function useChat() {
     }
   }
 
+  async function syncHistory(customerId) {
+    if (!customerId) return;
+    isSyncing.value = true;
+    try {
+      await axios.post(`/api/chat/${customerId}/sync`);
+      await selectChat(customerId);
+      await fetchConversations();
+    } catch (e) {
+      console.error('Помилка синхронізації:', e);
+      alert('Не вдалося синхронізувати. Перевірте, чи є активний діалог.');
+    } finally {
+      isSyncing.value = false;
+    }
+  }
+
   return {
     conversations,
     activeChatId,
@@ -94,9 +111,11 @@ export function useChat() {
     error,
     page,
     hasMore,
+    isSyncing,
     fetchConversations,
     loadMore,
     selectChat,
     sendMessage,
+    syncHistory,
   };
 }

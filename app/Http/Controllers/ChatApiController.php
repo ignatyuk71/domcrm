@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Customer;
 use App\Models\FacebookMessage;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -125,6 +126,101 @@ class ChatApiController extends Controller
                 'created_at' => $message->created_at?->toDateTimeString(),
                 'attachments' => $message->attachments ?? [],
             ],
+        ]);
+    }
+
+    /**
+     * Синхронізація історії повідомлень з Facebook/Instagram.
+     */
+    public function sync($customerId)
+    {
+        $customer = Customer::findOrFail($customerId);
+
+        $settings = DB::table('facebook_settings')->first();
+        if (!$settings || !$settings->access_token) {
+            return response()->json(['error' => 'Токен Meta не налаштовано'], 500);
+        }
+
+        $targetId = $customer->instagram_user_id ?? $customer->fb_user_id;
+        if (!$targetId) {
+            return response()->json(['error' => 'Клієнт не прив\'язаний до FB/Instagram'], 400);
+        }
+
+        $accessToken = $settings->access_token;
+        $platformParam = $customer->instagram_user_id ? 'instagram' : 'messenger';
+        $conversationsUrl = 'https://graph.facebook.com/v19.0/me/conversations';
+
+        $response = Http::withToken($accessToken)->get($conversationsUrl, [
+            'platform' => $platformParam,
+            'fields' => 'participants,updated_time',
+            'limit' => 20,
+        ]);
+
+        if ($response->failed()) {
+            return response()->json(['error' => 'Meta API Error', 'details' => $response->json()], 500);
+        }
+
+        $conversations = $response->json()['data'] ?? [];
+        $threadId = null;
+
+        foreach ($conversations as $convo) {
+            $participants = $convo['participants']['data'] ?? [];
+            foreach ($participants as $participant) {
+                if ($participant['id'] == $targetId) {
+                    $threadId = $convo['id'];
+                    break 2;
+                }
+            }
+        }
+
+        if (!$threadId) {
+            return response()->json(['message' => 'Активний діалог не знайдено в останніх 20-ти. Напишіть клієнту першим.'], 404);
+        }
+
+        $msgsUrl = "https://graph.facebook.com/v19.0/{$threadId}/messages";
+        $msgsResponse = Http::withToken($accessToken)->get($msgsUrl, [
+            'fields' => 'message,created_time,from,attachments,id',
+            'limit' => 50,
+        ]);
+
+        if ($msgsResponse->failed()) {
+            return response()->json(['error' => 'Meta API Error', 'details' => $msgsResponse->json()], 500);
+        }
+
+        $remoteMessages = $msgsResponse->json()['data'] ?? [];
+        $addedCount = 0;
+
+        foreach (array_reverse($remoteMessages) as $msgData) {
+            $mid = $msgData['id'] ?? null;
+            if (!$mid) {
+                continue;
+            }
+
+            if (FacebookMessage::where('mid', $mid)->exists()) {
+                continue;
+            }
+
+            $isFromCustomer = isset($msgData['from']['id']) && $msgData['from']['id'] == $targetId;
+
+            FacebookMessage::create([
+                'customer_id' => $customer->id,
+                'mid' => $mid,
+                'text' => $msgData['message'] ?? '',
+                'attachments' => $msgData['attachments']['data'] ?? null,
+                'is_from_customer' => $isFromCustomer,
+                'platform' => $platformParam,
+                'is_private' => true,
+                'created_at' => Carbon::parse($msgData['created_time']),
+                'updated_at' => Carbon::parse($msgData['created_time']),
+            ]);
+
+            $addedCount++;
+        }
+
+        return response()->json([
+            'success' => true,
+            'added' => $addedCount,
+            'message' => "Синхронізовано {$addedCount} повідомлень",
         ]);
     }
 }

@@ -5,6 +5,16 @@
         <span>{{ title || 'Оберіть клієнта' }}</span>
         <span v-if="subtitle" class="chat-thread-subtitle">{{ subtitle }}</span>
       </div>
+
+      <button
+        v-if="title"
+        class="btn-sync"
+        @click="$emit('sync')"
+        :disabled="sending || isSyncing"
+        title="Оновити історію з Facebook/Instagram"
+      >
+        <i class="bi" :class="isSyncing ? 'bi-arrow-repeat spin' : 'bi-cloud-download'"></i>
+      </button>
     </div>
 
     <div class="chat-thread-body custom-scrollbar" ref="messagesContainer">
@@ -43,11 +53,12 @@ const props = defineProps({
   activeChat: { type: Object, default: null },
   messages: { type: Array, default: () => [] },
   sending: { type: Boolean, default: false },
+  isSyncing: { type: Boolean, default: false },
   title: { type: String, default: '' },
   subtitle: { type: String, default: '' },
 });
 
-defineEmits(['send']);
+defineEmits(['send', 'sync']);
 
 // --- Логіка Скролу ---
 const messagesContainer = ref(null);
@@ -104,6 +115,10 @@ function closeLightbox() {
   border-bottom: 1px solid #e2e8f0;
   background: #fff;
   z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .chat-thread-title {
@@ -119,6 +134,41 @@ function closeLightbox() {
   font-size: 0.8rem;
   color: #94a3b8;
   font-weight: 400;
+}
+
+.btn-sync {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-sync:hover {
+  background: #f1f5f9;
+  color: #3b82f6;
+  border-color: #cbd5e1;
+}
+
+.btn-sync:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .chat-thread-body {
