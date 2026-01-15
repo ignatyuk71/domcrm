@@ -306,7 +306,8 @@ function handleSearch() {
 
 function isStatusActive(val) {
   if (!val) return !filters.statuses.length;
-  return filters.statuses.includes(val);
+  const values = Array.isArray(val) ? val : [val];
+  return values.some((item) => filters.statuses.includes(item));
 }
 
 function toggleStatus(value) {
@@ -314,8 +315,13 @@ function toggleStatus(value) {
     filters.statuses = [];
   } else {
     const next = new Set(filters.statuses);
-    if (next.has(value)) next.delete(value);
-    else next.add(value);
+    const values = Array.isArray(value) ? value : [value];
+    const allSelected = values.every((item) => next.has(item));
+    if (allSelected) {
+      values.forEach((item) => next.delete(item));
+    } else {
+      values.forEach((item) => next.add(item));
+    }
     filters.statuses = Array.from(next);
   }
   filters.page = 1;
@@ -428,16 +434,23 @@ async function loadStatuses() {
       'Успішно завершено',
       'Повернення',
     ]);
+    const primaryStatuses = statuses.value.filter((st) => primaryStatusNames.has(st.name));
+    const groupedByName = new Map();
+    for (const status of primaryStatuses) {
+      if (!groupedByName.has(status.name)) groupedByName.set(status.name, []);
+      groupedByName.get(status.name).push(status);
+    }
     statusChips.value = [
       { value: '', label: 'Всі', icon: 'bi-grid', color: null },
-      ...statuses.value
-        .filter((st) => primaryStatusNames.has(st.name))
-        .map((st) => ({
-          value: st.code,
-          label: st.name,
-          icon: st.icon,
-          color: st.color,
-        })),
+      ...Array.from(groupedByName.entries()).map(([name, statusesGroup]) => {
+        const base = statusesGroup[0];
+        return {
+          value: statusesGroup.map((st) => st.code),
+          label: name,
+          icon: base.icon,
+          color: base.color,
+        };
+      }),
     ];
   } catch (e) {
     console.error('Не вдалося завантажити статуси', e);
