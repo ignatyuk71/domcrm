@@ -60,7 +60,6 @@ const props = defineProps({
 
 defineEmits(['send', 'sync']);
 
-// --- Логіка Скролу ---
 const messagesContainer = ref(null);
 const scrollAnchor = ref(null);
 
@@ -71,41 +70,26 @@ function scrollToBottom(smooth = true) {
         top: messagesContainer.value.scrollHeight,
         behavior: smooth ? 'smooth' : 'auto',
       });
-    } else if (scrollAnchor.value) {
-      scrollAnchor.value.scrollIntoView({
-        behavior: smooth ? 'smooth' : 'auto',
-        block: 'end',
-      });
     }
   });
 }
 
-// Скролимо вниз, коли змінюється список повідомлень
 watch(() => props.messages, (newVal, oldVal) => {
-  // Якщо це перше завантаження чату - миттєво вниз
   const isFirstLoad = !oldVal || oldVal.length === 0;
   scrollToBottom(!isFirstLoad);
 }, { deep: true });
 
-// Скролимо вниз, коли змінюється чат
 watch(() => props.activeChat, () => {
-  scrollToBottom(false); // Миттєво, без анімації
+  scrollToBottom(false);
 });
 
 onMounted(() => {
   scrollToBottom(false);
 });
 
-// --- Логіка Лайтбоксу (Zoom) ---
 const lightboxImage = ref(null);
-
-function openLightbox(url) {
-  lightboxImage.value = url;
-}
-
-function closeLightbox() {
-  lightboxImage.value = null;
-}
+function openLightbox(url) { lightboxImage.value = url; }
+function closeLightbox() { lightboxImage.value = null; }
 </script>
 
 <style scoped>
@@ -114,7 +98,7 @@ function closeLightbox() {
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  position: relative; /* Для лайтбоксу */
+  position: relative;
   overflow: hidden;
   background: #fff;
   border-radius: 16px;
@@ -146,6 +130,51 @@ function closeLightbox() {
   font-weight: 400;
 }
 
+/* --- ТІЛО ЧАТУ ТА СКРОЛ --- */
+.chat-thread-body {
+  flex: 1;
+  min-height: 0;
+  padding: 20px;
+  overflow-y: scroll; /* Примусово показуємо зону скролу */
+  background-color: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  
+  /* Для Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f1f5f9;
+}
+
+.chat-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  justify-content: flex-end;
+  min-height: 100%;
+}
+
+/* --- СТИЛІЗАЦІЯ ПОЛОСКИ (Webkit) --- */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px; /* Ширина полоски */
+  display: block;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #f1f5f9; /* Колір доріжки */
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1; /* Колір самого повзунка */
+  border-radius: 20px;
+  border: 2px solid #f1f5f9; /* Відступ */
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8; /* Колір при наведенні */
+}
+
+/* Решта стилів залишається без змін */
 .btn-sync {
   width: 36px;
   height: 36px;
@@ -160,127 +189,26 @@ function closeLightbox() {
   transition: all 0.2s;
 }
 
-.btn-sync:hover {
-  background: #f1f5f9;
-  color: #3b82f6;
-  border-color: #cbd5e1;
-}
+.btn-sync:hover { background: #f1f5f9; color: #3b82f6; border-color: #cbd5e1; }
+.btn-sync:disabled { opacity: 0.7; cursor: not-allowed; }
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { 100% { transform: rotate(360deg); } }
 
-.btn-sync:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
+.message-list-enter-active, .message-list-leave-active { transition: all 0.4s ease; }
+.message-list-enter-from { opacity: 0; transform: translateY(20px); }
+.message-list-leave-to { opacity: 0; transform: scale(0.9); }
 
-.spin {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  100% {
-    transform: rotate(360deg);
-  }
-}
-
-.chat-thread-body {
-  flex: 1;
-  min-height: 0;
-  padding: 20px;
-  overflow-y: auto;
-  background-color: #f8fafc; /* Легкий фон для тіла чату */
-  display: flex;
-  flex-direction: column;
-}
-
-.chat-messages {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  /* flex: 1; */
-  justify-content: flex-end; /* Повідомлення притискаються до низу, якщо їх мало */
-  min-height: 100%;
-}
-
-/* --- Стилізація Скролбару --- */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: #cbd5e1;
-  border-radius: 10px;
-}
-
-/* --- АНІМАЦІЇ ПОВІДОМЛЕНЬ (Vue Transitions) --- */
-.message-list-enter-active,
-.message-list-leave-active {
-  transition: all 0.4s ease;
-}
-
-.message-list-enter-from {
-  opacity: 0;
-  transform: translateY(20px); /* Виїжджає знизу */
-}
-
-.message-list-leave-to {
-  opacity: 0;
-  transform: scale(0.9);
-}
-
-/* --- ЛАЙТБОКС (ZOOM) --- */
 .lightbox-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.85);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-  backdrop-filter: blur(5px); /* Блюр фону */
-  cursor: zoom-out;
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0, 0, 0, 0.85); display: flex; align-items: center;
+  justify-content: center; z-index: 100; backdrop-filter: blur(5px); cursor: zoom-out;
 }
-
-.lightbox-img {
-  max-width: 90%;
-  max-height: 90%;
-  border-radius: 8px;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-  cursor: default;
-}
-
+.lightbox-img { max-width: 90%; max-height: 90%; border-radius: 8px; }
 .lightbox-close {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  background: rgba(255, 255, 255, 0.2);
-  border: none;
-  color: #fff;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background 0.2s;
+  position: absolute; top: 20px; right: 20px; background: rgba(255, 255, 255, 0.2);
+  border: none; color: #fff; width: 40px; height: 40px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
 }
-
-.lightbox-close:hover {
-  background: rgba(255, 255, 255, 0.4);
-}
-
-/* Анімація лайтбоксу */
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.3s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
+.fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
 </style>
