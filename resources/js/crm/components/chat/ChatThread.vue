@@ -45,7 +45,7 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick, onUpdated } from 'vue';
+import { ref, watch, nextTick, onMounted } from 'vue';
 import ChatMessage from './ChatMessage.vue';
 import ChatComposer from './ChatComposer.vue';
 
@@ -66,7 +66,12 @@ const scrollAnchor = ref(null);
 
 function scrollToBottom(smooth = true) {
   nextTick(() => {
-    if (scrollAnchor.value) {
+    if (messagesContainer.value) {
+      messagesContainer.value.scrollTo({
+        top: messagesContainer.value.scrollHeight,
+        behavior: smooth ? 'smooth' : 'auto',
+      });
+    } else if (scrollAnchor.value) {
       scrollAnchor.value.scrollIntoView({
         behavior: smooth ? 'smooth' : 'auto',
         block: 'end',
@@ -85,6 +90,10 @@ watch(() => props.messages, (newVal, oldVal) => {
 // Скролимо вниз, коли змінюється чат
 watch(() => props.activeChat, () => {
   scrollToBottom(false); // Миттєво, без анімації
+});
+
+onMounted(() => {
+  scrollToBottom(false);
 });
 
 // --- Логіка Лайтбоксу (Zoom) ---
