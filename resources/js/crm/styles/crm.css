@@ -164,10 +164,37 @@
 
 .chat-thread-body {
   flex: 1;
-  padding: 16px;
+  min-height: 0;
+  height: 100%;
+  padding: 20px;
   overflow-y: auto;
-  max-height: 100%;
+  overflow-x: hidden;
+  background-color: #f8fafc;
   scrollbar-gutter: stable;
+}
+
+.chat-thread-inner {
+  height: calc(100vh - 160px);
+  overflow: hidden;
+}
+
+.chat-thread-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.chat-thread-body::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 10px;
+}
+
+.chat-thread-body::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+  border: 2px solid #f1f5f9;
+}
+
+.chat-thread-body::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 .chat-messages {
