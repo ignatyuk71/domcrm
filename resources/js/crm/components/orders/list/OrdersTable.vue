@@ -906,6 +906,10 @@
    ========================================= */
 
 @media (max-width: 991px) {
+  .orders-container {
+    padding: 10px;
+  }
+
   .orders-table thead {
     display: none;
   }
@@ -1015,11 +1019,12 @@
   .details-wrapper {
     margin-bottom: 12px;
     border-radius: 0 0 12px 12px;
-    border: 1px solid #e2e8f0;
-    border-top: none;
-    background: #fff;
+    border: none;
+    background: #f1f5f9;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
     overflow: hidden;
+    padding-left: 10px;
+    padding-right: 10px;
   }
 }
 </style>
