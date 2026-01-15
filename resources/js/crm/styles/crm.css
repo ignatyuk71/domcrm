@@ -21,6 +21,7 @@
   min-height: 560px;
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
 .chat-sidebar-inner {
@@ -165,6 +166,8 @@
   flex: 1;
   padding: 16px;
   overflow-y: auto;
+  max-height: 100%;
+  scrollbar-gutter: stable;
 }
 
 .chat-messages {
