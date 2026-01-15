@@ -419,14 +419,25 @@ async function loadStatuses() {
     const { data } = await fetchStatuses({ type: 'order' });
     const list = data?.data || data || [];
     statuses.value = Array.isArray(list) ? list : [];
+    const primaryStatusNames = new Set([
+      'Новий',
+      'В обробці',
+      'Підтверджено (на склад)',
+      'Упакування (ТТН)',
+      'Відправлено',
+      'Успішно завершено',
+      'Повернення',
+    ]);
     statusChips.value = [
       { value: '', label: 'Всі', icon: 'bi-grid', color: null },
-      ...statuses.value.map((st) => ({
-        value: st.code,
-        label: st.name,
-        icon: st.icon,
-        color: st.color,
-      })),
+      ...statuses.value
+        .filter((st) => primaryStatusNames.has(st.name))
+        .map((st) => ({
+          value: st.code,
+          label: st.name,
+          icon: st.icon,
+          color: st.color,
+        })),
     ];
   } catch (e) {
     console.error('Не вдалося завантажити статуси', e);
