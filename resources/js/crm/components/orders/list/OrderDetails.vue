@@ -286,7 +286,7 @@
                       @click.stop="$emit('cancel-ttn')"
                       :disabled="order.loadingTtn"
                     >
-                      <i class="bi bi-trash"></i> Вид.
+                      <i class="bi bi-trash"></i> Видалити
                     </button>
                   </div>
                 </template>
