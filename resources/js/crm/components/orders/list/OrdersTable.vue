@@ -39,7 +39,6 @@
 </script>
 
 <template>
-  <!-- Стан завантаження -->
   <div
     v-if="loading && !orders.length"
     class="d-flex flex-column align-items-center justify-content-center p-5 text-muted"
@@ -48,7 +47,6 @@
     <div class="fw-medium">Завантаження даних...</div>
   </div>
 
-  <!-- Порожній стан -->
   <div v-else-if="!orders.length" class="empty-state p-5 text-center">
     <div class="empty-icon mb-3">
       <i class="bi bi-inbox"></i>
@@ -57,7 +55,6 @@
     <p class="text-secondary mb-0">Замовлень поки немає. Спробуйте змінити фільтри.</p>
   </div>
 
-  <!-- Таблиця -->
   <div v-else class="orders-container">
     <div class="table-responsive-wrapper">
       <table class="table align-middle orders-table mb-0">
@@ -83,7 +80,6 @@
               :class="{ 'row-expanded': expandedRows.has(order.id) }"
               @click="$emit('toggle-row', order.id)"
             >
-              <!-- 1. Розгортання -->
               <td class="text-center ps-3 cell-expand">
                 <button
                   class="btn-expand"
@@ -94,12 +90,10 @@
                 </button>
               </td>
 
-              <!-- 2. ID -->
               <td class="cell-id">
                 <span class="order-id">#{{ order.id }}</span>
               </td>
 
-              <!-- 3. Клієнт -->
               <td class="cell-client">
                 <div
                   class="d-flex flex-column justify-content-center mobile-align-start"
@@ -145,7 +139,6 @@
                 </div>
               </td>
 
-              <!-- 4. Теги -->
               <td class="cell-tags">
                 <div class="tags-wrapper">
                   <span
@@ -161,12 +154,10 @@
                 </div>
               </td>
 
-              <!-- 5. Телефон -->
               <td class="cell-phone">
                 <span class="phone-text">{{ order.phone }}</span>
               </td>
 
-              <!-- 6. Статус -->
               <td class="cell-status">
                 <div
                   class="status-badge"
@@ -178,7 +169,6 @@
                 </div>
               </td>
 
-              <!-- 7. Товари -->
               <td class="cell-products">
                 <div class="product-stack hover-fan">
                   <div
@@ -196,17 +186,41 @@
                 </div>
               </td>
 
-              <!-- 8. СУМА (GLASS WIDGET) -->
               <td class="text-end pe-3 cell-fiscal">
+                
                 <a
                   v-if="
+                    order.latestFiscalReceipt?.status === 'success' &&
+                    order.latestFiscalReceipt?.type === 'sell' &&
+                    order.prepay_amount > 0 &&
+                    order.prepay_amount < order.total
+                  "
+                  :href="order.latestFiscalReceipt?.check_link"
+                  target="_blank"
+                  class="fiscal-widget widget-partial text-decoration-none"
+                  title="Чек на передплату"
+                  @click.stop
+                >
+                  <div class="d-flex align-items-center justify-content-between w-100 gap-2">
+                    <span class="widget-price">
+                      {{ formatCurrency(order.prepay_amount, order.currency) }}
+                    </span>
+                    <div class="widget-icon-box">
+                      <i class="bi bi-pie-chart-fill" style="font-size: 0.65rem;"></i>
+                    </div>
+                  </div>
+                  <div class="widget-label">Частково</div>
+                </a>
+
+                <a
+                  v-else-if="
                     order.latestFiscalReceipt?.status === 'success' &&
                     order.latestFiscalReceipt?.type === 'sell'
                   "
                   :href="order.latestFiscalReceipt?.check_link"
                   target="_blank"
                   class="fiscal-widget widget-success glass-effect text-decoration-none"
-                  title="Відкрити фіскальний чек у новій вкладці"
+                  title="Фіскалізовано повністю"
                   @click.stop
                 >
                   <div class="d-flex align-items-center justify-content-between w-100 gap-2">
@@ -214,7 +228,7 @@
                       {{ formatCurrency(order.total, order.currency) }}
                     </span>
                     <div class="widget-icon-box">
-                      <i class="bi bi-box-arrow-up-right" style="font-size: 0.65rem;"></i>
+                      <i class="bi bi-check-lg" style="font-size: 0.75rem;"></i>
                     </div>
                   </div>
                   <div class="widget-label">Фіскалізовано</div>
@@ -264,7 +278,6 @@
                 </div>
               </td>
 
-              <!-- 9. ДОСТАВКА (SMART WIDGET) -->
               <td class="cell-delivery">
                 <div v-if="order.ttn" class="delivery-widget">
                   <div class="d-flex align-items-center gap-2 mb-1">
@@ -308,12 +321,10 @@
                 </div>
               </td>
 
-              <!-- 10. Дата -->
               <td class="cell-date">
                 <span class="date-text">{{ formatDate(order.created_at) }}</span>
               </td>
 
-              <!-- 11. Меню -->
               <td class="text-end pe-3 cell-actions">
                 <div class="dropdown" @click.stop>
                   <button class="btn-action" data-bs-toggle="dropdown">
@@ -347,7 +358,6 @@
               </td>
             </tr>
 
-            <!-- Розгорнутий рядок з деталями -->
             <tr v-if="expandedRows.has(order.id)" class="details-row">
               <td colspan="11" class="p-0 border-0">
                 <div class="details-wrapper">
@@ -469,6 +479,22 @@
 .widget-return:hover {
   background: #fef3c7;
 }
+
+/* --- НОВИЙ СТИЛЬ: ЧАСТКОВА ОПЛАТА --- */
+.widget-partial {
+  background: #fffbeb; /* Світло-жовтий */
+  color: #b45309;      /* Помаранчевий */
+  border: 1px solid #fcd34d;
+}
+.widget-partial:hover {
+  background: #fef3c7;
+  box-shadow: 0 4px 12px rgba(251, 191, 36, 0.15);
+}
+.widget-partial .widget-icon-box {
+  background: rgba(255, 255, 255, 0.6);
+  color: #b45309;
+}
+
 .widget-empty {
   background: #ffffff;
   color: #64748b;
