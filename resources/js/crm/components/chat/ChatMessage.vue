@@ -45,12 +45,15 @@ const props = defineProps({
   isMine: { type: Boolean, default: false },
 });
 
+// Визначаємо подію, яку будемо посилати нагору
+const emit = defineEmits(['image-click']);
+
 // Перевіряємо, чи є вкладення
 const hasAttachments = computed(() => {
   return props.message.attachments && Array.isArray(props.message.attachments) && props.message.attachments.length > 0;
 });
 
-// Нормалізація даних вкладень (Facebook може слати різну структуру)
+// Нормалізація даних вкладень
 const normalizedAttachments = computed(() => {
   if (!hasAttachments.value) return [];
   
@@ -60,17 +63,19 @@ const normalizedAttachments = computed(() => {
       return { type: 'image', url: att };
     }
     
-    // Якщо прийшов об'єкт Facebook (payload.url)
+    // Якщо прийшов об'єкт Facebook
     const url = att.payload?.url || att.url;
-    const type = att.type || (url?.match(/\.(jpeg|jpg|gif|png)$/) != null ? 'image' : 'file');
+    // Проста перевірка на розширення картинки
+    const type = att.type || (url?.match(/\.(jpeg|jpg|gif|png|webp)$/i) != null ? 'image' : 'file');
     
     return { type, url };
   });
 });
 
-// Функція для відкриття зображення (можна підключити лайтбокс пізніше)
+// Функція кліку по картинці
 function openImage(url) {
-  window.open(url, '_blank');
+  // Замість відкриття вкладки, емітимо подію для Лайтбоксу
+  emit('image-click', url);
 }
 </script>
 
@@ -83,33 +88,36 @@ function openImage(url) {
   gap: 4px;
   max-width: 75%;
   margin-bottom: 12px;
+  /* Анімація появи (якщо раптом TransitionGroup не спрацює) */
+  transition: transform 0.2s; 
 }
 
 .chat-message.mine {
   align-items: flex-end;
-  align-self: flex-end; /* Щоб притискало вправо у флекс-контейнері */
+  align-self: flex-end;
 }
 
 /* Бульбашка (фон) */
 .chat-message-bubble {
-  background: #f1f5f9; /* Сірий для вхідних */
+  background: #f1f5f9;
   border-radius: 18px;
   padding: 12px 16px;
   color: #1e293b;
   position: relative;
-  border-bottom-left-radius: 4px; /* "Хвостик" зліва */
+  border-bottom-left-radius: 4px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05); /* Легка тінь */
 }
 
 .chat-message.mine .chat-message-bubble {
-  background: #3b82f6; /* Синій для своїх */
+  background: #3b82f6;
   color: #fff;
   border-bottom-left-radius: 18px;
-  border-bottom-right-radius: 4px; /* "Хвостик" справа */
+  border-bottom-right-radius: 4px;
 }
 
 /* Стилі тексту */
 .message-text {
-  white-space: pre-wrap; /* Зберігає переноси рядків */
+  white-space: pre-wrap;
   word-wrap: break-word;
   line-height: 1.5;
 }
@@ -122,12 +130,11 @@ function openImage(url) {
   margin-bottom: 8px;
 }
 
-/* Якщо картинок декілька, робимо сітку */
 .attachment-img-wrapper {
   max-width: 100%;
   border-radius: 12px;
   overflow: hidden;
-  cursor: pointer;
+  cursor: zoom-in; /* Показуємо, що можна збільшити */
 }
 
 .message-attachments img {
@@ -136,11 +143,12 @@ function openImage(url) {
   max-height: 300px;
   object-fit: cover;
   border-radius: 12px;
-  transition: opacity 0.2s;
+  transition: transform 0.2s, opacity 0.2s;
 }
 
 .message-attachments img:hover {
-  opacity: 0.9;
+  opacity: 0.95;
+  transform: scale(1.02); /* Легкий ефект при наведенні */
 }
 
 /* Стиль для файлів */
@@ -155,11 +163,20 @@ function openImage(url) {
   color: inherit;
   font-size: 0.9rem;
   font-weight: 500;
+  transition: background 0.2s;
+}
+
+.attachment-file:hover {
+  background: rgba(0,0,0,0.1);
 }
 
 .chat-message.mine .attachment-file {
   background: rgba(255,255,255,0.2);
   color: #fff;
+}
+
+.chat-message.mine .attachment-file:hover {
+  background: rgba(255,255,255,0.3);
 }
 
 /* Час */
