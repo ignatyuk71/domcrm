@@ -222,7 +222,7 @@
 
         <a href="{{ url('/orders/create') }}" class="sidebar-link">
             <span class="icon-frame"><i class="bi bi-plus-square-fill"></i></span>
-            <span class="item-text">Створити ТТН</span>
+            <span class="item-text">Створити Замовлення</span>
         </a>
 
         <div class="nav-divider">Склад</div>

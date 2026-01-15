@@ -42,7 +42,7 @@ defineEmits([
       
       <!-- 1. ORDER INFO -->
       <div class="col-12 col-md-6 col-xl-4">
-        <div class="clean-card h-100">
+        <div class="clean-card h-100 border-primary-subtle">
           <div class="card-header-simple">
             <span class="card-title">Замовлення</span>
             <span class="order-number font-monospace">#{{ order.order_number }}</span>
@@ -117,7 +117,7 @@ defineEmits([
 
       <!-- 2. CUSTOMER INFO -->
       <div class="col-12 col-md-6 col-xl-4">
-        <div class="clean-card h-100">
+        <div class="clean-card h-100 border-primary-subtle">
           <div class="card-header-simple mb-2 mb-md-3">
             <span class="card-title">Покупець</span>
             <button class="btn-icon-soft" title="Профіль клієнта">
