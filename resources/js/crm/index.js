@@ -5,6 +5,7 @@ import OrderEditPage from './pages/orders/OrderEditPage.vue';
 import OrderListPage from './pages/orders/OrderListPage.vue';
 import ProductListPage from './pages/products/ProductListPage.vue';
 import ProductFormPage from './pages/products/ProductFormPage.vue';
+import ChatPage from './pages/chat/ChatPage.vue';
 import './styles/crm.css';
 import PackingListPage from '../Pages/Packing/PackingList.vue';
 import PackingWorkspacePage from '../Pages/Packing/PackingWorkspace.vue';
@@ -79,6 +80,15 @@ export function mountPackingWorkspace(selector = '#packing-workspace') {
     return app;
 }
 
+export function mountChat(selector = '#crm-chat') {
+    const el = document.querySelector(selector);
+    if (!el) return;
+
+    const app = createApp(ChatPage);
+    app.mount(el);
+    return app;
+}
+
 // Auto-mount if element exists
 function autoMount() {
     mountOrderCreate();
@@ -88,6 +98,7 @@ function autoMount() {
     mountProductForm();
     mountPackingList();
     mountPackingWorkspace();
+    mountChat();
 }
 
 if (document.readyState !== 'loading') {

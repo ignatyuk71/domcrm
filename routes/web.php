@@ -12,6 +12,7 @@ use App\Http\Controllers\FiscalController;
 use App\Http\Controllers\PackingController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\MessageTemplateController;
+use App\Http\Controllers\ChatApiController;
 use App\Models\MessageTemplate;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -156,6 +157,9 @@ Route::middleware('auth')->group(function () {
     // --- ЧАТ ---
     Route::get('/chat', [ChatController::class, 'index'])->name('chat.index');
     Route::get('/chat/{id}', [ChatController::class, 'getMessages'])->name('chat.messages');
+    Route::get('/api/chat/list', [ChatApiController::class, 'list'])->name('chat.list');
+    Route::get('/api/chat/{id}/messages', [ChatApiController::class, 'messages'])->name('chat.messages.api');
+    Route::post('/api/chat/send', [ChatApiController::class, 'send'])->name('chat.send');
 
     // --- НОВА ПОШТА (Nova Poshta довідники) ---
     Route::controller(NovaPoshtaController::class)->prefix('nova-poshta')->name('novaPoshta.')->group(function () {
