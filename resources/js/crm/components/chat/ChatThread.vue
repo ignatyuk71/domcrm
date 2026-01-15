@@ -113,6 +113,7 @@ function closeLightbox() {
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-height: 0;
   position: relative; /* Для лайтбоксу */
   overflow: hidden;
   background: #fff;
@@ -182,6 +183,7 @@ function closeLightbox() {
 
 .chat-thread-body {
   flex: 1;
+  min-height: 0;
   padding: 20px;
   overflow-y: auto;
   background-color: #f8fafc; /* Легкий фон для тіла чату */
