@@ -8,23 +8,38 @@ export function useChat() {
   const isLoading = ref(false);
   const isSending = ref(false);
   const error = ref('');
+  const page = ref(1);
+  const hasMore = ref(false);
 
   const activeChat = computed(() =>
     conversations.value.find((chat) => chat.customer_id === activeChatId.value) || null
   );
 
-  async function fetchConversations() {
+  async function fetchConversations(nextPage = 1) {
     isLoading.value = true;
     error.value = '';
     try {
-      const { data } = await getConversations();
-      conversations.value = data?.data || data || [];
+      const { data } = await getConversations(nextPage);
+      const payload = data?.data || [];
+      if (nextPage === 1) {
+        conversations.value = payload;
+      } else {
+        conversations.value = [...conversations.value, ...payload];
+      }
+      page.value = data?.current_page || nextPage;
+      const lastPage = data?.last_page || page.value;
+      hasMore.value = page.value < lastPage;
     } catch (e) {
       console.error('Не вдалося завантажити список чатів', e);
       error.value = 'Не вдалося завантажити список чатів';
     } finally {
       isLoading.value = false;
     }
+  }
+
+  function loadMore() {
+    if (!hasMore.value || isLoading.value) return;
+    fetchConversations(page.value + 1);
   }
 
   async function selectChat(customerId) {
@@ -77,7 +92,10 @@ export function useChat() {
     isLoading,
     isSending,
     error,
+    page,
+    hasMore,
     fetchConversations,
+    loadMore,
     selectChat,
     sendMessage,
   };

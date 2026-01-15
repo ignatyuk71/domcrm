@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-export function getConversations() {
-  return axios.get('/api/chat/list');
+export function getConversations(page = 1) {
+  return axios.get('/api/chat/list', { params: { page } });
 }
 
 export function getMessages(customerId) {

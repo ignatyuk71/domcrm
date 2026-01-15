@@ -19,6 +19,14 @@
       <div v-if="!conversations.length" class="chat-sidebar-empty">
         Немає чатів
       </div>
+      <button
+        v-if="hasMore"
+        type="button"
+        class="chat-load-more"
+        @click="$emit('load-more')"
+      >
+        Завантажити ще...
+      </button>
     </div>
   </div>
 </template>
@@ -33,7 +41,8 @@ defineProps({
   search: { type: String, default: '' },
   tabs: { type: Array, default: () => [] },
   activeTab: { type: String, default: 'all' },
+  hasMore: { type: Boolean, default: false },
 });
 
-defineEmits(['select', 'update:search', 'change-tab']);
+defineEmits(['select', 'update:search', 'change-tab', 'load-more']);
 </script>

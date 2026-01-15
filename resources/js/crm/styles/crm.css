@@ -17,7 +17,8 @@
   background: #fff;
   border-radius: 16px;
   border: 1px solid #e2e8f0;
-  min-height: 70vh;
+  height: calc(100vh - 160px);
+  min-height: 560px;
   display: flex;
   flex-direction: column;
 }
@@ -79,6 +80,7 @@
   flex-direction: column;
   gap: 8px;
   overflow-y: auto;
+  flex: 1;
 }
 
 .chat-sidebar-item {
@@ -268,6 +270,15 @@
   padding: 20px 0;
 }
 
+.chat-load-more {
+  border: 1px dashed #cbd5e1;
+  background: #f8fafc;
+  color: #475569;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-weight: 600;
+}
+
 @media (max-width: 991px) {
   .chat-layout {
     grid-template-columns: 1fr;
@@ -275,5 +286,11 @@
 
   .chat-profile {
     display: none;
+  }
+
+  .chat-sidebar,
+  .chat-thread {
+    height: auto;
+    min-height: 0;
   }
 }

@@ -8,9 +8,11 @@
           :search="search"
           :tabs="tabs"
           :active-tab="activeTab"
+          :has-more="hasMore"
           @select="handleSelect"
           @update:search="search = $event"
           @change-tab="activeTab = $event"
+          @load-more="loadMore"
         />
       </template>
       <template #thread>
@@ -52,7 +54,9 @@ const {
   activeChat,
   messages,
   isSending,
+  hasMore,
   fetchConversations,
+  loadMore,
   selectChat,
   sendMessage,
 } = useChat();
