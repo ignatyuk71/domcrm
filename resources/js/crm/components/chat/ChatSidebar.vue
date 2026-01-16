@@ -8,7 +8,7 @@
       @change-tab="$emit('change-tab', $event)"
     />
 
-    <div class="chat-sidebar-list custom-scrollbar">
+    <div class="chat-sidebar-list custom-scrollbar" ref="sidebarList">
       <ChatSidebarItem
         v-for="chat in conversations"
         :key="chat.customer_id"
@@ -18,8 +18,10 @@
       />
 
       <div v-if="!conversations.length" class="chat-sidebar-empty">
-        <i class="bi bi-chat-square-text"></i>
-        <span>Чатів не знайдено</span>
+        <div class="empty-icon-wrapper">
+          <i class="bi bi-chat-left-text"></i>
+        </div>
+        <p>Чатів не знайдено</p>
       </div>
 
       <button
@@ -28,16 +30,17 @@
         class="chat-load-more"
         @click="$emit('load-more')"
       >
-        <i class="bi bi-arrow-clockwise"></i>
-        <span>Завантажити ще...</span>
+        <i class="bi bi-plus-circle"></i>
+        <span>Показати більше</span>
       </button>
       
-      <div class="pb-2"></div>
+      <div class="pb-3"></div>
     </div>
   </div>
 </template>
 
 <script setup>
+import { ref } from 'vue';
 import ChatFilters from './ChatFilters.vue';
 import ChatSidebarItem from './ChatSidebarItem.vue';
 
@@ -51,32 +54,37 @@ defineProps({
 });
 
 defineEmits(['select', 'update:search', 'change-tab', 'load-more']);
+
+const sidebarList = ref(null);
 </script>
 
 <style scoped>
-/* Головний контейнер сайдбару */
 .chat-sidebar-inner {
   display: flex;
   flex-direction: column;
   height: 100%;
-  overflow: hidden; /* Ховаємо скрол контейнера */
+  overflow: hidden;
   background: #fff;
-  border-radius: 16px; /* Закруглення всього блоку */
 }
 
-/* Область списку, яка скролиться */
+/* Область списку з полоскою прокрутки */
 .chat-sidebar-list {
-  flex: 1; /* Займає всю доступну висоту */
-  overflow-y: auto; /* Вертикальний скрол */
+  flex: 1;
+  overflow-y: scroll; /* Примусово резервуємо місце під скролбар */
   padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 8px; /* Відступ між картками */
+  gap: 4px;
+  background: #fff;
+  
+  /* Для Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
 }
 
-/* --- Стилізація скролбару (Webkit) --- */
+/* --- СТИЛІЗАЦІЯ ПОЛОСКИ СКРОЛУ (Webkit) --- */
 .custom-scrollbar::-webkit-scrollbar {
-  width: 5px; /* Тонкий скрол */
+  width: 6px; /* Тонка, але помітна полоска */
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
@@ -84,57 +92,59 @@ defineEmits(['select', 'update:search', 'change-tab', 'load-more']);
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: #cbd5e1; /* Світло-сірий */
-  border-radius: 4px;
+  background-color: #e2e8f0; /* Світлий колір, щоб не відволікати */
+  border-radius: 20px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background-color: #94a3b8; /* Темніший при наведенні */
+  background-color: #cbd5e1; /* Темніша при наведенні */
 }
 
-/* --- Порожній стан --- */
+/* Порожній стан */
 .chat-sidebar-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 40px 20px;
+  padding: 60px 20px;
   color: #94a3b8;
-  gap: 10px;
-  text-align: center;
 }
 
-.chat-sidebar-empty i {
-  font-size: 2rem;
-  opacity: 0.5;
+.empty-icon-wrapper {
+  font-size: 2.5rem;
+  margin-bottom: 12px;
+  opacity: 0.3;
 }
 
-/* --- Кнопка "Завантажити ще" --- */
+.chat-sidebar-empty p {
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+/* Кнопка "Завантажити ще" */
 .chat-load-more {
   width: 100%;
-  padding: 12px;
-  margin-top: 8px;
-  border: 1px dashed #cbd5e1; /* Пунктирна рамка */
+  padding: 10px;
+  margin-top: 12px;
+  border: 1px solid #e2e8f0;
   background: #f8fafc;
   color: #64748b;
   border-radius: 10px;
-  font-size: 0.85rem;
-  font-weight: 500;
-  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  transition: all 0.2s ease;
+  transition: all 0.2s;
 }
 
 .chat-load-more:hover {
-  background: #eff6ff;
+  background: #fff;
   border-color: #3b82f6;
   color: #3b82f6;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
 }
 
-.chat-load-more:active {
-  transform: scale(0.98);
-}
+.pb-3 { padding-bottom: 1rem; }
 </style>

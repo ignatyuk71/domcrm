@@ -29,9 +29,9 @@
     </div>
 
     <div class="chat-message-time">
-      {{ message.created_at || '' }}
-      <span v-if="isMine && message.id" class="ms-1">
-        <i class="bi bi-check2-all"></i>
+      {{ formattedTime }}
+      <span v-if="isMine" class="ms-1 status-icon">
+        <i class="bi" :class="message.id ? 'bi-check2-all' : 'bi-check2'"></i>
       </span>
     </div>
   </div>
@@ -45,51 +45,53 @@ const props = defineProps({
   isMine: { type: Boolean, default: false },
 });
 
-// Визначаємо подію, яку будемо посилати нагору
 const emit = defineEmits(['image-click']);
 
-// Перевіряємо, чи є вкладення
+// Перевірка наявності вкладень (базується на структурі Meta API)
 const hasAttachments = computed(() => {
   return props.message.attachments && Array.isArray(props.message.attachments) && props.message.attachments.length > 0;
 });
 
-// Нормалізація даних вкладень
+// Нормалізація вкладень для підтримки різних форматів (Sync vs Webhook)
 const normalizedAttachments = computed(() => {
   if (!hasAttachments.value) return [];
   
   return props.message.attachments.map(att => {
-    // Якщо прийшов просто рядок URL
-    if (typeof att === 'string') {
-      return { type: 'image', url: att };
-    }
-    
-    // Якщо прийшов об'єкт Facebook
+    // Обробка вкладень, збережених під час синхронізації
     const url = att.payload?.url || att.url;
-    // Проста перевірка на розширення картинки
     const type = att.type || (url?.match(/\.(jpeg|jpg|gif|png|webp)$/i) != null ? 'image' : 'file');
     
     return { type, url };
   });
 });
 
-// Функція кліку по картинці
+// Форматування часу для відображення
+const formattedTime = computed(() => {
+  if (!props.message.created_at) return '';
+  // Відображаємо лише години та хвилини для компактності
+  const date = new Date(props.message.created_at);
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+});
+
 function openImage(url) {
-  // Замість відкриття вкладки, емітимо подію для Лайтбоксу
   emit('image-click', url);
 }
 </script>
 
 <style scoped>
-/* Загальні стилі контейнера повідомлення */
 .chat-message {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 4px;
-  max-width: 75%;
-  margin-bottom: 12px;
-  /* Анімація появи (якщо раптом TransitionGroup не спрацює) */
-  transition: transform 0.2s; 
+  max-width: 80%;
+  margin-bottom: 8px;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .chat-message.mine {
@@ -97,94 +99,74 @@ function openImage(url) {
   align-self: flex-end;
 }
 
-/* Бульбашка (фон) */
 .chat-message-bubble {
   background: #f1f5f9;
-  border-radius: 18px;
-  padding: 12px 16px;
+  border-radius: 16px;
+  padding: 10px 14px;
   color: #1e293b;
-  position: relative;
   border-bottom-left-radius: 4px;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.05); /* Легка тінь */
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
 
 .chat-message.mine .chat-message-bubble {
   background: #3b82f6;
   color: #fff;
-  border-bottom-left-radius: 18px;
+  border-bottom-left-radius: 16px;
   border-bottom-right-radius: 4px;
 }
 
-/* Стилі тексту */
 .message-text {
   white-space: pre-wrap;
   word-wrap: break-word;
-  line-height: 1.5;
+  line-height: 1.4;
+  font-size: 0.95rem;
 }
 
-/* Стилі вкладень */
 .message-attachments {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 8px;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 6px;
 }
 
-.attachment-img-wrapper {
-  max-width: 100%;
-  border-radius: 12px;
-  overflow: hidden;
-  cursor: zoom-in; /* Показуємо, що можна збільшити */
-}
-
-.message-attachments img {
+.attachment-img-wrapper img {
   display: block;
-  max-width: 250px;
+  max-width: 100%;
   max-height: 300px;
-  object-fit: cover;
-  border-radius: 12px;
-  transition: transform 0.2s, opacity 0.2s;
+  object-fit: contain;
+  border-radius: 8px;
+  cursor: zoom-in;
+  transition: opacity 0.2s;
 }
 
-.message-attachments img:hover {
-  opacity: 0.95;
-  transform: scale(1.02); /* Легкий ефект при наведенні */
+.attachment-img-wrapper img:hover {
+  opacity: 0.9;
 }
 
-/* Стиль для файлів */
 .attachment-file {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   padding: 8px 12px;
   background: rgba(0,0,0,0.05);
   border-radius: 8px;
   text-decoration: none;
-  color: inherit;
-  font-size: 0.9rem;
-  font-weight: 500;
-  transition: background 0.2s;
-}
-
-.attachment-file:hover {
-  background: rgba(0,0,0,0.1);
+  color: #475569;
+  font-size: 0.85rem;
 }
 
 .chat-message.mine .attachment-file {
-  background: rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.15);
   color: #fff;
 }
 
-.chat-message.mine .attachment-file:hover {
-  background: rgba(255,255,255,0.3);
-}
-
-/* Час */
 .chat-message-time {
   font-size: 0.7rem;
   color: #94a3b8;
-  padding: 0 4px;
-  display: flex;
-  align-items: center;
+  padding: 0 2px;
+}
+
+.status-icon {
+  font-size: 0.8rem;
 }
 </style>
