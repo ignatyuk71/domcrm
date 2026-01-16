@@ -9,12 +9,10 @@
           :tabs="tabs"
           :active-tab="activeTab"
           :has-more="hasMore"
-          :is-syncing-all="isSyncingAll"
           @select="handleSelect"
           @update:search="search = $event"
           @change-tab="activeTab = $event"
           @load-more="loadMore"
-          @sync-all="handleSyncAll"
         />
       </template>
       <template #thread>
@@ -68,13 +66,11 @@ const {
   isSending,
   hasMore,
   isSyncing,
-  isSyncingAll,
   fetchConversations,
   loadMore,
   selectChat,
   sendMessage,
   syncHistory,
-  syncAllConversations,
 } = useChat();
 
 const filteredConversations = computed(() => {
@@ -101,17 +97,6 @@ function handleSend(text) {
 function handleSync() {
   if (!activeChat.value) return;
   syncHistory(activeChat.value.customer_id).then((result) => {
-    if (!result) return;
-    toastType.value = result.success ? 'toast-success' : 'toast-error';
-    toastMessage.value = result.message;
-    setTimeout(() => {
-      toastMessage.value = '';
-    }, 3000);
-  });
-}
-
-function handleSyncAll() {
-  syncAllConversations().then((result) => {
     if (!result) return;
     toastType.value = result.success ? 'toast-success' : 'toast-error';
     toastMessage.value = result.message;

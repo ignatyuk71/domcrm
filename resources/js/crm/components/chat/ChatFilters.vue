@@ -20,16 +20,6 @@
       </div>
     </div>
 
-    <button
-      class="sync-all-button"
-      type="button"
-      :disabled="isSyncingAll"
-      @click="$emit('sync-all')"
-    >
-      <i class="bi" :class="isSyncingAll ? 'bi-arrow-repeat spin' : 'bi-cloud-download'"></i>
-      <span>Синхронізувати все</span>
-    </button>
-
     <div class="tabs-wrapper custom-scrollbar-hidden">
       <div class="tabs-list">
         <button
@@ -54,10 +44,9 @@ defineProps({
   search: { type: String, default: '' },
   tabs: { type: Array, default: () => [] },
   activeTab: { type: String, default: 'all' },
-  isSyncingAll: { type: Boolean, default: false },
 });
 
-defineEmits(['update:search', 'change-tab', 'sync-all']);
+defineEmits(['update:search', 'change-tab']);
 </script>
 
 <style scoped>
@@ -116,43 +105,6 @@ defineEmits(['update:search', 'change-tab', 'sync-all']);
 
 .clear-search:hover {
   color: #94a3b8;
-}
-
-.sync-all-button {
-  width: 100%;
-  border: 1px dashed #cbd5e1;
-  background: #f8fafc;
-  color: #475569;
-  border-radius: 10px;
-  padding: 10px 12px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin-bottom: 12px;
-  transition: all 0.2s;
-}
-
-.sync-all-button:hover {
-  background: #eff6ff;
-  color: #2563eb;
-  border-color: #93c5fd;
-}
-
-.sync-all-button:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-.spin {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  100% {
-    transform: rotate(360deg);
-  }
 }
 
 /* Стилі табів */

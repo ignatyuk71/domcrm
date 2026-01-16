@@ -12,7 +12,6 @@ export function useChat() {
   const page = ref(1);
   const hasMore = ref(false);
   const isSyncing = ref(false);
-  const isSyncingAll = ref(false);
 
   const activeChat = computed(() =>
     conversations.value.find((chat) => chat.customer_id === activeChatId.value) || null
@@ -112,28 +111,6 @@ export function useChat() {
     }
   }
 
-  async function syncAllConversations() {
-    isSyncingAll.value = true;
-    try {
-      const { data } = await axios.post('/api/chat/sync-all');
-      await fetchConversations();
-      return {
-        success: true,
-        message: data?.message || 'Синхронізація завершена',
-      };
-    } catch (e) {
-      console.error('Помилка синхронізації:', e);
-      return {
-        success: false,
-        message:
-          e.response?.data?.message ||
-          e.response?.data?.error ||
-          'Не вдалося синхронізувати. Перевірте токен або права.',
-      };
-    } finally {
-      isSyncingAll.value = false;
-    }
-  }
 
   return {
     conversations,
@@ -146,12 +123,10 @@ export function useChat() {
     page,
     hasMore,
     isSyncing,
-    isSyncingAll,
     fetchConversations,
     loadMore,
     selectChat,
     sendMessage,
     syncHistory,
-    syncAllConversations,
   };
 }
