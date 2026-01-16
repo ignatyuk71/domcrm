@@ -1,90 +1,99 @@
 <template>
-  <section class="chat-page h-full">
-    <ChatLayout>
-      <!-- 1. Слот для сайдбару -->
-      <template #sidebar>
-        <ChatSidebar
-          :conversations="conversations"
-          :active-chat-id="activeChatId"
-          @select="handleSelect"
-        />
-      </template>
-
-      <!-- 2. Слот для основного вікна чату -->
-      <template #thread>
-        <ChatThread
-          v-if="activeChatId"
-          :active-chat="activeChat"
-          :messages="messages"
-          :is-sending="isSending"
-          @send="handleSend"
-        />
-        <ChatEmptyState v-else />
-      </template>
-
-      <!-- 3. Слот для профілю клієнта -->
-      <template #profile>
-        <ChatCustomerProfile :chat="activeChat" />
-      </template>
-    </ChatLayout>
-
-    <!-- Повідомлення про помилки -->
-    <Transition name="toast">
-      <div v-if="error" class="fixed bottom-4 right-4 bg-red-600 text-white px-5 py-3 rounded-xl shadow-2xl z-50 flex items-center gap-3">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-        <span class="text-sm font-medium">{{ error }}</span>
+  <ChatLayout>
+    <template #sidebar>
+      <div class="p-3 border-b border-gray-200 bg-white">
+        <input 
+          v-model="searchQuery" 
+          type="text" 
+          placeholder="Пошук чату..." 
+          class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-blue-400"
+        >
       </div>
-    </Transition>
-  </section>
+      
+      <div v-if="isLoading && !conversations.length" class="p-4 text-center text-gray-400">
+        <i class="bi bi-arrow-clockwise animate-spin text-2xl"></i>
+      </div>
+
+      <ChatSidebar
+        v-else
+        :conversations="filteredConversations"
+        :active-chat-id="activeChatId"
+        @select="handleSelectChat"
+      />
+    </template>
+
+    <template #thread>
+      <ChatThread
+        v-if="activeChat"
+        :active-chat="activeChat"
+        :messages="messages"
+        :is-sending="isSending"
+        @send="handleSendMessage"
+      />
+      <ChatEmpty v-else />
+    </template>
+
+    <template #profile>
+      <ChatProfile :chat="activeChat" />
+    </template>
+  </ChatLayout>
 </template>
 
 <script setup>
-import { onBeforeUnmount, onMounted } from 'vue';
+import { onMounted, onUnmounted, ref, computed } from 'vue';
+import { useChat } from '@/crm/composables/useChat'; // Ваш composable
 
-// Використовуємо аліас @ (зазвичай resources/js)
+// Імпорт компонентів UI
 import ChatLayout from '@/crm/components/chat/ChatLayout.vue';
 import ChatSidebar from '@/crm/components/chat/ChatSidebar.vue';
 import ChatThread from '@/crm/components/chat/ChatThread.vue';
-import ChatEmptyState from '@/crm/components/chat/ChatEmptyState.vue';
-import ChatCustomerProfile from '@/crm/components/chat/ChatCustomerProfile.vue';
-import { useChat } from '@/crm/composables/useChat';
+import ChatEmpty from '@/crm/components/chat/ChatEmptyState.vue';
+import ChatProfile from '@/crm/components/chat/ChatCustomerProfile.vue';
 
 const {
   conversations,
-  activeChatId,
   activeChat,
+  activeChatId,
   messages,
+  isLoading,
   isSending,
-  error,
   fetchConversations,
   selectChat,
   sendMessage,
-  stopPolling,
+  stopPolling
 } = useChat();
 
-function handleSelect(chat) {
+const searchQuery = ref('');
+
+// Фільтрація списку чатів
+const filteredConversations = computed(() => {
+  if (!searchQuery.value) return conversations.value;
+  const q = searchQuery.value.toLowerCase();
+  return conversations.value.filter(c => 
+    (c.customer_name || '').toLowerCase().includes(q) ||
+    (c.last_message || '').toLowerCase().includes(q)
+  );
+});
+
+// Обробники подій
+const handleSelectChat = (chat) => {
   selectChat(chat.customer_id);
-}
+};
 
-function handleSend(payload) {
-  sendMessage(payload);
-}
+const handleSendMessage = (payload) => {
+  // Додаємо customer_id, який очікує useChat / бекенд
+  sendMessage({
+    ...payload,
+    customer_id: activeChatId.value
+  });
+};
 
+// Lifecycle
 onMounted(() => {
   fetchConversations();
 });
 
-onBeforeUnmount(() => {
+onUnmounted(() => {
   stopPolling();
 });
 </script>
-
-<style scoped>
-.toast-enter-active, .toast-leave-active {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.toast-enter-from, .toast-leave-to {
-  opacity: 0;
-  transform: translateY(20px) scale(0.95);
-}
-</style>
