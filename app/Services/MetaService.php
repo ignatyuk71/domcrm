@@ -9,6 +9,8 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class MetaService
 {
@@ -124,13 +126,26 @@ class MetaService
             $sentAt = $this->normalizeTimestamp($msgData['created_time'] ?? null);
 
             $text = $msgData['message'] ?? '';
-            $hasAttachments = !empty($msgData['attachments']['data'] ?? []);
+            
+            // --- ВИПРАВЛЕННЯ ПОЧАТОК ---
+            // Обробляємо вкладення так само, як у вебхуку, щоб зберегти їх локально
+            $rawAttachments = $msgData['attachments']['data'] ?? [];
+            $processedAttachments = [];
+
+            if (!empty($rawAttachments)) {
+                foreach ($rawAttachments as $att) {
+                    // Використовуємо наш метод завантаження
+                    $processedAttachments[] = $this->processAttachment($att);
+                }
+            }
+            $hasAttachments = !empty($processedAttachments);
+            // --- ВИПРАВЛЕННЯ КІНЕЦЬ ---
 
             FacebookMessage::create([
                 'customer_id' => $customer->id,
                 'mid' => $mid,
                 'text' => $text !== '' ? $text : ($hasAttachments ? 'Вкладення' : ''),
-                'attachments' => $msgData['attachments']['data'] ?? null,
+                'attachments' => $hasAttachments ? $processedAttachments : null, // Зберігаємо локальні URL
                 'is_from_customer' => $isFromCustomer,
                 'platform' => $platform,
                 'is_private' => true,
@@ -163,6 +178,53 @@ class MetaService
         ]);
 
         return $response->ok() ? $response->json() : [];
+    }
+
+    /**
+     * Завантажує файл з URL Meta та зберігає у storage/app/public.
+     */
+    public function processAttachment(array $attachment): array
+    {
+        $type = $attachment['type'] ?? 'file';
+        $payload = $attachment['payload'] ?? [];
+        $remoteUrl = $payload['url'] ?? ($attachment['url'] ?? null);
+
+        if (!$remoteUrl || !str_starts_with($remoteUrl, 'http')) {
+            return $attachment;
+        }
+
+        try {
+            $response = Http::timeout(10)->get($remoteUrl);
+            if ($response->failed()) {
+                throw new \RuntimeException('Failed to download file');
+            }
+
+            $fileContent = $response->body();
+
+            $extension = 'jpg';
+            $pathInfo = pathinfo(parse_url($remoteUrl, PHP_URL_PATH));
+            if (!empty($pathInfo['extension'])) {
+                $extension = $pathInfo['extension'];
+            }
+
+            $directory = 'chat/' . date('Y/m');
+            $fileName = Str::random(40) . '.' . $extension;
+            $filePath = $directory . '/' . $fileName;
+
+            Storage::disk('public')->put($filePath, $fileContent);
+
+            return [
+                'type' => $type,
+                'url' => Storage::url($filePath),
+                'original_url' => $remoteUrl,
+            ];
+        } catch (\Throwable $e) {
+            Log::warning('Attachment download failed: ' . $e->getMessage());
+            return [
+                'type' => $type,
+                'url' => $remoteUrl,
+            ];
+        }
     }
 
     public function touchConversation(

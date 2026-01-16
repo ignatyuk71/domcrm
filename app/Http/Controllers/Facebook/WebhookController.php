@@ -146,9 +146,19 @@ class WebhookController extends Controller
             }
         }
 
+        // --- ОБРОБКА ВКЛАДЕНЬ ---
+        $rawAttachments = $message['attachments'] ?? [];
+        $processedAttachments = [];
+
+        if (!empty($rawAttachments)) {
+            foreach ($rawAttachments as $att) {
+                $processedAttachments[] = $metaService->processAttachment($att);
+            }
+        }
+
         // Зберігаємо саме повідомлення
         $text = $message['text'] ?? '';
-        $hasAttachments = !empty($message['attachments'] ?? []);
+        $hasAttachments = !empty($processedAttachments);
         $sentAt = isset($event['timestamp'])
             ? Carbon::createFromTimestampMs($event['timestamp'])->timezone(config('app.timezone', 'Europe/Kyiv'))
             : now(config('app.timezone', 'Europe/Kyiv'));
@@ -157,7 +167,7 @@ class WebhookController extends Controller
             'customer_id' => $customer->id,
             'mid' => $message['mid'] ?? null,
             'text' => $text !== '' ? $text : ($hasAttachments ? 'Вкладення' : null),
-            'attachments' => $message['attachments'] ?? null,
+            'attachments' => $hasAttachments ? $processedAttachments : null,
             'platform' => $platform,
             'type' => 'message',
             'is_from_customer' => !$isEcho,

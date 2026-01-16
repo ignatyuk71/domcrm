@@ -129,13 +129,14 @@ class ChatApiController extends Controller
             return response()->json(['error' => 'Customer not found'], 404);
         }
 
-        // Синхронізуємо історію
+        // Первинна синхронізація тільки якщо немає локальних повідомлень
         try {
-            if (method_exists($metaService, 'syncHistory')) {
+            $hasMessages = FacebookMessage::where('customer_id', $id)->exists();
+            if (!$hasMessages && method_exists($metaService, 'syncHistory')) {
                 $metaService->syncHistory($customer);
             }
         } catch (\Throwable $e) {
-            Log::error('Chat sync history failed', [
+            Log::error('Chat initial sync failed', [
                 'customer_id' => $id,
                 'error' => $e->getMessage(),
             ]);
