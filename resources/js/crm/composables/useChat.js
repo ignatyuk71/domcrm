@@ -70,31 +70,50 @@ export function useChat() {
 
   async function sendMessage(payload) {
     if (!payload?.customer_id) return;
-    if (!payload?.text && !payload?.file) return;
+    if (!payload?.text && (!payload?.files || !payload.files.length)) return;
     
     isSending.value = true;
     error.value = '';
 
     const tempId = `temp-${Date.now()}`;
-    const optimisticAttachments = [];
-    if (payload.file) {
-      const fileUrl = URL.createObjectURL(payload.file);
-      optimisticAttachments.push({
-        type: payload.file.type?.startsWith('image/') ? 'image' : 'file',
-        url: fileUrl,
-      });
-    }
-    const optimisticMessage = {
-      id: tempId,
-      text: payload.text || null,
-      direction: 'outbound',
-      created_at: new Date().toISOString(),
-      attachments: optimisticAttachments,
-      status: 'sending',
-      is_read: true,
-    };
+    const tempMessages = [];
+    const tempIds = [];
+    const files = payload.files || [];
 
-    messages.value = [...messages.value, optimisticMessage];
+    if (files.length) {
+      files.forEach((file, index) => {
+        const fileUrl = URL.createObjectURL(file);
+        const optimisticMessage = {
+          id: `${tempId}-${index}`,
+          text: index === 0 ? payload.text || null : null,
+          direction: 'outbound',
+          created_at: new Date().toISOString(),
+          attachments: [
+            {
+              type: file.type?.startsWith('image/') ? 'image' : 'file',
+              url: fileUrl,
+            },
+          ],
+          status: 'sending',
+          is_read: true,
+        };
+        tempMessages.push(optimisticMessage);
+        tempIds.push(optimisticMessage.id);
+      });
+    } else {
+      tempMessages.push({
+        id: tempId,
+        text: payload.text || null,
+        direction: 'outbound',
+        created_at: new Date().toISOString(),
+        attachments: [],
+        status: 'sending',
+        is_read: true,
+      });
+      tempIds.push(tempId);
+    }
+
+    messages.value = [...messages.value, ...tempMessages];
 
     try {
       const formData = new FormData();
@@ -102,20 +121,28 @@ export function useChat() {
       if (payload.text) {
         formData.append('text', payload.text);
       }
-      if (payload.file) {
-        formData.append('file', payload.file);
+      if (files.length) {
+        files.forEach((file) => {
+          formData.append('files[]', file);
+        });
       }
 
       const { data } = await apiSendMessage(formData);
-      const newMessage = data?.data || data;
-      messages.value = messages.value.map((msg) => (msg.id === tempId ? newMessage : msg));
+      const responseData = data?.data || data;
+      const newMessages = Array.isArray(responseData) ? responseData : [responseData];
+
+      messages.value = messages.value.map((msg) => {
+        const replaceIndex = tempIds.indexOf(msg.id);
+        if (replaceIndex === -1) return msg;
+        return newMessages[replaceIndex] || msg;
+      });
 
       conversations.value = conversations.value.map((chat) =>
         chat.customer_id === payload.customer_id
           ? {
               ...chat,
-              last_message: newMessage.text || payload.text || 'Вкладення',
-              last_message_time: newMessage.created_at || new Date().toISOString(),
+              last_message: newMessages[0]?.text || payload.text || 'Вкладення',
+              last_message_time: newMessages[0]?.created_at || new Date().toISOString(),
             }
           : chat
       );

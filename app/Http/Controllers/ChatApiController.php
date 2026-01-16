@@ -185,7 +185,8 @@ class ChatApiController extends Controller
             $validated = $request->validate([
                 'customer_id' => 'required|integer|exists:customers,id',
                 'text' => 'nullable|string',
-                'file' => 'nullable|file|mimes:jpg,jpeg,png,webp,gif,heic,heif',
+                'files' => 'nullable|array',
+                'files.*' => 'file|mimes:jpg,jpeg,png,webp,gif,heic,heif|max:5120',
                 'platform' => 'nullable|string|in:messenger,instagram',
             ]);
         } catch (\Throwable $e) {
@@ -193,7 +194,7 @@ class ChatApiController extends Controller
             throw $e;
         }
 
-        if (empty($validated['text']) && !$request->hasFile('file')) {
+        if (empty($validated['text']) && !$request->hasFile('files')) {
             return response()->json(['error' => 'Повідомлення порожнє'], 422);
         }
 
@@ -205,8 +206,12 @@ class ChatApiController extends Controller
         $attachments = [];
         $metaAttachments = [];
 
-        if ($request->hasFile('file')) {
-            $file = $request->file('file');
+        $files = $request->file('files', []);
+        if (!is_array($files)) {
+            $files = [$files];
+        }
+
+        foreach ($files as $file) {
             $datePath = now()->format('Y/m/d');
             $destinationPath = public_path("chat/attachments/{$datePath}");
 
@@ -224,57 +229,88 @@ class ChatApiController extends Controller
             $metaAttachments[] = ['type' => 'image', 'url' => url($relativeUrl)];
         }
 
-        try {
-            $metaResult = $metaService->sendMessage(
-                $customer,
-                $validated['text'] ?? '',
-                $metaAttachments,
-                $platform
-            );
-        } catch (\Throwable $e) {
-            Log::error('Chat send Meta API failed', [
-                'customer_id' => $customer->id,
-                'error' => $e->getMessage(),
-            ]);
-            return response()->json(['error' => 'Meta API Error'], 500);
-        }
-
-        if (!$metaResult) {
-            return response()->json(['error' => 'Не вдалося відправити повідомлення через Meta API.'], 500);
-        }
-
-        $mid = is_array($metaResult) ? ($metaResult['message_id'] ?? null) : null;
-        if (!$mid) {
-            $mid = 'local-'.uniqid('', true);
-        }
+        $createdMessages = [];
         $sentAt = Carbon::now(config('app.timezone', 'Europe/Kyiv'));
 
         try {
-            $message = FacebookMessage::create([
-                'customer_id' => $customer->id,
-                'mid' => $mid, 
-                'text' => $validated['text'] ?? null,
-                'attachments' => !empty($attachments) ? $attachments : null,
-                'is_from_customer' => false,
-                'platform' => $platform,
-                'is_private' => true,
-                'sent_at' => $sentAt,
-                'status' => 'sent',
-                'is_read' => true,
-                'created_at' => $sentAt,
-                'updated_at' => $sentAt,
-            ]);
+            if (!empty($metaAttachments)) {
+                foreach ($metaAttachments as $index => $attachment) {
+                    $text = $index === 0 ? ($validated['text'] ?? '') : '';
 
-            $metaService->touchConversation(
-                $customer->id,
-                $platform,
-                $validated['text'] ?? (!empty($attachments) ? 'Вкладення' : ''),
-                $sentAt,
-                false
-            );
+                    $metaResult = $metaService->sendMessage(
+                        $customer,
+                        $text,
+                        [$attachment],
+                        $platform
+                    );
 
-            return response()->json([
-                'data' => [
+                    if (!$metaResult) {
+                        return response()->json(['error' => 'Не вдалося відправити повідомлення через Meta API.'], 500);
+                    }
+
+                    $mid = is_array($metaResult) ? ($metaResult['message_id'] ?? null) : null;
+                    if (!$mid) {
+                        $mid = 'local-'.uniqid('', true);
+                    }
+
+                    $message = FacebookMessage::create([
+                        'customer_id' => $customer->id,
+                        'mid' => $mid,
+                        'text' => $text !== '' ? $text : null,
+                        'attachments' => $attachments[$index] ? [$attachments[$index]] : null,
+                        'is_from_customer' => false,
+                        'platform' => $platform,
+                        'is_private' => true,
+                        'sent_at' => $sentAt,
+                        'status' => 'sent',
+                        'is_read' => true,
+                        'created_at' => $sentAt,
+                        'updated_at' => $sentAt,
+                    ]);
+
+                    $createdMessages[] = [
+                        'id' => $message->id,
+                        'text' => $message->text ?? null,
+                        'direction' => 'outbound',
+                        'created_at' => $sentAt->toDateTimeString(),
+                        'attachments' => $message->attachments ?? [],
+                        'status' => $message->status,
+                        'is_read' => $message->is_read,
+                    ];
+                }
+            } else {
+                $metaResult = $metaService->sendMessage(
+                    $customer,
+                    $validated['text'] ?? '',
+                    [],
+                    $platform
+                );
+
+                if (!$metaResult) {
+                    return response()->json(['error' => 'Не вдалося відправити повідомлення через Meta API.'], 500);
+                }
+
+                $mid = is_array($metaResult) ? ($metaResult['message_id'] ?? null) : null;
+                if (!$mid) {
+                    $mid = 'local-'.uniqid('', true);
+                }
+
+                $message = FacebookMessage::create([
+                    'customer_id' => $customer->id,
+                    'mid' => $mid,
+                    'text' => $validated['text'] ?? null,
+                    'attachments' => null,
+                    'is_from_customer' => false,
+                    'platform' => $platform,
+                    'is_private' => true,
+                    'sent_at' => $sentAt,
+                    'status' => 'sent',
+                    'is_read' => true,
+                    'created_at' => $sentAt,
+                    'updated_at' => $sentAt,
+                ]);
+
+                $createdMessages[] = [
                     'id' => $message->id,
                     'text' => $message->text ?? null,
                     'direction' => 'outbound',
@@ -282,9 +318,19 @@ class ChatApiController extends Controller
                     'attachments' => $message->attachments ?? [],
                     'status' => $message->status,
                     'is_read' => $message->is_read,
-                ],
-            ]);
+                ];
+            }
 
+            $lastText = $createdMessages[0]['text'] ?? null;
+            $metaService->touchConversation(
+                $customer->id,
+                $platform,
+                $lastText ?? (!empty($attachments) ? 'Вкладення' : ''),
+                $sentAt,
+                false
+            );
+
+            return response()->json(['data' => $createdMessages]);
         } catch (\Throwable $e) {
             Log::error('Chat send save DB failed', [
                 'customer_id' => $customer->id,

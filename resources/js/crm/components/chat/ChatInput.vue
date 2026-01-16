@@ -2,15 +2,17 @@
   <div class="chat-input-wrapper">
     <form class="chat-input-form" @submit.prevent="handleSend">
       <div class="text-input-card">
-        <div v-if="selectedFile" class="file-preview-badge">
-          <div class="preview-content">
-            <i class="bi bi-image" v-if="selectedFile.type.startsWith('image/')"></i>
-            <i class="bi bi-file-earmark-arrow-up" v-else></i>
-            <span class="file-name">{{ selectedFile.name }}</span>
+        <div v-if="selectedFiles.length" class="file-preview-list">
+          <div v-for="(item, index) in selectedFiles" :key="item.id" class="file-preview-badge">
+            <div class="preview-content" :title="item.sizeLabel">
+              <img v-if="item.isImage" :src="item.previewUrl" class="file-thumb" alt="preview" />
+              <i class="bi bi-file-earmark-arrow-up" v-else></i>
+              <span class="file-name">{{ item.file.name }}</span>
+            </div>
+            <button type="button" class="remove-file-btn" @click="removeFile(index)">
+              <i class="bi bi-x"></i>
+            </button>
           </div>
-          <button type="button" class="remove-file-btn" @click="removeFile">
-            <i class="bi bi-x"></i>
-          </button>
         </div>
 
         <textarea
@@ -24,7 +26,9 @@
           ref="textareaRef"
         ></textarea>
 
-        <span class="kb-hint" v-if="text.length > 0 || selectedFile">Ctrl + Enter для відправки</span>
+        <span class="kb-hint" v-if="text.length > 0 || selectedFiles.length">Ctrl + Enter для відправки</span>
+        <span class="size-hint">Макс. 5 МБ на файл</span>
+        <span v-if="fileError" class="file-error">{{ fileError }}</span>
       </div>
 
       <div class="chat-actions">
@@ -49,6 +53,7 @@
             style="display: none"
             @change="onFileChange"
             accept="image/*"
+            multiple
           />
 
           <button type="button" class="tool-btn" title="Голосове"><i class="bi bi-mic"></i></button>
@@ -77,24 +82,48 @@ const props = defineProps({
 const emit = defineEmits(['send']);
 
 const text = ref('');
-const selectedFile = ref(null);
+const selectedFiles = ref([]);
+const fileError = ref('');
 const fileInputRef = ref(null);
 const textareaRef = ref(null);
 
-const canSend = computed(() => text.value.trim().length > 0 || selectedFile.value);
+const maxFileSize = 5 * 1024 * 1024;
+const canSend = computed(() => text.value.trim().length > 0 || selectedFiles.value.length > 0);
 
 function triggerFileInput() {
   fileInputRef.value.click();
 }
 
 function onFileChange(e) {
-  const file = e.target.files[0];
-  if (file) selectedFile.value = file;
+  const files = Array.from(e.target.files || []);
+  if (!files.length) return;
+
+  fileError.value = '';
+
+  files.forEach((file) => {
+    if (file.size > maxFileSize) {
+      fileError.value = 'Файл більший за 5 МБ';
+      return;
+    }
+    const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : '';
+    selectedFiles.value.push({
+      id: `${Date.now()}_${Math.random().toString(16).slice(2)}`,
+      file,
+      previewUrl,
+      isImage: file.type.startsWith('image/'),
+      sizeLabel: `${Math.round(file.size / 1024)} KB`,
+    });
+  });
+
+  fileInputRef.value.value = '';
 }
 
-function removeFile() {
-  selectedFile.value = null;
-  fileInputRef.value.value = '';
+function removeFile(index) {
+  const item = selectedFiles.value[index];
+  if (item?.previewUrl) {
+    URL.revokeObjectURL(item.previewUrl);
+  }
+  selectedFiles.value.splice(index, 1);
 }
 
 function autoResize() {
@@ -110,12 +139,15 @@ function handleSend() {
 
   emit('send', {
     text: text.value.trim(),
-    file: selectedFile.value,
+    files: selectedFiles.value.map((item) => item.file),
   });
 
   text.value = '';
-  selectedFile.value = null;
-  fileInputRef.value.value = '';
+  selectedFiles.value.forEach((item) => {
+    if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+  });
+  selectedFiles.value = [];
+  fileError.value = '';
   if (textareaRef.value) textareaRef.value.style.height = 'auto';
 }
 </script>
@@ -154,6 +186,13 @@ function handleSend() {
   line-height: 1.5;
 }
 
+.file-preview-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
 .file-preview-badge {
   display: flex;
   align-items: center;
@@ -162,7 +201,6 @@ function handleSend() {
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   padding: 6px 12px;
-  margin-bottom: 10px;
 }
 
 .preview-content {
@@ -171,6 +209,14 @@ function handleSend() {
   gap: 8px;
   font-size: 0.85rem;
   color: #475569;
+}
+
+.file-thumb {
+  width: 28px;
+  height: 28px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
 }
 
 .remove-file-btn {
@@ -232,5 +278,21 @@ function handleSend() {
   right: 12px;
   font-size: 0.7rem;
   color: #cbd5e1;
+}
+
+.size-hint {
+  position: absolute;
+  bottom: 4px;
+  left: 12px;
+  font-size: 0.7rem;
+  color: #94a3b8;
+}
+
+.file-error {
+  position: absolute;
+  bottom: 22px;
+  right: 12px;
+  font-size: 0.7rem;
+  color: #ef4444;
 }
 </style>
