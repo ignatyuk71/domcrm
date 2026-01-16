@@ -1,63 +1,66 @@
 <template>
-  <div class="chat-input-wrapper">
-    <form class="chat-input-form" @submit.prevent="handleSend">
+  <div class="chat-container">
+    <form class="message-box" @submit.prevent="handleSend">
       
-      <div class="text-input-card">
+      <transition name="slide-up">
+        <div v-if="showAttachment" class="attachment-panel">
+          <div class="attachment-input-wrapper">
+            <i class="bi bi-link-45deg"></i>
+            <input
+              v-model="attachmentUrl"
+              type="url"
+              class="attachment-input"
+              placeholder="Додати URL зображення або файлу..."
+            />
+            <button type="button" class="close-attach" @click="showAttachment = false">
+              <i class="bi bi-x"></i>
+            </button>
+          </div>
+        </div>
+      </transition>
+
+      <div class="input-main-card">
         <textarea
           v-model="text"
-          class="chat-textarea"
+          class="message-textarea"
           rows="1"
-          placeholder="Напишіть щось..."
+          placeholder="Напишіть повідомлення..."
           :disabled="disabled"
           @keydown.ctrl.enter.prevent="handleSend"
           @input="autoResize"
           ref="textareaRef"
         ></textarea>
-        
-        <span class="kb-hint" v-if="text.length > 0">Ctrl + Enter для відправки</span>
-      </div>
 
-      <div class="chat-actions">
-        <div class="chat-tools">
-          <button type="button" class="tool-btn" title="Шаблони"><i class="bi bi-file-text"></i></button>
-          <button type="button" class="tool-btn" title="Швидкі відповіді"><i class="bi bi-lightning"></i></button>
-          <button type="button" class="tool-btn" title="Товари"><i class="bi bi-box-seam"></i></button>
-          <button type="button" class="tool-btn" title="Емодзі"><i class="bi bi-emoji-smile"></i></button>
-          <button 
-            type="button" 
-            class="tool-btn" 
-            :class="{ active: showAttachment }"
-            @click="toggleAttachment"
-            title="Додати посилання"
-          >
-            <i class="bi bi-paperclip"></i>
-          </button>
-          <button type="button" class="tool-btn" title="Голосове"><i class="bi bi-mic"></i></button>
-        </div>
+        <div class="input-footer">
+          <div class="toolbar-left">
+            <button type="button" class="icon-btn" title="Шаблони"><i class="bi bi- lightning-charge"></i></button>
+            <button type="button" class="icon-btn" title="Файли"><i class="bi bi-folder2-open"></i></button>
+            <button 
+              type="button" 
+              class="icon-btn" 
+              :class="{ active: showAttachment }"
+              @click="toggleAttachment"
+            >
+              <i class="bi bi-paperclip"></i>
+            </button>
+            <div class="divider"></div>
+            <button type="button" class="icon-btn"><i class="bi bi-emoji-smile"></i></button>
+          </div>
 
-        <button 
-          class="chat-send-btn" 
-          type="submit" 
-          :disabled="disabled || !canSend"
-        >
-          <span>Надіслати</span>
-          <i class="bi bi-send-fill"></i>
-        </button>
-      </div>
-
-      <transition name="slide-fade">
-        <div v-if="showAttachment" class="attachment-area">
-          <div class="link-input-group">
-            <i class="bi bi-link-45deg"></i>
-            <input
-              v-model="attachmentUrl"
-              type="url"
-              class="link-input"
-              placeholder="Вставте посилання на зображення або файл..."
-            />
+          <div class="toolbar-right">
+            <span class="char-counter" v-if="text.length > 0">{{ text.length }}</span>
+            <button 
+              class="send-circle-btn" 
+              type="submit" 
+              :disabled="disabled || !canSend"
+            >
+              <i class="bi bi-arrow-up-short"></i>
+            </button>
           </div>
         </div>
-      </transition>
+      </div>
+      
+      <p class="hint-text"><b>Ctrl + Enter</b> щоб надіслати швидко</p>
     </form>
   </div>
 </template>
@@ -109,147 +112,179 @@ function handleSend() {
 </script>
 
 <style scoped>
-.chat-input-wrapper {
-  background: #f4f9ff; /* Твій ніжно-блакитний фон */
-  padding: 16px 24px;
-  border-top: 1px solid #e1e8f0;
+/* Контейнер */
+.chat-container {
+  padding: 20px;
+  background-color: #f8fafc;
+  display: flex;
+  justify-content: center;
 }
 
-/* БЛОК-КАРТКА ДЛЯ ТЕКСТУ */
-.text-input-card {
-  background: #ffffff;
-  border: 1px solid #d1d9e2;
-  border-radius: 12px;
-  padding: 12px 16px;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.03);
-  margin-bottom: 12px;
-  transition: border-color 0.2s, box-shadow 0.2s;
-  position: relative;
-}
-
-.text-input-card:focus-within {
-  border-color: #3b82f6;
-  box-shadow: 0 4px 10px rgba(59, 130, 246, 0.08);
-}
-
-.chat-textarea {
+.message-box {
   width: 100%;
-  border: none;
-  background: transparent;
-  resize: none;
-  font-size: 1rem;
-  color: #1e293b;
-  outline: none;
-  min-height: 24px;
-  max-height: 180px;
-  line-height: 1.5;
-  display: block;
-}
-
-.kb-hint {
-  position: absolute;
-  bottom: 4px;
-  right: 12px;
-  font-size: 0.7rem;
-  color: #94a3b8;
-  pointer-events: none;
-}
-
-/* ДІЇ ТА КНОПКИ */
-.chat-actions {
+  max-width: 800px;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.chat-tools {
-  display: flex;
-  gap: 16px;
-}
-
-.tool-btn {
-  background: transparent;
-  border: none;
-  color: #64748b;
-  font-size: 1.3rem;
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 6px;
-  transition: background 0.2s, color 0.2s;
-}
-
-.tool-btn:hover {
-  background: #eef2f7;
-  color: #3b82f6;
-}
-
-.tool-btn.active {
-  color: #3b82f6;
-  background: #e0e7ff;
-}
-
-.chat-send-btn {
-  background: #3b82f6; /* Зробив більш активною */
-  color: #ffffff;
-  border: none;
-  border-radius: 8px;
-  padding: 10px 20px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  cursor: pointer;
-  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
-}
-
-.chat-send-btn:hover:not(:disabled) {
-  background: #2563eb;
-}
-
-.chat-send-btn:disabled {
-  background: #cbd5e1;
-  box-shadow: none;
-  cursor: not-allowed;
-}
-
-/* ПОЛЕ ПОСИЛАННЯ */
-.attachment-area {
-  margin-top: 12px;
-}
-
-.link-input-group {
-  display: flex;
-  align-items: center;
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 6px 12px;
+  flex-direction: column;
   gap: 8px;
 }
 
-.link-input-group i {
-  color: #94a3b8;
-  font-size: 1.2rem;
+/* Картка вводу */
+.input-main-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 8px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  transition: all 0.2s ease;
 }
 
-.link-input {
+.input-main-card:focus-within {
+  border-color: #3b82f6;
+  box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.1);
+}
+
+/* Текстове поле */
+.message-textarea {
+  width: 100%;
+  border: none;
+  outline: none;
+  padding: 12px 12px 4px 12px;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: #1e293b;
+  resize: none;
+  min-height: 40px;
+  max-height: 200px;
+}
+
+/* Футер з кнопками */
+.input-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 8px;
+  border-top: 1px solid #f1f5f9;
+  margin-top: 4px;
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.divider {
+  width: 1px;
+  height: 20px;
+  background: #e2e8f0;
+  margin: 0 8px;
+}
+
+.icon-btn {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 1.1rem;
+  transition: all 0.2s;
+}
+
+.icon-btn:hover {
+  background: #f1f5f9;
+  color: #3b82f6;
+}
+
+.icon-btn.active {
+  background: #eff6ff;
+  color: #3b82f6;
+}
+
+/* Кнопка відправки */
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.char-counter {
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.send-circle-btn {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.8rem;
+  cursor: pointer;
+  transition: transform 0.2s, background 0.2s;
+}
+
+.send-circle-btn:hover:not(:disabled) {
+  background: #2563eb;
+  transform: scale(1.05);
+}
+
+.send-circle-btn:disabled {
+  background: #e2e8f0;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+/* Панель вкладень */
+.attachment-panel {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 8px 12px;
+}
+
+.attachment-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.attachment-input {
   flex: 1;
   border: none;
   outline: none;
-  font-size: 0.9rem;
-  color: #334155;
+  font-size: 0.85rem;
 }
 
-/* АНІМАЦІЯ */
-.slide-fade-enter-active {
-  transition: all 0.3s ease-out;
+.close-attach {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 1.2rem;
 }
-.slide-fade-leave-active {
-  transition: all 0.2s cubic-bezier(1, 0.5, 0.8, 1);
+
+.hint-text {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  text-align: right;
+  margin-right: 8px;
 }
-.slide-fade-enter-from,
-.slide-fade-leave-to {
-  transform: translateY(-10px);
+
+/* Анімації */
+.slide-up-enter-active, .slide-up-leave-active {
+  transition: all 0.3s ease;
+}
+.slide-up-enter-from, .slide-up-leave-to {
   opacity: 0;
+  transform: translateY(10px);
 }
 </style>
