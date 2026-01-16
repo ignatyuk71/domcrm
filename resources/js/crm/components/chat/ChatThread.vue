@@ -11,7 +11,6 @@
         class="btn-sync"
         @click="$emit('sync')"
         :disabled="sending || isSyncing"
-        title="Оновити історію з Facebook/Instagram"
       >
         <i class="bi" :class="isSyncing ? 'bi-arrow-repeat spin' : 'bi-cloud-download'"></i>
       </button>
@@ -24,23 +23,14 @@
             v-for="msg in messages"
             :key="msg.id || msg.temp_id"
             :message="msg"
-            :is-mine="msg.direction === 'outbound'"
-            @image-click="openLightbox" 
+            :is-mine="msg.direction === 'outbound' || !msg.is_from_customer"
           />
         </TransitionGroup>
       </div>
-      
       <div ref="scrollAnchor"></div>
     </div>
 
     <ChatComposer :sending="sending" @send="$emit('send', $event)" />
-
-    <Transition name="fade">
-      <div v-if="lightboxImage" class="lightbox-overlay" @click="closeLightbox">
-        <button class="lightbox-close"><i class="bi bi-x-lg"></i></button>
-        <img :src="lightboxImage" alt="Zoom" class="lightbox-img" @click.stop />
-      </div>
-    </Transition>
   </div>
 </template>
 
@@ -61,122 +51,74 @@ const props = defineProps({
 defineEmits(['send', 'sync']);
 
 const messagesContainer = ref(null);
-const scrollAnchor = ref(null);
 
 function scrollToBottom(smooth = true) {
   nextTick(() => {
     if (messagesContainer.value) {
-      messagesContainer.value.scrollTo({
-        top: messagesContainer.value.scrollHeight,
-        behavior: smooth ? 'smooth' : 'auto',
-      });
+      messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
     }
   });
 }
 
-watch(() => props.messages, (newVal, oldVal) => {
-  const isFirstLoad = !oldVal || oldVal.length === 0;
-  scrollToBottom(!isFirstLoad);
-}, { deep: true });
-
-watch(() => props.activeChat, () => {
-  scrollToBottom(false);
-});
-
-onMounted(() => {
-  scrollToBottom(false);
-});
-
-const lightboxImage = ref(null);
-function openLightbox(url) { lightboxImage.value = url; }
-function closeLightbox() { lightboxImage.value = null; }
+watch(() => props.messages, () => scrollToBottom(true), { deep: true });
+watch(() => props.activeChat, () => scrollToBottom(false));
+onMounted(() => scrollToBottom(false));
 </script>
 
 <style scoped>
+/* Головний контейнер має фіксовану висоту, щоб внутрішній блок скролився */
 .chat-thread-inner {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: 100%; 
   min-height: 0;
-  position: relative;
+  background: #fff;
   overflow: hidden;
-  background: #fff;
-  border-radius: 16px;
 }
 
-.chat-thread-header {
-  padding: 16px 20px;
-  border-bottom: 1px solid #e2e8f0;
-  background: #fff;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-/* --- ТІЛО ЧАТУ ТА ПРИМУСОВИЙ СКРОЛ --- */
 .chat-thread-body {
   flex: 1;
   min-height: 0;
   padding: 20px;
-  /* overflow-y: scroll гарантує, що місце під полоску зарезервовано завжди */
+  /* overflow-y: scroll - ПОЛОСКА БУДЕ ЗАВЖДИ */
   overflow-y: scroll; 
-  overflow-x: hidden;
   background-color: #f8fafc;
   display: flex;
   flex-direction: column;
-  
-  /* Для Firefox */
-  scrollbar-width: thin;
-  scrollbar-color: #cbd5e1 #f1f5f9;
 }
 
 .chat-messages {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  justify-content: flex-end;
   min-height: 100%;
 }
 
-/* --- СТИЛІЗАЦІЯ ПОЛОСКИ (Webkit: Chrome, Safari, Edge) --- */
-/* Робимо її видимою як у системних інтерфейсах */
+/* СТИЛІЗАЦІЯ ПОЛОСКИ (SCRОLLBAR) */
 .custom-scrollbar::-webkit-scrollbar {
-  width: 8px; /* Чітка ширина */
-  display: block;
+  width: 10px; /* Ширина полоски */
+  display: block !important;
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
   background: #f1f5f9; /* Колір доріжки */
-  border-radius: 0;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: #cbd5e1; /* Сіра полоска */
-  border-radius: 10px;
-  border: 2px solid #f1f5f9; /* Відступ від країв */
+  background-color: #cbd5e1; /* Колір повзунка */
+  border-radius: 5px;
+  border: 2px solid #f1f5f9;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background-color: #94a3b8; /* Темніша при наведенні */
+  background-color: #94a3b8;
 }
 
-/* Решта допоміжних стилів */
-.chat-thread-title { display: flex; flex-direction: column; gap: 2px; font-weight: 700; font-size: 1.1rem; color: #1e293b; }
-.chat-thread-subtitle { font-size: 0.8rem; color: #94a3b8; font-weight: 400; }
-
-.btn-sync {
-  width: 36px; height: 36px; border-radius: 8px; border: 1px solid #e2e8f0;
-  background: #fff; color: #64748b; display: flex; align-items: center; justify-content: center;
-  cursor: pointer; transition: all 0.2s;
-}
-.btn-sync:hover { background: #f1f5f9; color: #3b82f6; border-color: #cbd5e1; }
-.btn-sync:disabled { opacity: 0.7; cursor: not-allowed; }
+/* Допоміжні стилі */
+.chat-thread-header { padding: 16px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
+.chat-thread-title { display: flex; flex-direction: column; font-weight: 700; }
+.chat-thread-subtitle { font-size: 0.8rem; color: #94a3b8; }
+.btn-sync { width: 36px; height: 36px; border: 1px solid #e2e8f0; background: #fff; cursor: pointer; border-radius: 8px; }
 .spin { animation: spin 1s linear infinite; }
 @keyframes spin { 100% { transform: rotate(360deg); } }
-
-.message-list-enter-active, .message-list-leave-active { transition: all 0.4s ease; }
-.message-list-enter-from { opacity: 0; transform: translateY(20px); }
-.message-list-leave-to { opacity: 0; transform: scale(0.9); }
 </style>
