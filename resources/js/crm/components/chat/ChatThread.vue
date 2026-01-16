@@ -1,6 +1,14 @@
 <template>
   <div class="chat-thread-wrapper">
     <header class="chat-thread-header">
+      <button
+        type="button"
+        class="chat-thread-list-btn"
+        title="Список чатів"
+        @click="$emit('open-list')"
+      >
+        <i class="bi bi-list"></i>
+      </button>
       <div class="chat-thread-user">
         <div class="chat-thread-avatar">
           <img v-if="activeChat?.customer_avatar" :src="activeChat.customer_avatar" alt="avatar" />
@@ -74,7 +82,7 @@ const props = defineProps({
   isSyncing: { type: Boolean, default: false },
 });
 
-defineEmits(['send', 'force-sync']);
+defineEmits(['send', 'force-sync', 'open-list']);
 
 const threadBody = ref(null);
 
@@ -186,6 +194,35 @@ watch(
 .chat-thread-subtitle {
   font-size: 0.75rem;
   color: #94a3b8;
+}
+
+.chat-thread-list-btn {
+  display: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #475569;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.chat-thread-list-btn:hover {
+  background: #e2e8f0;
+}
+
+@media (max-width: 768px) {
+  .chat-thread-header {
+    justify-content: flex-start;
+  }
+
+  .chat-thread-list-btn {
+    display: inline-flex;
+  }
 }
 
 .chat-thread-sync {

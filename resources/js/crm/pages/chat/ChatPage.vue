@@ -32,6 +32,7 @@
         :loading="isLoading"
         @send="handleSendMessage"
         @force-sync="handleForceSync"
+        @open-list="openMobileList"
       />
       <ChatEmpty v-else />
     </template>
@@ -40,6 +41,24 @@
       <ChatProfile :chat="activeChat" />
     </template>
   </ChatLayout>
+
+  <div v-if="isMobileListOpen" class="chat-mobile-overlay">
+    <div class="chat-mobile-sheet">
+      <div class="chat-mobile-header">
+        <h3>Список чатів</h3>
+        <button type="button" class="chat-mobile-close" @click="closeMobileList">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
+      <div class="chat-mobile-body">
+        <ChatSidebar
+          :conversations="filteredConversations"
+          :active-chat-id="activeChatId"
+          @select="handleSelectChat"
+        />
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup>
@@ -69,6 +88,7 @@ const {
 } = useChat();
 
 const searchQuery = ref('');
+const isMobileListOpen = ref(false);
 
 // Фільтрація списку чатів
 const filteredConversations = computed(() => {
@@ -83,6 +103,9 @@ const filteredConversations = computed(() => {
 // Обробники подій
 const handleSelectChat = (chat) => {
   selectChat(chat.customer_id);
+  if (isMobileListOpen.value) {
+    isMobileListOpen.value = false;
+  }
 };
 
 const handleSendMessage = (payload) => {
@@ -96,6 +119,14 @@ const handleForceSync = () => {
   forceSync(activeChatId.value);
 };
 
+const openMobileList = () => {
+  isMobileListOpen.value = true;
+};
+
+const closeMobileList = () => {
+  isMobileListOpen.value = false;
+};
+
 // Lifecycle
 onMounted(() => {
   fetchConversations();
@@ -105,3 +136,63 @@ onUnmounted(() => {
   stopPolling();
 });
 </script>
+
+<style scoped>
+.chat-mobile-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.35);
+  z-index: 50;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+.chat-mobile-sheet {
+  background: #ffffff;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-mobile-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.chat-mobile-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.chat-mobile-close {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #475569;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.chat-mobile-body {
+  flex: 1;
+  overflow: hidden;
+}
+
+@media (min-width: 769px) {
+  .chat-mobile-overlay {
+    display: none;
+  }
+}
+</style>
