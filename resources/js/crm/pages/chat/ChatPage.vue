@@ -34,7 +34,7 @@
         @force-sync="handleForceSync"
         @open-list="openMobileList"
       />
-      <ChatEmpty v-else />
+      <ChatEmpty v-else @open-list="openMobileList" />
     </template>
 
     <template #profile>

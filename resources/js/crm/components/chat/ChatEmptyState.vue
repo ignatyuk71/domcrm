@@ -8,9 +8,16 @@
       <p class="chat-empty-subtitle">
         Виберіть діалог зі списку зліва, щоб переглянути історію повідомлень та відповісти клієнту
       </p>
+      <button type="button" class="chat-empty-button" @click="$emit('open-list')">
+        Список чатів
+      </button>
     </div>
   </div>
 </template>
+
+<script setup>
+defineEmits(['open-list']);
+</script>
 
 <style scoped>
 .chat-empty-container {
@@ -57,5 +64,25 @@
   font-size: 0.9rem;
   color: #64748b;
   line-height: 1.6;
+}
+
+.chat-empty-button {
+  display: none;
+  margin-top: 16px;
+  background: #3b82f6;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+@media (max-width: 768px) {
+  .chat-empty-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
 }
 </style>
