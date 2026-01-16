@@ -214,8 +214,10 @@ class ChatApiController extends Controller
                 mkdir($destinationPath, 0755, true);
             }
 
-            $fileName = time().'_'.$file->getClientOriginalName();
+            $extension = $file->getClientOriginalExtension() ?: 'jpg';
+            $fileName = time().'_'.bin2hex(random_bytes(4)).'.'.strtolower($extension);
             $file->move($destinationPath, $fileName);
+            @chmod($destinationPath.'/'.$fileName, 0644);
 
             $relativeUrl = "chat/attachments/{$datePath}/{$fileName}";
             $attachments[] = ['type' => 'image', 'url' => $relativeUrl];

@@ -270,10 +270,11 @@ class MetaService
                 $extension = $pathInfo['extension'];
             }
 
-            $fileName = Str::random(40) . '.' . $extension;
+            $fileName = time().'_'.bin2hex(random_bytes(4)).'.'.strtolower($extension);
             $relativePath = 'attachments/' . date('Y/m/d') . '/' . $fileName;
 
             Storage::disk('chat_uploads')->put($relativePath, $fileContent);
+            @chmod(public_path('chat/'.$relativePath), 0644);
 
             return [
                 'type' => $type,
