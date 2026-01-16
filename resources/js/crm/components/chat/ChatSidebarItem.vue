@@ -5,35 +5,35 @@
     :class="{ 'is-active': isActive, 'is-unread': item.unread_count > 0 }"
     @click="$emit('select', item)"
   >
-    <div class="avatar-wrapper">
+    <div class="avatar-container">
       <img 
         v-if="item.customer_avatar" 
         :src="item.customer_avatar" 
         class="avatar-img" 
         alt="User" 
       />
-      <div v-else class="avatar-placeholder" :class="platformBgClass">
+      <div v-else class="avatar-placeholder" :class="platformColorClass">
         {{ (item.customer_name || '?').charAt(0).toUpperCase() }}
       </div>
 
-      <div class="platform-badge" :class="platformBgClass">
+      <div class="platform-badge">
         <i :class="platformIconClass"></i>
       </div>
     </div>
 
-    <div class="content-wrapper">
-      <div class="row-top">
-        <h4 class="chat-name">{{ item.customer_name || 'Невідомий' }}</h4>
+    <div class="info-container">
+      <div class="info-row-top">
+        <h4 class="chat-name">{{ item.customer_name || 'Невідомий клієнт' }}</h4>
         <span class="chat-time">{{ formattedTime }}</span>
       </div>
 
-      <div class="row-bottom">
+      <div class="info-row-bottom">
         <p class="chat-preview">
           {{ item.last_message || 'Вкладення' }}
         </p>
         
         <span v-if="item.unread_count > 0" class="unread-count">
-          {{ item.unread_count }}
+          {{ item.unread_count > 99 ? '99+' : item.unread_count }}
         </span>
       </div>
     </div>
@@ -50,21 +50,22 @@ const props = defineProps({
 
 defineEmits(['select']);
 
-// --- Класи для платформ ---
+// --- Логіка іконок та кольорів ---
 const platformIconClass = computed(() => {
-  // Використовуємо заповнені іконки (bi-instagram, bi-messenger)
   return props.item.platform === 'instagram' 
-    ? 'bi bi-instagram' 
-    : 'bi bi-messenger';
+    ? 'bi bi-instagram instagram-icon' 
+    : 'bi bi-messenger messenger-icon';
 });
 
-const platformBgClass = computed(() => {
-  return props.item.platform === 'instagram' ? 'is-instagram' : 'is-messenger';
+const platformColorClass = computed(() => {
+  return props.item.platform === 'instagram' ? 'bg-instagram' : 'bg-messenger';
 });
 
-// --- Форматування часу (компактне) ---
+// --- Розумне форматування часу ---
+// Замість "2026-01-16 15:09:04" покаже "15:09" або "16 січ"
 const formattedTime = computed(() => {
   if (!props.item.last_message_time) return '';
+  
   const date = new Date(props.item.last_message_time);
   const now = new Date();
   
@@ -73,26 +74,26 @@ const formattedTime = computed(() => {
                   date.getFullYear() === now.getFullYear();
 
   return isToday 
-    ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
-    : date.toLocaleDateString('uk-UA', { day: 'numeric', month: 'short' });
+    ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) // 15:09
+    : date.toLocaleDateString('uk-UA', { day: 'numeric', month: 'short' }); // 16 січ
 });
 </script>
 
 <style scoped>
-/* Загальний контейнер */
+/* Основний контейнер картки */
 .chat-item {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 12px; /* Зменшив відступи для компактності */
+  gap: 12px; /* Відступ між аватаром і текстом */
+  padding: 10px 12px;
   background: transparent;
-  border: none;
-  border-radius: 10px;
+  border: 1px solid transparent;
+  border-radius: 12px;
   cursor: pointer;
+  transition: all 0.2s ease;
   text-align: left;
-  transition: background-color 0.2s;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; /* Системний шрифт як на скріні */
+  outline: none;
 }
 
 .chat-item:hover {
@@ -100,130 +101,124 @@ const formattedTime = computed(() => {
 }
 
 .chat-item.is-active {
-  background-color: #e0f2fe; /* Дуже світлий блакитний */
+  background-color: #eff6ff; /* Світло-блакитний фон */
+  border-color: #bfdbfe;     /* Легка рамка */
 }
 
 /* --- АВАТАР --- */
-.avatar-wrapper {
+.avatar-container {
   position: relative;
+  flex-shrink: 0;
   width: 48px;
   height: 48px;
-  flex-shrink: 0;
 }
 
-.avatar-img, .avatar-placeholder {
+.avatar-img, 
+.avatar-placeholder {
   width: 100%;
   height: 100%;
   border-radius: 50%;
   object-fit: cover;
-}
-
-.avatar-placeholder {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  font-size: 1.2rem;
   font-weight: 600;
-  font-size: 18px;
+  color: white;
 }
 
-/* --- ІКОНКА ПЛАТФОРМИ (як на скріншоті) --- */
+.bg-instagram { background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888); }
+.bg-messenger { background: linear-gradient(45deg, #00c6ff, #0072ff); }
+
+/* Значок платформи (маленький кружечок) */
 .platform-badge {
   position: absolute;
   bottom: -2px;
   right: -2px;
   width: 20px;
   height: 20px;
+  background: white;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
-  font-size: 11px;
-  border: 2px solid white; /* Біла обводка */
-  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+  border: 2px solid white; /* Біла обводка, щоб відділити від аватара */
 }
 
-/* Кольори платформ */
-.is-messenger {
-  background-color: #0084ff; /* Messenger Blue */
-}
-.is-instagram {
-  background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
-}
+.instagram-icon { color: #d62976; font-size: 11px; }
+.messenger-icon { color: #0072ff; font-size: 11px; }
 
-/* --- ТЕКСТ --- */
-.content-wrapper {
+/* --- ТЕКСТОВА ЧАСТИНА --- */
+.info-container {
   flex: 1;
-  min-width: 0; /* Дозволяє text-overflow працювати */
+  min-width: 0; /* Магія CSS: дозволяє text-overflow працювати всередині flex */
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: 2px; /* Мінімальний відступ між ім'ям і текстом */
+  gap: 4px;
 }
 
-.row-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-}
-
-.chat-name {
-  font-size: 15px; /* Трохи збільшив шрифт імені */
-  font-weight: 700; /* Жирний шрифт як на скріні */
-  color: #0f172a;
-  margin: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.chat-time {
-  font-size: 12px;
-  color: #94a3b8; /* Світло-сірий */
-  font-weight: 400;
-  flex-shrink: 0;
-  margin-left: 8px;
-}
-
-.row-bottom {
+.info-row-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.chat-name {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-right: 8px;
+}
+
+.chat-time {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.info-row-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 20px; /* Фіксуємо висоту рядка */
 }
 
 .chat-preview {
   margin: 0;
-  font-size: 13px; /* Зменшений шрифт повідомлення */
-  color: #64748b; /* Сірий колір тексту */
+  font-size: 0.85rem;
+  color: #64748b;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 100%;
-  line-height: 1.2;
+  flex: 1; /* Займає все доступне місце */
+  margin-right: 8px;
 }
 
-/* Якщо чат непрочитаний */
-.chat-item.is-unread .chat-name {
-  color: #000;
-}
+/* Якщо чат активний або непрочитаний - текст темніший */
+.chat-item.is-unread .chat-name,
 .chat-item.is-unread .chat-preview {
+  color: #0f172a;
   font-weight: 600;
-  color: #1e293b;
 }
 
+/* Лічильник непрочитаних */
 .unread-count {
-  background-color: #0084ff;
+  background-color: #3b82f6;
   color: white;
-  font-size: 10px;
+  font-size: 0.7rem;
   font-weight: 700;
-  min-width: 16px;
-  height: 16px;
-  border-radius: 8px;
+  padding: 0 6px;
+  border-radius: 10px;
+  min-width: 18px;
+  height: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-left: 6px;
-  padding: 0 4px;
 }
 </style>
