@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Facebook;
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use App\Models\FacebookMessage;
+use App\Services\MetaService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -39,7 +41,7 @@ class WebhookController extends Controller
     /**
      * Обробка вхідних даних (Messages & Comments)
      */
-    public function handle(Request $request)
+    public function handle(Request $request, MetaService $metaService)
     {
         $data = $request->all();
         // Логуємо все для відладки, щоб бачити, що саме приходить з Meta.
@@ -52,7 +54,7 @@ class WebhookController extends Controller
             foreach ($data['entry'] ?? [] as $entry) {
                 // Обробка приватних повідомлень (Direct/Messenger)
                 foreach ($entry['messaging'] ?? [] as $event) {
-                    $this->processMessage($event, $platform);
+                    $this->processMessage($event, $platform, $metaService);
                 }
 
                 // Обробка публічних коментарів (Feed)
@@ -72,22 +74,29 @@ class WebhookController extends Controller
         return response('EVENT_RECEIVED', 200);
     }
 
-    private function processMessage(array $event, string $platform): void
+    private function processMessage(array $event, string $platform, MetaService $metaService): void
     {
         // Перевірка наявності даних
-        if (!isset($event['message']) || !isset($event['sender']['id'])) {
+        if (!isset($event['message'])) {
             return;
         }
 
-        $senderId = (string) $event['sender']['id'];
+        $senderId = isset($event['sender']['id']) ? (string) $event['sender']['id'] : null;
+        $recipientId = isset($event['recipient']['id']) ? (string) $event['recipient']['id'] : null;
         $message = $event['message'];
+        $isEcho = $message['is_echo'] ?? false;
+        $contactId = $isEcho ? $recipientId : $senderId;
+
+        if (!$contactId) {
+            return;
+        }
 
         // --- ЛОГІКА РОЗПОДІЛУ КЛІЄНТІВ ---
         if ($platform === 'instagram') {
             // ВАРІАНТ А: Це Instagram
             // Шукаємо або створюємо клієнта по instagram_user_id
             $customer = Customer::firstOrCreate(
-                ['instagram_user_id' => $senderId],
+                ['instagram_user_id' => $contactId],
                 [
                     'first_name' => 'Instagram User',
                     'last_name' => '',
@@ -98,7 +107,7 @@ class WebhookController extends Controller
             // ВАРІАНТ Б: Це Facebook (Messenger)
             // Шукаємо або створюємо клієнта по fb_user_id
             $customer = Customer::firstOrCreate(
-                ['fb_user_id' => $senderId],
+                ['fb_user_id' => $contactId],
                 [
                     'first_name' => 'Facebook User',
                     'last_name' => '',
@@ -107,22 +116,34 @@ class WebhookController extends Controller
             );
         }
 
-        // Ігноруємо "відлуння" (echo), якщо ми самі собі відправили повідомлення
-        if ($message['is_echo'] ?? false) {
-            return;
-        }
-
         // Зберігаємо саме повідомлення
+        $text = $message['text'] ?? '';
+        $hasAttachments = !empty($message['attachments'] ?? []);
+        $sentAt = isset($event['timestamp'])
+            ? Carbon::createFromTimestampMs($event['timestamp'])->timezone(config('app.timezone', 'Europe/Kyiv'))
+            : now(config('app.timezone', 'Europe/Kyiv'));
+
         FacebookMessage::create([
             'customer_id' => $customer->id,
             'mid' => $message['mid'] ?? null,
-            'text' => $message['text'] ?? null,
+            'text' => $text !== '' ? $text : ($hasAttachments ? 'Вкладення' : null),
             'attachments' => $message['attachments'] ?? null,
             'platform' => $platform,
             'type' => 'message',
-            'is_from_customer' => true,
+            'is_from_customer' => !$isEcho,
             'is_private' => true,
+            'sent_at' => $sentAt,
+            'status' => $isEcho ? 'sent' : 'received',
+            'is_read' => $isEcho,
         ]);
+
+        $metaService->touchConversation(
+            $customer->id,
+            $platform,
+            $text !== '' ? $text : ($hasAttachments ? 'Вкладення' : ''),
+            $sentAt,
+            !$isEcho
+        );
     }
 
     private function processComment(array $value, string $platform): void
