@@ -1,124 +1,158 @@
 <template>
-  <div class="chat-thread-inner">
-    <div class="chat-thread-header">
-      <div class="chat-thread-title">
-        <span>{{ title || 'Оберіть клієнта' }}</span>
-        <span v-if="subtitle" class="chat-thread-subtitle">{{ subtitle }}</span>
+  <div class="chat-filters">
+    <!-- Пошук -->
+    <div class="search-box">
+      <div class="input-group">
+        <span class="input-group-text">
+          <i class="bi bi-search"></i>
+        </span>
+        <input
+          type="text"
+          class="form-control shadow-none"
+          placeholder="Пошук клієнта..."
+          :value="search"
+          @input="$emit('update:search', $event.target.value)"
+        />
+        <button 
+          v-if="search" 
+          class="btn-clear" 
+          @click="$emit('update:search', '')"
+        >
+          <i class="bi bi-x-circle-fill"></i>
+        </button>
       </div>
+    </div>
 
+    <!-- Вкладки платформ -->
+    <div class="tabs-container">
       <button
-        v-if="title"
-        class="btn-sync"
-        @click="$emit('sync')"
-        :disabled="sending || isSyncing"
+        v-for="tab in tabs"
+        :key="tab.value"
+        class="tab-btn"
+        :class="{ active: activeTab === tab.value, [tab.value]: true }"
+        @click="$emit('change-tab', tab.value)"
       >
-        <i class="bi" :class="isSyncing ? 'bi-arrow-repeat spin' : 'bi-cloud-download'"></i>
+        <span class="tab-label">{{ tab.label }}</span>
+        <span v-if="tab.count !== undefined" class="tab-count">{{ tab.count }}</span>
       </button>
     </div>
-
-    <div class="chat-thread-body custom-scrollbar" ref="messagesContainer">
-      <div class="chat-messages">
-        <TransitionGroup name="message-list">
-          <ChatMessage
-            v-for="msg in messages"
-            :key="msg.id || msg.temp_id"
-            :message="msg"
-            :is-mine="msg.direction === 'outbound'"
-          />
-        </TransitionGroup>
-      </div>
-      <div ref="scrollAnchor"></div>
-    </div>
-
-    <ChatComposer :sending="sending" @send="$emit('send', $event)" />
   </div>
 </template>
 
 <script setup>
-import { ref, watch, nextTick, onMounted } from 'vue';
-import ChatMessage from './ChatMessage.vue';
-import ChatComposer from './ChatComposer.vue';
-
-const props = defineProps({
-  activeChat: { type: Object, default: null },
-  messages: { type: Array, default: () => [] },
-  sending: { type: Boolean, default: false },
-  isSyncing: { type: Boolean, default: false },
-  title: { type: String, default: '' },
-  subtitle: { type: String, default: '' },
+defineProps({
+  search: { type: String, default: '' },
+  tabs: { type: Array, required: true },
+  activeTab: { type: String, required: true },
 });
 
-defineEmits(['send', 'sync']);
-
-const messagesContainer = ref(null);
-
-function scrollToBottom(smooth = true) {
-  nextTick(() => {
-    if (messagesContainer.value) {
-      messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
-    }
-  });
-}
-
-watch(() => props.messages, () => scrollToBottom(true), { deep: true });
-watch(() => props.activeChat, () => scrollToBottom(false));
-onMounted(() => scrollToBottom(false));
+defineEmits(['update:search', 'change-tab']);
 </script>
 
 <style scoped>
-/* Головний контейнер має фіксовану висоту, щоб внутрішній блок скролився */
-.chat-thread-inner {
+.chat-filters {
+  padding: 16px;
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
   display: flex;
   flex-direction: column;
-  height: 100%; 
-  min-height: 0;
-  background: #fff;
+  gap: 16px;
+}
+
+.search-box {
+  position: relative;
+}
+
+.input-group {
+  background: #f1f5f9;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  transition: all 0.2s;
   overflow: hidden;
 }
 
-.chat-thread-body {
+.input-group:focus-within {
+  background: #fff;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.input-group-text {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  padding-left: 12px;
+}
+
+.form-control {
+  background: transparent;
+  border: none;
+  font-size: 0.9rem;
+  padding: 10px 8px;
+  color: #1e293b;
+}
+
+.btn-clear {
+  background: transparent;
+  border: none;
+  color: #cbd5e1;
+  padding-right: 12px;
+  transition: color 0.2s;
+}
+
+.btn-clear:hover {
+  color: #94a3b8;
+}
+
+/* Стилізація вкладок */
+.tabs-container {
+  display: flex;
+  background: #f8fafc;
+  padding: 4px;
+  border-radius: 10px;
+  gap: 4px;
+}
+
+.tab-btn {
   flex: 1;
-  min-height: 0;
-  padding: 20px;
-  /* overflow-y: scroll - ПОЛОСКА БУДЕ ЗАВЖДИ */
-  overflow-y: scroll; 
-  background-color: #f8fafc;
+  border: none;
+  background: transparent;
+  padding: 6px 4px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #64748b;
+  transition: all 0.2s;
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 
-.chat-messages {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-height: 100%;
+.tab-btn:hover:not(.active) {
+  background: #f1f5f9;
+  color: #475569;
 }
 
-/* СТИЛІЗАЦІЯ ПОЛОСКИ (SCRОLLBAR) */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 10px; /* Ширина полоски */
-  display: block !important;
+.tab-btn.active {
+  background: #fff;
+  color: #1e293b;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: #f1f5f9; /* Колір доріжки */
+.tab-btn.active.facebook { color: #2563eb; }
+.tab-btn.active.instagram { color: #db2777; }
+
+.tab-count {
+  font-size: 0.7rem;
+  background: #e2e8f0;
+  padding: 1px 6px;
+  border-radius: 6px;
+  color: #64748b;
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: #cbd5e1; /* Колір повзунка */
-  border-radius: 5px;
-  border: 2px solid #f1f5f9;
+.tab-btn.active .tab-count {
+  background: #eff6ff;
+  color: #3b82f6;
 }
-
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background-color: #94a3b8;
-}
-
-/* Допоміжні стилі */
-.chat-thread-header { padding: 16px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
-.chat-thread-title { display: flex; flex-direction: column; font-weight: 700; }
-.chat-thread-subtitle { font-size: 0.8rem; color: #94a3b8; }
-.btn-sync { width: 36px; height: 36px; border: 1px solid #e2e8f0; background: #fff; cursor: pointer; border-radius: 8px; }
-.spin { animation: spin 1s linear infinite; }
-@keyframes spin { 100% { transform: rotate(360deg); } }
 </style>

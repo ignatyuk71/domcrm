@@ -12,11 +12,10 @@ use Illuminate\Support\Facades\Log;
 class WebhookController extends Controller
 {
     /**
-     * Підтвердження Webhook (Verification)fsdfgdsfgdd sdf gsdg sdfg
+     * Підтвердження Webhook (Verification)
      */
     public function verify(Request $request)
     {
-        // Отримуємо токен з нашої таблиці налаштувань
         $verifyToken = DB::table('facebook_settings')->value('verify_token');
 
         if (!$verifyToken) {
@@ -24,7 +23,6 @@ class WebhookController extends Controller
             return response('Forbidden', 403);
         }
 
-        // Facebook може надсилати параметри як hub_mode або hub.mode
         $mode = $request->input('hub_mode') ?? $request->input('hub.mode');
         $token = $request->input('hub_verify_token') ?? $request->input('hub.verify_token');
         $challenge = $request->input('hub_challenge') ?? $request->input('hub.challenge');
@@ -42,28 +40,34 @@ class WebhookController extends Controller
     public function handle(Request $request)
     {
         $data = $request->all();
-        // Логуємо все для відладки, щоб бачити, що саме приходить з Meta.
-        Log::info('Facebook Webhook Headers', $request->headers->all());
-        Log::info('Facebook Webhook Body', $data);
+        
+        Log::info('Facebook Webhook Received', [
+            'headers' => $request->headers->all(),
+            'body' => $data
+        ]);
 
         try {
             $platform = ($data['object'] ?? '') === 'instagram' ? 'instagram' : 'messenger';
 
             foreach ($data['entry'] ?? [] as $entry) {
-                // Обробка приватних повідомлень (Direct/Messenger)
-                foreach ($entry['messaging'] ?? [] as $event) {
-                    $this->processMessage($event, $platform);
+                // 1. Приватні повідомлення
+                if (isset($entry['messaging'])) {
+                    foreach ($entry['messaging'] as $event) {
+                        $this->processMessage($event, $platform);
+                    }
                 }
 
-                // Обробка публічних коментарів (Feed)
-                foreach ($entry['changes'] ?? [] as $change) {
-                    if (in_array($change['field'] ?? '', ['feed', 'comments'], true)) {
-                        $this->processComment($change['value'] ?? [], $platform);
+                // 2. Коментарі та зміни у фіді
+                if (isset($entry['changes'])) {
+                    foreach ($entry['changes'] as $change) {
+                        if (in_array($change['field'] ?? '', ['feed', 'comments'], true)) {
+                            $this->processComment($change['value'] ?? [], $platform);
+                        }
                     }
                 }
             }
         } catch (\Throwable $e) {
-            Log::error('Facebook Webhook Error: '.$e->getMessage(), [
+            Log::error('Facebook Webhook Error: ' . $e->getMessage(), [
                 'exception' => $e,
             ]);
             return response('Error', 500);
@@ -72,9 +76,11 @@ class WebhookController extends Controller
         return response('EVENT_RECEIVED', 200);
     }
 
+    /**
+     * Обробка приватних повідомлень
+     */
     private function processMessage(array $event, string $platform): void
     {
-        // Перевірка наявності даних
         if (!isset($event['message']) || !isset($event['sender']['id'])) {
             return;
         }
@@ -82,37 +88,27 @@ class WebhookController extends Controller
         $senderId = (string) $event['sender']['id'];
         $message = $event['message'];
 
-        // --- ЛОГІКА РОЗПОДІЛУ КЛІЄНТІВ ---
-        if ($platform === 'instagram') {
-            // ВАРІАНТ А: Це Instagram
-            // Шукаємо або створюємо клієнта по instagram_user_id
-            $customer = Customer::firstOrCreate(
-                ['instagram_user_id' => $senderId],
-                [
-                    'first_name' => 'Instagram User',
-                    'last_name' => '',
-                    'note' => 'Створено автоматично через Instagram Direct',
-                ]
-            );
-        } else {
-            // ВАРІАНТ Б: Це Facebook (Messenger)
-            // Шукаємо або створюємо клієнта по fb_user_id
-            $customer = Customer::firstOrCreate(
-                ['fb_user_id' => $senderId],
-                [
-                    'first_name' => 'Facebook User',
-                    'last_name' => '',
-                    'note' => 'Створено автоматично через Facebook Messenger',
-                ]
-            );
-        }
-
-        // Ігноруємо "відлуння" (echo), якщо ми самі собі відправили повідомлення
+        // Ігноруємо "відлуння"
         if ($message['is_echo'] ?? false) {
             return;
         }
 
-        // Зберігаємо саме повідомлення
+        // Пошук або створення клієнта
+        $customer = Customer::firstOrCreate(
+            $platform === 'instagram' 
+                ? ['instagram_user_id' => $senderId] 
+                : ['fb_user_id' => $senderId],
+            [
+                'first_name' => $platform === 'instagram' ? 'Instagram User' : 'Facebook User',
+                'platform' => $platform,
+                'note' => "Автоматично створено через $platform",
+            ]
+        );
+
+        // Формуємо текст для прев'ю (якщо є вкладення без тексту)
+        $previewText = $message['text'] ?? (isset($message['attachments']) ? '📷 Зображення/Файл' : '...');
+
+        // Зберігаємо повідомлення
         FacebookMessage::create([
             'customer_id' => $customer->id,
             'mid' => $message['mid'] ?? null,
@@ -123,8 +119,17 @@ class WebhookController extends Controller
             'is_from_customer' => true,
             'is_private' => true,
         ]);
+
+        // Оновлюємо клієнта для сайдбару чату
+        $customer->update([
+            'last_message_at' => now(),
+            'last_message_text' => $previewText,
+        ]);
     }
 
+    /**
+     * Обробка публічних коментарів
+     */
     private function processComment(array $value, string $platform): void
     {
         $fbUserId = $value['from']['id'] ?? null;
@@ -150,6 +155,12 @@ class WebhookController extends Controller
             'is_private' => false,
             'post_id' => $value['post_id'] ?? null,
             'permalink' => $value['permalink_url'] ?? ($value['permalink'] ?? null),
+        ]);
+
+        // Оновлюємо клієнта
+        $customer->update([
+            'last_message_at' => now(),
+            'last_message_text' => '💬 Коментар: ' . ($value['message'] ?? '...'),
         ]);
     }
 }

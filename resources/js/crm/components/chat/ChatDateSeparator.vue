@@ -17,9 +17,10 @@ defineProps({
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 20px 0;
-  padding: 0 10px;
+  margin: 24px 0;
+  padding: 0 16px;
   gap: 16px;
+  width: 100%;
 }
 
 .chat-date-line {
@@ -32,12 +33,13 @@ defineProps({
   font-size: 0.75rem;
   font-weight: 600;
   color: #94a3b8;
-  background: #f8fafc; /* Колір фону чату, щоб перекривати лінію */
-  padding: 4px 12px;
+  /* Змінено на #fff, щоб відповідати фону ChatThread */
+  background: #fff; 
+  padding: 4px 14px;
   border-radius: 999px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #f1f5f9;
   text-transform: lowercase;
+  white-space: nowrap;
+  user-select: none;
 }
-
-/* Якщо фон чату білий, змініть background у .chat-date-label на #fff */
 </style>
