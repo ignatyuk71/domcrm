@@ -201,6 +201,11 @@ class MetaService
             $response = Http::withToken($settings->access_token)
                 ->get($this->graphUrl("/{$socialId}"), ['fields' => $fields]);
 
+            Log::info("Meta API Debug Response for Customer {$customer->id}: ", [
+                'status' => $response->status(),
+                'json' => $response->json(),
+            ]);
+
             if (!$response->successful()) {
                 return;
             }

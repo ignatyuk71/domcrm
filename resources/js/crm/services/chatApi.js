@@ -20,6 +20,10 @@ export function forceSync(customerId) {
   return axios.post(`/api/chat/${customerId}/sync`);
 }
 
+export function refreshProfile(customerId) {
+  return axios.post(`/api/chat/customers/${customerId}/refresh-profile`);
+}
+
 export function fetchNewMessages(threadId, sinceId) {
   return axios
     .get(`/api/chat/threads/${threadId}/messages/updates`, {
