@@ -21,16 +21,6 @@
             >
               <i class="bi bi-arrow-clockwise"></i>
             </button>
-            <button
-              type="button"
-              class="chat-thread-sync"
-              :class="{ 'is-syncing': isProfileRefreshing }"
-              :disabled="isProfileRefreshing || loading"
-              title="Оновити профіль"
-              @click="$emit('refresh-profile')"
-            >
-              <i class="bi bi-person-arrows"></i>
-            </button>
           </div>
           <div class="chat-thread-platform" v-if="activeChat?.platform">
             <i :class="activeChat.platform === 'instagram' ? 'bi bi-instagram' : 'bi bi-messenger'"></i>
@@ -82,10 +72,9 @@ const props = defineProps({
   isSending: { type: Boolean, default: false },
   loading: { type: Boolean, default: false }, // <--- ДОДАНО НОВИЙ PROPS
   isSyncing: { type: Boolean, default: false },
-  isProfileRefreshing: { type: Boolean, default: false },
 });
 
-defineEmits(['send', 'force-sync', 'refresh-profile']);
+defineEmits(['send', 'force-sync']);
 
 const threadBody = ref(null);
 

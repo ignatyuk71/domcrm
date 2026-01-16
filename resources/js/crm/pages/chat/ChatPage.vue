@@ -29,11 +29,9 @@
         :messages="messages"
         :is-sending="isSending"
         :is-syncing="isSyncing"
-        :is-profile-refreshing="isProfileRefreshing"
         :loading="isLoading"
         @send="handleSendMessage"
         @force-sync="handleForceSync"
-        @refresh-profile="handleRefreshProfile"
       />
       <ChatEmpty v-else />
     </template>
@@ -63,12 +61,10 @@ const {
   isLoading, // Ця змінна відповідає за стан завантаження
   isSending,
   isSyncing,
-  isProfileRefreshing,
   fetchConversations,
   selectChat,
   sendMessage,
   forceSync,
-  refreshProfile,
   stopPolling
 } = useChat();
 
@@ -98,10 +94,6 @@ const handleSendMessage = (payload) => {
 
 const handleForceSync = () => {
   forceSync(activeChatId.value);
-};
-
-const handleRefreshProfile = () => {
-  refreshProfile(activeChatId.value);
 };
 
 // Lifecycle

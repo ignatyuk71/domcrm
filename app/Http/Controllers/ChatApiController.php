@@ -368,14 +368,5 @@ class ChatApiController extends Controller
         return response()->json(['success' => true, 'count' => $count]);
     }
 
-    public function refreshProfile($id, MetaService $metaService)
-    {
-        $customer = Customer::findOrFail($id);
-        $metaService->updateCustomerProfile($customer);
-
-        return response()->json([
-            'success' => true,
-            'customer' => $customer->fresh(),
-        ]);
-    }
+    
 }

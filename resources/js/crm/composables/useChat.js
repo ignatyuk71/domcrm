@@ -5,7 +5,6 @@ import {
   getConversations,
   getMessages,
   markRead as apiMarkRead,
-  refreshProfile as apiRefreshProfile,
   sendMessage as apiSendMessage,
 } from '@/crm/services/chatApi';
 
@@ -16,7 +15,6 @@ export function useChat() {
   const isLoading = ref(false);
   const isSending = ref(false);
   const isSyncing = ref(false);
-  const isProfileRefreshing = ref(false);
   const error = ref('');
   
   // Змінили назву змінної, бо це тепер таймер, а не інтервал
@@ -130,32 +128,6 @@ export function useChat() {
     }
   }
 
-  async function refreshProfile(customerId) {
-    if (!customerId) return;
-    isProfileRefreshing.value = true;
-    try {
-      const { data } = await apiRefreshProfile(customerId);
-      const updatedCustomer = data?.customer;
-      if (updatedCustomer) {
-        conversations.value = conversations.value.map((chat) =>
-          chat.customer_id === customerId
-            ? {
-                ...chat,
-                customer_name: `${updatedCustomer.first_name || ''} ${updatedCustomer.last_name || ''}`.trim()
-                  || chat.customer_name,
-                customer_avatar: updatedCustomer.fb_profile_pic || chat.customer_avatar,
-              }
-            : chat
-        );
-      }
-    } catch (e) {
-      console.error('Не вдалося оновити профіль клієнта', e);
-      error.value = 'Не вдалося оновити профіль клієнта';
-    } finally {
-      isProfileRefreshing.value = false;
-    }
-  }
-
   // --- ОНОВЛЕНА ЛОГІКА POLLING (3 секунди + захист від дублів) ---
   function startPolling(threadId) {
     stopPolling();
@@ -228,13 +200,11 @@ export function useChat() {
     isLoading,
     isSending,
     isSyncing,
-    isProfileRefreshing,
     error,
     fetchConversations,
     selectChat,
     sendMessage,
     forceSync,
-    refreshProfile,
     startPolling,
     stopPolling,
   };
