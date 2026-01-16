@@ -7,6 +7,9 @@
   >
     <div class="chat-item-header">
       <div class="chat-item-title">
+        <span class="platform-icon" :class="item.platform" :title="item.platform">
+          <i :class="item.platform === 'instagram' ? 'bi bi-instagram' : 'bi bi-messenger'"></i>
+        </span>
         <span class="chat-item-name">{{ item.customer_name || 'Невідомий клієнт' }}</span>
       </div>
       <span class="chat-item-time">{{ item.last_message_time || '' }}</span>
@@ -16,6 +19,9 @@
       <div class="chat-item-preview">
         {{ item.last_message || 'Немає повідомлень' }}
       </div>
+      <span v-if="item.unread_count" class="chat-item-badge">
+        {{ item.unread_count }}
+      </span>
     </div>
   </button>
 </template>
@@ -68,6 +74,15 @@ defineEmits(['select']);
   overflow: hidden;
 }
 
+.platform-icon {
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+}
+
+.platform-icon.instagram { color: #db2777; }
+.platform-icon.messenger { color: #2563eb; }
+
 .chat-item-name {
   font-weight: 700;
   font-size: 0.9rem;
@@ -98,6 +113,17 @@ defineEmits(['select']);
   overflow: hidden;
   text-overflow: ellipsis;
   flex: 1;
+}
+
+.chat-item-badge {
+  background: #3b82f6;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  min-width: 20px;
+  text-align: center;
 }
 
 .chat-sidebar-item.active .chat-item-name {

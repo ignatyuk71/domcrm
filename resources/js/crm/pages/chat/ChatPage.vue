@@ -16,8 +16,15 @@
           v-if="activeChatId"
           :active-chat="activeChat"
           :messages="messages"
+          :is-sending="isSending"
+          @send="handleSend"
         />
         <ChatEmptyState v-else />
+      </template>
+
+      <!-- 3. Слот для профілю клієнта -->
+      <template #profile>
+        <ChatCustomerProfile :chat="activeChat" />
       </template>
     </ChatLayout>
 
@@ -32,13 +39,14 @@
 </template>
 
 <script setup>
-import { onMounted } from 'vue';
+import { onBeforeUnmount, onMounted } from 'vue';
 
 // Використовуємо аліас @ (зазвичай resources/js)
 import ChatLayout from '@/crm/components/chat/ChatLayout.vue';
 import ChatSidebar from '@/crm/components/chat/ChatSidebar.vue';
 import ChatThread from '@/crm/components/chat/ChatThread.vue';
 import ChatEmptyState from '@/crm/components/chat/ChatEmptyState.vue';
+import ChatCustomerProfile from '@/crm/components/chat/ChatCustomerProfile.vue';
 import { useChat } from '@/crm/composables/useChat';
 
 const {
@@ -46,19 +54,29 @@ const {
   activeChatId,
   activeChat,
   messages,
+  isSending,
   error,
   fetchConversations,
   selectChat,
+  sendMessage,
+  stopPolling,
 } = useChat();
 
 function handleSelect(chat) {
   selectChat(chat.customer_id);
 }
 
+function handleSend(payload) {
+  sendMessage(payload);
+}
+
 onMounted(() => {
   fetchConversations();
 });
 
+onBeforeUnmount(() => {
+  stopPolling();
+});
 </script>
 
 <style scoped>

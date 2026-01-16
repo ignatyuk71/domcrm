@@ -7,3 +7,19 @@ export function getConversations() {
 export function getMessages(customerId) {
   return axios.get(`/api/chat/${customerId}/messages`);
 }
+
+export function sendMessage(payload) {
+  return axios.post('/api/chat/send', payload);
+}
+
+export function markRead(customerId) {
+  return axios.post('/api/chat/mark-read', { customer_id: customerId });
+}
+
+export function fetchNewMessages(threadId, sinceId) {
+  return axios
+    .get(`/api/chat/threads/${threadId}/messages/updates`, {
+      params: { since_id: sinceId },
+    })
+    .then((res) => res.data);
+}

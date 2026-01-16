@@ -7,7 +7,7 @@
       </span>
     </header>
 
-    <div class="chat-thread-body">
+    <div ref="threadBody" class="chat-thread-body">
       <div v-if="!messages.length" class="chat-thread-empty">
         Немає повідомлень
       </div>
@@ -19,16 +19,45 @@
         :is-mine="message.direction === 'outbound'"
       />
     </div>
+
+    <ChatInput
+      :disabled="isSending"
+      @send="$emit('send', { ...$event, customer_id: activeChat?.customer_id })"
+    />
   </div>
 </template>
 
 <script setup>
+import { nextTick, onMounted, ref, watch } from 'vue';
 import ChatMessage from './ChatMessage.vue';
+import ChatInput from './ChatInput.vue';
 
-defineProps({
+const props = defineProps({
   activeChat: { type: Object, default: null },
   messages: { type: Array, default: () => [] },
+  isSending: { type: Boolean, default: false },
 });
+
+defineEmits(['send']);
+
+const threadBody = ref(null);
+
+function scrollToBottom() {
+  if (!threadBody.value) return;
+  threadBody.value.scrollTop = threadBody.value.scrollHeight;
+}
+
+onMounted(() => {
+  scrollToBottom();
+});
+
+watch(
+  () => props.messages.length,
+  async () => {
+    await nextTick();
+    scrollToBottom();
+  }
+);
 </script>
 
 <style scoped>
