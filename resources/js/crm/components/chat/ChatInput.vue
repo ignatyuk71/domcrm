@@ -1,33 +1,28 @@
 <template>
   <div class="chat-input-wrapper">
     <form class="chat-input-form" @submit.prevent="handleSend">
-      <div class="textarea-container">
+      
+      <div class="text-input-card">
         <textarea
           v-model="text"
           class="chat-textarea"
           rows="1"
-          placeholder="Введіть повідомлення..."
+          placeholder="Напишіть щось..."
           :disabled="disabled"
           @keydown.ctrl.enter.prevent="handleSend"
           @input="autoResize"
           ref="textareaRef"
         ></textarea>
+        
+        <span class="kb-hint" v-if="text.length > 0">Ctrl + Enter для відправки</span>
       </div>
 
       <div class="chat-actions">
         <div class="chat-tools">
-          <button type="button" class="tool-btn" title="Шаблони">
-            <i class="bi bi-file-text"></i>
-          </button>
-          <button type="button" class="tool-btn" title="Швидкі відповіді">
-            <i class="bi bi-lightning"></i>
-          </button>
-          <button type="button" class="tool-btn" title="Товари">
-            <i class="bi bi-box-seam"></i>
-          </button>
-          <button type="button" class="tool-btn" title="Емодзі">
-            <i class="bi bi-emoji-smile"></i>
-          </button>
+          <button type="button" class="tool-btn" title="Шаблони"><i class="bi bi-file-text"></i></button>
+          <button type="button" class="tool-btn" title="Швидкі відповіді"><i class="bi bi-lightning"></i></button>
+          <button type="button" class="tool-btn" title="Товари"><i class="bi bi-box-seam"></i></button>
+          <button type="button" class="tool-btn" title="Емодзі"><i class="bi bi-emoji-smile"></i></button>
           <button 
             type="button" 
             class="tool-btn" 
@@ -37,9 +32,7 @@
           >
             <i class="bi bi-paperclip"></i>
           </button>
-          <button type="button" class="tool-btn" title="Голосове">
-            <i class="bi bi-mic"></i>
-          </button>
+          <button type="button" class="tool-btn" title="Голосове"><i class="bi bi-mic"></i></button>
         </div>
 
         <button 
@@ -47,19 +40,24 @@
           type="submit" 
           :disabled="disabled || !canSend"
         >
-          <i class="bi bi-send-fill"></i>
           <span>Надіслати</span>
+          <i class="bi bi-send-fill"></i>
         </button>
       </div>
 
-      <div v-if="showAttachment" class="attachment-input-area">
-        <input
-          v-model="attachmentUrl"
-          type="url"
-          class="link-input"
-          placeholder="Вставте посилання на файл (https://...)"
-        />
-      </div>
+      <transition name="slide-fade">
+        <div v-if="showAttachment" class="attachment-area">
+          <div class="link-input-group">
+            <i class="bi bi-link-45deg"></i>
+            <input
+              v-model="attachmentUrl"
+              type="url"
+              class="link-input"
+              placeholder="Вставте посилання на зображення або файл..."
+            />
+          </div>
+        </div>
+      </transition>
     </form>
   </div>
 </template>
@@ -103,31 +101,35 @@ function handleSend() {
     attachments,
   });
 
-  // Очищення після відправки
   text.value = '';
   attachmentUrl.value = '';
   showAttachment.value = false;
-  if (textareaRef.value) {
-    textareaRef.value.style.height = 'auto';
-  }
+  if (textareaRef.value) textareaRef.value.style.height = 'auto';
 }
 </script>
 
 <style scoped>
-/* Головний фон блоку введення (світло-блакитний) */
 .chat-input-wrapper {
-  background: #f1f8fe; 
-  padding: 12px 20px;
-  border-top: 1px solid #e2eaf3;
+  background: #f4f9ff; /* Твій ніжно-блакитний фон */
+  padding: 16px 24px;
+  border-top: 1px solid #e1e8f0;
 }
 
-.chat-input-form {
-  display: flex;
-  flex-direction: column;
+/* БЛОК-КАРТКА ДЛЯ ТЕКСТУ */
+.text-input-card {
+  background: #ffffff;
+  border: 1px solid #d1d9e2;
+  border-radius: 12px;
+  padding: 12px 16px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.03);
+  margin-bottom: 12px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  position: relative;
 }
 
-.textarea-container {
-  margin-bottom: 8px;
+.text-input-card:focus-within {
+  border-color: #3b82f6;
+  box-shadow: 0 4px 10px rgba(59, 130, 246, 0.08);
 }
 
 .chat-textarea {
@@ -136,18 +138,24 @@ function handleSend() {
   background: transparent;
   resize: none;
   font-size: 1rem;
-  color: #334155;
-  padding: 4px 0;
+  color: #1e293b;
   outline: none;
   min-height: 24px;
-  max-height: 200px;
-  line-height: 1.4;
+  max-height: 180px;
+  line-height: 1.5;
+  display: block;
 }
 
-.chat-textarea::placeholder {
+.kb-hint {
+  position: absolute;
+  bottom: 4px;
+  right: 12px;
+  font-size: 0.7rem;
   color: #94a3b8;
+  pointer-events: none;
 }
 
+/* ДІЇ ТА КНОПКИ */
 .chat-actions {
   display: flex;
   justify-content: space-between;
@@ -156,70 +164,92 @@ function handleSend() {
 
 .chat-tools {
   display: flex;
-  gap: 18px; /* Відступи між іконками */
+  gap: 16px;
 }
 
 .tool-btn {
   background: transparent;
   border: none;
   color: #64748b;
-  font-size: 1.25rem;
-  padding: 0;
+  font-size: 1.3rem;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  transition: color 0.2s ease;
+  padding: 4px;
+  border-radius: 6px;
+  transition: background 0.2s, color 0.2s;
 }
 
 .tool-btn:hover {
+  background: #eef2f7;
   color: #3b82f6;
 }
 
 .tool-btn.active {
   color: #3b82f6;
+  background: #e0e7ff;
 }
 
-/* Кнопка "Надіслати" — блакитний фон, синій текст */
 .chat-send-btn {
-  background: #bfdbfe; 
-  color: #2563eb;
+  background: #3b82f6; /* Зробив більш активною */
+  color: #ffffff;
   border: none;
-  border-radius: 6px;
-  padding: 8px 16px;
-  font-weight: 500;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-weight: 600;
   display: flex;
   align-items: center;
   gap: 10px;
   cursor: pointer;
-  transition: background 0.2s ease;
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
 }
 
 .chat-send-btn:hover:not(:disabled) {
-  background: #adcfff;
+  background: #2563eb;
 }
 
 .chat-send-btn:disabled {
-  background: #e2e8f0;
-  color: #94a3b8;
+  background: #cbd5e1;
+  box-shadow: none;
   cursor: not-allowed;
 }
 
-.attachment-input-area {
-  margin-top: 10px;
-  padding-bottom: 5px;
+/* ПОЛЕ ПОСИЛАННЯ */
+.attachment-area {
+  margin-top: 12px;
+}
+
+.link-input-group {
+  display: flex;
+  align-items: center;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 6px 12px;
+  gap: 8px;
+}
+
+.link-input-group i {
+  color: #94a3b8;
+  font-size: 1.2rem;
 }
 
 .link-input {
-  width: 100%;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  padding: 7px 12px;
-  font-size: 0.9rem;
-  background: #fff;
+  flex: 1;
+  border: none;
   outline: none;
+  font-size: 0.9rem;
+  color: #334155;
 }
 
-.link-input:focus {
-  border-color: #3b82f6;
+/* АНІМАЦІЯ */
+.slide-fade-enter-active {
+  transition: all 0.3s ease-out;
+}
+.slide-fade-leave-active {
+  transition: all 0.2s cubic-bezier(1, 0.5, 0.8, 1);
+}
+.slide-fade-enter-from,
+.slide-fade-leave-to {
+  transform: translateY(-10px);
+  opacity: 0;
 }
 </style>
