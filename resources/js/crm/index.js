@@ -82,10 +82,18 @@ export function mountPackingWorkspace(selector = '#packing-workspace') {
 
 export function mountChat(selector = '#crm-chat') {
     const el = document.querySelector(selector);
-    if (!el) return;
+    if (!el) {
+        if (window.__CHAT_DEBUG) {
+            console.warn('[chat] mount target not found', selector);
+        }
+        return;
+    }
 
     const app = createApp(ChatPage);
     app.mount(el);
+    if (window.__CHAT_DEBUG) {
+        console.info('[chat] mounted', selector);
+    }
     return app;
 }
 

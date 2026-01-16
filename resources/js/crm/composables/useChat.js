@@ -25,7 +25,13 @@ export function useChat() {
     error.value = '';
     try {
       const { data } = await getConversations();
+      if (window.__CHAT_DEBUG) {
+        console.info('[chat] list response', data);
+      }
       conversations.value = data?.data || data || [];
+      if (window.__CHAT_DEBUG) {
+        console.info('[chat] list items', conversations.value.length);
+      }
     } catch (e) {
       console.error('Не вдалося завантажити список чатів', e);
       error.value = 'Не вдалося завантажити список чатів';
@@ -43,7 +49,13 @@ export function useChat() {
     error.value = '';
     try {
       const { data } = await getMessages(customerId);
+      if (window.__CHAT_DEBUG) {
+        console.info('[chat] messages response', customerId, data);
+      }
       messages.value = data?.data || data || [];
+      if (window.__CHAT_DEBUG) {
+        console.info('[chat] messages items', messages.value.length);
+      }
       apiMarkRead(customerId).catch(() => {});
       conversations.value = conversations.value.map((chat) =>
         chat.customer_id === customerId ? { ...chat, unread_count: 0 } : chat
@@ -76,6 +88,9 @@ export function useChat() {
 
     try {
       const { data } = await apiSendMessage(payload);
+      if (window.__CHAT_DEBUG) {
+        console.info('[chat] send response', data);
+      }
       const newMessage = data?.data || data;
       messages.value = messages.value.map((msg) => (msg.id === tempId ? newMessage : msg));
 

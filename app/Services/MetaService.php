@@ -2,7 +2,7 @@
 
 namespace App\Services;
 
-use App\Models\ChatMessage;
+use App\Models\FacebookMessage; // Змінено
 use App\Models\Conversation;
 use App\Models\Customer;
 use Carbon\Carbon;
@@ -12,25 +12,31 @@ use Illuminate\Support\Facades\Log;
 
 class MetaService
 {
+    /**
+     * Відправка повідомлення (текст або вкладення)
+     */
     public function sendMessage(
         Customer $customer,
         string $text,
         array $attachments = [],
         string $platform = 'messenger'
-    ): array
+    ): ?array // Повертаємо null при помилці, array при успіху
     {
         $settings = $this->getSettings();
-        $platform = $platform === 'instagram' ? 'instagram' : 'messenger';
-        $recipientId = $platform === 'instagram'
-            ? $customer->instagram_user_id
+        
+        // Вибираємо правильний ID
+        $recipientId = $platform === 'instagram' 
+            ? $customer->instagram_user_id 
             : $customer->fb_user_id;
 
+        // Fallback: якщо не знайшли по платформі, спробуємо хоч якийсь
         if (!$recipientId) {
             $recipientId = $customer->instagram_user_id ?: $customer->fb_user_id;
         }
 
         if (!$recipientId) {
-            throw new \RuntimeException('Клієнт не має ID соцмережі.');
+            Log::error("Спроба відправки повідомлення клієнту {$customer->id} без ID соцмережі");
+            return null;
         }
 
         $validAttachments = array_values(array_filter($attachments, function ($attachment) {
@@ -54,19 +60,27 @@ class MetaService
                 ],
             ];
         } else {
+            // Meta API не дозволяє пусті повідомлення
+            if (empty($text)) {
+                return null;
+            }
             $payload['message'] = ['text' => $text];
         }
 
-        $response = Http::withToken($settings->access_token)->post($this->graphUrl('/me/messages'), $payload);
+        $response = Http::withToken($settings->access_token)
+            ->post($this->graphUrl('/me/messages'), $payload);
 
         if ($response->failed()) {
-            Log::error('Meta API Error', $response->json());
-            throw new \RuntimeException('Meta API Error');
+            Log::error('Meta API Send Error', $response->json());
+            return null;
         }
 
         return $response->json();
     }
 
+    /**
+     * Стягування історії при відкритті чату
+     */
     public function syncHistory(Customer $customer): int
     {
         $settings = $this->getSettings();
@@ -89,7 +103,7 @@ class MetaService
         ]);
 
         if ($response->failed()) {
-            Log::error('Meta API Error', $response->json());
+            Log::error('Meta API Sync Error', $response->json());
             return 0;
         }
 
@@ -98,21 +112,21 @@ class MetaService
 
         foreach (array_reverse($remoteMessages) as $msgData) {
             $mid = $msgData['id'] ?? null;
-            if (!$mid) {
+            if (!$mid) continue;
+
+            // Перевірка дублікатів через FacebookMessage
+            if (FacebookMessage::where('mid', $mid)->exists()) {
                 continue;
             }
 
-            if (ChatMessage::where('mid', $mid)->exists()) {
-                continue;
-            }
-
+            // Визначення від кого
             $isFromCustomer = isset($msgData['from']['id']) && $msgData['from']['id'] == $recipientId;
             $sentAt = $this->normalizeTimestamp($msgData['created_time'] ?? null);
 
             $text = $msgData['message'] ?? '';
             $hasAttachments = !empty($msgData['attachments']['data'] ?? []);
 
-            ChatMessage::create([
+            FacebookMessage::create([
                 'customer_id' => $customer->id,
                 'mid' => $mid,
                 'text' => $text !== '' ? $text : ($hasAttachments ? 'Вкладення' : ''),
@@ -127,6 +141,7 @@ class MetaService
                 'updated_at' => $sentAt,
             ]);
 
+            // Оновлюємо conversation
             $this->touchConversation(
                 $customer->id,
                 $platform,
@@ -157,27 +172,22 @@ class MetaService
         ?Carbon $sentAt,
         bool $isInbound
     ): void {
-        $payload = [
-            'platform' => $platform,
-            'last_message_text' => $text,
-            'last_message_at' => $sentAt,
-        ];
-
-        Conversation::updateOrCreate(
+        // Використовуємо updateOrCreate, щоб отримати об'єкт
+        $conversation = Conversation::updateOrCreate(
             ['customer_id' => $customerId, 'platform' => $platform],
-            array_merge($payload, [
+            [
+                'last_message_text' => mb_strimwidth($text, 0, 190, '...'),
+                'last_message_at' => $sentAt,
                 'status' => 'open',
-            ])
+                'updated_at' => now(), // Оновлюємо час редагування запису
+            ]
         );
 
         if ($isInbound) {
-            Conversation::where('customer_id', $customerId)
-                ->where('platform', $platform)
-                ->increment('unread_count');
+            $conversation->increment('unread_count');
         } else {
-            Conversation::where('customer_id', $customerId)
-                ->where('platform', $platform)
-                ->update(['unread_count' => 0]);
+            // Якщо це вихідне повідомлення — скидаємо лічильник непрочитаних
+            $conversation->update(['unread_count' => 0]);
         }
     }
 
@@ -197,11 +207,10 @@ class MetaService
         $response = Http::withToken($accessToken)->get($this->graphUrl('/me/conversations'), [
             'platform' => $platform,
             'fields' => 'participants,updated_time',
-            'limit' => 20,
+            'limit' => 50,
         ]);
 
         if ($response->failed()) {
-            Log::error('Meta API Error', $response->json());
             return null;
         }
 
@@ -222,9 +231,7 @@ class MetaService
         if (!$timestamp) {
             return null;
         }
-
         $timezone = config('app.timezone', 'Europe/Kyiv');
-
         return Carbon::parse($timestamp)->timezone($timezone);
     }
 

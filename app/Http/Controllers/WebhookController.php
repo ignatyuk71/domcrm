@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\ChatMessage;
+use App\Models\FacebookMessage; // Змінено
 use App\Models\Customer;
 use App\Services\MetaService;
 use Carbon\Carbon;
@@ -66,7 +66,8 @@ class WebhookController extends Controller
             return;
         }
 
-        if (ChatMessage::where('mid', $mid)->exists()) {
+        // Перевірка на дублікати через FacebookMessage
+        if (FacebookMessage::where('mid', $mid)->exists()) {
             return;
         }
 
@@ -96,7 +97,8 @@ class WebhookController extends Controller
         $text = $message['text'] ?? '';
         $hasAttachments = !empty($message['attachments'] ?? []);
 
-        ChatMessage::create([
+        // Створення повідомлення через FacebookMessage
+        FacebookMessage::create([
             'customer_id' => $customer->id,
             'mid' => $mid,
             'text' => $text !== '' ? $text : ($hasAttachments ? 'Вкладення' : ''),
