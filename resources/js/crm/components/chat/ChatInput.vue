@@ -16,28 +16,28 @@
 
       <div class="chat-actions">
         <div class="chat-tools">
-          <button type="button" class="tool-btn" :disabled="disabled">
+          <button type="button" class="tool-btn" title="Шаблони">
             <i class="bi bi-file-text"></i>
           </button>
-          <button type="button" class="tool-btn" :disabled="disabled">
+          <button type="button" class="tool-btn" title="Швидкі відповіді">
             <i class="bi bi-lightning"></i>
           </button>
-          <button type="button" class="tool-btn" :disabled="disabled">
+          <button type="button" class="tool-btn" title="Товари">
             <i class="bi bi-box-seam"></i>
           </button>
-          <button type="button" class="tool-btn" :disabled="disabled">
+          <button type="button" class="tool-btn" title="Емодзі">
             <i class="bi bi-emoji-smile"></i>
           </button>
           <button 
             type="button" 
             class="tool-btn" 
             :class="{ active: showAttachment }"
-            :disabled="disabled" 
             @click="toggleAttachment"
+            title="Додати посилання"
           >
             <i class="bi bi-paperclip"></i>
           </button>
-          <button type="button" class="tool-btn" :disabled="disabled">
+          <button type="button" class="tool-btn" title="Голосове">
             <i class="bi bi-mic"></i>
           </button>
         </div>
@@ -57,7 +57,7 @@
           v-model="attachmentUrl"
           type="url"
           class="link-input"
-          placeholder="Вставте посилання на файл..."
+          placeholder="Вставте посилання на файл (https://...)"
         />
       </div>
     </form>
@@ -82,8 +82,10 @@ const canSend = computed(() => text.value.trim().length > 0 || attachmentUrl.val
 
 function autoResize() {
   const el = textareaRef.value;
-  el.style.height = 'auto';
-  el.style.height = el.scrollHeight + 'px';
+  if (el) {
+    el.style.height = 'auto';
+    el.style.height = (el.scrollHeight) + 'px';
+  }
 }
 
 function toggleAttachment() {
@@ -101,19 +103,22 @@ function handleSend() {
     attachments,
   });
 
+  // Очищення після відправки
   text.value = '';
   attachmentUrl.value = '';
   showAttachment.value = false;
-  if (textareaRef.value) textareaRef.value.style.height = 'auto';
+  if (textareaRef.value) {
+    textareaRef.value.style.height = 'auto';
+  }
 }
 </script>
 
 <style scoped>
-/* Головний контейнер як на скріні (світлий фон) */
+/* Головний фон блоку введення (світло-блакитний) */
 .chat-input-wrapper {
-  background: #f0f7ff; 
-  padding: 15px 20px;
-  border-top: 1px solid #e2e8f0;
+  background: #f1f8fe; 
+  padding: 12px 20px;
+  border-top: 1px solid #e2eaf3;
 }
 
 .chat-input-form {
@@ -122,7 +127,7 @@ function handleSend() {
 }
 
 .textarea-container {
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .chat-textarea {
@@ -131,11 +136,12 @@ function handleSend() {
   background: transparent;
   resize: none;
   font-size: 1rem;
-  color: #475569;
-  padding: 0;
+  color: #334155;
+  padding: 4px 0;
   outline: none;
   min-height: 24px;
-  line-height: 1.5;
+  max-height: 200px;
+  line-height: 1.4;
 }
 
 .chat-textarea::placeholder {
@@ -150,19 +156,19 @@ function handleSend() {
 
 .chat-tools {
   display: flex;
-  gap: 15px;
+  gap: 18px; /* Відступи між іконками */
 }
 
 .tool-btn {
   background: transparent;
   border: none;
   color: #64748b;
-  font-size: 1.2rem;
+  font-size: 1.25rem;
   padding: 0;
   cursor: pointer;
   display: flex;
   align-items: center;
-  transition: color 0.2s;
+  transition: color 0.2s ease;
 }
 
 .tool-btn:hover {
@@ -173,40 +179,47 @@ function handleSend() {
   color: #3b82f6;
 }
 
-/* Кнопка Надіслати (світло-синій фон, синій текст) */
+/* Кнопка "Надіслати" — блакитний фон, синій текст */
 .chat-send-btn {
-  background: #dbeafe;
+  background: #bfdbfe; 
   color: #2563eb;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   padding: 8px 16px;
   font-weight: 500;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background 0.2s ease;
 }
 
 .chat-send-btn:hover:not(:disabled) {
-  background: #bfdbfe;
+  background: #adcfff;
 }
 
 .chat-send-btn:disabled {
-  opacity: 0.5;
+  background: #e2e8f0;
+  color: #94a3b8;
   cursor: not-allowed;
 }
 
 .attachment-input-area {
-  margin-top: 12px;
+  margin-top: 10px;
+  padding-bottom: 5px;
 }
 
 .link-input {
   width: 100%;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
-  padding: 6px 12px;
-  font-size: 0.85rem;
+  padding: 7px 12px;
+  font-size: 0.9rem;
+  background: #fff;
   outline: none;
+}
+
+.link-input:focus {
+  border-color: #3b82f6;
 }
 </style>
