@@ -1,20 +1,30 @@
 <template>
   <form class="chat-input" @submit.prevent="handleSend">
+    <div v-if="isWindowClosed" class="window-closed-alert">
+      <i class="bi bi-exclamation-triangle-fill"></i>
+      <span>24-годинне вікно закрите. Ви зможете відповісти, коли клієнт напише вам знову.</span>
+    </div>
+
     <div class="chat-input-row">
       <textarea
         v-model="text"
         class="chat-textarea"
         rows="2"
-        placeholder="Напишіть повідомлення..."
-        :disabled="disabled"
+        :placeholder="isWindowClosed ? 'Відповідь заблокована' : 'Напишіть повідомлення...'"
+        :disabled="disabled || isWindowClosed"
         @keydown.ctrl.enter.prevent="handleSend"
       ></textarea>
-      <button class="chat-send-btn" type="submit" :disabled="disabled || !canSend">
+      
+      <button 
+        class="chat-send-btn" 
+        type="submit" 
+        :disabled="disabled || !canSend || isWindowClosed"
+      >
         <i class="bi bi-send"></i>
       </button>
     </div>
 
-    <div class="chat-attachment-row">
+    <div v-if="!isWindowClosed" class="chat-attachment-row">
       <button
         type="button"
         class="chat-attachment-btn"
@@ -41,6 +51,8 @@ import { computed, ref } from 'vue';
 
 const props = defineProps({
   disabled: { type: Boolean, default: false },
+  // Додаємо дату останнього повідомлення від клієнта
+  lastCustomerMessageAt: { type: String, default: null }, 
 });
 
 const emit = defineEmits(['send']);
@@ -49,7 +61,21 @@ const text = ref('');
 const attachmentUrl = ref('');
 const showAttachment = ref(false);
 
-const canSend = computed(() => text.value.trim().length > 0 || attachmentUrl.value.trim().length > 0);
+// Логіка перевірки 24 годин
+const isWindowClosed = computed(() => {
+  if (!props.lastCustomerMessageAt) return false;
+  
+  const lastDate = new Date(props.lastCustomerMessageAt);
+  const now = new Date();
+  const diffInHours = (now - lastDate) / (1000 * 60 * 60);
+  
+  return diffInHours >= 24; // Якщо минуло 24 години або більше
+});
+
+const canSend = computed(() => {
+  if (isWindowClosed.value) return false;
+  return text.value.trim().length > 0 || attachmentUrl.value.trim().length > 0;
+});
 
 function toggleAttachment() {
   showAttachment.value = !showAttachment.value;
@@ -83,6 +109,20 @@ function handleSend() {
 </script>
 
 <style scoped>
+/* Додаємо стилі для попередження */
+.window-closed-alert {
+  background: #fef2f2;
+  border: 1px solid #fee2e2;
+  color: #b91c1c;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
 .chat-input {
   border-top: 1px solid #e2e8f0;
   padding: 12px 16px;
@@ -90,6 +130,13 @@ function handleSend() {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+/* Стараємося зробити поле сірим, коли воно заблоковане */
+.chat-textarea:disabled {
+  background: #f8fafc;
+  color: #94a3b8;
+  cursor: not-allowed;
 }
 
 .chat-input-row {
@@ -124,7 +171,7 @@ function handleSend() {
 }
 
 .chat-send-btn:disabled {
-  background: #cbd5f5;
+  background: #cbd5e1; /* Більш нейтральний сірий */
   cursor: not-allowed;
 }
 
