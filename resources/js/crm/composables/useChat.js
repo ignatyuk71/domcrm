@@ -165,7 +165,7 @@ export function useChat() {
       // Плануємо наступний запит тільки ПІСЛЯ завершення поточного
       // Інтервал: 3000 мс (3 секунди)
       if (activeChatId.value === threadId) {
-        pollingTimer = setTimeout(poll, 3000);
+        pollingTimer = setTimeout(poll, 5000);
       }
     };
 
