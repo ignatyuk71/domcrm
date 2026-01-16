@@ -133,7 +133,7 @@ export function useChat() {
       if (!lastMessage?.id) return;
 
       try {
-        const { data } = await fetchNewMessages(threadId, lastMessage.id);
+        const data = await fetchNewMessages(threadId, lastMessage.id);
         pollingErrorCount = 0;
 
         const incoming = data?.messages || [];
