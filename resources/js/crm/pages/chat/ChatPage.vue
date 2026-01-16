@@ -41,7 +41,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import ChatCustomerProfile from '@/crm/components/chat/ChatCustomerProfile.vue';
 import ChatLayout from '@/crm/components/chat/ChatLayout.vue';
 import ChatSidebar from '@/crm/components/chat/ChatSidebar.vue';
@@ -71,6 +71,7 @@ const {
   selectChat,
   sendMessage,
   syncHistory,
+  stopPolling,
 } = useChat();
 
 const filteredConversations = computed(() => {
@@ -107,6 +108,10 @@ function handleSync() {
 }
 
 onMounted(fetchConversations);
+
+onBeforeUnmount(() => {
+  stopPolling();
+});
 </script>
 
 <style></style>

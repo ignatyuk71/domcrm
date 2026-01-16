@@ -11,3 +11,11 @@ export function getMessages(customerId) {
 export function sendMessage(payload) {
   return axios.post('/api/chat/send', payload);
 }
+
+export function fetchNewMessages(threadId, sinceId) {
+  return axios
+    .get(`/api/chat/threads/${threadId}/messages/updates`, {
+      params: { since_id: sinceId },
+    })
+    .then((res) => res.data);
+}

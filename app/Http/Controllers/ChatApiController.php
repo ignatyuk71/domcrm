@@ -61,6 +61,47 @@ class ChatApiController extends Controller
         return response()->json(['data' => $messages]);
     }
 
+    public function getThreadUpdates(Request $request, $id)
+    {
+        $sinceId = (int) $request->query('since_id');
+
+        if ($sinceId <= 0) {
+            return response()->json([
+                'messages' => [],
+                'thread' => null,
+                'has_updates' => false,
+            ]);
+        }
+
+        $messages = FacebookMessage::query()
+            ->where('customer_id', $id)
+            ->where('id', '>', $sinceId)
+            ->orderBy('id', 'asc')
+            ->get();
+
+        $normalizedMessages = $messages->map(function (FacebookMessage $message) {
+            return [
+                'id' => $message->id,
+                'text' => $message->text ?? null,
+                'direction' => $message->is_from_customer ? 'inbound' : 'outbound',
+                'created_at' => $message->created_at?->toDateTimeString(),
+                'attachments' => $message->attachments ?? [],
+            ];
+        });
+
+        $lastMessage = $messages->last();
+
+        return response()->json([
+            'messages' => $normalizedMessages,
+            'thread' => $lastMessage ? [
+                'id' => (int) $id,
+                'last_message_text' => $lastMessage->text ?? null,
+                'last_message_at' => $lastMessage->created_at?->toDateTimeString(),
+            ] : null,
+            'has_updates' => $messages->isNotEmpty(),
+        ]);
+    }
+
     public function send(Request $request)
     {
         $validated = $request->validate([
