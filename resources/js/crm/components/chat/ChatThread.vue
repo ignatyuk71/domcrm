@@ -23,7 +23,7 @@
             v-for="msg in messages"
             :key="msg.id || msg.temp_id"
             :message="msg"
-            :is-mine="msg.direction === 'outbound' || !msg.is_from_customer"
+            :is-mine="msg.direction === 'outbound'"
           />
         </TransitionGroup>
       </div>
