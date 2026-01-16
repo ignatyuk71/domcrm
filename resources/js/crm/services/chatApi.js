@@ -16,6 +16,10 @@ export function markRead(customerId) {
   return axios.post('/api/chat/mark-read', { customer_id: customerId });
 }
 
+export function forceSync(customerId) {
+  return axios.post(`/api/chat/${customerId}/sync`);
+}
+
 export function fetchNewMessages(threadId, sinceId) {
   return axios
     .get(`/api/chat/threads/${threadId}/messages/updates`, {

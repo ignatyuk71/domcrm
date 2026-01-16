@@ -346,4 +346,25 @@ class ChatApiController extends Controller
             return response()->json(['error' => 'Error'], 500);
         }
     }
+
+    public function sync($id, MetaService $metaService)
+    {
+        try {
+            $customer = Customer::findOrFail($id);
+        } catch (\Throwable $e) {
+            return response()->json(['error' => 'Customer not found'], 404);
+        }
+
+        try {
+            $count = $metaService->syncHistory($customer);
+        } catch (\Throwable $e) {
+            Log::error('Chat force sync failed', [
+                'customer_id' => $id,
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json(['success' => false], 500);
+        }
+
+        return response()->json(['success' => true, 'count' => $count]);
+    }
 }

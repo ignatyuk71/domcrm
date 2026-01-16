@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue';
 import {
   fetchNewMessages,
+  forceSync as apiForceSync,
   getConversations,
   getMessages,
   markRead as apiMarkRead,
@@ -13,6 +14,7 @@ export function useChat() {
   const messages = ref([]);
   const isLoading = ref(false);
   const isSending = ref(false);
+  const isSyncing = ref(false);
   const error = ref('');
   let pollingIntervalId = null;
 
@@ -111,6 +113,22 @@ export function useChat() {
     }
   }
 
+  async function forceSync(customerId) {
+    if (!customerId) return;
+    isSyncing.value = true;
+    try {
+      await apiForceSync(customerId);
+      const { data } = await getMessages(customerId);
+      messages.value = data?.data || data || [];
+      await fetchConversations();
+    } catch (e) {
+      console.error('Не вдалося синхронізувати чат', e);
+      error.value = 'Не вдалося синхронізувати чат';
+    } finally {
+      isSyncing.value = false;
+    }
+  }
+
   function startPolling(threadId) {
     stopPolling();
 
@@ -168,10 +186,12 @@ export function useChat() {
     messages,
     isLoading,
     isSending,
+    isSyncing,
     error,
     fetchConversations,
     selectChat,
     sendMessage,
+    forceSync,
     startPolling,
     stopPolling,
   };

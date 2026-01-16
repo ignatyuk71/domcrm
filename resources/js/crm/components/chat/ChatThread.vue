@@ -9,7 +9,19 @@
           </span>
         </div>
         <div class="chat-thread-meta">
-          <h2 class="chat-thread-title">{{ activeChat?.customer_name || 'Чат' }}</h2>
+          <div class="chat-thread-title-row">
+            <h2 class="chat-thread-title">{{ activeChat?.customer_name || 'Чат' }}</h2>
+            <button
+              type="button"
+              class="chat-thread-sync"
+              :class="{ 'is-syncing': isSyncing }"
+              :disabled="isSyncing || loading"
+              title="Оновити історію"
+              @click="$emit('force-sync')"
+            >
+              <i class="bi bi-arrow-clockwise"></i>
+            </button>
+          </div>
           <div class="chat-thread-platform" v-if="activeChat?.platform">
             <i :class="activeChat.platform === 'instagram' ? 'bi bi-instagram' : 'bi bi-messenger'"></i>
             <span>{{ activeChat.platform === 'instagram' ? 'Instagram' : 'Facebook' }}</span>
@@ -59,9 +71,10 @@ const props = defineProps({
   messages: { type: Array, default: () => [] },
   isSending: { type: Boolean, default: false },
   loading: { type: Boolean, default: false }, // <--- ДОДАНО НОВИЙ PROPS
+  isSyncing: { type: Boolean, default: false },
 });
 
-defineEmits(['send']);
+defineEmits(['send', 'force-sync']);
 
 const threadBody = ref(null);
 
@@ -149,6 +162,12 @@ watch(
   gap: 4px;
 }
 
+.chat-thread-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .chat-thread-title {
   font-size: 1rem;
   font-weight: 700;
@@ -167,6 +186,35 @@ watch(
 .chat-thread-subtitle {
   font-size: 0.75rem;
   color: #94a3b8;
+}
+
+.chat-thread-sync {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: rgba(148, 163, 184, 0.12);
+  color: #64748b;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+}
+
+.chat-thread-sync:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.12);
+  color: #2563eb;
+}
+
+.chat-thread-sync:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.chat-thread-sync.is-syncing i {
+  animation: spin 1s linear infinite;
 }
 
 .chat-thread-body {

@@ -73,9 +73,9 @@ const formattedTime = computed(() => {
                   date.getMonth() === now.getMonth() && 
                   date.getFullYear() === now.getFullYear();
 
-  return isToday 
-    ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) // 15:09
-    : date.toLocaleDateString('uk-UA', { day: 'numeric', month: 'short' }); // 16 січ
+  return isToday
+    ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : date.toLocaleDateString('uk-UA', { day: '2-digit', month: 'short' });
 });
 </script>
 
@@ -85,8 +85,8 @@ const formattedTime = computed(() => {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 12px; /* Відступ між аватаром і текстом */
-  padding: 10px 12px;
+  gap: 10px; /* Відступ між аватаром і текстом */
+  padding: 8px 10px;
   background: transparent;
   border: 1px solid transparent;
   border-radius: 12px;
@@ -94,6 +94,7 @@ const formattedTime = computed(() => {
   transition: all 0.2s ease;
   text-align: left;
   outline: none;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 .chat-item:hover {
@@ -133,21 +134,21 @@ const formattedTime = computed(() => {
 /* Значок платформи (маленький кружечок) */
 .platform-badge {
   position: absolute;
-  bottom: -2px;
-  right: -2px;
-  width: 20px;
-  height: 20px;
+  bottom: -1px;
+  right: -1px;
+  width: 18px;
+  height: 18px;
   background: white;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   box-shadow: 0 2px 4px rgba(0,0,0,0.15);
-  border: 2px solid white; /* Біла обводка, щоб відділити від аватара */
+  border: 2px solid white;
 }
 
-.instagram-icon { color: #d62976; font-size: 11px; }
-.messenger-icon { color: #0072ff; font-size: 11px; }
+.instagram-icon { color: #d62976; font-size: 10px; }
+.messenger-icon { color: #0072ff; font-size: 10px; }
 
 /* --- ТЕКСТОВА ЧАСТИНА --- */
 .info-container {
@@ -166,8 +167,8 @@ const formattedTime = computed(() => {
 
 .chat-name {
   margin: 0;
-  font-size: 0.95rem;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 700;
   color: #1e293b;
   white-space: nowrap;
   overflow: hidden;
@@ -176,7 +177,7 @@ const formattedTime = computed(() => {
 }
 
 .chat-time {
-  font-size: 0.75rem;
+  font-size: 12px;
   color: #94a3b8;
   white-space: nowrap;
   flex-shrink: 0;
@@ -191,7 +192,7 @@ const formattedTime = computed(() => {
 
 .chat-preview {
   margin: 0;
-  font-size: 0.85rem;
+  font-size: 13px;
   color: #64748b;
   white-space: nowrap;
   overflow: hidden;

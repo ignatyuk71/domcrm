@@ -114,54 +114,56 @@ class MetaService
 
         foreach (array_reverse($remoteMessages) as $msgData) {
             $mid = $msgData['id'] ?? null;
-            if (!$mid) continue;
-
-            // Перевірка дублікатів через FacebookMessage
-            if (FacebookMessage::where('mid', $mid)->exists()) {
+            if (!$mid) {
                 continue;
             }
+
+            $existing = FacebookMessage::where('mid', $mid)->first();
 
             // Визначення від кого
             $isFromCustomer = isset($msgData['from']['id']) && $msgData['from']['id'] == $recipientId;
             $sentAt = $this->normalizeTimestamp($msgData['created_time'] ?? null);
 
             $text = $msgData['message'] ?? '';
-            
-            // --- ВИПРАВЛЕННЯ ПОЧАТОК ---
+
             // Обробляємо вкладення так само, як у вебхуку, щоб зберегти їх локально
             $rawAttachments = $msgData['attachments']['data'] ?? [];
             $processedAttachments = [];
 
-            if (!empty($rawAttachments)) {
+            if (!empty($rawAttachments) && (!$existing || empty($existing->attachments))) {
                 foreach ($rawAttachments as $att) {
                     // Використовуємо наш метод завантаження
                     $processedAttachments[] = $this->processAttachment($att);
                 }
             }
-            $hasAttachments = !empty($processedAttachments);
-            // --- ВИПРАВЛЕННЯ КІНЕЦЬ ---
+            $storedAttachments = $existing && !empty($existing->attachments)
+                ? $existing->attachments
+                : (!empty($processedAttachments) ? $processedAttachments : null);
+            $hasAttachments = !empty($storedAttachments);
 
-            FacebookMessage::create([
-                'customer_id' => $customer->id,
-                'mid' => $mid,
-                'text' => $text !== '' ? $text : ($hasAttachments ? 'Вкладення' : ''),
-                'attachments' => $hasAttachments ? $processedAttachments : null, // Зберігаємо локальні URL
-                'is_from_customer' => $isFromCustomer,
-                'platform' => $platform,
-                'is_private' => true,
-                'sent_at' => $sentAt,
-                'status' => $isFromCustomer ? 'received' : 'sent',
-                'is_read' => !$isFromCustomer,
-                'created_at' => $sentAt,
-                'updated_at' => $sentAt,
-            ]);
+            $message = FacebookMessage::updateOrCreate(
+                ['mid' => $mid],
+                [
+                    'customer_id' => $customer->id,
+                    'text' => $text !== '' ? $text : ($hasAttachments ? 'Вкладення' : ''),
+                    'attachments' => $storedAttachments,
+                    'is_from_customer' => $isFromCustomer,
+                    'platform' => $platform,
+                    'is_private' => true,
+                    'sent_at' => $sentAt,
+                    'status' => $isFromCustomer ? 'received' : 'sent',
+                    'is_read' => !$isFromCustomer,
+                    'created_at' => $sentAt ?? now(),
+                    'updated_at' => $sentAt ?? now(),
+                ]
+            );
 
             // Оновлюємо conversation
             $this->touchConversation(
                 $customer->id,
                 $platform,
-                $text !== '' ? $text : ($hasAttachments ? 'Вкладення' : ''),
-                $sentAt,
+                $message->text ?? ($hasAttachments ? 'Вкладення' : ''),
+                $message->sent_at,
                 $isFromCustomer
             );
             $addedCount++;

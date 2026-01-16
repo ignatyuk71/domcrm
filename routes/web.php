@@ -162,6 +162,7 @@ Route::middleware('auth')->group(function () {
         ->name('chat.messages.updates');
     Route::post('/api/chat/send', [ChatApiController::class, 'send'])->name('chat.send');
     Route::post('/api/chat/mark-read', [ChatApiController::class, 'markRead'])->name('chat.markRead');
+    Route::post('/api/chat/{id}/sync', [ChatApiController::class, 'sync'])->name('chat.sync');
 
     // --- НОВА ПОШТА (Nova Poshta довідники) ---
     Route::controller(NovaPoshtaController::class)->prefix('nova-poshta')->name('novaPoshta.')->group(function () {

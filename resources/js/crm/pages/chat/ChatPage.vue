@@ -28,8 +28,10 @@
         :active-chat="activeChat"
         :messages="messages"
         :is-sending="isSending"
+        :is-syncing="isSyncing"
         :loading="isLoading"
         @send="handleSendMessage"
+        @force-sync="handleForceSync"
       />
       <ChatEmpty v-else />
     </template>
@@ -58,9 +60,11 @@ const {
   messages,
   isLoading, // Ця змінна відповідає за стан завантаження
   isSending,
+  isSyncing,
   fetchConversations,
   selectChat,
   sendMessage,
+  forceSync,
   stopPolling
 } = useChat();
 
@@ -86,6 +90,10 @@ const handleSendMessage = (payload) => {
     ...payload,
     customer_id: activeChatId.value
   });
+};
+
+const handleForceSync = () => {
+  forceSync(activeChatId.value);
 };
 
 // Lifecycle
