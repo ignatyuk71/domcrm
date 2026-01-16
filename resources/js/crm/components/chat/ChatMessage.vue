@@ -51,10 +51,7 @@ const fixUrl = (url) => {
   // Якщо це повне посилання (Facebook CDN) - не чіпаємо
   if (url.startsWith('http')) return url;
 
-  // Якщо це локальний шлях /storage, але без /public (для вашого хостингу)
-  if (url.startsWith('/storage') && !url.includes('/public')) {
-    return '/public' + url;
-  }
+  if (url.startsWith('chat/')) return `/${url}`;
   
   return url;
 };

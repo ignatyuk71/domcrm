@@ -183,7 +183,7 @@ class MetaService
     }
 
     /**
-     * Завантажує файл з URL Meta та зберігає у storage/app/public.
+     * Завантажує файл з URL Meta та зберігає напряму у public/chat.
      */
     public function processAttachment(array $attachment): array
     {
@@ -209,16 +209,14 @@ class MetaService
                 $extension = $pathInfo['extension'];
             }
 
-            $directory = 'chat/' . date('Y/m');
             $fileName = Str::random(40) . '.' . $extension;
-            $filePath = $directory . '/' . $fileName;
+            $relativePath = date('Y/m') . '/' . $fileName;
 
-            Storage::disk('public')->put($filePath, $fileContent);
+            Storage::disk('chat_uploads')->put($relativePath, $fileContent);
 
-            // --- ЗМІНА ТУТ: Додаємо /public до шляху ---
             return [
                 'type' => $type,
-                'url' => '/public' . Storage::url($filePath), // Це дасть /public/storage/chat/...
+                'url' => '/chat/' . $relativePath,
                 'original_url' => $remoteUrl,
             ];
 
