@@ -1,38 +1,13 @@
 <template>
   <div class="chat-message" :class="{ mine: isMine }">
     <div class="chat-message-bubble">
-      
-      <div v-if="hasAttachments" class="message-attachments">
-        <template v-for="(att, index) in normalizedAttachments" :key="index">
-          
-          <div v-if="att.type === 'image'" class="attachment-img-wrapper">
-            <img 
-              :src="att.url" 
-              alt="attachment" 
-              loading="lazy"
-              @click="openImage(att.url)"
-            />
-          </div>
-
-          <a v-else :href="att.url" target="_blank" class="attachment-file">
-            <i class="bi bi-paperclip"></i>
-            <span>Завантажити файл</span>
-          </a>
-
-        </template>
+      <div class="message-text">
+        {{ message.text || '...' }}
       </div>
-
-      <div v-if="message.text" class="message-text">
-        {{ message.text }}
-      </div>
-
     </div>
 
     <div class="chat-message-time">
       {{ formattedTime }}
-      <span v-if="isMine" class="ms-1 status-icon">
-        <i class="bi" :class="message.id ? 'bi-check2-all' : 'bi-check2'"></i>
-      </span>
     </div>
   </div>
 </template>
@@ -45,26 +20,6 @@ const props = defineProps({
   isMine: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(['image-click']);
-
-// Перевірка наявності вкладень (базується на структурі Meta API)
-const hasAttachments = computed(() => {
-  return props.message.attachments && Array.isArray(props.message.attachments) && props.message.attachments.length > 0;
-});
-
-// Нормалізація вкладень для підтримки різних форматів (Sync vs Webhook)
-const normalizedAttachments = computed(() => {
-  if (!hasAttachments.value) return [];
-  
-  return props.message.attachments.map(att => {
-    // Обробка вкладень, збережених під час синхронізації
-    const url = att.payload?.url || att.url;
-    const type = att.type || (url?.match(/\.(jpeg|jpg|gif|png|webp)$/i) != null ? 'image' : 'file');
-    
-    return { type, url };
-  });
-});
-
 // Форматування часу для відображення
 const formattedTime = computed(() => {
   if (!props.message.created_at) return '';
@@ -72,10 +27,6 @@ const formattedTime = computed(() => {
   const date = new Date(props.message.created_at);
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 });
-
-function openImage(url) {
-  emit('image-click', url);
-}
 </script>
 
 <style scoped>
@@ -122,51 +73,10 @@ function openImage(url) {
   font-size: 0.95rem;
 }
 
-.message-attachments {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 6px;
-}
-
-.attachment-img-wrapper img {
-  display: block;
-  max-width: 100%;
-  max-height: 300px;
-  object-fit: contain;
-  border-radius: 8px;
-  cursor: zoom-in;
-  transition: opacity 0.2s;
-}
-
-.attachment-img-wrapper img:hover {
-  opacity: 0.9;
-}
-
-.attachment-file {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: rgba(0,0,0,0.05);
-  border-radius: 8px;
-  text-decoration: none;
-  color: #475569;
-  font-size: 0.85rem;
-}
-
-.chat-message.mine .attachment-file {
-  background: rgba(255,255,255,0.15);
-  color: #fff;
-}
-
 .chat-message-time {
   font-size: 0.7rem;
   color: #94a3b8;
   padding: 0 2px;
 }
 
-.status-icon {
-  font-size: 0.8rem;
-}
 </style>

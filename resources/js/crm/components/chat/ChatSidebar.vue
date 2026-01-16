@@ -1,14 +1,6 @@
 <template>
   <div class="chat-sidebar-inner">
-    <ChatFilters
-      :search="search"
-      :tabs="tabs"
-      :active-tab="activeTab"
-      @update:search="$emit('update:search', $event)"
-      @change-tab="$emit('change-tab', $event)"
-    />
-
-    <div class="chat-sidebar-list custom-scrollbar" ref="sidebarList">
+    <div class="chat-sidebar-list custom-scrollbar">
       <ChatSidebarItem
         v-for="chat in conversations"
         :key="chat.customer_id"
@@ -23,39 +15,19 @@
         </div>
         <p>Чатів не знайдено</p>
       </div>
-
-      <button
-        v-if="hasMore"
-        type="button"
-        class="chat-load-more"
-        @click="$emit('load-more')"
-      >
-        <i class="bi bi-plus-circle"></i>
-        <span>Показати більше</span>
-      </button>
-      
-      <div class="pb-3"></div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue';
-import ChatFilters from './ChatFilters.vue';
 import ChatSidebarItem from './ChatSidebarItem.vue';
 
 defineProps({
   conversations: { type: Array, default: () => [] },
   activeChatId: { type: [Number, String, null], default: null },
-  search: { type: String, default: '' },
-  tabs: { type: Array, default: () => [] },
-  activeTab: { type: String, default: 'all' },
-  hasMore: { type: Boolean, default: false },
 });
 
-defineEmits(['select', 'update:search', 'change-tab', 'load-more']);
-
-const sidebarList = ref(null);
+defineEmits(['select']);
 </script>
 
 <style scoped>
@@ -121,30 +93,4 @@ const sidebarList = ref(null);
   font-size: 0.9rem;
 }
 
-/* Кнопка "Завантажити ще" */
-.chat-load-more {
-  width: 100%;
-  padding: 10px;
-  margin-top: 12px;
-  border: 1px solid #e2e8f0;
-  background: #f8fafc;
-  color: #64748b;
-  border-radius: 10px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  transition: all 0.2s;
-}
-
-.chat-load-more:hover {
-  background: #fff;
-  border-color: #3b82f6;
-  color: #3b82f6;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-}
-
-.pb-3 { padding-bottom: 1rem; }
 </style>

@@ -1,7 +1,6 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Facebook\WebhookController;
 
 /*
 |--------------------------------------------------------------------------
@@ -9,7 +8,4 @@ use App\Http\Controllers\Facebook\WebhookController;
 |--------------------------------------------------------------------------
 */
 
-// Facebook Webhook
-// URL: domain.com/api/fb-webhook
-Route::get('/fb-webhook', [WebhookController::class, 'verify']);
-Route::post('/fb-webhook', [WebhookController::class, 'handle']);
+// API routes

@@ -156,13 +156,8 @@ Route::middleware('auth')->group(function () {
 
     // --- ЧАТ ---
     Route::get('/chat', [ChatController::class, 'index'])->name('chat.index');
-    Route::get('/chat/{id}', [ChatController::class, 'getMessages'])->name('chat.messages');
     Route::get('/api/chat/list', [ChatApiController::class, 'list'])->name('chat.list');
     Route::get('/api/chat/{id}/messages', [ChatApiController::class, 'messages'])->name('chat.messages.api');
-    Route::get('/api/chat/threads/{id}/messages/updates', [ChatApiController::class, 'getThreadUpdates'])
-        ->name('chat.messages.updates');
-    Route::post('/api/chat/send', [ChatApiController::class, 'send'])->name('chat.send');
-    Route::post('/api/chat/{id}/sync', [ChatApiController::class, 'sync'])->name('chat.sync');
 
     // --- НОВА ПОШТА (Nova Poshta довідники) ---
     Route::controller(NovaPoshtaController::class)->prefix('nova-poshta')->name('novaPoshta.')->group(function () {

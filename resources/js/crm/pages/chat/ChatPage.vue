@@ -4,17 +4,9 @@
       <!-- 1. Слот для сайдбару -->
       <template #sidebar>
         <ChatSidebar
-          :conversations="filteredConversations"
+          :conversations="conversations"
           :active-chat-id="activeChatId"
-          :search="search"
-          :tabs="tabs"
-          :active-tab="activeTab"
-          :has-more="hasMore"
-          :is-loading="isLoading"
           @select="handleSelect"
-          @update:search="search = $event"
-          @change-tab="activeTab = $event"
-          @load-more="loadMore"
         />
       </template>
 
@@ -24,15 +16,8 @@
           v-if="activeChatId"
           :active-chat="activeChat"
           :messages="messages"
-          :title="activeChat?.customer_name"
-          :subtitle="activeChat?.last_message_time"
         />
         <ChatEmptyState v-else />
-      </template>
-
-      <!-- 3. Слот для профілю клієнта -->
-      <template #profile v-if="activeChatId">
-        <ChatCustomerProfile :chat="activeChat" />
       </template>
     </ChatLayout>
 
@@ -47,47 +32,24 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { onMounted } from 'vue';
 
 // Використовуємо аліас @ (зазвичай resources/js)
 import ChatLayout from '@/crm/components/chat/ChatLayout.vue';
 import ChatSidebar from '@/crm/components/chat/ChatSidebar.vue';
 import ChatThread from '@/crm/components/chat/ChatThread.vue';
 import ChatEmptyState from '@/crm/components/chat/ChatEmptyState.vue';
-import ChatCustomerProfile from '@/crm/components/chat/ChatCustomerProfile.vue';
 import { useChat } from '@/crm/composables/useChat';
-
-const search = ref('');
-const activeTab = ref('all');
-
-const tabs = [
-  { value: 'all', label: 'Всі' },
-  { value: 'facebook', label: 'Messenger' },
-  { value: 'instagram', label: 'Instagram' },
-];
 
 const {
   conversations,
   activeChatId,
   activeChat,
   messages,
-  isLoading,
-  hasMore,
   error,
   fetchConversations,
-  loadMore,
   selectChat,
-  stopPolling,
 } = useChat();
-
-const filteredConversations = computed(() => {
-  const needle = search.value.trim().toLowerCase();
-  return conversations.value.filter((chat) => {
-    if (activeTab.value !== 'all' && chat.platform !== activeTab.value) return false;
-    if (!needle) return true;
-    return (chat.customer_name || '').toLowerCase().includes(needle);
-  });
-});
 
 function handleSelect(chat) {
   selectChat(chat.customer_id);
@@ -97,9 +59,6 @@ onMounted(() => {
   fetchConversations();
 });
 
-onBeforeUnmount(() => {
-  stopPolling();
-});
 </script>
 
 <style scoped>

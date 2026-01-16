@@ -5,26 +5,20 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class FacebookMessage extends Model
+class ChatMessage extends Model
 {
+    protected $table = 'facebook_messages';
+
     protected $fillable = [
         'customer_id',
-        'mid',
-        'parent_id',
         'text',
-        'attachments',
-        'type',
         'is_from_customer',
-        'platform',
-        'is_private',
-        'post_id',
-        'permalink',
+        'created_at',
+        'updated_at',
     ];
 
     protected $casts = [
-        'attachments' => 'array',
         'is_from_customer' => 'boolean',
-        'is_private' => 'boolean',
     ];
 
     public function customer(): BelongsTo

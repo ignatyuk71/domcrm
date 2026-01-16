@@ -12,12 +12,6 @@
           <slot name="thread" />
         </div>
       </main>
-
-      <aside class="chat-profile">
-        <div class="profile-inner">
-          <slot name="profile" />
-        </div>
-      </aside>
     </div>
   </div>
 </template>
@@ -32,8 +26,8 @@
 
 .chat-container {
   display: grid;
-  /* Три колонки: Список (320px), Чат (гнучкий), Профіль (300px) */
-  grid-template-columns: 320px 1fr 300px;
+  /* Дві колонки: Список (320px), Чат (гнучкий) */
+  grid-template-columns: 320px 1fr;
   height: 100%;
   gap: 16px;
   max-width: 1600px;
@@ -42,8 +36,7 @@
 
 /* Спільні стилі для всіх колонок */
 .chat-sidebar,
-.chat-thread,
-.chat-profile {
+.chat-thread {
   background: #fff;
   border-radius: 16px;
   border: 1px solid #e2e8f0;
@@ -54,22 +47,11 @@
 }
 
 .sidebar-inner,
-.thread-inner,
-.profile-inner {
+.thread-inner {
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0; /* Важливо для роботи скролу всередині */
-}
-
-/* Адаптивність: на середніх екранах ховаємо профіль */
-@media (max-width: 1200px) {
-  .chat-container {
-    grid-template-columns: 300px 1fr;
-  }
-  .chat-profile {
-    display: none;
-  }
 }
 
 /* Адаптивність: на мобільних залишаємо тільки чат або список (логіка перемикання зазвичай на рівні сторінки) */
