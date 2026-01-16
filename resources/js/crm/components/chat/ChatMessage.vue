@@ -43,8 +43,9 @@ const normalizedAttachments = computed(() => {
   if (!hasAttachments.value) return [];
 
   return props.message.attachments.map((att) => {
-    const url = att.payload?.url || att.url || att;
-    const type = att.type || (url?.match(/\.(jpeg|jpg|gif|png|webp)$/i) ? 'image' : 'file');
+    const url = att?.payload?.url || att?.url || (typeof att === 'string' ? att : '');
+    const isImage = typeof url === 'string' && url.match(/\.(jpeg|jpg|gif|png|webp)$/i);
+    const type = att?.type || (isImage ? 'image' : 'file');
 
     return { type, url };
   });
