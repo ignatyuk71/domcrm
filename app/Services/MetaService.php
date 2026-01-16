@@ -2,7 +2,7 @@
 
 namespace App\Services;
 
-use App\Models\FacebookMessage; // Змінено
+use App\Models\FacebookMessage;
 use App\Models\Conversation;
 use App\Models\Customer;
 use Carbon\Carbon;
@@ -215,11 +215,13 @@ class MetaService
 
             Storage::disk('public')->put($filePath, $fileContent);
 
+            // --- ЗМІНА ТУТ: Додаємо /public до шляху ---
             return [
                 'type' => $type,
-                'url' => Storage::url($filePath),
+                'url' => '/public' . Storage::url($filePath), // Це дасть /public/storage/chat/...
                 'original_url' => $remoteUrl,
             ];
+
         } catch (\Throwable $e) {
             Log::warning('Attachment download failed: ' . $e->getMessage());
             return [
