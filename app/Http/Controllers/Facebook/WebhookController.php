@@ -141,19 +141,21 @@ class WebhookController extends Controller
             ? Carbon::createFromTimestampMs($event['timestamp'])->timezone(config('app.timezone', 'Europe/Kyiv'))
             : now(config('app.timezone', 'Europe/Kyiv'));
 
-        FacebookMessage::create([
-            'customer_id' => $customer->id,
-            'mid' => $message['mid'] ?? null,
-            'text' => $text !== '' ? $text : ($hasAttachments ? 'Вкладення' : null),
-            'attachments' => $hasAttachments ? $processedAttachments : null,
-            'platform' => $platform,
-            'type' => 'message',
-            'is_from_customer' => !$isEcho,
-            'is_private' => true,
-            'sent_at' => $sentAt,
-            'status' => $isEcho ? 'sent' : 'received',
-            'is_read' => $isEcho,
-        ]);
+        FacebookMessage::updateOrCreate(
+            ['mid' => $message['mid'] ?? null],
+            [
+                'customer_id' => $customer->id,
+                'text' => $text !== '' ? $text : ($hasAttachments ? 'Вкладення' : null),
+                'attachments' => $hasAttachments ? $processedAttachments : null,
+                'platform' => $platform,
+                'type' => 'message',
+                'is_from_customer' => !$isEcho,
+                'is_private' => true,
+                'sent_at' => $sentAt,
+                'status' => $isEcho ? 'sent' : 'received',
+                'is_read' => $isEcho,
+            ]
+        );
 
         $metaService->touchConversation(
             $customer->id,
