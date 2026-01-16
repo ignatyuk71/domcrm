@@ -1,7 +1,6 @@
 <template>
   <div class="chat-input-wrapper">
     <form class="chat-input-form" @submit.prevent="handleSend">
-      
       <div class="text-input-card">
         <div v-if="selectedFile" class="file-preview-badge">
           <div class="preview-content">
@@ -24,7 +23,7 @@
           @input="autoResize"
           ref="textareaRef"
         ></textarea>
-        
+
         <span class="kb-hint" v-if="text.length > 0 || selectedFile">Ctrl + Enter для відправки</span>
       </div>
 
@@ -34,20 +33,20 @@
           <button type="button" class="tool-btn" title="Швидкі відповіді"><i class="bi bi-lightning"></i></button>
           <button type="button" class="tool-btn" title="Товари"><i class="bi bi-box-seam"></i></button>
           <button type="button" class="tool-btn" title="Емодзі"><i class="bi bi-emoji-smile"></i></button>
-          
-          <button 
-            type="button" 
-            class="tool-btn" 
+
+          <button
+            type="button"
+            class="tool-btn"
             :class="{ active: selectedFile }"
             @click="triggerFileInput"
             title="Прикріпити фото"
           >
             <i class="bi bi-paperclip"></i>
           </button>
-          <input 
-            type="file" 
-            ref="fileInputRef" 
-            style="display: none" 
+          <input
+            type="file"
+            ref="fileInputRef"
+            style="display: none"
             @change="onFileChange"
             accept="image/*"
           />
@@ -55,9 +54,9 @@
           <button type="button" class="tool-btn" title="Голосове"><i class="bi bi-mic"></i></button>
         </div>
 
-        <button 
-          class="chat-send-btn" 
-          type="submit" 
+        <button
+          class="chat-send-btn"
+          type="submit"
           :disabled="disabled || !canSend"
         >
           <span>Надіслати</span>
@@ -109,10 +108,9 @@ function autoResize() {
 function handleSend() {
   if (!canSend.value) return;
 
-  // Важливо: відправляємо об'єкт для FormData
   emit('send', {
     text: text.value.trim(),
-    file: selectedFile.value
+    file: selectedFile.value,
   });
 
   text.value = '';
@@ -205,7 +203,8 @@ function handleSend() {
   transition: color 0.2s;
 }
 
-.tool-btn:hover, .tool-btn.active {
+.tool-btn:hover,
+.tool-btn.active {
   color: #3b82f6;
 }
 

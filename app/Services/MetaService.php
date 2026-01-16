@@ -42,7 +42,7 @@ class MetaService
         }
 
         $validAttachments = array_values(array_filter($attachments, function ($attachment) {
-            return !empty($attachment['url']) && str_starts_with($attachment['url'], 'http');
+            return !empty($attachment['url']);
         }));
 
         $payload = [
@@ -52,11 +52,15 @@ class MetaService
 
         if (!empty($validAttachments)) {
             $attachment = $validAttachments[0];
+            $attachmentUrl = $attachment['url'] ?? '';
+            if ($attachmentUrl !== '' && !str_starts_with($attachmentUrl, 'http')) {
+                $attachmentUrl = url(ltrim($attachmentUrl, '/'));
+            }
             $payload['message'] = [
                 'attachment' => [
                     'type' => $attachment['type'] ?? 'image',
                     'payload' => [
-                        'url' => $attachment['url'] ?? '',
+                        'url' => $attachmentUrl,
                         'is_reusable' => true,
                     ],
                 ],
@@ -240,7 +244,7 @@ class MetaService
     }
 
     /**
-     * Завантажує файл з URL Meta та зберігає напряму у public/chat.
+     * Завантажує файл з URL Meta та зберігає напряму у public/chat/attachments.
      */
     public function processAttachment(array $attachment): array
     {
@@ -267,13 +271,13 @@ class MetaService
             }
 
             $fileName = Str::random(40) . '.' . $extension;
-            $relativePath = date('Y/m') . '/' . $fileName;
+            $relativePath = 'attachments/' . date('Y/m/d') . '/' . $fileName;
 
             Storage::disk('chat_uploads')->put($relativePath, $fileContent);
 
             return [
                 'type' => $type,
-                'url' => '/chat/' . $relativePath,
+                'url' => 'chat/' . $relativePath,
                 'original_url' => $remoteUrl,
             ];
 

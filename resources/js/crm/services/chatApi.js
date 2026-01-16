@@ -9,6 +9,11 @@ export function getMessages(customerId) {
 }
 
 export function sendMessage(payload) {
+  if (payload instanceof FormData) {
+    return axios.post('/api/chat/send', payload, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  }
   return axios.post('/api/chat/send', payload);
 }
 

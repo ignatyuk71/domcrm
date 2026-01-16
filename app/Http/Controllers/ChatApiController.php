@@ -185,7 +185,7 @@ class ChatApiController extends Controller
             $validated = $request->validate([
                 'customer_id' => 'required|integer|exists:customers,id',
                 'text' => 'nullable|string',
-                'attachments' => 'array',
+                'file' => 'nullable|file|mimes:jpg,jpeg,png,webp,gif,heic,heif',
                 'platform' => 'nullable|string|in:messenger,instagram',
             ]);
         } catch (\Throwable $e) {
@@ -193,7 +193,7 @@ class ChatApiController extends Controller
             throw $e;
         }
 
-        if (empty($validated['text']) && empty($validated['attachments'])) {
+        if (empty($validated['text']) && !$request->hasFile('file')) {
             return response()->json(['error' => 'Повідомлення порожнє'], 422);
         }
 
@@ -202,11 +202,31 @@ class ChatApiController extends Controller
         $platform = $validated['platform'] 
             ?? ($customer->instagram_user_id ? 'instagram' : 'messenger');
 
+        $attachments = [];
+        $metaAttachments = [];
+
+        if ($request->hasFile('file')) {
+            $file = $request->file('file');
+            $datePath = now()->format('Y/m/d');
+            $destinationPath = public_path("chat/attachments/{$datePath}");
+
+            if (!is_dir($destinationPath)) {
+                mkdir($destinationPath, 0755, true);
+            }
+
+            $fileName = time().'_'.$file->getClientOriginalName();
+            $file->move($destinationPath, $fileName);
+
+            $relativeUrl = "chat/attachments/{$datePath}/{$fileName}";
+            $attachments[] = ['type' => 'image', 'url' => $relativeUrl];
+            $metaAttachments[] = ['type' => 'image', 'url' => url($relativeUrl)];
+        }
+
         try {
             $metaResult = $metaService->sendMessage(
                 $customer,
                 $validated['text'] ?? '',
-                $validated['attachments'] ?? [],
+                $metaAttachments,
                 $platform
             );
         } catch (\Throwable $e) {
@@ -232,7 +252,7 @@ class ChatApiController extends Controller
                 'customer_id' => $customer->id,
                 'mid' => $mid, 
                 'text' => $validated['text'] ?? null,
-                'attachments' => $validated['attachments'] ?? null,
+                'attachments' => !empty($attachments) ? $attachments : null,
                 'is_from_customer' => false,
                 'platform' => $platform,
                 'is_private' => true,
@@ -246,7 +266,7 @@ class ChatApiController extends Controller
             $metaService->touchConversation(
                 $customer->id,
                 $platform,
-                $validated['text'] ?? (empty($validated['attachments']) ? '' : 'Вкладення'),
+                $validated['text'] ?? (!empty($attachments) ? 'Вкладення' : ''),
                 $sentAt,
                 false
             );

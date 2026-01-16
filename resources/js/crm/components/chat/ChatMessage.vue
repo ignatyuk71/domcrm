@@ -52,6 +52,7 @@ const fixUrl = (url) => {
   if (url.startsWith('http')) return url;
 
   if (url.startsWith('chat/')) return `/${url}`;
+  if (url.startsWith('/chat/')) return url;
   
   return url;
 };

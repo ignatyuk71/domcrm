@@ -70,18 +70,26 @@ export function useChat() {
 
   async function sendMessage(payload) {
     if (!payload?.customer_id) return;
-    if (!payload?.text && (!payload?.attachments || !payload.attachments.length)) return;
+    if (!payload?.text && !payload?.file) return;
     
     isSending.value = true;
     error.value = '';
 
     const tempId = `temp-${Date.now()}`;
+    const optimisticAttachments = [];
+    if (payload.file) {
+      const fileUrl = URL.createObjectURL(payload.file);
+      optimisticAttachments.push({
+        type: payload.file.type?.startsWith('image/') ? 'image' : 'file',
+        url: fileUrl,
+      });
+    }
     const optimisticMessage = {
       id: tempId,
       text: payload.text || null,
       direction: 'outbound',
       created_at: new Date().toISOString(),
-      attachments: payload.attachments || [],
+      attachments: optimisticAttachments,
       status: 'sending',
       is_read: true,
     };
@@ -89,7 +97,16 @@ export function useChat() {
     messages.value = [...messages.value, optimisticMessage];
 
     try {
-      const { data } = await apiSendMessage(payload);
+      const formData = new FormData();
+      formData.append('customer_id', payload.customer_id);
+      if (payload.text) {
+        formData.append('text', payload.text);
+      }
+      if (payload.file) {
+        formData.append('file', payload.file);
+      }
+
+      const { data } = await apiSendMessage(formData);
       const newMessage = data?.data || data;
       messages.value = messages.value.map((msg) => (msg.id === tempId ? newMessage : msg));
 
