@@ -223,4 +223,112 @@ class ChatApiController extends Controller
             'message' => "Синхронізовано {$addedCount} повідомлень",
         ]);
     }
+
+    /**
+     * Масова синхронізація діалогів та повідомлень (Messenger).
+     */
+    public function syncAll()
+    {
+        $settings = DB::table('facebook_settings')->first();
+        if (!$settings || !$settings->access_token) {
+            return response()->json(['error' => 'Токен Meta не налаштовано'], 500);
+        }
+
+        $accessToken = $settings->access_token;
+        $pageId = $settings->page_id;
+        $platformParam = 'messenger';
+
+        $nextUrl = 'https://graph.facebook.com/v19.0/me/conversations?fields=participants,updated_time&limit=100&platform=messenger';
+        $totalConversations = 0;
+        $totalMessages = 0;
+        $totalCustomers = 0;
+
+        while ($nextUrl) {
+            $response = Http::withToken($accessToken)->get($nextUrl);
+            if ($response->failed()) {
+                return response()->json(['error' => 'Meta API Error', 'details' => $response->json()], 500);
+            }
+
+            $payload = $response->json();
+            $conversations = $payload['data'] ?? [];
+            $totalConversations += count($conversations);
+
+            foreach ($conversations as $convo) {
+                $participants = $convo['participants']['data'] ?? [];
+                $target = null;
+
+                foreach ($participants as $participant) {
+                    if ($pageId && $participant['id'] == $pageId) {
+                        continue;
+                    }
+                    $target = $participant;
+                    break;
+                }
+
+                if (!$target || empty($target['id'])) {
+                    continue;
+                }
+
+                $customer = Customer::firstOrCreate(
+                    ['fb_user_id' => (string) $target['id']],
+                    [
+                        'first_name' => $target['name'] ?? 'Facebook User',
+                        'last_name' => '',
+                        'note' => 'Створено через масову синхронізацію чату',
+                    ]
+                );
+
+                if ($customer->wasRecentlyCreated) {
+                    $totalCustomers++;
+                }
+
+                $threadId = $convo['id'] ?? null;
+                if (!$threadId) {
+                    continue;
+                }
+
+                $msgsUrl = "https://graph.facebook.com/v19.0/{$threadId}/messages?fields=message,created_time,from,attachments,id&limit=20";
+                $msgsResponse = Http::withToken($accessToken)->get($msgsUrl);
+
+                if ($msgsResponse->failed()) {
+                    continue;
+                }
+
+                $remoteMessages = $msgsResponse->json()['data'] ?? [];
+                foreach (array_reverse($remoteMessages) as $msgData) {
+                    $mid = $msgData['id'] ?? null;
+                    if (!$mid) {
+                        continue;
+                    }
+
+                    if (FacebookMessage::where('mid', $mid)->exists()) {
+                        continue;
+                    }
+
+                    $isFromCustomer = isset($msgData['from']['id']) && $msgData['from']['id'] == $target['id'];
+
+                    FacebookMessage::create([
+                        'customer_id' => $customer->id,
+                        'mid' => $mid,
+                        'text' => $msgData['message'] ?? '',
+                        'attachments' => $msgData['attachments']['data'] ?? null,
+                        'is_from_customer' => $isFromCustomer,
+                        'platform' => $platformParam,
+                        'is_private' => true,
+                        'created_at' => Carbon::parse($msgData['created_time']),
+                        'updated_at' => Carbon::parse($msgData['created_time']),
+                    ]);
+
+                    $totalMessages++;
+                }
+            }
+
+            $nextUrl = $payload['paging']['next'] ?? null;
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => "Синхронізовано діалоги: {$totalConversations}, клієнти: {$totalCustomers}, повідомлення: {$totalMessages}",
+        ]);
+    }
 }

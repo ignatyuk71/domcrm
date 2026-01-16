@@ -4,8 +4,10 @@
       :search="search"
       :tabs="tabs"
       :active-tab="activeTab"
+      :is-syncing-all="isSyncingAll"
       @update:search="$emit('update:search', $event)"
       @change-tab="$emit('change-tab', $event)"
+      @sync-all="$emit('sync-all')"
     />
 
     <div class="chat-sidebar-list custom-scrollbar" ref="sidebarList">
@@ -51,9 +53,10 @@ defineProps({
   tabs: { type: Array, default: () => [] },
   activeTab: { type: String, default: 'all' },
   hasMore: { type: Boolean, default: false },
+  isSyncingAll: { type: Boolean, default: false },
 });
 
-defineEmits(['select', 'update:search', 'change-tab', 'load-more']);
+defineEmits(['select', 'update:search', 'change-tab', 'load-more', 'sync-all']);
 
 const sidebarList = ref(null);
 </script>
