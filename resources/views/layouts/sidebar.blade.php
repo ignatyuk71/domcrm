@@ -253,7 +253,7 @@
             <span class="item-text">База клієнтів</span>
         </a>
 
-        <a href="{{ url('/chat') }}" class="sidebar-link {{ request()->is('chats*') ? 'active' : '' }}">
+        <a href="{{ url('/messenger') }}" class="sidebar-link {{ request()->is('messenger*') ? 'active' : '' }}">
             <span class="icon-frame"><i class="bi bi-chat-dots-fill"></i></span>
             <span class="item-text">Чати</span>
             <!-- Бейдж повідомлень (червоний) - статичний для прикладу -->

@@ -155,7 +155,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/customers/{customer}', [CustomerController::class, 'show'])->name('customers.show');
 
     // --- ЧАТ ---
-    Route::get('/chat', [ChatController::class, 'index'])->name('chat.index');
+    Route::get('/messenger', [ChatController::class, 'index'])->name('chat.index');
     Route::get('/api/chat/list', [ChatApiController::class, 'list'])->name('chat.list');
     Route::get('/api/chat/{id}/messages', [ChatApiController::class, 'messages'])->name('chat.messages.api');
     Route::get('/api/chat/threads/{id}/messages/updates', [ChatApiController::class, 'updates'])
