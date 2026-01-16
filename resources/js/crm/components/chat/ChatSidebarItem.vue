@@ -7,10 +7,18 @@
   >
     <div class="chat-item-header">
       <div class="chat-item-title">
-        <span class="platform-icon" :class="item.platform" :title="item.platform">
-          <i :class="item.platform === 'instagram' ? 'bi bi-instagram' : 'bi bi-messenger'"></i>
-        </span>
-        <span class="chat-item-name">{{ item.customer_name || 'Невідомий клієнт' }}</span>
+        <div class="chat-item-avatar">
+          <img v-if="item.customer_avatar" :src="item.customer_avatar" alt="avatar" />
+          <span v-else class="chat-item-avatar-fallback">
+            {{ (item.customer_name || '?').charAt(0).toUpperCase() }}
+          </span>
+        </div>
+        <div class="chat-item-text">
+          <span class="chat-item-name">{{ item.customer_name || 'Невідомий клієнт' }}</span>
+          <span class="platform-icon" :class="item.platform" :title="item.platform">
+            <i :class="item.platform === 'instagram' ? 'bi bi-instagram' : 'bi bi-messenger'"></i>
+          </span>
+        </div>
       </div>
       <span class="chat-item-time">{{ item.last_message_time || '' }}</span>
     </div>
@@ -72,6 +80,37 @@ defineEmits(['select']);
   align-items: center;
   gap: 8px;
   overflow: hidden;
+}
+
+.chat-item-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.chat-item-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.chat-item-avatar-fallback {
+  font-weight: 700;
+  color: #475569;
+  font-size: 0.85rem;
+}
+
+.chat-item-text {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
 }
 
 .platform-icon {

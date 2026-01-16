@@ -116,6 +116,36 @@ class WebhookController extends Controller
             );
         }
 
+        $defaultNames = ['Facebook User', 'Instagram User', 'Meta User'];
+        $isDefaultName = in_array($customer->first_name, $defaultNames, true) && empty($customer->last_name);
+        if ($isDefaultName || !$customer->fb_profile_pic) {
+            try {
+                $profile = $metaService->getUserProfile($contactId);
+                $name = $profile['name'] ?? '';
+                $photo = $profile['profile_pic'] ?? null;
+
+                $firstName = $customer->first_name;
+                $lastName = $customer->last_name;
+
+                if ($name !== '') {
+                    $parts = preg_split('/\s+/', trim($name), 2);
+                    $firstName = $parts[0] ?? $firstName;
+                    $lastName = $parts[1] ?? $lastName;
+                }
+
+                $customer->update([
+                    'first_name' => $firstName,
+                    'last_name' => $lastName,
+                    'fb_profile_pic' => $photo ?: $customer->fb_profile_pic,
+                ]);
+            } catch (\Throwable $e) {
+                Log::warning('Meta profile sync failed', [
+                    'contact_id' => $contactId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
         // Зберігаємо саме повідомлення
         $text = $message['text'] ?? '';
         $hasAttachments = !empty($message['attachments'] ?? []);
