@@ -183,6 +183,63 @@ class MetaService
     }
 
     /**
+     * Отримує та оновлює дані профілю (Ім'я, Фото) через Graph API.
+     */
+    public function updateCustomerProfile(Customer $customer): void
+    {
+        $settings = $this->getSettings();
+        $socialId = $customer->instagram_user_id ?: $customer->fb_user_id;
+        $isInsta = (bool) $customer->instagram_user_id;
+
+        if (!$socialId) {
+            return;
+        }
+
+        try {
+            $fields = $isInsta ? 'name,profile_pic' : 'first_name,last_name,profile_pic';
+
+            $response = Http::withToken($settings->access_token)
+                ->get($this->graphUrl("/{$socialId}"), ['fields' => $fields]);
+
+            if (!$response->successful()) {
+                return;
+            }
+
+            $data = $response->json();
+            $updateData = [];
+
+            if ($isInsta) {
+                $fullName = trim((string) ($data['name'] ?? ''));
+                if ($fullName !== '') {
+                    $parts = preg_split('/\s+/', $fullName, 2);
+                    $updateData['first_name'] = $parts[0] ?? $customer->first_name;
+                    $updateData['last_name'] = $parts[1] ?? $customer->last_name;
+                }
+            } else {
+                if (!empty($data['first_name'])) {
+                    $updateData['first_name'] = $data['first_name'];
+                }
+                if (!empty($data['last_name'])) {
+                    $updateData['last_name'] = $data['last_name'];
+                }
+            }
+
+            if (!empty($data['profile_pic'])) {
+                $updateData['fb_profile_pic'] = $data['profile_pic'];
+            }
+
+            if (!empty($updateData)) {
+                $customer->update($updateData);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Meta profile sync failed', [
+                'customer_id' => $customer->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
      * Завантажує файл з URL Meta та зберігає напряму у public/chat.
      */
     public function processAttachment(array $attachment): array
