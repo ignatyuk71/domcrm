@@ -12,10 +12,22 @@ use Illuminate\Support\Facades\Log;
 
 class MetaService
 {
-    public function sendMessage(Customer $customer, string $text, array $attachments = []): array
+    public function sendMessage(
+        Customer $customer,
+        string $text,
+        array $attachments = [],
+        string $platform = 'messenger'
+    ): array
     {
         $settings = $this->getSettings();
-        $recipientId = $customer->instagram_user_id ?: $customer->fb_user_id;
+        $platform = $platform === 'instagram' ? 'instagram' : 'messenger';
+        $recipientId = $platform === 'instagram'
+            ? $customer->instagram_user_id
+            : $customer->fb_user_id;
+
+        if (!$recipientId) {
+            $recipientId = $customer->instagram_user_id ?: $customer->fb_user_id;
+        }
 
         if (!$recipientId) {
             throw new \RuntimeException('Клієнт не має ID соцмережі.');

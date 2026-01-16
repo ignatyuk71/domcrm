@@ -8,12 +8,58 @@ use App\Models\Customer;
 use App\Services\MetaService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 class ChatApiController extends Controller
 {
     public function list()
     {
+        if (!Schema::hasTable('conversations') || !Schema::hasColumn('conversations', 'last_message_at')) {
+            $hasAvatar = Schema::hasColumn('customers', 'fb_profile_pic');
+            $selectColumns = [
+                'messages.customer_id',
+                'messages.text as last_message',
+                'messages.created_at as last_message_time',
+                'messages.platform',
+                'customers.first_name',
+                'customers.last_name',
+            ];
+            if ($hasAvatar) {
+                $selectColumns[] = 'customers.fb_profile_pic';
+            }
+
+            $latestMessages = DB::table('facebook_messages as messages')
+                ->join(
+                    DB::raw('(SELECT customer_id, MAX(id) AS last_id FROM facebook_messages GROUP BY customer_id) AS latest'),
+                    'messages.id',
+                    '=',
+                    'latest.last_id'
+                )
+                ->leftJoin('customers as customers', 'customers.id', '=', 'messages.customer_id')
+                ->orderByDesc('messages.created_at')
+                ->get($selectColumns);
+
+            $data = $latestMessages->map(function ($message) {
+                $name = trim(($message->first_name ?? '').' '.($message->last_name ?? ''));
+
+                return [
+                    'conversation_id' => null,
+                    'customer_id' => (int) $message->customer_id,
+                    'customer_name' => $name !== '' ? $name : 'Невідомий клієнт',
+                    'customer_avatar' => $hasAvatar ? ($message->fb_profile_pic ?? null) : null,
+                    'last_message' => $message->last_message,
+                    'last_message_time' => $message->last_message_time,
+                    'unread_count' => 0,
+                    'platform' => $message->platform,
+                    'status' => 'open',
+                ];
+            });
+
+            return response()->json(['data' => $data]);
+        }
+
         $conversations = Conversation::query()
             ->with('customer')
             ->orderByDesc('last_message_at')

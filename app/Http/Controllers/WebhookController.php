@@ -8,6 +8,7 @@ use App\Services\MetaService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class WebhookController extends Controller
 {
@@ -37,7 +38,14 @@ class WebhookController extends Controller
 
         foreach ($payload['entry'] ?? [] as $entry) {
             foreach ($entry['messaging'] ?? [] as $event) {
-                $this->handleMessageEvent($event, $metaService, $platform);
+                try {
+                    $this->handleMessageEvent($event, $metaService, $platform);
+                } catch (\Throwable $e) {
+                    Log::error('Webhook message handling failed', [
+                        'error' => $e->getMessage(),
+                        'event' => $event,
+                    ]);
+                }
             }
         }
 
@@ -47,10 +55,14 @@ class WebhookController extends Controller
     private function handleMessageEvent(array $event, MetaService $metaService, string $platform): void
     {
         $senderId = $event['sender']['id'] ?? null;
+        $recipientId = $event['recipient']['id'] ?? null;
         $message = $event['message'] ?? [];
         $mid = $message['mid'] ?? null;
+        $isEcho = !empty($message['is_echo']);
 
-        if (!$senderId || !$mid || !empty($message['is_echo'])) {
+        $contactId = $isEcho ? $recipientId : $senderId;
+
+        if (!$contactId || !$mid) {
             return;
         }
 
@@ -58,22 +70,22 @@ class WebhookController extends Controller
             return;
         }
 
-        $customer = Customer::where('instagram_user_id', $senderId)
-            ->orWhere('fb_user_id', $senderId)
+        $customer = Customer::where('instagram_user_id', $contactId)
+            ->orWhere('fb_user_id', $contactId)
             ->first();
 
         if (!$customer) {
             $customer = Customer::create([
                 'first_name' => 'Meta User',
-                'instagram_user_id' => $platform === 'instagram' ? $senderId : null,
-                'fb_user_id' => $platform === 'messenger' ? $senderId : null,
+                'instagram_user_id' => $platform === 'instagram' ? $contactId : null,
+                'fb_user_id' => $platform === 'messenger' ? $contactId : null,
             ]);
         } else {
             if ($platform === 'instagram' && !$customer->instagram_user_id) {
-                $customer->update(['instagram_user_id' => $senderId]);
+                $customer->update(['instagram_user_id' => $contactId]);
             }
             if ($platform === 'messenger' && !$customer->fb_user_id) {
-                $customer->update(['fb_user_id' => $senderId]);
+                $customer->update(['fb_user_id' => $contactId]);
             }
         }
 
@@ -89,12 +101,12 @@ class WebhookController extends Controller
             'mid' => $mid,
             'text' => $text !== '' ? $text : ($hasAttachments ? 'Вкладення' : ''),
             'attachments' => $message['attachments'] ?? null,
-            'is_from_customer' => true,
+            'is_from_customer' => !$isEcho,
             'platform' => $platform,
             'is_private' => true,
             'sent_at' => $sentAt,
-            'status' => 'received',
-            'is_read' => false,
+            'status' => $isEcho ? 'sent' : 'received',
+            'is_read' => $isEcho,
             'created_at' => $sentAt,
             'updated_at' => $sentAt,
         ]);
@@ -104,7 +116,7 @@ class WebhookController extends Controller
             $platform,
             $text !== '' ? $text : ($hasAttachments ? 'Вкладення' : ''),
             $sentAt,
-            true
+            !$isEcho
         );
     }
 
@@ -114,7 +126,7 @@ class WebhookController extends Controller
         $appSecret = config('services.facebook.app_secret');
 
         if (!$signature || !$appSecret) {
-            return true;
+            return false;
         }
 
         $expected = 'sha256='.hash_hmac('sha256', $request->getContent(), $appSecret);
