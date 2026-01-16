@@ -22,20 +22,28 @@
     </header>
 
     <div ref="threadBody" class="chat-thread-body">
-      <div v-if="!messages.length" class="chat-thread-empty">
+      
+      <div v-if="loading" class="chat-loading">
+        <div class="spinner"></div>
+        <span>Завантаження історії...</span>
+      </div>
+
+      <div v-else-if="!messages.length" class="chat-thread-empty">
         Немає повідомлень
       </div>
 
-      <ChatMessage
-        v-for="message in messages"
-        :key="message.id"
-        :message="message"
-        :is-mine="message.direction === 'outbound'"
-      />
+      <template v-else>
+        <ChatMessage
+          v-for="message in messages"
+          :key="message.id"
+          :message="message"
+          :is-mine="message.direction === 'outbound'"
+        />
+      </template>
     </div>
 
     <ChatInput
-      :disabled="isSending"
+      :disabled="isSending || loading"
       @send="$emit('send', { ...$event, customer_id: activeChat?.customer_id })"
     />
   </div>
@@ -50,6 +58,7 @@ const props = defineProps({
   activeChat: { type: Object, default: null },
   messages: { type: Array, default: () => [] },
   isSending: { type: Boolean, default: false },
+  loading: { type: Boolean, default: false }, // <--- ДОДАНО НОВИЙ PROPS
 });
 
 defineEmits(['send']);
@@ -61,15 +70,28 @@ function scrollToBottom() {
   threadBody.value.scrollTop = threadBody.value.scrollHeight;
 }
 
+// Скролимо вниз при монтуванні
 onMounted(() => {
   scrollToBottom();
 });
 
+// Скролимо вниз, коли приходять нові повідомлення
 watch(
   () => props.messages.length,
   async () => {
     await nextTick();
     scrollToBottom();
+  }
+);
+
+// Також бажано скролити вниз, коли закінчується завантаження
+watch(
+  () => props.loading,
+  async (newVal) => {
+    if (!newVal) { // Якщо завантаження завершилось (false)
+      await nextTick();
+      scrollToBottom();
+    }
   }
 );
 </script>
@@ -160,5 +182,30 @@ watch(
   text-align: center;
   margin-top: 32px;
   font-size: 0.9rem;
+}
+
+/* --- СТИЛІ ДЛЯ ЗАВАНТАЖЕННЯ --- */
+.chat-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #94a3b8;
+  gap: 12px;
+  font-size: 0.9rem;
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #3b82f6; /* Синій колір */
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 </style>

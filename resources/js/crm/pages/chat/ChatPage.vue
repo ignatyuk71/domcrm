@@ -28,6 +28,7 @@
         :active-chat="activeChat"
         :messages="messages"
         :is-sending="isSending"
+        :loading="isLoading"
         @send="handleSendMessage"
       />
       <ChatEmpty v-else />
@@ -41,7 +42,7 @@
 
 <script setup>
 import { onMounted, onUnmounted, ref, computed } from 'vue';
-import { useChat } from '@/crm/composables/useChat'; // Ваш composable
+import { useChat } from '@/crm/composables/useChat'; 
 
 // Імпорт компонентів UI
 import ChatLayout from '@/crm/components/chat/ChatLayout.vue';
@@ -55,7 +56,7 @@ const {
   activeChat,
   activeChatId,
   messages,
-  isLoading,
+  isLoading, // Ця змінна відповідає за стан завантаження
   isSending,
   fetchConversations,
   selectChat,
@@ -81,7 +82,6 @@ const handleSelectChat = (chat) => {
 };
 
 const handleSendMessage = (payload) => {
-  // Додаємо customer_id, який очікує useChat / бекенд
   sendMessage({
     ...payload,
     customer_id: activeChatId.value
