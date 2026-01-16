@@ -8,7 +8,9 @@ use App\Models\Customer;
 use App\Services\MetaService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 class ChatApiController extends Controller
 {
@@ -19,6 +21,14 @@ class ChatApiController extends Controller
                 ->with('customer')
                 ->orderByDesc('last_message_at')
                 ->paginate(20);
+
+            if ($conversations->total() === 0) {
+                return $this->listFromMessages();
+            }
+
+            Log::info('Chat list conversations', [
+                'total' => $conversations->total(),
+            ]);
 
             $conversations->getCollection()->transform(function (Conversation $conversation) {
                 $customer = $conversation->customer;
@@ -43,6 +53,67 @@ class ChatApiController extends Controller
 
         } catch (\Throwable $e) {
             Log::error('Chat list failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return $this->listFromMessages();
+        }
+    }
+
+    private function listFromMessages()
+    {
+        try {
+            if (!Schema::hasTable('facebook_messages')) {
+                return response()->json(['data' => []]);
+            }
+
+            $hasAvatar = Schema::hasColumn('customers', 'fb_profile_pic');
+            $selectColumns = [
+                'messages.customer_id',
+                'messages.text as last_message',
+                'messages.created_at as last_message_time',
+                'messages.platform',
+                'customers.first_name',
+                'customers.last_name',
+            ];
+            if ($hasAvatar) {
+                $selectColumns[] = 'customers.fb_profile_pic';
+            }
+
+            $latestMessages = DB::table('facebook_messages as messages')
+                ->join(
+                    DB::raw('(SELECT customer_id, MAX(id) AS last_id FROM facebook_messages GROUP BY customer_id) AS latest'),
+                    'messages.id',
+                    '=',
+                    'latest.last_id'
+                )
+                ->leftJoin('customers as customers', 'customers.id', '=', 'messages.customer_id')
+                ->orderByDesc('messages.created_at')
+                ->get($selectColumns);
+
+            Log::info('Chat list fallback messages', [
+                'count' => $latestMessages->count(),
+            ]);
+
+            $data = $latestMessages->map(function ($message) use ($hasAvatar) {
+                $name = trim(($message->first_name ?? '').' '.($message->last_name ?? ''));
+
+                return [
+                    'conversation_id' => null,
+                    'customer_id' => (int) $message->customer_id,
+                    'customer_name' => $name !== '' ? $name : 'Невідомий клієнт',
+                    'customer_avatar' => $hasAvatar ? ($message->fb_profile_pic ?? null) : null,
+                    'last_message' => $message->last_message,
+                    'last_message_time' => $message->last_message_time,
+                    'unread_count' => 0,
+                    'platform' => $message->platform,
+                    'status' => 'open',
+                ];
+            });
+
+            return response()->json(['data' => $data]);
+        } catch (\Throwable $e) {
+            Log::error('Chat list fallback failed', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
@@ -150,6 +221,9 @@ class ChatApiController extends Controller
         }
 
         $mid = is_array($metaResult) ? ($metaResult['message_id'] ?? null) : null;
+        if (!$mid) {
+            $mid = 'local-'.uniqid('', true);
+        }
         $sentAt = Carbon::now(config('app.timezone', 'Europe/Kyiv'));
 
         try {
