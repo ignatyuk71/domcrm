@@ -12,7 +12,16 @@
         </div>
         
         <div class="info">
-          <div class="name">{{ displayName }}</div>
+          <div v-if="!showNameInput" class="name-display" @click="enableNameEdit" title="Натисніть, щоб змінити ПІП">
+            {{ displayName }} <i class="bi bi-pencil edit-icon-mini"></i>
+          </div>
+          <div v-else class="name-edit-group">
+            <input v-model="form.first_name" class="name-input" placeholder="Ім'я">
+            <input v-model="form.last_name" class="name-input" placeholder="Прізвище">
+            <button class="btn-done" @click="showNameInput = false" title="Готово">
+              <i class="bi bi-check-lg"></i>
+            </button>
+          </div>
           <div class="id-text">ID: {{ customer.fb_user_id || customer.instagram_user_id || customerId }}</div>
         </div>
 
@@ -89,6 +98,7 @@ import axios from 'axios';
 
 const props = defineProps({ customer: Object });
 
+const showNameInput = ref(false);
 const phoneFocused = ref(false);
 const emailFocused = ref(false);
 const isLoading = ref(false);
@@ -97,12 +107,20 @@ const showEmailInput = ref(false);
 const phoneRef = ref(null);
 const emailRef = ref(null);
 
-const form = reactive({ phone: '', email: '' });
+const form = reactive({ 
+  first_name: '',
+  last_name: '',
+  phone: '', 
+  email: '' 
+});
 
+// Форматування телефону (суто цифри, примусовий старт 380)
 watch(() => form.phone, (newVal) => {
   if (!newVal) return;
-  let cleaned = newVal.replace(/\D/g, '');
-  if (cleaned.length > 0 && !cleaned.startsWith('38')) cleaned = '380' + cleaned;
+  let cleaned = newVal.replace(/\D/g, ''); // Видаляємо все крім цифр
+  if (cleaned.length > 0 && !cleaned.startsWith('38')) {
+    cleaned = '380' + cleaned;
+  }
   form.phone = cleaned.substring(0, 12);
 });
 
@@ -110,45 +128,82 @@ const isPhoneValid = computed(() => !form.phone || /^380\d{9}$/.test(form.phone)
 const isFormValid = computed(() => isPhoneValid.value);
 
 const customerId = computed(() => props.customer?.id ?? props.customer?.customer_id ?? null);
+
 const displayName = computed(() => {
-  const first = props.customer?.first_name || '';
-  const last = props.customer?.last_name || '';
-  return `${first} ${last}`.trim() || props.customer?.customer_name || 'Невідомий клієнт';
+  const combined = `${form.first_name} ${form.last_name}`.trim();
+  return combined || props.customer?.customer_name || 'Невідомий клієнт';
 });
+
 const displayInitial = computed(() => (displayName.value ? displayName.value[0] : ''));
 const avatarUrl = computed(() => props.customer?.fb_profile_pic || props.customer?.customer_avatar || '');
 const platform = computed(() => props.customer?.source || props.customer?.platform || '');
 const isInstagram = computed(() => platform.value === 'instagram' || !!props.customer?.instagram_user_id);
 
+// Завантаження даних при зміні клієнта
 watch(() => props.customer, (newVal) => {
   if (newVal) {
-    form.phone = newVal.phone || '';
+    form.first_name = newVal.first_name || '';
+    form.last_name = newVal.last_name || '';
+    form.phone = newVal.phone ? newVal.phone.replace(/\D/g, '') : '';
     form.email = newVal.email || '';
     showPhoneInput.value = !!form.phone;
     showEmailInput.value = !!form.email;
+    showNameInput.value = false;
   }
 }, { immediate: true });
 
-const enablePhone = async () => { showPhoneInput.value = true; if (!form.phone) form.phone = '380'; await nextTick(); phoneRef.value?.focus(); };
+const enableNameEdit = () => { showNameInput.value = true; };
+
+const enablePhone = async () => { 
+  showPhoneInput.value = true; 
+  if (!form.phone) form.phone = '380'; 
+  await nextTick(); 
+  phoneRef.value?.focus(); 
+};
 const clearPhone = () => { form.phone = ''; showPhoneInput.value = false; };
-const enableEmail = async () => { showEmailInput.value = true; await nextTick(); emailRef.value?.focus(); };
+
+const enableEmail = async () => { 
+  showEmailInput.value = true; 
+  await nextTick(); 
+  emailRef.value?.focus(); 
+};
 const clearEmail = () => { form.email = ''; showEmailInput.value = false; };
 
 const saveData = async () => {
   if (!customerId.value || !isFormValid.value) return;
   isLoading.value = true;
   try {
-    await axios.put(`/api/customers/${customerId.value}`, { phone: form.phone, email: form.email });
-    if (props.customer) { props.customer.phone = form.phone; props.customer.email = form.email; }
-  } catch (e) { console.error(e); alert('Помилка збереження'); } finally { isLoading.value = false; }
+    // Відправляємо ПІП, телефон та email (телефон суто цифри)
+    await axios.put(`/api/customers/${customerId.value}`, { 
+      first_name: form.first_name,
+      last_name: form.last_name,
+      phone: form.phone, 
+      email: form.email 
+    });
+    
+    // Оновлюємо оригінальний об'єкт
+    if (props.customer) { 
+      props.customer.first_name = form.first_name;
+      props.customer.last_name = form.last_name;
+      props.customer.phone = form.phone; 
+      props.customer.email = form.email; 
+    }
+    showNameInput.value = false;
+  } catch (e) { 
+    console.error(e); 
+    alert('Помилка збереження'); 
+  } finally { 
+    isLoading.value = false; 
+  }
 };
 </script>
 
 <style scoped>
-.right-sidebar { width: 100%; height: 100%; background: #fff; border-left: 1px solid #e5e7eb; display: flex; flex-direction: column; }
+.right-sidebar { width: 100%; height: 100%; background: #fff; border-left: 1px solid #e5e7eb; display: flex; flex-direction: column; font-family: sans-serif; }
 .profile-content { padding: 16px; display: flex; flex-direction: column; }
 .divider { border: 0; border-top: 1px solid #f1f5f9; margin: 12px 0; }
 
+/* HEADER & NAME EDIT */
 .header-section { display: flex; align-items: center; gap: 12px; }
 .avatar-wrap { position: relative; width: 48px; height: 48px; flex-shrink: 0; }
 .avatar-img, .avatar-placeholder { width: 100%; height: 100%; border-radius: 10px; object-fit: cover; }
@@ -160,12 +215,20 @@ const saveData = async () => {
 .platform-icon i { color: white; font-size: 10px; }
 
 .info { flex: 1; min-width: 0; }
-.name { font-size: 15px; color: #111827; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.id-text { font-size: 11px; color: #6b7280; }
+.name-display { font-size: 15px; color: #111827; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+.name-display:hover { color: #6366f1; }
+.edit-icon-mini { font-size: 12px; color: #94a3b8; }
 
+.name-edit-group { display: flex; flex-direction: column; gap: 4px; }
+.name-input { border: 1px solid #e5e7eb; border-radius: 4px; padding: 2px 6px; font-size: 13px; outline: none; }
+.name-input:focus { border-color: #6366f1; }
+.btn-done { background: #6366f1; color: white; border: none; border-radius: 4px; cursor: pointer; width: 24px; height: 24px; padding: 0; display: flex; align-items: center; justify-content: center; margin-top: 2px; }
+
+.id-text { font-size: 11px; color: #6b7280; margin-top: 2px; }
 .btn-unlink { background: #fff1f2; border: none; color: #f43f5e; width: 28px; height: 28px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 
-.fields-section { display: flex; flex-direction: column; gap: 12px; } /* Зменшена відстань */
+/* FIELDS */
+.fields-section { display: flex; flex-direction: column; gap: 10px; }
 .field-row { display: flex; align-items: flex-start; }
 .icon-col { width: 32px; color: #94a3b8; font-size: 18px; padding-top: 18px; }
 .input-col { flex: 1; display: flex; flex-direction: column; }
@@ -180,8 +243,8 @@ const saveData = async () => {
 .add-btn { color: #6366f1; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 4px 0; }
 .btn-clear { background: none; border: none; color: #d1d5db; cursor: pointer; padding: 0 2px; }
 
-/* НОВА МАЛЕНЬКА КНОПКА */
-.action-row { padding-left: 32px; margin-top: 4px; }
+/* ACTION BUTTON */
+.action-row { padding-left: 32px; margin-top: 6px; }
 .btn-save-small {
   background: #111827; color: #fff; border: none; border-radius: 6px;
   padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
