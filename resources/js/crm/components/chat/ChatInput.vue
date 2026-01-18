@@ -43,10 +43,7 @@
           >
             <i class="bi bi-file-text"></i>
           </button>
-          <button type="button" class="tool-btn" title="Швидкі відповіді"><i class="bi bi-lightning"></i></button>
           <button type="button" class="tool-btn" title="Товари"><i class="bi bi-box-seam"></i></button>
-          <button type="button" class="tool-btn" title="Емодзі"><i class="bi bi-emoji-smile"></i></button>
-
           <button
             type="button"
             class="tool-btn"
@@ -64,8 +61,6 @@
             accept="image/*"
             multiple
           />
-
-          <button type="button" class="tool-btn" title="Голосове"><i class="bi bi-mic"></i></button>
         </div>
 
         <button
