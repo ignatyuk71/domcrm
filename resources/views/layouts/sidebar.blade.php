@@ -313,8 +313,8 @@
         position: absolute;
         top: -2px;
         right: -2px;
-        width: 10px;
-        height: 10px;
+        width: 15px;
+        height: 15px;
         background: #ef4444;
         border: 2px solid #0f172a;
         border-radius: 50%;
