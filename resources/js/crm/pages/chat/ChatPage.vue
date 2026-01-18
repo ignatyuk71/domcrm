@@ -20,6 +20,7 @@
         :active-chat-id="activeChatId"
         :is-loading-more="isLoadingMore"
         :has-more="currentPage < lastPage"
+        :disable-scroll="searchQuery.length > 0"
         @select="handleSelectChat"
         @load-more="handleLoadMore"
       />

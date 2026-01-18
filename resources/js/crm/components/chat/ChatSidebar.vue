@@ -31,12 +31,13 @@ const props = defineProps({
   activeChatId: { type: [Number, String, null], default: null },
   isLoadingMore: { type: Boolean, default: false },
   hasMore: { type: Boolean, default: false },
+  disableScroll: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(['select', 'load-more']);
 
 function handleScroll(event) {
-  if (!props.hasMore || props.isLoadingMore) return;
+  if (!props.hasMore || props.isLoadingMore || props.disableScroll) return;
   const { scrollTop, clientHeight, scrollHeight } = event.target;
   if (scrollTop + clientHeight >= scrollHeight - 50) {
     emit('load-more');
