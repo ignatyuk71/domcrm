@@ -6,7 +6,6 @@
         <div class="file-info" :title="item.file.name">
           <img v-if="item.isImage" :src="item.previewUrl" class="file-thumb" alt="preview" />
           <i v-else class="bi bi-file-earmark-text file-icon"></i>
-          <span class="file-name">{{ item.file.name }}</span>
         </div>
         <button type="button" class="remove-btn" @click="removeFile(index)">
           <i class="bi bi-x"></i>
@@ -279,8 +278,8 @@ function handleSend() {
 }
 
 .file-thumb {
-  width: 32px;
-  height: 32px;
+  width: 70px;
+  height: 70px;
   border-radius: 4px;
   object-fit: cover;
 }
