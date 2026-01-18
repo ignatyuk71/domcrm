@@ -1,23 +1,25 @@
 <template>
   <div class="chat-input-wrapper">
-    <form class="chat-input-form" @submit.prevent="handleSend">
-      <div class="text-input-card">
-        <div v-if="selectedFiles.length" class="file-preview-list">
-          <div v-for="(item, index) in selectedFiles" :key="item.id" class="file-preview-badge">
-            <div class="preview-content" :title="item.sizeLabel">
-              <img v-if="item.isImage" :src="item.previewUrl" class="file-thumb" alt="preview" />
-              <i class="bi bi-file-earmark-arrow-up" v-else></i>
-              <span class="file-name">{{ item.file.name }}</span>
-            </div>
-            <button type="button" class="remove-file-btn" @click="removeFile(index)">
-              <i class="bi bi-x"></i>
-            </button>
-          </div>
+    
+    <div v-if="selectedFiles.length" class="file-preview-area">
+      <div v-for="(item, index) in selectedFiles" :key="item.id" class="file-badge">
+        <div class="file-info" :title="item.file.name">
+          <img v-if="item.isImage" :src="item.previewUrl" class="file-thumb" alt="preview" />
+          <i v-else class="bi bi-file-earmark-text file-icon"></i>
+          <span class="file-name">{{ item.file.name }}</span>
         </div>
+        <button type="button" class="remove-btn" @click="removeFile(index)">
+          <i class="bi bi-x"></i>
+        </button>
+      </div>
+    </div>
 
+    <form class="chat-input-bar" @submit.prevent="handleSend" :class="{ 'has-error': fileError }">
+      
+      <div class="input-area">
         <textarea
           v-model="text"
-          class="chat-textarea"
+          class="chat-textarea custom-scrollbar"
           rows="1"
           placeholder="Напишіть повідомлення..."
           :disabled="disabled"
@@ -25,54 +27,71 @@
           @input="autoResize"
           ref="textareaRef"
         ></textarea>
-
-        <span class="kb-hint" v-if="text.length > 0 || selectedFiles.length">Ctrl + Enter для відправки</span>
-        <span class="size-hint">Макс. 5 МБ на файл</span>
-        <span v-if="fileError" class="file-error">{{ fileError }}</span>
       </div>
 
-      <div class="chat-actions">
-        <div class="chat-tools">
-          <ChatTemplates v-if="showTemplates" @select="handleTemplateSelect" />
+      <div class="chat-tools">
+        
+        <button type="button" class="tool-btn" title="Товари">
+          <i class="bi bi-handbag"></i>
+        </button>
+
+        <button
+          type="button"
+          class="tool-btn"
+          :class="{ active: selectedFiles.length }"
+          @click="triggerFileInput"
+          title="Прикріпити файл"
+        >
+          <i class="bi bi-paperclip"></i>
+        </button>
+        <input
+          type="file"
+          ref="fileInputRef"
+          style="display: none"
+          @change="onFileChange"
+          accept="image/*, video/*, .pdf, .doc, .docx, .xls, .xlsx"
+          multiple
+        />
+
+        <div class="relative-container">
+          <ChatTemplates 
+            v-if="showTemplates" 
+            @select="handleTemplateSelect"
+            v-click-outside="() => showTemplates = false"
+          />
           <button
             type="button"
             class="tool-btn"
             :class="{ active: showTemplates }"
-            title="Шаблони"
+            title="Шаблони відповідей"
             @click="showTemplates = !showTemplates"
           >
-            <i class="bi bi-file-text"></i>
+            <i class="bi bi-chat-square-dots"></i>
           </button>
-          <button type="button" class="tool-btn" title="Товари"><i class="bi bi-box-seam"></i></button>
-          <button
-            type="button"
-            class="tool-btn"
-            :class="{ active: selectedFiles.length }"
-            @click="triggerFileInput"
-            title="Прикріпити фото"
-          >
-            <i class="bi bi-paperclip"></i>
-          </button>
-          <input
-            type="file"
-            ref="fileInputRef"
-            style="display: none"
-            @change="onFileChange"
-            accept="image/*"
-            multiple
-          />
         </div>
 
+        <button type="button" class="tool-btn" title="Емодзі">
+          <i class="bi bi-emoji-smile"></i>
+        </button>
+
         <button
-          class="chat-send-btn"
+          class="action-btn"
           type="submit"
-          :disabled="disabled || !canSend"
+          :disabled="disabled"
+          :title="hasContent ? 'Надіслати' : 'Надіслати лайк'"
         >
-          <span>Надіслати</span>
-          <i class="bi bi-send-fill"></i>
+          <i v-if="hasContent" class="bi bi-send-fill send-icon"></i>
+          <i v-else class="bi bi-hand-thumbs-up-fill like-icon" @click.prevent="sendLike"></i>
         </button>
       </div>
+
     </form>
+
+    <div class="input-footer">
+      <span v-if="fileError" class="error-text">{{ fileError }}</span>
+      <span v-else class="hint-text">Enter — новий рядок, Ctrl+Enter — надіслати</span>
+    </div>
+
   </div>
 </template>
 
@@ -93,8 +112,10 @@ const fileInputRef = ref(null);
 const textareaRef = ref(null);
 const showTemplates = ref(false);
 
-const maxFileSize = 5 * 1024 * 1024;
-const canSend = computed(() => text.value.trim().length > 0 || selectedFiles.value.length > 0);
+const maxFileSize = 10 * 1024 * 1024; // 10 MB
+
+// Перевірка, чи є контент для відправки
+const hasContent = computed(() => text.value.trim().length > 0 || selectedFiles.value.length > 0);
 
 function triggerFileInput() {
   fileInputRef.value.click();
@@ -108,16 +129,16 @@ function onFileChange(e) {
 
   files.forEach((file) => {
     if (file.size > maxFileSize) {
-      fileError.value = 'Файл більший за 5 МБ';
+      fileError.value = `Файл ${file.name} завеликий (макс 10МБ)`;
       return;
     }
     const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : '';
+    
     selectedFiles.value.push({
       id: `${Date.now()}_${Math.random().toString(16).slice(2)}`,
       file,
       previewUrl,
       isImage: file.type.startsWith('image/'),
-      sizeLabel: `${Math.round(file.size / 1024)} KB`,
     });
   });
 
@@ -137,178 +158,247 @@ function handleTemplateSelect(content) {
   showTemplates.value = false;
   if (textareaRef.value) {
     textareaRef.value.focus();
-    setTimeout(() => textareaRef.value.dispatchEvent(new Event('input')), 0);
+    setTimeout(autoResize, 0);
   }
 }
 
 function autoResize() {
   const el = textareaRef.value;
   if (el) {
-    el.style.height = 'auto';
-    el.style.height = el.scrollHeight + 'px';
+    el.style.height = 'auto'; // Скидаємо висоту
+    el.style.height = Math.min(el.scrollHeight, 150) + 'px'; // Обмежуємо макс висоту
   }
 }
 
+// Функція швидкого відправлення лайка
+function sendLike() {
+  emit('send', {
+    text: '👍', // Відправляємо смайлик
+    files: []
+  });
+}
+
 function handleSend() {
-  if (!canSend.value) return;
+  // Якщо пусто - нічого не робимо (кнопка лайка обробляється окремо в @click)
+  if (!hasContent.value) return;
 
   emit('send', {
     text: text.value.trim(),
     files: selectedFiles.value.map((item) => item.file),
   });
 
+  // Очистка
   text.value = '';
   selectedFiles.value.forEach((item) => {
     if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
   });
   selectedFiles.value = [];
   fileError.value = '';
-  if (textareaRef.value) textareaRef.value.style.height = 'auto';
+  
+  if (textareaRef.value) {
+    textareaRef.value.style.height = 'auto';
+    textareaRef.value.focus();
+  }
 }
 </script>
 
 <style scoped>
 .chat-input-wrapper {
-  background: #f4f9ff;
-  padding: 16px 24px;
-  border-top: 1px solid #e1e8f0;
+  padding: 12px 20px;
+  background: #ffffff; /* Білий фон, як на скріні */
+  border-top: 1px solid #f1f5f9;
 }
 
-.text-input-card {
+/* --- Прев'ю файлів --- */
+.file-preview-area {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.file-badge {
+  display: flex;
+  align-items: center;
+  background: #f1f5f9;
+  border-radius: 8px;
+  padding: 4px 8px 4px 4px;
+  font-size: 0.85rem;
+  border: 1px solid #e2e8f0;
+}
+
+.file-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 150px;
+}
+
+.file-thumb {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
+.file-icon {
+  font-size: 1.2rem;
+  color: #64748b;
+  margin-left: 4px;
+}
+
+.file-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #334155;
+}
+
+.remove-btn {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  margin-left: 6px;
+  padding: 0 4px;
+  font-size: 1.1rem;
+}
+
+.remove-btn:hover { color: #ef4444; }
+
+
+/* --- Основний рядок вводу (Стиль Messenger) --- */
+.chat-input-bar {
+  display: flex;
+  align-items: flex-end; /* Вирівнювання по низу, щоб іконки були на рівні тексту при багаторядковості */
+  gap: 12px;
   background: #ffffff;
-  border: 1px solid #d1d9e2;
-  border-radius: 12px;
-  padding: 12px 16px;
-  margin-bottom: 12px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-  position: relative;
+  border: 1px solid #cbd5e1; /* Сіра рамка */
+  border-radius: 24px; /* Сильне заокруглення */
+  padding: 10px 16px;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
-.text-input-card:focus-within {
+.chat-input-bar:focus-within {
   border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.chat-input-bar.has-error {
+  border-color: #ef4444;
+}
+
+/* Область тексту */
+.input-area {
+  flex: 1; /* Займає весь вільний простір */
+  display: flex;
+  align-items: center;
+  min-height: 24px;
 }
 
 .chat-textarea {
   width: 100%;
   border: none;
-  background: transparent;
-  resize: none;
-  font-size: 1rem;
-  color: #1e293b;
   outline: none;
-  min-height: 24px;
-  max-height: 180px;
-  line-height: 1.5;
-}
-
-.file-preview-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.file-preview-badge {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 6px 12px;
-}
-
-.preview-content {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.85rem;
-  color: #475569;
-}
-
-.file-thumb {
-  width: 28px;
-  height: 28px;
-  object-fit: cover;
-  border-radius: 6px;
-  border: 1px solid #e2e8f0;
-}
-
-.remove-file-btn {
+  resize: none;
   background: transparent;
-  border: none;
+  font-size: 0.95rem;
+  color: #1e293b;
+  line-height: 1.5;
+  max-height: 150px; /* Скрол, якщо тексту дуже багато */
+  padding: 0;
+  margin: 0;
+}
+
+.chat-textarea::placeholder {
   color: #94a3b8;
-  cursor: pointer;
-  font-size: 1.2rem;
-  line-height: 1;
 }
 
-.chat-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
+/* --- Інструменти (Іконки) --- */
 .chat-tools {
+  display: flex;
+  align-items: center;
+  gap: 14px; /* Відступи між іконками */
+  padding-bottom: 2px; /* Мікро-корекція для вирівнювання з текстом */
+}
+
+.relative-container {
   position: relative;
   display: flex;
-  gap: 16px;
 }
 
 .tool-btn {
-  background: transparent;
+  background: none;
   border: none;
-  color: #64748b;
-  font-size: 1.3rem;
-  cursor: pointer;
   padding: 0;
-  transition: color 0.2s;
+  color: #64748b; /* Темно-сірий колір іконок, як на скріні */
+  font-size: 1.25rem;
+  cursor: pointer;
+  transition: color 0.2s, transform 0.1s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.tool-btn:hover,
-.tool-btn.active {
+.tool-btn:hover, .tool-btn.active {
   color: #3b82f6;
 }
 
-.chat-send-btn {
-  background: #3b82f6;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  padding: 8px 18px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
+.tool-btn:active {
+  transform: scale(0.95);
 }
 
-.chat-send-btn:disabled {
-  background: #cbd5e1;
+/* Кнопка дії (Лайк / Send) */
+.action-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 4px; /* Трохи відсунути від решти */
+}
+
+.like-icon {
+  font-size: 1.35rem;
+  color: #3b82f6; /* Лайк синій */
+  transition: transform 0.2s;
+}
+
+.like-icon:hover {
+  transform: scale(1.1);
+}
+
+.send-icon {
+  font-size: 1.25rem;
+  color: #3b82f6; /* Літачок синій */
+}
+
+.action-btn:disabled {
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
-.kb-hint {
-  position: absolute;
-  bottom: 4px;
-  right: 12px;
-  font-size: 0.7rem;
+/* --- Футер з підказками --- */
+.input-footer {
+  display: flex;
+  justify-content: flex-end; /* Текст помилки/підказки справа або зліва */
+  margin-top: 6px;
+  padding: 0 12px;
+}
+
+.hint-text {
+  font-size: 0.75rem;
   color: #cbd5e1;
 }
 
-.size-hint {
-  position: absolute;
-  bottom: 4px;
-  left: 12px;
-  font-size: 0.7rem;
-  color: #94a3b8;
-}
-
-.file-error {
-  position: absolute;
-  bottom: 22px;
-  right: 12px;
-  font-size: 0.7rem;
+.error-text {
+  font-size: 0.75rem;
   color: #ef4444;
 }
+
+/* Скролбар для textarea */
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
 </style>
