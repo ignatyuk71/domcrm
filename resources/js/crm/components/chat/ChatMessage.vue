@@ -191,8 +191,8 @@ const statusIcon = computed(() => {
 
 .reply-image {
   flex-shrink: 0;
-  width: 70px;
-  height: 70px;
+  width: 100px;
+  height: 120px;
   border-radius: 4px;
   overflow: hidden;
   background: rgba(0, 0, 0, 0.1);
