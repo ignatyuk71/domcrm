@@ -93,6 +93,11 @@
             <span v-if="isLoading" class="spinner"></span>
             {{ isLoading ? 'Зберігаємо...' : 'Зберегти покупця' }}
           </button>
+          
+          <button class="btn-create-order" @click="showOrderPanel = true">
+            <i class="bi bi-bag-plus"></i>
+            Створити замовлення
+          </button>
         </div>
       </div>
 
@@ -102,6 +107,23 @@
       <i class="bi bi-person-bounding-box"></i>
       <p>Виберіть чат</p>
     </div>
+
+    <transition name="slide">
+      <div v-if="showOrderPanel" class="offcanvas-panel">
+        <div class="offcanvas-header">
+          <h3>Нове замовлення</h3>
+          <button class="btn-close-panel" @click="showOrderPanel = false">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </div>
+        <div class="offcanvas-body">
+          <div class="empty-placeholder">
+            <p>Тут буде форма створення замовлення</p>
+          </div>
+        </div>
+      </div>
+    </transition>
+
   </div>
 </template>
 
@@ -118,6 +140,9 @@ const isLoading = ref(false);
 const showPhoneInput = ref(false);
 const showEmailInput = ref(false);
 const phoneRef = ref(null);
+
+// Стан для панелі замовлення
+const showOrderPanel = ref(false);
 
 // Стан для сповіщень
 const toast = reactive({
@@ -191,12 +216,10 @@ const saveData = async () => {
   isLoading.value = true;
   try {
     const response = await axios.put(`/api/customers/${customerId.value}`, form);
-    // Оновлюємо локальні дані даними з сервера, щоб все було синхронізовано
     const updatedCustomer = response?.data?.data;
     if (props.customer && updatedCustomer) {
       Object.assign(props.customer, updatedCustomer);
     } else if (props.customer) {
-      // Фолбек, якщо сервер не повернув об'єкт
       Object.assign(props.customer, form);
     }
 
@@ -212,7 +235,17 @@ const saveData = async () => {
 </script>
 
 <style scoped>
-.right-sidebar { width: 100%; height: 100%; background: #ffffff; border-left: 1px solid #edf2f7; display: flex; flex-direction: column; position: relative; }
+/* Додаємо position: relative до головного контейнера для правильного позиціонування Offcanvas */
+.right-sidebar { 
+  width: 100%; 
+  height: 100%; 
+  background: #ffffff; 
+  border-left: 1px solid #edf2f7; 
+  display: flex; 
+  flex-direction: column; 
+  position: relative; 
+  overflow: hidden; /* Щоб вікно не вилазило за межі при анімації */
+}
 .profile-content { padding: 16px; }
 
 /* TOAST STYLES */
@@ -281,16 +314,16 @@ const saveData = async () => {
 .error-text { color: #ef4444; font-size: 10px; margin-top: 2px; }
 .add-btn { color: #6366f1; font-size: 13px; font-weight: 600; cursor: pointer; padding: 4px 0; }
 
-.action-row { padding-left: 32px; margin-top: 8px; }
+.action-row { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
 
-/* --- НОВІ СТИЛІ ДЛЯ КНОПКИ ЗБЕРЕЖЕННЯ --- */
+/* КНОПКА ЗБЕРЕЖЕННЯ */
 .btn-save-modern {
-  background: #A78BFB; /* М'який фіолетовий колір */
+  background: #A78BFB; 
   color: white;
   border: none;
   border-radius: 8px;
-  height: 40px; /* Фіксована менша висота */
-  display: flex; /* Для центрування вмісту */
+  height: 40px; 
+  display: flex; 
   align-items: center;
   justify-content: center;
   gap: 8px;
@@ -300,20 +333,100 @@ const saveData = async () => {
   cursor: pointer;
   transition: all 0.3s ease;
 }
-
 .btn-save-modern:hover:not(:disabled) {
-  background: #9061f9; /* Трохи темніший при наведенні */
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(167, 139, 251, 0.3);
+  background: #9061f9; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(167, 139, 251, 0.3);
+}
+.btn-save-modern:disabled { background: #e2e8f0; color: #94a3b8; cursor: not-allowed; box-shadow: none; }
+
+/* НОВА КНОПКА: СТВОРИТИ ЗАМОВЛЕННЯ */
+.btn-create-order {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #1f2937;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  transition: 0.2s;
+}
+.btn-create-order:hover {
+  background: #f8fafc;
+  border-color: #cbd5e0;
 }
 
-.btn-save-modern:disabled {
-  background: #e2e8f0;
-  color: #94a3b8;
-  cursor: not-allowed;
-  box-shadow: none;
+/* --- OFFCANVAS WINDOW STYLES --- */
+.offcanvas-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 100%; /* Займає всю ширину сайдбару (якщо сайдбар 300px, то і вікно 300px) */
+  height: 100%;
+  background: #ffffff;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -5px 0 15px rgba(0,0,0,0.05);
 }
-/* --------------------------------------- */
+
+.offcanvas-header {
+  padding: 16px;
+  border-bottom: 1px solid #edf2f7;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.offcanvas-header h3 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0;
+}
+.btn-close-panel {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.btn-close-panel:hover { color: #ef4444; }
+
+.offcanvas-body {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+}
+.empty-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #cbd5e0;
+  font-size: 14px;
+}
+
+/* АНІМАЦІЯ ВИЇЗДУ */
+.slide-enter-active,
+.slide-leave-active {
+  transition: transform 0.3s ease-in-out;
+}
+.slide-enter-from,
+.slide-leave-to {
+  transform: translateX(100%);
+}
+.slide-enter-to,
+.slide-leave-from {
+  transform: translateX(0);
+}
 
 .spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: #fff; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
