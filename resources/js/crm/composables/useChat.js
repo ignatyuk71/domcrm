@@ -160,6 +160,19 @@ export function useChat() {
       });
     }
 
+    if (!files.length && !remoteUrls.length) {
+      tempMessages.push({
+        id: tempId,
+        text: payload.text || null,
+        direction: 'outbound',
+        created_at: new Date().toISOString(),
+        attachments: [],
+        status: 'sending',
+        is_read: true,
+      });
+      tempIds.push(tempId);
+    }
+
     messages.value = [...messages.value, ...tempMessages];
 
     try {
@@ -188,6 +201,11 @@ export function useChat() {
         if (replaceIndex === -1) return msg;
         return newMessages[replaceIndex] || msg;
       });
+
+      if (newMessages.length < tempIds.length) {
+        const staleIds = tempIds.slice(newMessages.length);
+        messages.value = messages.value.filter((msg) => !staleIds.includes(msg.id));
+      }
 
       conversations.value = conversations.value.map((chat) =>
         chat.customer_id === payload.customer_id
