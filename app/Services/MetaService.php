@@ -104,7 +104,7 @@ class MetaService
 
         $messagesUrl = $this->graphUrl("/{$threadId}/messages");
         $response = Http::withToken($settings->access_token)->get($messagesUrl, [
-            'fields' => 'message,created_time,from,attachments,id',
+            'fields' => 'message,created_time,from,attachments,reply_to,id',
             'limit' => 50,
         ]);
 
@@ -123,6 +123,8 @@ class MetaService
             }
 
             $existing = FacebookMessage::where('mid', $mid)->first();
+            $replyToMid = $msgData['reply_to']['mid'] ?? null;
+            $parentId = $replyToMid ? FacebookMessage::where('mid', $replyToMid)->value('id') : null;
 
             // Визначення від кого
             $isFromCustomer = isset($msgData['from']['id']) && $msgData['from']['id'] == $recipientId;
@@ -149,6 +151,7 @@ class MetaService
                 ['mid' => $mid],
                 [
                     'customer_id' => $customer->id,
+                    'parent_id' => $parentId,
                     'text' => $text !== '' ? $text : ($hasAttachments ? 'Вкладення' : ''),
                     'attachments' => $storedAttachments,
                     'is_from_customer' => $isFromCustomer,

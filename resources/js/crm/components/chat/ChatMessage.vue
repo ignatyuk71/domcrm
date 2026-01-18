@@ -1,6 +1,18 @@
 <template>
   <div class="chat-message" :class="{ mine: isMine }">
     <div class="chat-message-bubble">
+      <div v-if="message.reply_to" class="reply-wrapper">
+        <span class="reply-author">
+          {{ message.reply_to.direction === 'outbound' ? 'Ви' : 'Клієнт' }}
+        </span>
+        <span class="reply-text">
+          {{
+            message.reply_to.text
+              ? message.reply_to.text
+              : (message.reply_to.attachments && message.reply_to.attachments.length ? 'Вкладення' : '')
+          }}
+        </span>
+      </div>
       <div v-if="hasAttachments" class="message-attachments">
         <template v-for="(att, index) in normalizedAttachments" :key="index">
           
@@ -132,6 +144,36 @@ const statusIcon = computed(() => {
   color: #fff;
   border-bottom-left-radius: 16px;
   border-bottom-right-radius: 4px;
+}
+
+.reply-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border-left: 3px solid #94a3b8;
+  background: rgba(148, 163, 184, 0.15);
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.chat-message.mine .reply-wrapper {
+  background: rgba(255, 255, 255, 0.18);
+  border-left-color: rgba(255, 255, 255, 0.65);
+}
+
+.reply-author {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: inherit;
+}
+
+.reply-text {
+  font-size: 0.75rem;
+  opacity: 0.8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Текст */

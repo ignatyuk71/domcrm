@@ -124,6 +124,12 @@ class WebhookController extends Controller
             $customer->refresh();
         }
 
+        $replyToMid = $message['reply_to']['mid'] ?? null;
+        $parentId = null;
+        if ($replyToMid) {
+            $parentId = FacebookMessage::where('mid', $replyToMid)->value('id');
+        }
+
         // --- ОБРОБКА ВКЛАДЕНЬ ---
         $rawAttachments = $message['attachments'] ?? [];
         $processedAttachments = [];
@@ -145,6 +151,7 @@ class WebhookController extends Controller
             ['mid' => $message['mid'] ?? null],
             [
                 'customer_id' => $customer->id,
+                'parent_id' => $parentId,
                 'text' => $text !== '' ? $text : ($hasAttachments ? 'Вкладення' : null),
                 'attachments' => $hasAttachments ? $processedAttachments : null,
                 'platform' => $platform,

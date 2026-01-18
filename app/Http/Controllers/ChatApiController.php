@@ -144,10 +144,21 @@ class ChatApiController extends Controller
 
         try {
             $messages = FacebookMessage::query()
+                ->with('parent')
                 ->where('customer_id', $id)
                 ->orderByRaw('COALESCE(sent_at, created_at) asc')
                 ->get()
                 ->map(function (FacebookMessage $message) {
+                    $parent = $message->parent;
+                    $replyTo = null;
+                    if ($parent) {
+                        $replyTo = [
+                            'text' => $parent->text ?? null,
+                            'direction' => $parent->is_from_customer ? 'inbound' : 'outbound',
+                            'attachments' => $parent->attachments ?? [],
+                        ];
+                    }
+
                     return [
                         'id' => $message->id,
                         'text' => $message->text ?? null,
@@ -157,6 +168,7 @@ class ChatApiController extends Controller
                         'status' => $message->status ?? null,
                         'is_read' => $message->is_read ?? null,
                         'mid' => $message->mid,
+                        'reply_to' => $replyTo,
                     ];
                 });
 
