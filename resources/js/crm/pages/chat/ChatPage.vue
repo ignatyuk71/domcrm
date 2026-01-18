@@ -42,7 +42,7 @@
     </template>
 
     <template #profile>
-      <ChatProfile :chat="activeChat" />
+      <ChatProfile :customer="activeChat" />
     </template>
   </ChatLayout>
 
@@ -74,6 +74,7 @@ import ChatLayout from '@/crm/components/chat/ChatLayout.vue';
 import ChatSidebar from '@/crm/components/chat/ChatSidebar.vue';
 import ChatThread from '@/crm/components/chat/ChatThread.vue';
 import ChatEmpty from '@/crm/components/chat/ChatEmptyState.vue';
+// Імпортуємо наш новий профіль (який ми щойно зробили)
 import ChatProfile from '@/crm/components/chat/ChatCustomerProfile.vue';
 
 const {
@@ -81,7 +82,7 @@ const {
   activeChat,
   activeChatId,
   messages,
-  isLoading, // Ця змінна відповідає за стан завантаження
+  isLoading, 
   isLoadingMore,
   isSending,
   isSyncing,
