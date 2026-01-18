@@ -1,7 +1,7 @@
 <template>
   <div class="right-sidebar">
     
-    <div v-if="customer" class="profile-content">
+    <div v-if="customer && customer.id" class="profile-content">
       
       <div class="header-section">
         <div class="avatar-wrap">
@@ -9,7 +9,6 @@
           <div v-else class="avatar-placeholder">
             {{ (customer.first_name?.[0] || '') }}
           </div>
-          
           <div class="platform-icon">
             <i class="bi" :class="customer.source === 'instagram' ? 'bi-instagram' : 'bi-messenger'"></i>
           </div>
@@ -26,46 +25,40 @@
       <div class="fields-section">
         
         <div class="field-row">
-          <div class="icon-col">
-            <i class="bi bi-telephone"></i>
-          </div>
+          <div class="icon-col"><i class="bi bi-telephone"></i></div>
           <div class="input-col">
             <label>Телефон</label>
             <input 
               v-model="form.phone" 
-              class="editable-input" 
+              class="simple-input" 
+              type="text" 
               placeholder="+ Додати телефон"
-              type="text"
             >
           </div>
         </div>
 
         <div class="field-row">
-          <div class="icon-col">
-            <i class="bi bi-envelope"></i>
-          </div>
+          <div class="icon-col"><i class="bi bi-envelope"></i></div>
           <div class="input-col">
             <label>E-mail</label>
             <input 
               v-model="form.email" 
-              class="editable-input" 
+              class="simple-input" 
+              type="email" 
               placeholder="+ Додати email"
-              type="email"
             >
           </div>
         </div>
 
         <div class="field-row">
-          <div class="icon-col">
-            <i class="bi bi-card-text"></i>
-          </div>
+          <div class="icon-col"><i class="bi bi-card-text"></i></div>
           <div class="input-col">
             <label>Коментар</label>
             <textarea 
               v-model="form.note" 
-              class="editable-input" 
+              class="simple-input" 
+              rows="1" 
               placeholder="+ Додати коментар"
-              rows="1"
             ></textarea>
           </div>
         </div>
@@ -97,14 +90,14 @@ const props = defineProps({
 
 const isLoading = ref(false);
 
-// Форма, куди менеджер вводить дані
+// Локальна форма для вводу
 const form = reactive({
   phone: '',
   email: '',
   note: ''
 });
 
-// Коли відкриваємо клієнта - підставляємо те, що вже є в базі, або лишаємо пустим
+// Коли міняється клієнт - заповнюємо форму тим, що є в базі
 watch(() => props.customer, (newVal) => {
   if (newVal) {
     form.phone = newVal.phone || '';
@@ -118,19 +111,18 @@ const saveData = async () => {
 
   isLoading.value = true;
   try {
-    // Відправляємо те, що ввів менеджер
+    // Відправляємо на сервер введені дані
     await axios.put(`/api/customers/${props.customer.id}`, {
       phone: form.phone,
       email: form.email,
       note: form.note
     });
 
-    // Оновлюємо дані в інтерфейсі, щоб не треба було перезавантажувати сторінку
+    // Оновлюємо дані в об'єкті клієнта (щоб в списку теж оновилось)
     props.customer.phone = form.phone;
     props.customer.email = form.email;
     props.customer.note = form.note;
 
-    // alert('Збережено'); // Можна розкоментувати якщо треба підтвердження
   } catch (e) {
     console.error(e);
     alert('Помилка збереження');
@@ -171,7 +163,7 @@ const saveData = async () => {
   height: 50px;
 }
 
-.avatar-img {
+.avatar-img, .avatar-placeholder {
   width: 100%;
   height: 100%;
   border-radius: 50%;
@@ -179,10 +171,7 @@ const saveData = async () => {
 }
 
 .avatar-placeholder {
-  width: 100%;
-  height: 100%;
   background: #e2e8f0;
-  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -203,15 +192,12 @@ const saveData = async () => {
 .bi-instagram { color: #E1306C; }
 .bi-messenger { color: #0084FF; }
 
-.info {
-  flex: 1;
-  overflow: hidden;
-}
+.info { flex: 1; overflow: hidden; }
 
 .name {
   font-size: 16px;
   font-weight: 600;
-  color: #0ea5e9;
+  color: #0ea5e9; /* Голубий колір імені */
   margin-bottom: 2px;
 }
 
@@ -220,10 +206,8 @@ const saveData = async () => {
   color: #334155;
 }
 
-/* FIELDS */
-.fields-section {
-  flex: 1;
-}
+/* ПОЛЯ ВВОДУ */
+.fields-section { flex: 1; }
 
 .field-row {
   display: flex;
@@ -249,30 +233,26 @@ const saveData = async () => {
   margin-bottom: 4px;
 }
 
-.editable-input {
-  width: 100%;
+.simple-input {
   border: none;
   background: transparent;
-  border-bottom: 1px solid transparent;
-  color: #3b82f6; /* Синій колір тексту, як просив */
+  width: 100%;
   font-size: 15px;
-  padding: 2px 0;
+  color: #3b82f6; /* Синій текст, як на скріні */
   outline: none;
-  transition: border-color 0.2s;
+  padding: 0;
 }
 
-.editable-input::placeholder {
-  color: #60a5fa; /* Світло-синій плейсхолдер */
+.simple-input::placeholder {
+  color: #60a5fa; /* Світло-синій placeholder (+ Додати телефон) */
 }
 
-.editable-input:focus {
-  border-bottom: 1px solid #3b82f6;
+.simple-input:focus {
+  border-bottom: 1px solid #3b82f6; /* Підкреслення при вводі */
 }
 
-/* FOOTER */
-.footer-section {
-  margin-top: auto;
-}
+/* КНОПКА */
+.footer-section { margin-top: auto; }
 
 .btn-save {
   width: 100%;
@@ -284,15 +264,8 @@ const saveData = async () => {
   font-weight: 600;
   cursor: pointer;
 }
-
-.btn-save:hover {
-  background: #2563eb;
-}
-
-.btn-save:disabled {
-  background: #93c5fd;
-  cursor: not-allowed;
-}
+.btn-save:hover { background: #2563eb; }
+.btn-save:disabled { background: #93c5fd; cursor: not-allowed; }
 
 .empty-state {
   display: flex;
