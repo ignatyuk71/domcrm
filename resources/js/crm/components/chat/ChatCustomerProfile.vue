@@ -1,13 +1,13 @@
 <template>
   <div class="right-sidebar">
     
-    <div v-if="customer && customer.id" class="profile-content">
+    <div v-if="customerId" class="profile-content">
       
       <div class="header-section">
         <div class="avatar-wrap">
-          <img v-if="customer.fb_profile_pic" :src="customer.fb_profile_pic" class="avatar-img">
+          <img v-if="avatarUrl" :src="avatarUrl" class="avatar-img">
           <div v-else class="avatar-placeholder">
-            {{ (customer.first_name?.[0] || '') }}
+            {{ displayInitial }}
           </div>
           <div class="platform-icon">
             <i class="bi" :class="isInstagram ? 'bi-instagram' : 'bi-messenger'"></i>
@@ -16,9 +16,9 @@
         
         <div class="info">
           <div class="name">
-            {{ customer.first_name }} {{ customer.last_name }}
+            {{ displayName }}
           </div>
-          <div class="id-text">{{ customer.fb_user_id || customer.instagram_user_id || customer.id }}</div>
+          <div class="id-text">{{ customer.fb_user_id || customer.instagram_user_id || customerId }}</div>
         </div>
 
         <button class="btn-unlink">
@@ -111,9 +111,20 @@ const form = reactive({
   email: ''
 });
 
+const customerId = computed(() => props.customer?.id ?? props.customer?.customer_id ?? null);
+const displayName = computed(() => {
+  const first = props.customer?.first_name || '';
+  const last = props.customer?.last_name || '';
+  const combined = `${first} ${last}`.trim();
+  return combined || props.customer?.customer_name || 'Невідомий клієнт';
+});
+const displayInitial = computed(() => (displayName.value ? displayName.value[0] : ''));
+const avatarUrl = computed(() => props.customer?.fb_profile_pic || props.customer?.customer_avatar || '');
+const platform = computed(() => props.customer?.source || props.customer?.platform || '');
+
 // Визначаємо іконку
 const isInstagram = computed(() => {
-  return props.customer?.source === 'instagram' || !!props.customer?.instagram_user_id;
+  return platform.value === 'instagram' || !!props.customer?.instagram_user_id;
 });
 
 // Коли відкриваємо нового клієнта - підтягуємо те, що є (або пустоту)
@@ -151,19 +162,21 @@ const clearEmail = () => {
 
 // --- ЗБЕРЕЖЕННЯ ---
 const saveData = async () => {
-  if (!props.customer?.id) return;
+  if (!customerId.value) return;
 
   isLoading.value = true;
   try {
     // Відправляємо на сервер те, що ввів менеджер
-    await axios.put(`/api/customers/${props.customer.id}`, {
+    await axios.put(`/api/customers/${customerId.value}`, {
       phone: form.phone,
       email: form.email
     });
 
     // Оновлюємо об'єкт клієнта (щоб оновилось в списку без перезавантаження)
-    props.customer.phone = form.phone;
-    props.customer.email = form.email;
+    if (props.customer) {
+      props.customer.phone = form.phone;
+      props.customer.email = form.email;
+    }
 
   } catch (e) {
     console.error(e);
