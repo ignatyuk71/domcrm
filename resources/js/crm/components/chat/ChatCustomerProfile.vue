@@ -94,7 +94,7 @@
             {{ isLoading ? 'Зберігаємо...' : 'Зберегти покупця' }}
           </button>
           
-          <button class="btn-create-order" @click="showOrderPanel = true">
+          <button class="btn-create-order" type="button" @click="showOrderPanel = true">
             <i class="bi bi-bag-plus"></i>
             Створити замовлення
           </button>
@@ -108,41 +108,12 @@
       <p>Виберіть чат</p>
     </div>
 
-    <teleport to="body">
-      <transition name="fade">
-        <div v-if="showOrderPanel" class="offcanvas-backdrop" @click="showOrderPanel = false"></div>
-      </transition>
-      
-      <transition name="slide-global">
-        <div v-if="showOrderPanel" class="order-offcanvas-global">
-          
-          <div class="offcanvas-header">
-            <div class="header-left">
-              <i class="bi bi-bag-check-fill header-icon"></i>
-              <h3>Нове замовлення</h3>
-            </div>
-            <button class="btn-close-panel" @click="showOrderPanel = false">
-              <i class="bi bi-x-lg"></i>
-            </button>
-          </div>
-
-          <div class="offcanvas-body">
-            <div class="empty-placeholder">
-              <div class="placeholder-icon">
-                <i class="bi bi-basket2"></i>
-              </div>
-              <p>Тут буде форма створення замовлення</p>
-              <span>Пошук товарів, вибір доставки та оплати</span>
-            </div>
-          </div>
-
-          <div class="offcanvas-footer">
-             <button class="btn-save-modern" disabled>Зберегти замовлення</button>
-          </div>
-
-        </div>
-      </transition>
-    </teleport>
+    <ChatOrderPanel
+      v-if="showOrderPanel"
+      :customer="customer"
+      @close="showOrderPanel = false"
+      @saved="handleOrderSaved"
+    />
 
   </div>
 </template>
@@ -150,6 +121,7 @@
 <script setup>
 import { ref, reactive, watch, nextTick, computed } from 'vue';
 import axios from 'axios';
+import ChatOrderPanel from '@/crm/components/chat/ChatOrderPanel.vue';
 
 const props = defineProps({ customer: Object });
 
@@ -215,6 +187,7 @@ watch(() => props.customer, (newVal) => {
     showPhoneInput.value = !!form.phone;
     showEmailInput.value = !!form.email;
     showNameInput.value = false;
+    showOrderPanel.value = false;
   }
 }, { immediate: true });
 
@@ -251,6 +224,11 @@ const saveData = async () => {
   } finally { 
     isLoading.value = false; 
   }
+};
+
+const handleOrderSaved = () => {
+  showOrderPanel.value = false;
+  showToast('Замовлення створено!');
 };
 </script>
 
@@ -369,68 +347,6 @@ const saveData = async () => {
   background: #f8fafc;
   border-color: #cbd5e0;
 }
-
-/* === GLOBAL OFFCANVAS STYLES === */
-.offcanvas-backdrop {
-  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-  background: rgba(0,0,0,0.3); z-index: 1000;
-  backdrop-filter: blur(2px);
-}
-
-.order-offcanvas-global {
-  position: fixed; top: 0; right: 0; 
-  width: 400px; /* Ширина 400px для кращого вигляду, можна поміняти на 300px */
-  height: 100vh;
-  background: #ffffff; z-index: 1001;
-  display: flex; flex-direction: column;
-  box-shadow: -10px 0 30px rgba(0,0,0,0.15);
-}
-
-/* HEADER */
-.offcanvas-header {
-  padding: 16px; border-bottom: 1px solid #edf2f7;
-  display: flex; align-items: center; justify-content: space-between;
-  background: #fff;
-}
-.header-left { display: flex; align-items: center; gap: 10px; }
-.header-icon { color: #A78BFB; font-size: 18px; }
-.offcanvas-header h3 {
-  font-size: 16px; font-weight: 700; color: #1f2937; margin: 0;
-}
-.btn-close-panel {
-  background: #f1f5f9; border: none; width: 32px; height: 32px; border-radius: 8px;
-  color: #64748b; cursor: pointer; display: flex; align-items: center; justify-content: center;
-  transition: 0.2s;
-}
-.btn-close-panel:hover { background: #fee2e2; color: #ef4444; }
-
-/* BODY */
-.offcanvas-body { flex: 1; padding: 20px; overflow-y: auto; background: #f8fafc; }
-
-/* FOOTER */
-.offcanvas-footer {
-  padding: 16px; border-top: 1px solid #edf2f7; background: #fff;
-}
-
-/* PLACEHOLDER STATE */
-.empty-placeholder {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  height: 100%; color: #94a3b8; text-align: center; gap: 10px;
-}
-.placeholder-icon {
-  width: 64px; height: 64px; background: #fff; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 28px; color: #cbd5e0; box-shadow: 0 4px 10px rgba(0,0,0,0.05);
-}
-.empty-placeholder p { font-size: 15px; font-weight: 600; color: #475569; margin: 0; }
-.empty-placeholder span { font-size: 13px; }
-
-/* АНІМАЦІЯ ВИЇЗДУ */
-.fade-enter-active, .fade-leave-active { transition: opacity 0.3s; }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
-
-.slide-global-enter-active, .slide-global-leave-active { transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
-.slide-global-enter-from, .slide-global-leave-to { transform: translateX(100%); }
 
 .spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: #fff; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
