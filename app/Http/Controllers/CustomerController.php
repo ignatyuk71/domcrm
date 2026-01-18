@@ -90,4 +90,27 @@ class CustomerController extends Controller
             ],
         ]);
     }
+    /**
+     * Оновлення контактних даних клієнта (ПІП, телефон, email).
+     */
+    public function update(Request $request, Customer $customer): JsonResponse
+    {
+        // 1. Валідація вхідних даних
+        $validated = $request->validate([
+            'first_name' => 'required|string|max:255',
+            'last_name'  => 'required|string|max:255',
+            'phone'      => 'required|string|max:20',
+            'email'      => 'nullable|email|max:255',
+        ]);
+
+        // 2. Оновлення моделі
+        $customer->update($validated);
+
+        // 3. Повернення успішної відповіді
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Дані клієнта оновлено',
+            'data' => $customer
+        ]);
+    }
 }

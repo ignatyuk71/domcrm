@@ -153,6 +153,7 @@ Route::middleware('auth')->group(function () {
     // --- КЛІЄНТИ (Customers) ---
     Route::get('/customers', [CustomerController::class, 'index'])->name('customers.index');
     Route::get('/customers/{customer}', [CustomerController::class, 'show'])->name('customers.show');
+    Route::put('/api/customers/{customer}', [CustomerController::class, 'update'])->name('customers.update');
 
     // --- ЧАТ ---
     Route::get('/messenger', [ChatController::class, 'index'])->name('chat.index');
