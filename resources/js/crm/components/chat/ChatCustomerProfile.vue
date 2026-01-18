@@ -1,5 +1,6 @@
 <template>
   <div class="right-sidebar">
+    
     <div v-if="customerId" class="profile-content">
       
       <div class="header-section">
@@ -14,8 +15,10 @@
         </div>
         
         <div class="info">
-          <div class="name">{{ displayName }}</div>
-          <div class="id-text">ID: {{customerId }}</div>
+          <div class="name">
+            {{ displayName }}
+          </div>
+          <div class="id-text">ID: {{ customer.fb_user_id || customer.instagram_user_id || customerId }}</div>
         </div>
 
         <button class="btn-unlink" title="Від'єднати">
@@ -26,10 +29,12 @@
       <hr class="divider" />
 
       <div class="fields-section">
+        
         <div class="field-row">
           <div class="icon-col"><i class="bi bi-telephone"></i></div>
           <div class="input-col">
             <label>Телефон</label>
+            
             <div v-if="form.phone || showPhoneInput" class="input-group" :class="{ 'is-focused': phoneFocused }">
               <input 
                 v-model="form.phone" 
@@ -43,6 +48,7 @@
                 <i class="bi bi-x-circle-fill"></i>
               </button>
             </div>
+            
             <div v-else class="add-btn" @click="enablePhone">
               <i class="bi bi-plus-circle"></i> Додати телефон
             </div>
@@ -53,6 +59,7 @@
           <div class="icon-col"><i class="bi bi-envelope"></i></div>
           <div class="input-col">
             <label>E-mail</label>
+            
             <div v-if="form.email || showEmailInput" class="input-group" :class="{ 'is-focused': emailFocused }">
               <input 
                 v-model="form.email" 
@@ -66,11 +73,13 @@
                 <i class="bi bi-x-circle-fill"></i>
               </button>
             </div>
+            
             <div v-else class="add-btn" @click="enableEmail">
               <i class="bi bi-plus-circle"></i> Додати email
             </div>
           </div>
         </div>
+
       </div>
 
       <div class="footer-section">
@@ -86,29 +95,110 @@
       <i class="bi bi-chat-dots"></i>
       <p>Виберіть чат для перегляду профілю</p>
     </div>
+
   </div>
 </template>
 
 <script setup>
-// ... твій існуючий JS код ...
-// Додай лише ці два ref для візуальних ефектів:
+import { ref, reactive, watch, nextTick, computed } from 'vue';
+import axios from 'axios';
+
+const props = defineProps({
+  customer: Object
+});
+
+// Стани для візуальних ефектів (тепер вони точно є!)
 const phoneFocused = ref(false);
 const emailFocused = ref(false);
+
+const isLoading = ref(false);
+const showPhoneInput = ref(false);
+const showEmailInput = ref(false);
+const phoneRef = ref(null);
+const emailRef = ref(null);
+
+const form = reactive({
+  phone: '',
+  email: ''
+});
+
+const customerId = computed(() => props.customer?.id ?? props.customer?.customer_id ?? null);
+const displayName = computed(() => {
+  const first = props.customer?.first_name || '';
+  const last = props.customer?.last_name || '';
+  const combined = `${first} ${last}`.trim();
+  return combined || props.customer?.customer_name || 'Невідомий клієнт';
+});
+const displayInitial = computed(() => (displayName.value ? displayName.value[0] : ''));
+const avatarUrl = computed(() => props.customer?.fb_profile_pic || props.customer?.customer_avatar || '');
+const platform = computed(() => props.customer?.source || props.customer?.platform || '');
+
+const isInstagram = computed(() => {
+  return platform.value === 'instagram' || !!props.customer?.instagram_user_id;
+});
+
+watch(() => props.customer, (newVal) => {
+  if (newVal) {
+    form.phone = newVal.phone || '';
+    form.email = newVal.email || '';
+    showPhoneInput.value = !!form.phone;
+    showEmailInput.value = !!form.email;
+  }
+}, { immediate: true });
+
+const enablePhone = async () => {
+  showPhoneInput.value = true;
+  await nextTick();
+  phoneRef.value?.focus();
+};
+const clearPhone = () => {
+  form.phone = '';
+  showPhoneInput.value = false;
+};
+
+const enableEmail = async () => {
+  showEmailInput.value = true;
+  await nextTick();
+  emailRef.value?.focus();
+};
+const clearEmail = () => {
+  form.email = '';
+  showEmailInput.value = false;
+};
+
+const saveData = async () => {
+  if (!customerId.value) return;
+  isLoading.value = true;
+  try {
+    await axios.put(`/api/customers/${customerId.value}`, {
+      phone: form.phone,
+      email: form.email
+    });
+    if (props.customer) {
+      props.customer.phone = form.phone;
+      props.customer.email = form.email;
+    }
+  } catch (e) {
+    console.error(e);
+    alert('Помилка збереження');
+  } finally {
+    isLoading.value = false;
+  }
+};
 </script>
 
 <style scoped>
-/* Основний контейнер */
 .right-sidebar {
   width: 100%;
   height: 100%;
-  background: #f8fafc;
-  border-left: 1px solid #e2e8f0;
+  background: #ffffff;
+  border-left: 1px solid #e5e7eb;
   display: flex;
   flex-direction: column;
 }
 
 .profile-content {
-  padding: 16px 16px 18px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -120,64 +210,57 @@ const emailFocused = ref(false);
   margin: 20px 0;
 }
 
-/* HEADER */
 .header-section {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 12px;
-  border-radius: 14px;
-  background: #ffffff;
-  border: 1px solid #eef2f6;
-  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
-  margin-bottom: 12px;
 }
 
 .avatar-wrap {
   position: relative;
-  width: 52px;
-  height: 52px;
+  width: 64px;
+  height: 64px;
   flex-shrink: 0;
 }
 
 .avatar-img, .avatar-placeholder {
   width: 100%;
   height: 100%;
-  border-radius: 50%;
+  border-radius: 16px;
   object-fit: cover;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
 
 .avatar-placeholder {
-  background: #e2e8f0;
-  color: #64748b;
+  background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+  color: white;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  font-size: 18px;
+  font-size: 24px;
 }
 
 .platform-icon {
   position: absolute;
-  bottom: -3px;
-  right: -3px;
-  width: 20px;
-  height: 20px;
+  bottom: -4px;
+  right: -4px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 2px 4px rgba(15, 23, 42, 0.12);
+  border: 2px solid #fff;
 }
-.platform-icon .bi-instagram { color: #e1306c; font-size: 12px; }
-.platform-icon .bi-messenger { color: #0084ff; font-size: 12px; }
+.ig-bg { background: radial-gradient(circle at 30% 107%, #fdf497 0%, #fdf497 5%, #fd5949 45%, #d6249f 60%, #285AEB 90%); }
+.fb-bg { background: #0084FF; }
+.platform-icon i { color: white; font-size: 12px; }
 
 .info { flex: 1; min-width: 0; }
 .name {
-  font-size: 15px;
-  color: #1f2937;
+  font-size: 18px;
+  color: #111827;
   font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
@@ -185,16 +268,16 @@ const emailFocused = ref(false);
 }
 .id-text {
   font-size: 12px;
-  color: #64748b;
+  color: #6b7280;
   margin-top: 2px;
 }
 
 .btn-unlink {
-  background: #fff7ed;
+  background: #fff1f2;
   border: none;
-  color: #f59e0b;
-  width: 30px;
-  height: 30px;
+  color: #f43f5e;
+  width: 32px;
+  height: 32px;
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
@@ -202,29 +285,20 @@ const emailFocused = ref(false);
   align-items: center;
   justify-content: center;
 }
-.btn-unlink:hover { background: #ffedd5; }
+.btn-unlink:hover { background: #ffe4e6; transform: scale(1.05); }
 
-/* FIELDS */
-.fields-section {
-  flex: 1;
-  margin-top: 8px;
-  padding: 12px;
-  background: #ffffff;
-  border: 1px solid #eef2f6;
-  border-radius: 14px;
-}
+.fields-section { flex: 1; margin-top: 8px; }
 
 .field-row {
   display: flex;
-  margin-bottom: 16px;
+  margin-bottom: 24px;
 }
-.field-row:last-child { margin-bottom: 0; }
 
 .icon-col {
-  width: 28px;
-  color: #cbd5e1;
-  font-size: 18px;
-  padding-top: 18px;
+  width: 40px;
+  color: #94a3b8;
+  font-size: 20px;
+  padding-top: 22px;
 }
 
 .input-col {
@@ -235,80 +309,74 @@ const emailFocused = ref(false);
 
 .input-col label {
   font-size: 12px;
-  font-weight: 700;
-  color: #94a3b8;
+  font-weight: 600;
+  color: #64748b;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin-bottom: 6px;
+  letter-spacing: 0.025em;
+  margin-bottom: 4px;
 }
 
 .add-btn {
-  color: #2563eb;
-  font-size: 13px;
+  color: #6366f1;
+  font-size: 14px;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-weight: 600;
+  gap: 8px;
+  font-weight: 500;
+  padding: 8px 0;
 }
-.add-btn:hover { color: #1d4ed8; }
 
 .input-group {
   display: flex;
   align-items: center;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  padding: 6px 8px;
-  background: #f9fafb;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  border-bottom: 2px solid #e5e7eb;
+  padding: 4px 0;
+  transition: border-color 0.3s;
 }
 .input-group.is-focused {
-  border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  border-color: #6366f1;
 }
 
 .simple-input {
   flex: 1;
   border: none;
   background: transparent;
-  font-size: 14px;
-  color: #111827;
+  font-size: 15px;
+  color: #1f2937;
   outline: none;
-  padding: 0;
+  padding: 4px 0;
   font-weight: 500;
 }
 
 .btn-clear {
   background: none;
   border: none;
-  color: #94a3b8;
+  color: #d1d5db;
   cursor: pointer;
   padding: 0 4px;
-  transition: color 0.2s;
 }
-.btn-clear:hover { color: #9ca3af; }
 
-/* FOOTER */
+.footer-section { margin-top: auto; }
+
 .btn-save {
   width: 100%;
-  background: #0ea5e9;
+  background: #111827;
   color: #fff;
   border: none;
   border-radius: 10px;
-  padding: 12px 14px;
-  font-size: 14px;
-  font-weight: 700;
+  padding: 14px;
+  font-size: 15px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
   display: flex;
   justify-content: center;
   align-items: center;
   gap: 8px;
 }
-.btn-save:hover:not(:disabled) { background: #0284c7; }
-.btn-save:disabled { background: #93c5fd; cursor: not-allowed; }
+.btn-save:hover:not(:disabled) { background: #000; }
+.btn-save:disabled { background: #9ca3af; cursor: not-allowed; }
 
-/* EMPTY STATE */
 .empty-state {
   display: flex;
   flex-direction: column;
@@ -319,9 +387,7 @@ const emailFocused = ref(false);
   gap: 12px;
 }
 .empty-state i { font-size: 48px; opacity: 0.5; }
-.empty-state p { font-size: 14px; }
 
-/* Простий спіннер */
 .spinner {
   width: 18px;
   height: 18px;
