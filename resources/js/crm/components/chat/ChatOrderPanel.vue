@@ -196,5 +196,11 @@ const handleSaved = () => {
   .order-offcanvas-global {
     width: 100%;
   }
+
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }
 </style>

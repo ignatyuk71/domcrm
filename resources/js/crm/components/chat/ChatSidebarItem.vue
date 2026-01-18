@@ -222,4 +222,16 @@ const formattedTime = computed(() => {
   align-items: center;
   justify-content: center;
 }
+
+@media (max-width: 768px) {
+  .chat-item {
+    padding: 12px 12px;
+    min-height: 76px;
+  }
+
+  .avatar-container {
+    width: 52px;
+    height: 52px;
+  }
+}
 </style>

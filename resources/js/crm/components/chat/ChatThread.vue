@@ -36,9 +36,19 @@
           </div>
         </div>
       </div>
-      <span v-if="activeChat?.last_message_time" class="chat-thread-subtitle">
-        {{ activeChat.last_message_time }}
-      </span>
+      <div class="chat-thread-actions">
+        <button
+          type="button"
+          class="chat-thread-profile-btn"
+          title="Профіль"
+          @click="$emit('open-profile')"
+        >
+          <i class="bi bi-person-circle"></i>
+        </button>
+        <span v-if="activeChat?.last_message_time" class="chat-thread-subtitle">
+          {{ activeChat.last_message_time }}
+        </span>
+      </div>
     </header>
 
     <div ref="threadBody" class="chat-thread-body">
@@ -82,7 +92,7 @@ const props = defineProps({
   isSyncing: { type: Boolean, default: false },
 });
 
-defineEmits(['send', 'force-sync', 'open-list']);
+defineEmits(['send', 'force-sync', 'open-list', 'open-profile']);
 
 const threadBody = ref(null);
 
@@ -196,6 +206,30 @@ watch(
   color: #94a3b8;
 }
 
+.chat-thread-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chat-thread-profile-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #64748b;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.chat-thread-profile-btn:hover {
+  background: #e2e8f0;
+}
+
 .chat-thread-list-btn {
   display: none;
   width: 36px;
@@ -218,6 +252,10 @@ watch(
 @media (max-width: 768px) {
   .chat-thread-header {
     justify-content: flex-start;
+  }
+
+  .chat-thread-actions {
+    margin-left: auto;
   }
 
   .chat-thread-list-btn {

@@ -444,4 +444,20 @@ function handleSend() {
 /* Скролбар для textarea */
 .custom-scrollbar::-webkit-scrollbar { width: 4px; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+
+@media (max-width: 768px) {
+  .chat-input-wrapper {
+    padding: 10px 12px;
+  }
+
+  .chat-input-bar {
+    padding: 8px 12px;
+    gap: 10px;
+  }
+
+  .chat-textarea {
+    font-size: 16px;
+    max-height: 120px;
+  }
+}
 </style>

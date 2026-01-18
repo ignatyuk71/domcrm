@@ -144,6 +144,12 @@ const statusIcon = computed(() => {
   to { opacity: 1; transform: translateY(0); }
 }
 
+@media (max-width: 768px) {
+  .chat-message {
+    max-width: 90%;
+  }
+}
+
 /* Мої повідомлення (справа) */
 .chat-message.mine {
   align-items: flex-end;

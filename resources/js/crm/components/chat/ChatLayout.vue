@@ -1,5 +1,5 @@
 <template>
-  <div class="chat-wrapper">
+  <div class="chat-wrapper" :data-view="viewMode">
     <div class="chat-container">
       <aside class="chat-sidebar">
         <div class="sidebar-inner">
@@ -21,6 +21,12 @@
     </div>
   </div>
 </template>
+
+<script setup>
+defineProps({
+  viewMode: { type: String, default: 'list' },
+});
+</script>
 
 <style scoped>
 /* Обгортка для всього чату, щоб він займав доступну висоту */
@@ -74,11 +80,54 @@
 
 /* Адаптивність: на мобільних залишаємо тільки чат або список (логіка перемикання зазвичай на рівні сторінки) */
 @media (max-width: 768px) {
-  .chat-container {
-    grid-template-columns: 1fr;
+  .chat-wrapper {
+    padding: 0;
+    height: 100vh;
   }
-  .chat-sidebar {
+
+  .chat-container {
+    display: block;
+    height: 100%;
+  }
+
+  .chat-sidebar,
+  .chat-thread,
+  .chat-profile {
+    width: 100%;
+    height: 100vh;
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
+  }
+
+  .chat-wrapper[data-view="list"] .chat-thread,
+  .chat-wrapper[data-view="list"] .chat-profile {
     display: none;
+  }
+
+  .chat-wrapper[data-view="thread"] .chat-sidebar,
+  .chat-wrapper[data-view="thread"] .chat-profile {
+    display: none;
+  }
+
+  .chat-profile {
+    position: fixed;
+    top: 0;
+    right: 0;
+    z-index: 30;
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+    background: #ffffff;
+  }
+
+  .chat-wrapper[data-view="profile"] .chat-sidebar,
+  .chat-wrapper[data-view="profile"] .chat-thread {
+    display: none;
+  }
+
+  .chat-wrapper[data-view="profile"] .chat-profile {
+    display: flex;
+    transform: translateX(0);
   }
 }
 </style>

@@ -8,6 +8,12 @@
     </transition>
 
     <div v-if="customerId" class="profile-content">
+      <div class="profile-mobile-header">
+        <button class="profile-back-btn" type="button" @click="emit('close')">
+          <i class="bi bi-arrow-left"></i>
+          Назад
+        </button>
+      </div>
       
       <div class="header-section">
         <div class="avatar-wrap">
@@ -25,7 +31,7 @@
         <div class="info">
           <div v-if="!showNameInput" class="name-display-wrapper" @click="enableNameEdit">
             <span class="name-text" :class="{ 'text-error': !isNameValid }">{{ displayName }}</span>
-            <button class="btn-edit-purple">
+            <button class="btn-edit-purple" type="button">
               <i class="bi bi-pencil-square"></i>
             </button>
           </div>
@@ -35,7 +41,7 @@
               <input v-model="form.first_name" class="modern-input" placeholder="Ім'я (кирилиця)">
               <input v-model="form.last_name" class="modern-input" placeholder="Прізвище (кирилиця)">
             </div>
-            <button class="btn-confirm-tick" @click="showNameInput = false">
+            <button class="btn-confirm-tick" type="button" @click="showNameInput = false">
               <i class="bi bi-check2"></i>
             </button>
           </div>
@@ -43,7 +49,8 @@
           <div class="id-badge">ID: {{ customer.fb_user_id || customer.instagram_user_id || customerId }}</div>
         </div>
 
-        <button 
+        <button
+          type="button"
           class="btn-status-indicator" 
           :class="isProfileComplete ? 'status-ready' : 'status-attention'"
           title="Статус заповнення"
@@ -69,7 +76,7 @@
                 @focus="phoneFocused = true"
                 @blur="phoneFocused = false"
               >
-              <button class="btn-clear" @click="clearPhone"><i class="bi bi-x-circle-fill"></i></button>
+              <button class="btn-clear" type="button" @click="clearPhone"><i class="bi bi-x-circle-fill"></i></button>
             </div>
             <div v-else class="add-btn" @click="enablePhone"><i class="bi bi-plus-circle"></i> Додати телефон</div>
             <small v-if="form.phone && !isPhoneValid" class="error-text">Має бути 12 цифр (380...)</small>
@@ -82,7 +89,7 @@
             <label>E-mail</label>
             <div v-if="form.email || showEmailInput" class="input-group" :class="{ 'is-focused': emailFocused }">
               <input v-model="form.email" class="simple-input" placeholder="email@example.com" @focus="emailFocused = true" @blur="emailFocused = false">
-              <button class="btn-clear" @click="clearEmail"><i class="bi bi-x-circle-fill"></i></button>
+              <button class="btn-clear" type="button" @click="clearEmail"><i class="bi bi-x-circle-fill"></i></button>
             </div>
             <div v-else class="add-btn" @click="enableEmail"><i class="bi bi-plus-circle"></i> Додати email</div>
           </div>
@@ -124,6 +131,7 @@ import axios from 'axios';
 import ChatOrderPanel from '@/crm/components/chat/ChatOrderPanel.vue';
 
 const props = defineProps({ customer: Object });
+const emit = defineEmits(['close']);
 
 const showNameInput = ref(false);
 const phoneFocused = ref(false);
@@ -304,6 +312,26 @@ const handleOrderSaved = () => {
 
 .action-row { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
 
+.profile-mobile-header {
+  display: none;
+  margin-bottom: 12px;
+}
+
+.profile-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #334155;
+  border-radius: 10px;
+  height: 40px;
+  padding: 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 /* КНОПКА ЗБЕРЕЖЕННЯ */
 .btn-save-modern {
   background: #A78BFB; 
@@ -346,6 +374,21 @@ const handleOrderSaved = () => {
 .btn-create-order:hover {
   background: #f8fafc;
   border-color: #cbd5e0;
+}
+
+@media (max-width: 768px) {
+  .profile-content {
+    padding: 14px 16px 24px;
+  }
+
+  .profile-mobile-header {
+    display: flex;
+  }
+
+  .btn-save-modern,
+  .btn-create-order {
+    height: 48px;
+  }
 }
 
 .spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: #fff; animation: spin 0.8s linear infinite; }
