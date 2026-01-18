@@ -171,6 +171,35 @@ class WebhookController extends Controller
             ? Carbon::createFromTimestampMs($event['timestamp'])->timezone(config('app.timezone', 'Europe/Kyiv'))
             : now(config('app.timezone', 'Europe/Kyiv'));
 
+        if ($isEcho) {
+            $recentEcho = FacebookMessage::query()
+                ->where('customer_id', $customer->id)
+                ->where('is_from_customer', false)
+                ->where('created_at', '>=', now(config('app.timezone', 'Europe/Kyiv'))->subMinutes(2))
+                ->get();
+
+            foreach ($recentEcho as $existing) {
+                $existingText = (string) ($existing->text ?? '');
+                $existingAttachments = $existing->attachments ?? [];
+
+                $textMatches = $existingText === $text;
+                $attachmentsMatch = empty($processedAttachments) && empty($existingAttachments);
+
+                if (!empty($processedAttachments) && !empty($existingAttachments)) {
+                    $incomingUrl = $processedAttachments[0]['url'] ?? null;
+                    $storedUrl = $existingAttachments[0]['url'] ?? null;
+                    $attachmentsMatch = $incomingUrl && $storedUrl && basename($incomingUrl) === basename($storedUrl);
+                }
+
+                if (($textMatches && $attachmentsMatch) || ($textMatches && empty($processedAttachments))) {
+                    if (!$existing->mid || str_starts_with($existing->mid, 'local-')) {
+                        $existing->update(['mid' => $mid]);
+                    }
+                    return;
+                }
+            }
+        }
+
         FacebookMessage::updateOrCreate(
             ['mid' => $mid],
             [
