@@ -1,7 +1,7 @@
 <template>
   <div class="right-sidebar">
     
-    <div v-if="customer && customer.id" class="profile-content">
+    <div v-if="customer" class="profile-content">
       
       <div class="header-section">
         <div class="avatar-wrap">
@@ -20,46 +20,53 @@
           </div>
           <div class="id-text">{{ customer.fb_user_id || customer.instagram_user_id }}</div>
         </div>
+
+        <button class="btn-unlink">
+          <i class="bi bi-person-x-fill"></i>
+        </button>
       </div>
 
       <div class="fields-section">
         
         <div class="field-row">
-          <div class="icon-col"><i class="bi bi-telephone"></i></div>
+          <div class="icon-col">
+            <i class="bi bi-telephone"></i>
+          </div>
           <div class="input-col">
             <label>Телефон</label>
-            <input 
-              v-model="form.phone" 
-              class="simple-input" 
-              type="text" 
-              placeholder="+ Додати телефон"
-            >
+            
+            <div v-if="hasPhone || showPhoneInput" class="input-wrapper">
+              <input 
+                v-model="form.phone" 
+                class="simple-input" 
+                placeholder="+380..." 
+                ref="phoneInputRef"
+              >
+            </div>
+            <div v-else class="add-btn" @click="enablePhone">
+              <i class="bi bi-plus-lg"></i> Додати телефон
+            </div>
           </div>
         </div>
 
         <div class="field-row">
-          <div class="icon-col"><i class="bi bi-envelope"></i></div>
+          <div class="icon-col">
+            <i class="bi bi-envelope"></i>
+          </div>
           <div class="input-col">
             <label>E-mail</label>
-            <input 
-              v-model="form.email" 
-              class="simple-input" 
-              type="email" 
-              placeholder="+ Додати email"
-            >
-          </div>
-        </div>
-
-        <div class="field-row">
-          <div class="icon-col"><i class="bi bi-card-text"></i></div>
-          <div class="input-col">
-            <label>Коментар</label>
-            <textarea 
-              v-model="form.note" 
-              class="simple-input" 
-              rows="1" 
-              placeholder="+ Додати коментар"
-            ></textarea>
+            
+            <div v-if="hasEmail || showEmailInput" class="input-wrapper">
+              <input 
+                v-model="form.email" 
+                class="simple-input" 
+                placeholder="email@example.com"
+                ref="emailInputRef"
+              >
+            </div>
+            <div v-else class="add-btn" @click="enableEmail">
+              <i class="bi bi-plus-lg"></i> Додати email
+            </div>
           </div>
         </div>
 
@@ -81,7 +88,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch } from 'vue';
+import { ref, reactive, watch, nextTick, computed } from 'vue';
 import axios from 'axios';
 
 const props = defineProps({
@@ -89,40 +96,58 @@ const props = defineProps({
 });
 
 const isLoading = ref(false);
+const showPhoneInput = ref(false);
+const showEmailInput = ref(false);
+const phoneInputRef = ref(null);
+const emailInputRef = ref(null);
 
-// Локальна форма для вводу
 const form = reactive({
   phone: '',
-  email: '',
-  note: ''
+  email: ''
 });
 
-// Коли міняється клієнт - заповнюємо форму тим, що є в базі
+// Перевіряємо, чи є вже дані (щоб відразу показати інпут, а не кнопку)
+const hasPhone = computed(() => !!form.phone);
+const hasEmail = computed(() => !!form.email);
+
+// При зміні клієнта заповнюємо форму
 watch(() => props.customer, (newVal) => {
   if (newVal) {
     form.phone = newVal.phone || '';
     form.email = newVal.email || '';
-    form.note = newVal.note || '';
+    // Скидаємо стан відкриття кнопок, якщо полів немає
+    showPhoneInput.value = false;
+    showEmailInput.value = false;
   }
 }, { immediate: true });
 
+// Логіка кнопок "+ Додати"
+const enablePhone = async () => {
+  showPhoneInput.value = true;
+  await nextTick();
+  if (phoneInputRef.value) phoneInputRef.value.focus();
+};
+
+const enableEmail = async () => {
+  showEmailInput.value = true;
+  await nextTick();
+  if (emailInputRef.value) emailInputRef.value.focus();
+};
+
 const saveData = async () => {
   if (!props.customer?.id) return;
-
+  
   isLoading.value = true;
   try {
-    // Відправляємо на сервер введені дані
     await axios.put(`/api/customers/${props.customer.id}`, {
       phone: form.phone,
-      email: form.email,
-      note: form.note
+      email: form.email
     });
-
-    // Оновлюємо дані в об'єкті клієнта (щоб в списку теж оновилось)
+    
+    // Оновлюємо дані в пропсах для миттєвого відображення
     props.customer.phone = form.phone;
     props.customer.email = form.email;
-    props.customer.note = form.note;
-
+    
   } catch (e) {
     console.error(e);
     alert('Помилка збереження');
@@ -140,6 +165,7 @@ const saveData = async () => {
   border-left: 1px solid #e2e8f0;
   display: flex;
   flex-direction: column;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 .profile-content {
@@ -159,8 +185,8 @@ const saveData = async () => {
 
 .avatar-wrap {
   position: relative;
-  width: 50px;
-  height: 50px;
+  width: 48px;
+  height: 48px;
 }
 
 .avatar-img, .avatar-placeholder {
@@ -192,33 +218,48 @@ const saveData = async () => {
 .bi-instagram { color: #E1306C; }
 .bi-messenger { color: #0084FF; }
 
-.info { flex: 1; overflow: hidden; }
+.info {
+  flex: 1;
+  overflow: hidden;
+}
 
 .name {
   font-size: 16px;
-  font-weight: 600;
-  color: #0ea5e9; /* Голубий колір імені */
+  color: #3b82f6; /* Синій колір імені */
   margin-bottom: 2px;
+  line-height: 1.2;
 }
 
 .id-text {
-  font-size: 12px;
-  color: #334155;
+  font-size: 13px;
+  color: #1e293b;
 }
 
-/* ПОЛЯ ВВОДУ */
-.fields-section { flex: 1; }
+.btn-unlink {
+  background: none;
+  border: none;
+  color: #fbbf24; /* Жовтий колір іконки відв'язки */
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0;
+}
+
+/* FIELDS */
+.fields-section {
+  flex: 1;
+}
 
 .field-row {
   display: flex;
   margin-bottom: 25px;
+  align-items: flex-start;
 }
 
 .icon-col {
   width: 30px;
-  color: #94a3b8;
-  font-size: 18px;
-  padding-top: 2px;
+  color: #94a3b8; /* Сіра іконка телефону/пошти */
+  font-size: 20px;
+  padding-top: 0px;
 }
 
 .input-col {
@@ -228,31 +269,46 @@ const saveData = async () => {
 }
 
 .input-col label {
-  font-size: 13px;
-  color: #1e293b;
+  font-size: 14px;
+  color: #1e293b; /* Чорний текст лейблу */
   margin-bottom: 4px;
 }
 
+/* Кнопка "+ Додати ..." */
+.add-btn {
+  color: #3b82f6; /* Голубий колір */
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.add-btn:hover {
+  text-decoration: underline;
+}
+
+/* Поле вводу */
 .simple-input {
   border: none;
   background: transparent;
   width: 100%;
   font-size: 15px;
-  color: #3b82f6; /* Синій текст, як на скріні */
+  color: #1e293b;
   outline: none;
-  padding: 0;
+  padding: 2px 0;
+  border-bottom: 1px solid transparent;
 }
-
-.simple-input::placeholder {
-  color: #60a5fa; /* Світло-синій placeholder (+ Додати телефон) */
-}
-
 .simple-input:focus {
-  border-bottom: 1px solid #3b82f6; /* Підкреслення при вводі */
+  border-bottom: 1px solid #3b82f6;
+}
+.simple-input::placeholder {
+  color: #94a3b8;
 }
 
-/* КНОПКА */
-.footer-section { margin-top: auto; }
+/* FOOTER */
+.footer-section {
+  margin-top: auto;
+}
 
 .btn-save {
   width: 100%;
@@ -261,11 +317,16 @@ const saveData = async () => {
   border: none;
   border-radius: 6px;
   padding: 12px;
-  font-weight: 600;
+  font-size: 16px;
   cursor: pointer;
 }
-.btn-save:hover { background: #2563eb; }
-.btn-save:disabled { background: #93c5fd; cursor: not-allowed; }
+.btn-save:hover {
+  background: #2563eb;
+}
+.btn-save:disabled {
+  background: #93c5fd;
+  cursor: not-allowed;
+}
 
 .empty-state {
   display: flex;
