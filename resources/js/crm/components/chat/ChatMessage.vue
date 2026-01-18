@@ -2,16 +2,24 @@
   <div class="chat-message" :class="{ mine: isMine }">
     <div class="chat-message-bubble">
       <div v-if="message.reply_to" class="reply-wrapper">
-        <span class="reply-author">
-          {{ message.reply_to.direction === 'outbound' ? 'Ви' : 'Клієнт' }}
-        </span>
-        <span class="reply-text">
-          {{
-            message.reply_to.text
-              ? message.reply_to.text
-              : (message.reply_to.attachments && message.reply_to.attachments.length ? 'Вкладення' : '')
-          }}
-        </span>
+        <div
+          v-if="message.reply_to.attachments && message.reply_to.attachments.length"
+          class="reply-image"
+        >
+          <img
+            :src="fixUrl(message.reply_to.attachments[0].url)"
+            alt="Reply attachment"
+            loading="lazy"
+          />
+        </div>
+        <div class="reply-content">
+          <span class="reply-author">
+            {{ message.reply_to.direction === 'outbound' ? 'Ви' : 'Клієнт' }}
+          </span>
+          <span class="reply-text">
+            {{ message.reply_to.text || 'Вкладення' }}
+          </span>
+        </div>
       </div>
       <div v-if="hasAttachments" class="message-attachments">
         <template v-for="(att, index) in normalizedAttachments" :key="index">
@@ -148,32 +156,60 @@ const statusIcon = computed(() => {
 
 .reply-wrapper {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex-direction: row;
+  gap: 10px;
   padding: 6px 8px;
-  border-left: 3px solid #94a3b8;
-  background: rgba(148, 163, 184, 0.15);
-  border-radius: 8px;
+  border-left: 3px solid rgba(0, 0, 0, 0.2);
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 6px;
   margin-bottom: 8px;
+  overflow: hidden;
+  max-width: 100%;
 }
 
 .chat-message.mine .reply-wrapper {
-  background: rgba(255, 255, 255, 0.18);
-  border-left-color: rgba(255, 255, 255, 0.65);
+  background: rgba(255, 255, 255, 0.2);
+  border-left-color: rgba(255, 255, 255, 0.6);
+}
+
+.reply-image {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.reply-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.reply-content {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
+  flex: 1;
 }
 
 .reply-author {
   font-size: 0.75rem;
   font-weight: 700;
   color: inherit;
+  opacity: 0.9;
+  margin-bottom: 2px;
 }
 
 .reply-text {
-  font-size: 0.75rem;
-  opacity: 0.8;
+  font-size: 0.8rem;
+  opacity: 0.85;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  line-height: 1.2;
 }
 
 /* Текст */
