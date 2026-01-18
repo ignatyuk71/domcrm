@@ -126,6 +126,28 @@ class WebhookController extends Controller
             $customer->refresh();
         }
 
+        if ($isEcho) {
+            $text = (string) ($message['text'] ?? '');
+            $hasAttachments = !empty($message['attachments'] ?? []);
+
+            $recentEcho = FacebookMessage::query()
+                ->where('customer_id', $customer->id)
+                ->where('is_from_customer', false)
+                ->where('created_at', '>=', now(config('app.timezone', 'Europe/Kyiv'))->subMinutes(2));
+
+            if ($text !== '') {
+                $recentEcho->where('text', $text);
+            }
+
+            if ($hasAttachments) {
+                $recentEcho->whereNotNull('attachments');
+            }
+
+            if ($recentEcho->exists()) {
+                return;
+            }
+        }
+
         $replyToMid = $message['reply_to']['mid'] ?? null;
         $parentId = null;
         if ($replyToMid) {
