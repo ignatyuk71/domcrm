@@ -190,8 +190,13 @@ const saveData = async () => {
   if (!customerId.value || !isProfileComplete.value) return;
   isLoading.value = true;
   try {
-    await axios.put(`/api/customers/${customerId.value}`, form);
-    if (props.customer) Object.assign(props.customer, form);
+    const response = await axios.put(`/api/customers/${customerId.value}`, form);
+    const updatedCustomer = response?.data?.data;
+    if (props.customer && updatedCustomer) {
+      Object.assign(props.customer, updatedCustomer);
+    } else if (props.customer) {
+      Object.assign(props.customer, form);
+    }
     showNameInput.value = false;
     showToast('Дані покупця успішно збережено!');
   } catch (e) { 

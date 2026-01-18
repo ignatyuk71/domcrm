@@ -37,6 +37,10 @@ class ChatApiController extends Controller
                     'customer_id' => $conversation->customer_id,
                     'customer_name' => $name !== '' ? $name : 'Невідомий клієнт',
                     'customer_avatar' => $customer?->fb_profile_pic,
+                    'first_name' => $customer?->first_name,
+                    'last_name' => $customer?->last_name,
+                    'phone' => $customer?->phone,
+                    'email' => $customer?->email,
                     'last_message' => $conversation->last_message_text,
                     'last_message_time' => optional($conversation->last_message_at)->toDateTimeString(),
                     'unread_count' => $conversation->unread_count,
@@ -71,6 +75,8 @@ class ChatApiController extends Controller
                 'messages.platform',
                 'customers.first_name',
                 'customers.last_name',
+                'customers.phone',
+                'customers.email',
             ];
             if ($hasAvatar) {
                 $selectColumns[] = 'customers.fb_profile_pic';
@@ -95,6 +101,10 @@ class ChatApiController extends Controller
                     'customer_id' => (int) $message->customer_id,
                     'customer_name' => $name !== '' ? $name : 'Невідомий клієнт',
                     'customer_avatar' => $hasAvatar ? ($message->fb_profile_pic ?? null) : null,
+                    'first_name' => $message->first_name ?? null,
+                    'last_name' => $message->last_name ?? null,
+                    'phone' => $message->phone ?? null,
+                    'email' => $message->email ?? null,
                     'last_message' => $message->last_message,
                     'last_message_time' => $message->last_message_time,
                     'unread_count' => 0,
