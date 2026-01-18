@@ -254,9 +254,12 @@
         </a>
 
         <a href="{{ url('/messenger') }}" class="sidebar-link {{ request()->is('messenger*') ? 'active' : '' }}">
-            <span class="icon-frame"><i class="bi bi-chat-dots-fill"></i></span>
+            <span class="icon-frame">
+                <i class="bi bi-chat-dots-fill"></i>
+                <span id="chat-unread-dot" class="chat-badge-collapsed d-none"></span>
+            </span>
             <span class="item-text">Чати</span>
-            <span id="chat-unread-badge" class="badge bg-danger rounded-pill ms-auto me-3 d-none" style="font-size: 0.7rem;"></span>
+            <span id="chat-unread-badge" class="badge bg-danger rounded-pill ms-auto me-3 chat-badge-expanded d-none" style="font-size: 0.7rem;"></span>
         </a>
 
         <a href="{{ route('templates.index') }}" class="sidebar-link {{ request()->is('templates*') ? 'active' : '' }}">
@@ -277,6 +280,7 @@
 <script>
 (() => {
   const badge = document.getElementById('chat-unread-badge');
+  const dot = document.getElementById('chat-unread-dot');
   if (!badge) return;
 
   const updateBadge = async () => {
@@ -289,8 +293,10 @@
       if (count > 0) {
         badge.textContent = count > 99 ? '99+' : String(count);
         badge.classList.remove('d-none');
+        if (dot) dot.classList.remove('d-none');
       } else {
         badge.classList.add('d-none');
+        if (dot) dot.classList.add('d-none');
       }
     } catch (_) {
       // No-op: avoid spamming console in prod
@@ -301,3 +307,30 @@
   setInterval(updateBadge, 30000);
 })();
 </script>
+
+<style>
+    .chat-badge-collapsed {
+        position: absolute;
+        top: -2px;
+        right: -2px;
+        width: 10px;
+        height: 10px;
+        background: #ef4444;
+        border: 2px solid #0f172a;
+        border-radius: 50%;
+    }
+
+    @media (min-width: 992px) {
+        .chat-badge-expanded {
+            display: none;
+        }
+
+        .pro-sidebar:hover .chat-badge-expanded {
+            display: inline-flex;
+        }
+
+        .pro-sidebar:hover .chat-badge-collapsed {
+            display: none;
+        }
+    }
+</style>
