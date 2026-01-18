@@ -7,7 +7,11 @@
           <img v-if="avatarUrl" :src="avatarUrl" class="avatar-img">
           <div v-else class="avatar-placeholder">{{ displayInitial }}</div>
           
-          <div class="platform-icon-static" :class="isInstagram ? 'ig-bg' : 'fb-bg'">
+          <div 
+            class="platform-icon-indicator" 
+            :class="[isInstagram ? 'ig-bg' : 'fb-bg', isProfileComplete ? 'glow-green' : 'glow-red']"
+            :title="isProfileComplete ? 'Профіль заповнено правильно' : 'Потрібна кирилиця в ПІП та 12 цифр телефону'"
+          >
             <i class="bi" :class="isInstagram ? 'bi-instagram' : 'bi-messenger'"></i>
           </div>
         </div>
@@ -33,12 +37,8 @@
           <div class="id-badge">ID: {{ customer.fb_user_id || customer.instagram_user_id || customerId }}</div>
         </div>
 
-        <button 
-          class="btn-status-indicator" 
-          :class="isProfileComplete ? 'status-ready' : 'status-attention'"
-          :title="isProfileComplete ? 'Дані в порядку' : 'Заповніть ПІП кирилицею та телефон'"
-        >
-          <i class="bi" :class="isProfileComplete ? 'bi-person-check-fill' : 'bi-person-x-fill'"></i>
+        <button class="btn-unlink-minimal" title="Від'єднати">
+          <i class="bi bi-person-x"></i>
         </button>
       </div>
 
@@ -87,6 +87,11 @@
       </div>
 
     </div>
+
+    <div v-else class="empty-state">
+      <i class="bi bi-person-bounding-box"></i>
+      <p>Виберіть чат</p>
+    </div>
   </div>
 </template>
 
@@ -111,6 +116,7 @@ const form = reactive({
   email: '' 
 });
 
+// --- ВАЛІДАЦІЯ ---
 const cyrillicRegex = /^[А-Яа-яЁёЇїІіЄєҐґ' \-]+$/;
 
 const isNameValid = computed(() => {
@@ -121,8 +127,11 @@ const isNameValid = computed(() => {
 });
 
 const isPhoneValid = computed(() => /^380\d{9}$/.test(form.phone));
+
+// Головний статус профілю для індикатора та кнопки
 const isProfileComplete = computed(() => isNameValid.value && isPhoneValid.value);
 
+// --- ЛОГІКА ---
 watch(() => form.phone, (newVal) => {
   if (!newVal) return;
   let cleaned = newVal.replace(/\D/g, '');
@@ -139,6 +148,7 @@ const displayInitial = computed(() => (displayName.value ? displayName.value[0].
 const avatarUrl = computed(() => props.customer?.fb_profile_pic || props.customer?.customer_avatar || '');
 const isInstagram = computed(() => (props.customer?.source || props.customer?.platform) === 'instagram' || !!props.customer?.instagram_user_id);
 
+// Завантаження даних з бази
 watch(() => props.customer, (newVal) => {
   if (newVal) {
     form.first_name = newVal.first_name || '';
@@ -164,7 +174,12 @@ const saveData = async () => {
     await axios.put(`/api/customers/${customerId.value}`, form);
     if (props.customer) Object.assign(props.customer, form);
     showNameInput.value = false;
-  } catch (e) { console.error(e); alert('Помилка збереження'); } finally { isLoading.value = false; }
+  } catch (e) { 
+    console.error(e); 
+    alert('Помилка збереження'); 
+  } finally { 
+    isLoading.value = false; 
+  }
 };
 </script>
 
@@ -172,59 +187,83 @@ const saveData = async () => {
 .right-sidebar { width: 100%; height: 100%; background: #ffffff; border-left: 1px solid #edf2f7; display: flex; flex-direction: column; }
 .profile-content { padding: 16px; }
 
-/* HEADER */
+/* HEADER & INDICATOR */
 .header-section { display: flex; align-items: flex-start; gap: 12px; }
 .avatar-wrap { position: relative; width: 52px; height: 52px; flex-shrink: 0; }
 .avatar-img, .avatar-placeholder { width: 100%; height: 100%; border-radius: 12px; object-fit: cover; }
 .avatar-placeholder { background: #edf2f7; color: #a0aec0; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 20px; }
 
-/* СТАТИЧНА ІКОНКА ПЛАТФОРМИ */
-.platform-icon-static {
-  position: absolute; bottom: -4px; right: -4px; width: 20px; height: 20px;
+/* ПЛАТФОРМА ТА СЯЙВО */
+.platform-icon-indicator {
+  position: absolute; bottom: -4px; right: -4px; width: 22px; height: 22px;
   border-radius: 50%; display: flex; align-items: center; justify-content: center;
-  border: 2px solid #fff; color: white;
+  border: 2px solid #fff; transition: all 0.4s ease; color: white;
 }
 .ig-bg { background: radial-gradient(circle at 30% 107%, #fdf497 0%, #fd5949 45%, #d6249f 60%, #285AEB 90%); }
 .fb-bg { background: #0084FF; }
-.platform-icon-static i { font-size: 10px; }
 
-/* ГОЛОВНИЙ ІНДИКАТОР (СПРАВА) */
-.btn-status-indicator {
-  background: none; border: none; cursor: pointer; transition: all 0.4s ease;
-  font-size: 24px; padding: 0; margin-left: auto; display: flex; align-items: center;
-}
-.status-attention { color: #ef4444; filter: drop-shadow(0 0 5px rgba(239, 68, 68, 0.4)); }
-.status-ready { color: #10b981; filter: drop-shadow(0 0 5px rgba(16, 185, 129, 0.4)); }
-.btn-status-indicator:hover { transform: scale(1.1); }
+/* Динамічне сяйво (GLOW) */
+.glow-red { box-shadow: 0 0 10px #ef4444; border-color: #ef4444; }
+.glow-green { box-shadow: 0 0 10px #10b981; border-color: #10b981; }
 
-/* ФІОЛЕТОВА КНОПКА РЕДАГУВАННЯ */
-.btn-edit-purple {
-  background: #ddd6fe; color: #7c3aed; border: none;
-  width: 28px; height: 28px; border-radius: 8px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 14px; cursor: pointer; transition: all 0.2s; margin-left: 8px;
-}
-.btn-edit-purple:hover { background: #c4b5fd; transform: rotate(5deg); }
+.platform-icon-indicator i { font-size: 11px; }
 
+/* INFO & NAME */
 .info { flex: 1; min-width: 0; padding-top: 2px; }
 .name-display-wrapper { display: inline-flex; align-items: center; cursor: pointer; }
 .name-text { font-size: 15px; font-weight: 700; color: #1a202c; }
 .text-error { color: #ef4444; }
 
+/* ФІОЛЕТОВА КНОПКА РЕДАГУВАННЯ */
+.btn-edit-purple {
+  background: #a78bfa; 
+  color: white;
+  border: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-left: 10px;
+}
+.btn-edit-purple:hover { background: #8b5cf6; transform: scale(1.1); }
+
 .name-edit-flow { display: flex; align-items: center; gap: 8px; }
-.modern-input { border: none; border-bottom: 1.5px solid #e2e8f0; font-size: 13px; font-weight: 600; outline: none; padding: 2px 0; }
+.inputs-stack { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.modern-input { border: none; border-bottom: 1.5px solid #e2e8f0; font-size: 13px; font-weight: 600; outline: none; transition: 0.3s; padding: 2px 0; }
 .modern-input:focus { border-color: #6366f1; }
-.btn-confirm-tick { background: #6366f1; color: white; border: none; width: 26px; height: 26px; border-radius: 50%; cursor: pointer; }
+.btn-confirm-tick { background: #6366f1; color: white; border: none; width: 26px; height: 26px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 
 .id-badge { font-size: 11px; color: #a0aec0; margin-top: 4px; display: inline-block; background: #f7fafc; padding: 2px 6px; border-radius: 4px; }
+.btn-unlink-minimal { background: none; border: none; color: #cbd5e0; cursor: pointer; font-size: 18px; margin-left: auto; }
 
 .divider { border: 0; border-top: 1px solid #f3f4f6; margin: 12px 0; }
+
+/* FIELDS */
 .fields-section { display: flex; flex-direction: column; gap: 12px; }
 .field-row { display: flex; align-items: flex-start; }
 .icon-col { width: 32px; color: #cbd5e0; font-size: 18px; padding-top: 18px; }
 .input-col label { font-size: 10px; font-weight: 700; color: #a0aec0; text-transform: uppercase; margin-bottom: 2px; display: block; }
 .input-group { display: flex; align-items: center; border-bottom: 2px solid #edf2f7; padding: 2px 0; }
+.input-group.is-focused { border-color: #6366f1; }
+.input-group.is-invalid { border-color: #fc8181; }
 .simple-input { flex: 1; border: none; background: transparent; font-size: 14px; color: #2d3748; outline: none; font-weight: 600; }
-.btn-save-modern { background: #111827; color: white; border: none; border-radius: 8px; padding: 10px 20px; font-size: 13px; font-weight: 700; width: 100%; cursor: pointer; }
+.error-text { color: #ef4444; font-size: 10px; margin-top: 2px; }
+.add-btn { color: #6366f1; font-size: 13px; font-weight: 600; cursor: pointer; padding: 4px 0; }
+
+.action-row { padding-left: 32px; margin-top: 8px; }
+.btn-save-modern { 
+  background: #111827; color: white; border: none; border-radius: 8px; padding: 10px 20px; 
+  font-size: 13px; font-weight: 700; cursor: pointer; width: 100%;
+}
 .btn-save-modern:disabled { background: #f3f4f6; color: #cbd5e0; cursor: not-allowed; }
+
+.spinner { width: 12px; height: 12px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: #fff; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #cbd5e0; gap: 8px; }
 </style>
