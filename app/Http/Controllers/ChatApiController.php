@@ -440,5 +440,12 @@ class ChatApiController extends Controller
         return response()->json(['success' => true, 'count' => $count]);
     }
 
+    public function getUnreadCount()
+    {
+        $count = Conversation::where('unread_count', '>', 0)->count();
+
+        return response()->json(['count' => $count]);
+    }
+
     
 }

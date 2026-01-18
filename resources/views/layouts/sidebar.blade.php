@@ -256,8 +256,7 @@
         <a href="{{ url('/messenger') }}" class="sidebar-link {{ request()->is('messenger*') ? 'active' : '' }}">
             <span class="icon-frame"><i class="bi bi-chat-dots-fill"></i></span>
             <span class="item-text">Чати</span>
-            <!-- Бейдж повідомлень (червоний) - статичний для прикладу -->
-            <span class="badge bg-danger rounded-pill ms-auto me-3" style="font-size: 0.7rem;">3</span>
+            <span id="chat-unread-badge" class="badge bg-danger rounded-pill ms-auto me-3 d-none" style="font-size: 0.7rem;"></span>
         </a>
 
         <a href="{{ route('templates.index') }}" class="sidebar-link {{ request()->is('templates*') ? 'active' : '' }}">
@@ -274,3 +273,31 @@
         </a>
     </div>
 </aside>
+
+<script>
+(() => {
+  const badge = document.getElementById('chat-unread-badge');
+  if (!badge) return;
+
+  const updateBadge = async () => {
+    try {
+      const response = await fetch('/api/chat/unread-count', { headers: { 'Accept': 'application/json' } });
+      if (!response.ok) return;
+      const data = await response.json();
+      const count = Number(data?.count || 0);
+
+      if (count > 0) {
+        badge.textContent = count > 99 ? '99+' : String(count);
+        badge.classList.remove('d-none');
+      } else {
+        badge.classList.add('d-none');
+      }
+    } catch (_) {
+      // No-op: avoid spamming console in prod
+    }
+  };
+
+  updateBadge();
+  setInterval(updateBadge, 30000);
+})();
+</script>
