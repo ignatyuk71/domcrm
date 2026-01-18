@@ -213,7 +213,7 @@ const saveData = async () => {
 
 <style scoped>
 .right-sidebar { width: 100%; height: 100%; background: #ffffff; border-left: 1px solid #edf2f7; display: flex; flex-direction: column; position: relative; }
-.profile-content { padding: 16px; }
+.profile-content { padding: 10px; }
 
 /* TOAST STYLES */
 .toast-notification {
