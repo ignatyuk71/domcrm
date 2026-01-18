@@ -5,11 +5,16 @@ namespace App\Http\Controllers;
 use App\Models\SavedFile;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Schema;
 
 class SavedFileController extends Controller
 {
     public function index()
     {
+        if (!Schema::hasTable('saved_files')) {
+            return response()->json(['error' => 'saved_files table missing'], 500);
+        }
+
         $files = SavedFile::query()
             ->orderByDesc('id')
             ->get();
@@ -19,6 +24,10 @@ class SavedFileController extends Controller
 
     public function store(Request $request)
     {
+        if (!Schema::hasTable('saved_files')) {
+            return response()->json(['error' => 'saved_files table missing'], 500);
+        }
+
         $validated = $request->validate([
             'file' => 'required|file|mimes:jpg,jpeg,png,webp,gif,mp4,mov,webm|max:5120',
         ]);
@@ -52,6 +61,10 @@ class SavedFileController extends Controller
 
     public function destroy($id)
     {
+        if (!Schema::hasTable('saved_files')) {
+            return response()->json(['error' => 'saved_files table missing'], 500);
+        }
+
         $file = SavedFile::findOrFail($id);
 
         $fullPath = public_path($file->path);
