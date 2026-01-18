@@ -9,8 +9,9 @@
           <div v-else class="avatar-placeholder">
             {{ (customer.first_name?.[0] || '') }}
           </div>
+          
           <div class="platform-icon">
-            <i class="bi" :class="customer.source === 'instagram' ? 'bi-instagram' : 'bi-messenger'"></i>
+            <i class="bi" :class="isInstagram ? 'bi-instagram' : 'bi-messenger'"></i>
           </div>
         </div>
         
@@ -18,10 +19,12 @@
           <div class="name">
             {{ customer.first_name }} {{ customer.last_name }}
           </div>
-          <div class="id-text">{{ customer.fb_user_id || customer.instagram_user_id }}</div>
+          <div class="id-text">
+            {{ customer.fb_user_id || customer.instagram_user_id || customer.id }}
+          </div>
         </div>
 
-        <button class="btn-unlink" title="Відв'язати">
+        <button class="btn-unlink">
           <i class="bi bi-person-x-fill"></i>
         </button>
       </div>
@@ -29,20 +32,18 @@
       <div class="fields-section">
         
         <div class="field-row">
-          <div class="icon-col">
-            <i class="bi bi-telephone"></i>
-          </div>
+          <div class="icon-col"><i class="bi bi-telephone"></i></div>
           <div class="input-col">
             <label>Телефон</label>
             
-            <div v-if="hasPhone || showPhoneInput" class="input-group">
+            <div v-if="showPhone || form.phone" class="input-group">
               <input 
                 v-model="form.phone" 
                 class="simple-input" 
                 placeholder="+380..." 
                 ref="phoneInputRef"
               >
-              <button class="btn-clear" @click="removePhone">
+              <button class="btn-clear" @click="clearPhone">
                 <i class="bi bi-x"></i>
               </button>
             </div>
@@ -54,20 +55,18 @@
         </div>
 
         <div class="field-row">
-          <div class="icon-col">
-            <i class="bi bi-envelope"></i>
-          </div>
+          <div class="icon-col"><i class="bi bi-envelope"></i></div>
           <div class="input-col">
             <label>E-mail</label>
             
-            <div v-if="hasEmail || showEmailInput" class="input-group">
+            <div v-if="showEmail || form.email" class="input-group">
               <input 
                 v-model="form.email" 
                 class="simple-input" 
                 placeholder="email@example.com"
                 ref="emailInputRef"
               >
-              <button class="btn-clear" @click="removeEmail">
+              <button class="btn-clear" @click="clearEmail">
                 <i class="bi bi-x"></i>
               </button>
             </div>
@@ -100,12 +99,12 @@ import { ref, reactive, watch, nextTick, computed } from 'vue';
 import axios from 'axios';
 
 const props = defineProps({
-  customer: Object
+  customer: Object // Сюди приходить об'єкт клієнта з бази
 });
 
 const isLoading = ref(false);
-const showPhoneInput = ref(false);
-const showEmailInput = ref(false);
+const showPhone = ref(false);
+const showEmail = ref(false);
 const phoneInputRef = ref(null);
 const emailInputRef = ref(null);
 
@@ -114,66 +113,68 @@ const form = reactive({
   email: ''
 });
 
-// Перевірка: чи є значення в формі
-const hasPhone = computed(() => !!form.phone && form.phone.trim() !== '');
-const hasEmail = computed(() => !!form.email && form.email.trim() !== '');
+// Визначаємо іконку платформи
+const isInstagram = computed(() => {
+  if (!props.customer) return false;
+  return props.customer.source === 'instagram' || !!props.customer.instagram_user_id;
+});
 
-// При зміні клієнта заповнюємо форму і скидаємо стан кнопок
+// Слідкуємо за зміною клієнта.
+// Якщо в базі вже є телефон/email - показуємо їх в інпутах.
+// Якщо немає - показуємо кнопки "Додати".
 watch(() => props.customer, (newVal) => {
   if (newVal) {
     form.phone = newVal.phone || '';
     form.email = newVal.email || '';
-    showPhoneInput.value = false;
-    showEmailInput.value = false;
+    
+    // Якщо дані є - показуємо інпути, якщо ні - ховаємо (будуть кнопки)
+    showPhone.value = !!form.phone;
+    showEmail.value = !!form.email;
   }
 }, { immediate: true });
 
-// Логіка Телефон
+// --- ЛОГІКА ТЕЛЕФОНУ ---
 const enablePhone = async () => {
-  showPhoneInput.value = true;
+  showPhone.value = true;
   await nextTick();
-  if (phoneInputRef.value) phoneInputRef.value.focus();
+  phoneInputRef.value?.focus();
 };
-const removePhone = () => {
+const clearPhone = () => {
   form.phone = '';
-  showPhoneInput.value = false;
+  showPhone.value = false;
 };
 
-// Логіка Email
+// --- ЛОГІКА EMAIL ---
 const enableEmail = async () => {
-  showEmailInput.value = true;
+  showEmail.value = true;
   await nextTick();
-  if (emailInputRef.value) emailInputRef.value.focus();
+  emailInputRef.value?.focus();
 };
-const removeEmail = () => {
+const clearEmail = () => {
   form.email = '';
-  showEmailInput.value = false;
+  showEmail.value = false;
 };
 
-// Збереження
+// --- ЗБЕРЕЖЕННЯ ---
 const saveData = async () => {
   if (!props.customer?.id) return;
-
-  // Валідація (якщо поля відкриті і заповнені)
-  if (hasEmail.value && !form.email.includes('@')) {
-    alert('Перевірте формат E-mail');
-    return;
-  }
   
   isLoading.value = true;
   try {
+    // Відправляємо PUT запит на оновлення клієнта
     await axios.put(`/api/customers/${props.customer.id}`, {
       phone: form.phone,
       email: form.email
     });
-    
-    // Оновлюємо об'єкт клієнта в батьківському компоненті
+
+    // Оновлюємо дані локально, щоб інтерфейс не блимав
     props.customer.phone = form.phone;
     props.customer.email = form.email;
-    
+
+    // alert('Збережено'); // Можна розкоментувати, якщо треба
   } catch (e) {
     console.error(e);
-    alert('Помилка збереження');
+    alert('Помилка збереження даних');
   } finally {
     isLoading.value = false;
   }
@@ -181,14 +182,14 @@ const saveData = async () => {
 </script>
 
 <style scoped>
+/* Стилі точнісінько під твій скріншот */
 .right-sidebar {
   width: 100%;
   height: 100%;
-  background: #f8fafc; /* Світло-сірий фон як на скріні */
+  background: #f8fafc; /* Світло-сірий фон */
   border-left: 1px solid #e2e8f0;
   display: flex;
   flex-direction: column;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 .profile-content {
@@ -208,8 +209,8 @@ const saveData = async () => {
 
 .avatar-wrap {
   position: relative;
-  width: 48px;
-  height: 48px;
+  width: 50px;
+  height: 50px;
 }
 
 .avatar-img, .avatar-placeholder {
@@ -226,7 +227,7 @@ const saveData = async () => {
   justify-content: center;
   font-weight: bold;
   color: #64748b;
-  font-size: 18px;
+  font-size: 20px;
 }
 
 .platform-icon {
@@ -236,10 +237,11 @@ const saveData = async () => {
   background: #fff;
   border-radius: 50%;
   padding: 2px;
-  line-height: 1;
+  display: flex;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
-.bi-instagram { color: #E1306C; }
-.bi-messenger { color: #0084FF; }
+.bi-instagram { color: #E1306C; font-size: 14px; }
+.bi-messenger { color: #0084FF; font-size: 14px; }
 
 .info {
   flex: 1;
@@ -248,7 +250,8 @@ const saveData = async () => {
 
 .name {
   font-size: 16px;
-  color: #3b82f6; /* Синій колір імені */
+  color: #3b82f6; /* Синій, як на фото */
+  font-weight: 500;
   margin-bottom: 2px;
   line-height: 1.2;
 }
@@ -261,10 +264,11 @@ const saveData = async () => {
 .btn-unlink {
   background: none;
   border: none;
-  color: #f59e0b; /* Жовтий */
+  color: #f59e0b; /* Жовтий колір іконки */
   font-size: 20px;
   cursor: pointer;
   padding: 0;
+  margin-left: auto;
 }
 
 /* FIELDS */
@@ -280,7 +284,7 @@ const saveData = async () => {
 
 .icon-col {
   width: 30px;
-  color: #94a3b8; /* Сіра іконка */
+  color: #94a3b8; /* Сірий колір іконки */
   font-size: 20px;
   padding-top: 0px;
 }
@@ -293,27 +297,28 @@ const saveData = async () => {
 
 .input-col label {
   font-size: 14px;
-  color: #1e293b;
+  color: #0f172a;
   margin-bottom: 4px;
 }
 
 /* Кнопка "+ Додати" */
 .add-btn {
-  color: #3b82f6; /* Голубий */
+  color: #3b82f6; /* Голубий колір */
   font-size: 14px;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   font-weight: 500;
 }
 .add-btn:hover { text-decoration: underline; }
 
-/* Група вводу */
+/* Інпут з хрестиком */
 .input-group {
   display: flex;
   align-items: center;
-  border-bottom: 1px solid #3b82f6;
+  border-bottom: 1px solid #3b82f6; /* Синя лінія знизу */
+  padding-bottom: 2px;
 }
 
 .simple-input {
@@ -323,17 +328,19 @@ const saveData = async () => {
   font-size: 15px;
   color: #1e293b;
   outline: none;
-  padding: 2px 0;
+  padding: 0;
 }
+.simple-input::placeholder { color: #94a3b8; }
 
 .btn-clear {
   background: none;
   border: none;
-  color: #ef4444; /* Червоний хрестик */
+  color: #94a3b8;
   cursor: pointer;
-  padding: 0 4px;
+  padding: 0 0 0 8px;
   font-size: 18px;
 }
+.btn-clear:hover { color: #ef4444; }
 
 /* FOOTER */
 .footer-section {
@@ -350,6 +357,7 @@ const saveData = async () => {
   font-size: 16px;
   font-weight: 500;
   cursor: pointer;
+  transition: background 0.2s;
 }
 .btn-save:hover { background: #2563eb; }
 .btn-save:disabled { background: #93c5fd; cursor: not-allowed; }
