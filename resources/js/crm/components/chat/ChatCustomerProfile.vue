@@ -9,7 +9,7 @@
           
           <div 
             class="platform-icon-indicator" 
-            :class="isProfileComplete ? 'status-valid' : 'status-invalid'"
+            :class="[isInstagram ? 'ig-bg' : 'fb-bg', isProfileComplete ? 'glow-green' : 'glow-red']"
             :title="isProfileComplete ? 'Профіль заповнено правильно' : 'Потрібна кирилиця в ПІП та 12 цифр телефону'"
           >
             <i class="bi" :class="isInstagram ? 'bi-instagram' : 'bi-messenger'"></i>
@@ -19,7 +19,9 @@
         <div class="info">
           <div v-if="!showNameInput" class="name-display-wrapper" @click="enableNameEdit">
             <span class="name-text" :class="{ 'text-error': !isNameValid }">{{ displayName }}</span>
-            <i class="bi bi-pencil-square edit-icon"></i>
+            <button class="btn-edit-purple">
+              <i class="bi bi-pencil-square"></i>
+            </button>
           </div>
 
           <div v-else class="name-edit-flow">
@@ -126,7 +128,7 @@ const isNameValid = computed(() => {
 
 const isPhoneValid = computed(() => /^380\d{9}$/.test(form.phone));
 
-// Головний статус профілю
+// Головний статус профілю для індикатора та кнопки
 const isProfileComplete = computed(() => isNameValid.value && isPhoneValid.value);
 
 // --- ЛОГІКА ---
@@ -191,20 +193,44 @@ const saveData = async () => {
 .avatar-img, .avatar-placeholder { width: 100%; height: 100%; border-radius: 12px; object-fit: cover; }
 .avatar-placeholder { background: #edf2f7; color: #a0aec0; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 20px; }
 
+/* ПЛАТФОРМА ТА СЯЙВО */
 .platform-icon-indicator {
   position: absolute; bottom: -4px; right: -4px; width: 22px; height: 22px;
   border-radius: 50%; display: flex; align-items: center; justify-content: center;
-  border: 2px solid #fff; transition: 0.3s; color: white;
+  border: 2px solid #fff; transition: all 0.4s ease; color: white;
 }
-.status-valid { background: #10b981 !important; box-shadow: 0 0 10px rgba(16, 185, 129, 0.4); }
-.status-invalid { background: #ef4444 !important; box-shadow: 0 0 10px rgba(239, 68, 68, 0.4); }
+.ig-bg { background: radial-gradient(circle at 30% 107%, #fdf497 0%, #fd5949 45%, #d6249f 60%, #285AEB 90%); }
+.fb-bg { background: #0084FF; }
+
+/* Динамічне сяйво (GLOW) */
+.glow-red { box-shadow: 0 0 10px #ef4444; border-color: #ef4444; }
+.glow-green { box-shadow: 0 0 10px #10b981; border-color: #10b981; }
+
 .platform-icon-indicator i { font-size: 11px; }
 
+/* INFO & NAME */
 .info { flex: 1; min-width: 0; padding-top: 2px; }
-.name-display-wrapper { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.name-display-wrapper { display: inline-flex; align-items: center; cursor: pointer; }
 .name-text { font-size: 15px; font-weight: 700; color: #1a202c; }
 .text-error { color: #ef4444; }
-.edit-icon { font-size: 12px; color: #cbd5e0; }
+
+/* ФІОЛЕТОВА КНОПКА РЕДАГУВАННЯ */
+.btn-edit-purple {
+  background: #a78bfa; 
+  color: white;
+  border: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-left: 10px;
+}
+.btn-edit-purple:hover { background: #8b5cf6; transform: scale(1.1); }
 
 .name-edit-flow { display: flex; align-items: center; gap: 8px; }
 .inputs-stack { display: flex; flex-direction: column; gap: 4px; flex: 1; }
@@ -214,7 +240,6 @@ const saveData = async () => {
 
 .id-badge { font-size: 11px; color: #a0aec0; margin-top: 4px; display: inline-block; background: #f7fafc; padding: 2px 6px; border-radius: 4px; }
 .btn-unlink-minimal { background: none; border: none; color: #cbd5e0; cursor: pointer; font-size: 18px; margin-left: auto; }
-.btn-unlink-minimal:hover { color: #f56565; }
 
 .divider { border: 0; border-top: 1px solid #f3f4f6; margin: 12px 0; }
 
