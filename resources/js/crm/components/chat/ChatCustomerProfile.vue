@@ -21,7 +21,7 @@
           <div class="id-text">{{ customer.fb_user_id || customer.instagram_user_id }}</div>
         </div>
 
-        <button class="btn-unlink">
+        <button class="btn-unlink" title="Відв'язати">
           <i class="bi bi-person-x-fill"></i>
         </button>
       </div>
@@ -35,14 +35,18 @@
           <div class="input-col">
             <label>Телефон</label>
             
-            <div v-if="hasPhone || showPhoneInput" class="input-wrapper">
+            <div v-if="hasPhone || showPhoneInput" class="input-group">
               <input 
                 v-model="form.phone" 
                 class="simple-input" 
                 placeholder="+380..." 
                 ref="phoneInputRef"
               >
+              <button class="btn-clear" @click="removePhone">
+                <i class="bi bi-x"></i>
+              </button>
             </div>
+            
             <div v-else class="add-btn" @click="enablePhone">
               <i class="bi bi-plus-lg"></i> Додати телефон
             </div>
@@ -56,14 +60,18 @@
           <div class="input-col">
             <label>E-mail</label>
             
-            <div v-if="hasEmail || showEmailInput" class="input-wrapper">
+            <div v-if="hasEmail || showEmailInput" class="input-group">
               <input 
                 v-model="form.email" 
                 class="simple-input" 
                 placeholder="email@example.com"
                 ref="emailInputRef"
               >
+              <button class="btn-clear" @click="removeEmail">
+                <i class="bi bi-x"></i>
+              </button>
             </div>
+            
             <div v-else class="add-btn" @click="enableEmail">
               <i class="bi bi-plus-lg"></i> Додати email
             </div>
@@ -106,36 +114,51 @@ const form = reactive({
   email: ''
 });
 
-// Перевіряємо, чи є вже дані (щоб відразу показати інпут, а не кнопку)
-const hasPhone = computed(() => !!form.phone);
-const hasEmail = computed(() => !!form.email);
+// Перевірка: чи є значення в формі
+const hasPhone = computed(() => !!form.phone && form.phone.trim() !== '');
+const hasEmail = computed(() => !!form.email && form.email.trim() !== '');
 
-// При зміні клієнта заповнюємо форму
+// При зміні клієнта заповнюємо форму і скидаємо стан кнопок
 watch(() => props.customer, (newVal) => {
   if (newVal) {
     form.phone = newVal.phone || '';
     form.email = newVal.email || '';
-    // Скидаємо стан відкриття кнопок, якщо полів немає
     showPhoneInput.value = false;
     showEmailInput.value = false;
   }
 }, { immediate: true });
 
-// Логіка кнопок "+ Додати"
+// Логіка Телефон
 const enablePhone = async () => {
   showPhoneInput.value = true;
   await nextTick();
   if (phoneInputRef.value) phoneInputRef.value.focus();
 };
+const removePhone = () => {
+  form.phone = '';
+  showPhoneInput.value = false;
+};
 
+// Логіка Email
 const enableEmail = async () => {
   showEmailInput.value = true;
   await nextTick();
   if (emailInputRef.value) emailInputRef.value.focus();
 };
+const removeEmail = () => {
+  form.email = '';
+  showEmailInput.value = false;
+};
 
+// Збереження
 const saveData = async () => {
   if (!props.customer?.id) return;
+
+  // Валідація (якщо поля відкриті і заповнені)
+  if (hasEmail.value && !form.email.includes('@')) {
+    alert('Перевірте формат E-mail');
+    return;
+  }
   
   isLoading.value = true;
   try {
@@ -144,7 +167,7 @@ const saveData = async () => {
       email: form.email
     });
     
-    // Оновлюємо дані в пропсах для миттєвого відображення
+    // Оновлюємо об'єкт клієнта в батьківському компоненті
     props.customer.phone = form.phone;
     props.customer.email = form.email;
     
@@ -161,7 +184,7 @@ const saveData = async () => {
 .right-sidebar {
   width: 100%;
   height: 100%;
-  background: #f8fafc;
+  background: #f8fafc; /* Світло-сірий фон як на скріні */
   border-left: 1px solid #e2e8f0;
   display: flex;
   flex-direction: column;
@@ -169,7 +192,7 @@ const saveData = async () => {
 }
 
 .profile-content {
-  padding: 24px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -238,7 +261,7 @@ const saveData = async () => {
 .btn-unlink {
   background: none;
   border: none;
-  color: #fbbf24; /* Жовтий колір іконки відв'язки */
+  color: #f59e0b; /* Жовтий */
   font-size: 20px;
   cursor: pointer;
   padding: 0;
@@ -257,7 +280,7 @@ const saveData = async () => {
 
 .icon-col {
   width: 30px;
-  color: #94a3b8; /* Сіра іконка телефону/пошти */
+  color: #94a3b8; /* Сіра іконка */
   font-size: 20px;
   padding-top: 0px;
 }
@@ -270,39 +293,46 @@ const saveData = async () => {
 
 .input-col label {
   font-size: 14px;
-  color: #1e293b; /* Чорний текст лейблу */
+  color: #1e293b;
   margin-bottom: 4px;
 }
 
-/* Кнопка "+ Додати ..." */
+/* Кнопка "+ Додати" */
 .add-btn {
-  color: #3b82f6; /* Голубий колір */
+  color: #3b82f6; /* Голубий */
   font-size: 14px;
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 4px;
+  font-weight: 500;
 }
-.add-btn:hover {
-  text-decoration: underline;
+.add-btn:hover { text-decoration: underline; }
+
+/* Група вводу */
+.input-group {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid #3b82f6;
 }
 
-/* Поле вводу */
 .simple-input {
+  flex: 1;
   border: none;
   background: transparent;
-  width: 100%;
   font-size: 15px;
   color: #1e293b;
   outline: none;
   padding: 2px 0;
-  border-bottom: 1px solid transparent;
 }
-.simple-input:focus {
-  border-bottom: 1px solid #3b82f6;
-}
-.simple-input::placeholder {
-  color: #94a3b8;
+
+.btn-clear {
+  background: none;
+  border: none;
+  color: #ef4444; /* Червоний хрестик */
+  cursor: pointer;
+  padding: 0 4px;
+  font-size: 18px;
 }
 
 /* FOOTER */
@@ -318,15 +348,11 @@ const saveData = async () => {
   border-radius: 6px;
   padding: 12px;
   font-size: 16px;
+  font-weight: 500;
   cursor: pointer;
 }
-.btn-save:hover {
-  background: #2563eb;
-}
-.btn-save:disabled {
-  background: #93c5fd;
-  cursor: not-allowed;
-}
+.btn-save:hover { background: #2563eb; }
+.btn-save:disabled { background: #93c5fd; cursor: not-allowed; }
 
 .empty-state {
   display: flex;
