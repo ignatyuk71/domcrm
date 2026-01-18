@@ -1,5 +1,12 @@
 <template>
   <div class="right-sidebar">
+    <transition name="toast">
+      <div v-if="toast.show" class="toast-notification" :class="toast.type">
+        <i class="bi" :class="toast.type === 'success' ? 'bi-check-circle-fill' : 'bi-exclamation-triangle-fill'"></i>
+        <span>{{ toast.message }}</span>
+      </div>
+    </transition>
+
     <div v-if="customerId" class="profile-content">
       
       <div class="header-section">
@@ -39,7 +46,7 @@
         <button 
           class="btn-status-indicator" 
           :class="isProfileComplete ? 'status-ready' : 'status-attention'"
-          title="Від'єднати або перевірити статус"
+          title="Статус заповнення"
         >
           <i class="bi" :class="isProfileComplete ? 'bi-person-check-fill' : 'bi-person-x-fill'"></i>
         </button>
@@ -84,7 +91,7 @@
         <div class="action-row">
           <button class="btn-save-modern" @click="saveData" :disabled="isLoading || !isProfileComplete">
             <span v-if="isLoading" class="spinner"></span>
-            {{ isLoading ? 'Оновлення...' : 'Зберегти покупця' }}
+            {{ isLoading ? 'Зберігаємо...' : 'Зберегти покупця' }}
           </button>
         </div>
       </div>
@@ -111,6 +118,13 @@ const isLoading = ref(false);
 const showPhoneInput = ref(false);
 const showEmailInput = ref(false);
 const phoneRef = ref(null);
+
+// Стан для сповіщень
+const toast = reactive({
+  show: false,
+  message: '',
+  type: 'success'
+});
 
 const form = reactive({ 
   first_name: '',
@@ -159,6 +173,13 @@ watch(() => props.customer, (newVal) => {
   }
 }, { immediate: true });
 
+const showToast = (msg, type = 'success') => {
+  toast.message = msg;
+  toast.type = type;
+  toast.show = true;
+  setTimeout(() => { toast.show = false; }, 3000);
+};
+
 const enableNameEdit = () => { showNameInput.value = true; };
 const enablePhone = async () => { showPhoneInput.value = true; if (!form.phone) form.phone = '380'; await nextTick(); phoneRef.value?.focus(); };
 const clearPhone = () => { form.phone = ''; showPhoneInput.value = false; };
@@ -172,9 +193,10 @@ const saveData = async () => {
     await axios.put(`/api/customers/${customerId.value}`, form);
     if (props.customer) Object.assign(props.customer, form);
     showNameInput.value = false;
+    showToast('Дані покупця успішно збережено!');
   } catch (e) { 
     console.error(e); 
-    alert('Помилка збереження'); 
+    showToast('Помилка сервера. Дані не збережено.', 'error');
   } finally { 
     isLoading.value = false; 
   }
@@ -182,8 +204,19 @@ const saveData = async () => {
 </script>
 
 <style scoped>
-.right-sidebar { width: 100%; height: 100%; background: #ffffff; border-left: 1px solid #edf2f7; display: flex; flex-direction: column; }
+.right-sidebar { width: 100%; height: 100%; background: #ffffff; border-left: 1px solid #edf2f7; display: flex; flex-direction: column; position: relative; }
 .profile-content { padding: 16px; }
+
+/* TOAST STYLES */
+.toast-notification {
+  position: absolute; top: 10px; left: 10%; right: 10%; z-index: 100;
+  padding: 10px 15px; border-radius: 10px; display: flex; align-items: center; gap: 10px;
+  font-size: 13px; font-weight: 600; color: white; box-shadow: 0 5px 15px rgba(0,0,0,0.15);
+}
+.toast-notification.success { background: #10b981; }
+.toast-notification.error { background: #ef4444; }
+.toast-enter-active, .toast-leave-active { transition: all 0.4s ease; }
+.toast-enter-from, .toast-leave-to { opacity: 0; transform: translateY(-20px); }
 
 /* HEADER */
 .header-section { display: flex; align-items: flex-start; gap: 12px; }
@@ -191,7 +224,6 @@ const saveData = async () => {
 .avatar-img, .avatar-placeholder { width: 100%; height: 100%; border-radius: 12px; object-fit: cover; }
 .avatar-placeholder { background: #edf2f7; color: #a0aec0; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 20px; }
 
-/* ПЛАТФОРМА ТА СЯЙВО */
 .platform-icon-indicator {
   position: absolute; bottom: -4px; right: -4px; width: 22px; height: 22px;
   border-radius: 50%; display: flex; align-items: center; justify-content: center;
@@ -203,7 +235,11 @@ const saveData = async () => {
 .glow-green { box-shadow: 0 0 10px #10b981; border-color: #10b981; }
 .platform-icon-indicator i { font-size: 11px; }
 
-/* ІНДИКАТОР ВІД'ЄДНАННЯ (СПРАВА) */
+.info { flex: 1; min-width: 0; padding-top: 2px; }
+.name-display-wrapper { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.name-text { font-size: 15px; font-weight: 700; color: #1a202c; }
+.text-error { color: #ef4444; }
+
 .btn-status-indicator {
   background: none; border: none; cursor: pointer; transition: all 0.4s ease;
   font-size: 24px; padding: 0; margin-left: auto; display: flex; align-items: center;
@@ -211,7 +247,6 @@ const saveData = async () => {
 .status-attention { color: #ef4444; filter: drop-shadow(0 0 5px rgba(239, 68, 68, 0.4)); }
 .status-ready { color: #10b981; filter: drop-shadow(0 0 5px rgba(16, 185, 129, 0.4)); }
 
-/* ФІОЛЕТОВА КНОПКА РЕДАГУВАННЯ */
 .btn-edit-purple {
   background: #a78bfa; color: white; border: none;
   width: 30px; height: 30px; border-radius: 8px;
@@ -220,18 +255,15 @@ const saveData = async () => {
 }
 .btn-edit-purple:hover { background: #8b5cf6; transform: scale(1.1); }
 
-/* ІНШІ СТИЛІ */
-.info { flex: 1; min-width: 0; padding-top: 2px; }
-.name-display-wrapper { display: inline-flex; align-items: center; cursor: pointer; }
-.name-text { font-size: 15px; font-weight: 700; color: #1a202c; }
-.text-error { color: #ef4444; }
 .name-edit-flow { display: flex; align-items: center; gap: 8px; }
 .inputs-stack { display: flex; flex-direction: column; gap: 4px; flex: 1; }
 .modern-input { border: none; border-bottom: 1.5px solid #e2e8f0; font-size: 13px; font-weight: 600; outline: none; transition: 0.3s; padding: 2px 0; }
 .modern-input:focus { border-color: #6366f1; }
 .btn-confirm-tick { background: #6366f1; color: white; border: none; width: 26px; height: 26px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+
 .id-badge { font-size: 11px; color: #a0aec0; margin-top: 4px; display: inline-block; background: #f7fafc; padding: 2px 6px; border-radius: 4px; }
-.divider { border: 0; border-top: 1px solid #f3f4f6; margin: 12px 0; }
+.divider { border: 0; border-top: 1px solid #f3f4f6; margin: 16px 0; }
+
 .fields-section { display: flex; flex-direction: column; gap: 12px; }
 .field-row { display: flex; align-items: flex-start; }
 .icon-col { width: 32px; color: #cbd5e0; font-size: 18px; padding-top: 18px; }
