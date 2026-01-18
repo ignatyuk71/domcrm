@@ -82,158 +82,164 @@ onMounted(load);
 </script>
 
 <style scoped>
-.gallery-popover {
-  position: absolute;
-  bottom: 100%;
+  .gallery-popover {
+    position: absolute;
+    bottom: 100%;
+    left: auto;
+    right: -60px; /* Залишаємо позиціонування справа */
+    margin-bottom: 12px;
+    
+    /* 👇 ЗБІЛЬШИЛИ ШИРИНУ ВІКНА */
+    width: 400px; 
+    
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    
+    transform-origin: bottom right;
+    animation: popUp 0.2s ease-out;
+  }
   
-  /* 👇 ВИПРАВЛЕНО: Позиціонування відносно правого краю */
-  left: auto;          /* Скасовуємо прив'язку до лівого краю */
-  right: -60px;        /* Зміщуємо вліво, щоб центрувати над кнопкою */
+  @keyframes popUp {
+    from { opacity: 0; transform: translateY(10px) scale(0.95); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
   
-  margin-bottom: 12px;
-  width: 360px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.15);
-  z-index: 100;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid #f1f5f9;
+  }
   
-  /* Анімація появи */
-  transform-origin: bottom right;
-  animation: popUp 0.2s ease-out;
-}
-
-@keyframes popUp {
-  from { opacity: 0; transform: translateY(10px) scale(0.95); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid #f1f5f9;
-}
-
-.header h4 {
-  margin: 0;
-  font-size: 0.95rem;
-  font-weight: 700;
-}
-
-.upload-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  background: #f1f5f9;
-  color: #64748b;
-  cursor: pointer;
-}
-
-.grid-container {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  padding: 12px;
-  max-height: 280px;
-  overflow-y: auto;
-}
-
-.grid-item {
-  position: relative;
-  border-radius: 8px;
-  overflow: hidden;
-  cursor: pointer;
-  border: 2px solid transparent;
-}
-
-.grid-item img,
-.video-placeholder {
-  width: 100%;
-  height: 90px;
-  object-fit: cover;
-  background: #e2e8f0;
-}
-
-.video-placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #64748b;
-  font-size: 1.2rem;
-}
-
-.grid-item.selected {
-  border-color: #3b82f6;
-}
-
-.check-overlay {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: rgba(59, 130, 246, 0.9);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.7rem;
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-
-.grid-item.selected .check-overlay {
-  opacity: 1;
-}
-
-.footer {
-  padding: 10px 16px;
-  border-top: 1px solid #f1f5f9;
-}
-
-.confirm-btn {
-  width: 100%;
-  background: #3b82f6;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  padding: 8px 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.state-msg {
-  grid-column: 1 / -1;
-  padding: 20px;
-  text-align: center;
-  color: #94a3b8;
-}
-
-.spinner {
-  width: 20px;
-  height: 20px;
-  border: 2px solid #e2e8f0;
-  border-top-color: #3b82f6;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  margin: 0 auto;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-/* Скролбар */
-.custom-scrollbar::-webkit-scrollbar { width: 4px; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-</style>
+  .header h4 {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+  }
+  
+  .upload-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: #f1f5f9;
+    color: #64748b;
+    cursor: pointer;
+  }
+  
+  .grid-container {
+    display: grid;
+    
+    /* 👇 ЗМІНИЛИ НА 2 СТОВПЦІ (було 3) */
+    grid-template-columns: repeat(2, 1fr); 
+    
+    gap: 12px; /* Трохи більший відступ між фото */
+    padding: 12px;
+    max-height: 350px; /* Збільшили висоту списку */
+    overflow-y: auto;
+  }
+  
+  .grid-item {
+    position: relative;
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: pointer;
+    border: 2px solid transparent;
+  }
+  
+  .grid-item img,
+  .video-placeholder {
+    width: 100%;
+    
+    /* 👇 ЗБІЛЬШИЛИ ВИСОТУ ФОТО (було 90px) */
+    height: 160px; 
+    
+    object-fit: cover;
+    background: #e2e8f0;
+  }
+  
+  .video-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #64748b;
+    font-size: 1.5rem;
+  }
+  
+  .grid-item.selected {
+    border-color: #3b82f6;
+  }
+  
+  /* Галочка теж трохи більша і помітніша */
+  .check-overlay {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(59, 130, 246, 0.9);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  
+  .grid-item.selected .check-overlay {
+    opacity: 1;
+  }
+  
+  .footer {
+    padding: 10px 16px;
+    border-top: 1px solid #f1f5f9;
+  }
+  
+  .confirm-btn {
+    width: 100%;
+    background: #3b82f6;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 10px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  
+  .state-msg {
+    grid-column: 1 / -1;
+    padding: 20px;
+    text-align: center;
+    color: #94a3b8;
+  }
+  
+  .spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid #e2e8f0;
+    border-top-color: #3b82f6;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto;
+  }
+  
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  
+  /* Скролбар */
+  .custom-scrollbar::-webkit-scrollbar { width: 5px; }
+  .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+  .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+  </style>
