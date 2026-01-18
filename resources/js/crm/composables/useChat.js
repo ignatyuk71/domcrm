@@ -20,7 +20,6 @@ export function useChat() {
   const currentPage = ref(1);
   const lastPage = ref(1);
   
-  // Змінили назву змінної, бо це тепер таймер, а не інтервал
   let pollingTimer = null;
 
   const activeChat = computed(() =>
@@ -70,7 +69,6 @@ export function useChat() {
     messages.value = [];
     error.value = '';
     
-    // Вмикаємо лоадер, щоб користувач бачив процес
     isLoading.value = true;
 
     try {
@@ -106,6 +104,7 @@ export function useChat() {
     const files = payload.files || [];
     const remoteUrls = payload.remote_urls || [];
 
+    // Формуємо оптимістичні повідомлення (для відображення одразу)
     if (files.length) {
       files.forEach((file, index) => {
         const fileUrl = URL.createObjectURL(file);
@@ -114,12 +113,7 @@ export function useChat() {
           text: index === 0 ? payload.text || null : null,
           direction: 'outbound',
           created_at: new Date().toISOString(),
-          attachments: [
-            {
-              type: file.type?.startsWith('image/') ? 'image' : 'file',
-              url: fileUrl,
-            },
-          ],
+          attachments: [{ type: file.type?.startsWith('image/') ? 'image' : 'file', url: fileUrl }],
           status: 'sending',
           is_read: true,
         };
@@ -127,6 +121,7 @@ export function useChat() {
         tempIds.push(optimisticMessage.id);
       });
     } else {
+      // Тільки текст
       tempMessages.push({
         id: tempId,
         text: payload.text || null,
@@ -146,12 +141,7 @@ export function useChat() {
           text: files.length === 0 && index === 0 ? payload.text || null : null,
           direction: 'outbound',
           created_at: new Date().toISOString(),
-          attachments: [
-            {
-              type: 'image',
-              url,
-            },
-          ],
+          attachments: [{ type: 'image', url }],
           status: 'sending',
           is_read: true,
         };
@@ -160,53 +150,33 @@ export function useChat() {
       });
     }
 
-    if (!files.length && !remoteUrls.length) {
-      tempMessages.push({
-        id: tempId,
-        text: payload.text || null,
-        direction: 'outbound',
-        created_at: new Date().toISOString(),
-        attachments: [],
-        status: 'sending',
-        is_read: true,
-      });
-      tempIds.push(tempId);
-    }
-
     messages.value = [...messages.value, ...tempMessages];
 
     try {
       const formData = new FormData();
       formData.append('customer_id', payload.customer_id);
-      if (payload.text) {
-        formData.append('text', payload.text);
-      }
-      if (files.length) {
-        files.forEach((file) => {
-          formData.append('files[]', file);
-        });
-      }
-      if (remoteUrls.length) {
-        remoteUrls.forEach((url) => {
-          formData.append('remote_urls[]', url);
-        });
-      }
+      if (payload.text) formData.append('text', payload.text);
+      if (files.length) files.forEach((file) => formData.append('files[]', file));
+      if (remoteUrls.length) remoteUrls.forEach((url) => formData.append('remote_urls[]', url));
 
       const { data } = await apiSendMessage(formData);
       const responseData = data?.data || data;
       const newMessages = Array.isArray(responseData) ? responseData : [responseData];
 
+      // Оновлюємо тимчасові повідомлення реальними даними з відповіді API
       messages.value = messages.value.map((msg) => {
         const replaceIndex = tempIds.indexOf(msg.id);
         if (replaceIndex === -1) return msg;
         return newMessages[replaceIndex] || msg;
       });
 
+      // Видаляємо зайві тимчасові, якщо їх було більше ніж повернув сервер
       if (newMessages.length < tempIds.length) {
         const staleIds = tempIds.slice(newMessages.length);
         messages.value = messages.value.filter((msg) => !staleIds.includes(msg.id));
       }
 
+      // Оновлюємо сайдбар
       conversations.value = conversations.value.map((chat) =>
         chat.customer_id === payload.customer_id
           ? {
@@ -229,10 +199,8 @@ export function useChat() {
     isSyncing.value = true;
     try {
       await apiForceSync(customerId);
-      // Після синхронізації оновлюємо список повідомлень
       const { data } = await getMessages(customerId);
       messages.value = data?.data || data || [];
-      // Також оновлюємо список чатів (щоб змінився останній меседж)
       await fetchConversations();
     } catch (e) {
       console.error('Не вдалося синхронізувати чат', e);
@@ -242,54 +210,74 @@ export function useChat() {
     }
   }
 
-  // --- ОНОВЛЕНА ЛОГІКА POLLING (3 секунди + захист від дублів) ---
+  // --- 🔥 ОНОВЛЕНА ЛОГІКА POLLING (Фікс дублікатів) ---
   function startPolling(threadId) {
     stopPolling();
 
     const poll = async () => {
-      // Якщо користувач пішов з чату поки йшов таймер - виходимо
+      // Якщо користувач пішов з чату - виходимо
       if (activeChatId.value !== threadId) return;
 
-      const lastMessage = messages.value[messages.value.length - 1];
-      
-      // Робимо запит тільки якщо є повідомлення і останнє не є "тимчасовим"
-      if (lastMessage?.id && !String(lastMessage.id).startsWith('temp-')) {
-        try {
-          const data = await fetchNewMessages(threadId, lastMessage.id);
-          const incoming = data?.messages || [];
+      // 1. Беремо ID останнього РЕАЛЬНОГО повідомлення (ігноруємо temp-...)
+      // Це важливо, щоб запит не "застрягав" на тимчасових ID
+      const lastRealMessage = [...messages.value].reverse().find(m => !String(m.id).startsWith('temp-'));
+      const sinceId = lastRealMessage ? lastRealMessage.id : 0;
 
-          if (incoming.length) {
-            incoming.forEach((msg) => {
-              // Уникаємо дублікатів
-              if (!messages.value.find((existing) => existing.id === msg.id)) {
+      try {
+        const data = await fetchNewMessages(threadId, sinceId);
+        const incoming = data?.messages || [];
+
+        if (incoming.length) {
+          incoming.forEach((msg) => {
+            // А. Якщо повідомлення з таким ID вже є - пропускаємо
+            const existsById = messages.value.find((m) => m.id === msg.id);
+            if (existsById) return;
+
+            // Б. 🔥 ШУКАЄМО ТИМЧАСОВОГО ДВІЙНИКА
+            // Якщо сервер надіслав повідомлення, яке ми щойно відправили (але воно ще висить як temp-)
+            const tempMatch = messages.value.find((m) => 
+                String(m.id).startsWith('temp-') &&       
+                m.direction === 'outbound' &&             
+                msg.direction === 'outbound' &&
+                (m.text === msg.text) // Звіряємо текст
+            );
+
+            if (tempMatch) {
+                // Знайшли! Оновлюємо тимчасове повідомлення на реальне (MERGE)
+                tempMatch.id = msg.id;
+                tempMatch.created_at = msg.created_at;
+                tempMatch.status = 'sent';
+                
+                // Якщо прийшли реальні посилання на файли
+                if (msg.attachments && msg.attachments.length) {
+                    tempMatch.attachments = msg.attachments;
+                }
+            } else {
+                // Це чуже повідомлення або нове - просто додаємо
                 messages.value.push(msg);
-              }
-            });
-          }
-
-          if (data?.thread) {
-            updateThreadInSidebar(data.thread);
-          }
-        } catch (e) {
-          // Тиха помилка (наприклад, немає інтернету), не блокуємо роботу
-          console.warn('Polling skip:', e.message);
+            }
+          });
         }
+
+        if (data?.thread) {
+          updateThreadInSidebar(data.thread);
+        }
+      } catch (e) {
+        console.warn('Polling skip:', e.message);
       }
 
-      // Плануємо наступний запит тільки ПІСЛЯ завершення поточного
-      // Інтервал: 3000 мс (3 секунди)
+      // Наступний запит через 3 секунди
       if (activeChatId.value === threadId) {
-        pollingTimer = setTimeout(poll, 5000);
+        pollingTimer = setTimeout(poll, 3000);
       }
     };
 
-    // Запускаємо
     poll();
   }
 
   function stopPolling() {
     if (pollingTimer) {
-      clearTimeout(pollingTimer); // Використовуємо clearTimeout
+      clearTimeout(pollingTimer);
       pollingTimer = null;
     }
   }
