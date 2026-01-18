@@ -40,6 +40,8 @@ class SavedFileController extends Controller
             mkdir($destinationPath, 0755, true);
         }
 
+        $mimeType = (string) $file->getClientMimeType();
+        $type = str_starts_with($mimeType, 'video') ? 'video' : 'image';
         $extension = $file->getClientOriginalExtension() ?: 'jpg';
         $fileName = time().'_'.bin2hex(random_bytes(4)).'.'.strtolower($extension);
         $file->move($destinationPath, $fileName);
@@ -47,8 +49,6 @@ class SavedFileController extends Controller
 
         $relativePath = "saved/{$datePath}/{$fileName}";
         $url = '/'.$relativePath;
-        $type = str_starts_with((string) $file->getMimeType(), 'video') ? 'video' : 'image';
-
         $saved = SavedFile::create([
             'filename' => $file->getClientOriginalName(),
             'path' => $relativePath,
