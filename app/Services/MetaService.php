@@ -259,6 +259,18 @@ class MetaService
             return $attachment;
         }
 
+        $appUrl = rtrim((string) config('app.url'), '/');
+        if ($appUrl !== '' && str_starts_with($remoteUrl, $appUrl)) {
+            $path = parse_url($remoteUrl, PHP_URL_PATH);
+            if ($path) {
+                return [
+                    'type' => $type,
+                    'url' => ltrim($path, '/'),
+                    'original_url' => $remoteUrl,
+                ];
+            }
+        }
+
         try {
             $response = Http::timeout(10)->get($remoteUrl);
             if ($response->failed()) {

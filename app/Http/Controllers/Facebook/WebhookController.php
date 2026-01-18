@@ -81,10 +81,15 @@ class WebhookController extends Controller
         $senderId = isset($event['sender']['id']) ? (string) $event['sender']['id'] : null;
         $recipientId = isset($event['recipient']['id']) ? (string) $event['recipient']['id'] : null;
         $message = $event['message'];
+        $mid = $message['mid'] ?? null;
         $isEcho = $message['is_echo'] ?? false;
         $contactId = $isEcho ? $recipientId : $senderId;
 
-        if (!$contactId) {
+        if (!$contactId || !$mid) {
+            return;
+        }
+
+        if (FacebookMessage::where('mid', $mid)->exists()) {
             return;
         }
 
@@ -145,7 +150,7 @@ class WebhookController extends Controller
             : now(config('app.timezone', 'Europe/Kyiv'));
 
         FacebookMessage::updateOrCreate(
-            ['mid' => $message['mid'] ?? null],
+            ['mid' => $mid],
             [
                 'customer_id' => $customer->id,
                 'parent_id' => $parentId,
