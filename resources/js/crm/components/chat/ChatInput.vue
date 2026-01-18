@@ -13,19 +13,31 @@
       </div>
     </div>
 
-    <form class="chat-input-bar" @submit.prevent="handleSend" :class="{ 'has-error': fileError }">
+    <form class="chat-input-bar-container" @submit.prevent="handleSend" :class="{ 'has-error': fileError }">
       
-      <div class="input-area">
-        <textarea
-          v-model="text"
-          class="chat-textarea custom-scrollbar"
-          rows="1"
-          placeholder="Напишіть повідомлення..."
+      <div class="chat-input-main-row">
+        <div class="input-area">
+          <textarea
+            v-model="text"
+            class="chat-textarea custom-scrollbar"
+            rows="1"
+            placeholder="Напишіть повідомлення..."
+            :disabled="disabled"
+            @keydown.ctrl.enter.prevent="handleSend"
+            @input="autoResize"
+            ref="textareaRef"
+          ></textarea>
+        </div>
+
+        <button
+          class="action-btn"
+          type="submit"
           :disabled="disabled"
-          @keydown.ctrl.enter.prevent="handleSend"
-          @input="autoResize"
-          ref="textareaRef"
-        ></textarea>
+          :title="hasContent ? 'Надіслати' : 'Надіслати лайк'"
+        >
+          <i v-if="hasContent" class="bi bi-send-fill send-icon"></i>
+          <i v-else class="bi bi-hand-thumbs-up-fill like-icon" @click.prevent="sendLike"></i>
+        </button>
       </div>
 
       <div class="chat-tools">
@@ -83,23 +95,13 @@
         <button type="button" class="tool-btn" title="Емодзі">
           <i class="bi bi-emoji-smile"></i>
         </button>
-
-        <button
-          class="action-btn"
-          type="submit"
-          :disabled="disabled"
-          :title="hasContent ? 'Надіслати' : 'Надіслати лайк'"
-        >
-          <i v-if="hasContent" class="bi bi-send-fill send-icon"></i>
-          <i v-else class="bi bi-hand-thumbs-up-fill like-icon" @click.prevent="sendLike"></i>
-        </button>
       </div>
 
     </form>
 
     <div class="input-footer">
       <span v-if="fileError" class="error-text">{{ fileError }}</span>
-      <span v-else class="hint-text">Enter — новий рядок, Ctrl+Enter — надіслати</span>
+      <span v-else class="hint-text mobile-hide">Enter — новий рядок, Ctrl+Enter — надіслати</span>
     </div>
 
   </div>
@@ -126,7 +128,6 @@ const showGallery = ref(false);
 
 const maxFileSize = 5 * 1024 * 1024; // 5 MB
 
-// Перевірка, чи є контент для відправки
 const hasContent = computed(() => text.value.trim().length > 0 || selectedFiles.value.length > 0);
 
 function triggerFileInput() {
@@ -136,7 +137,6 @@ function triggerFileInput() {
 function onFileChange(e) {
   const files = Array.from(e.target.files || []);
   if (!files.length) return;
-
   fileError.value = '';
 
   files.forEach((file) => {
@@ -154,7 +154,6 @@ function onFileChange(e) {
       isRemote: false,
     });
   });
-
   fileInputRef.value.value = '';
 }
 
@@ -196,22 +195,16 @@ function handleGallerySelect(files) {
 function autoResize() {
   const el = textareaRef.value;
   if (el) {
-    el.style.height = 'auto'; // Скидаємо висоту
-    el.style.height = Math.min(el.scrollHeight, 150) + 'px'; // Обмежуємо макс висоту
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 150) + 'px';
   }
 }
 
-// Функція швидкого відправлення лайка
 function sendLike() {
-  emit('send', {
-    text: '👍', // Відправляємо смайлик
-    files: [],
-    remote_urls: [],
-  });
+  emit('send', { text: '👍', files: [], remote_urls: [] });
 }
 
 function handleSend() {
-  // Якщо пусто - нічого не робимо (кнопка лайка обробляється окремо в @click)
   if (!hasContent.value) return;
 
   const filesToUpload = selectedFiles.value
@@ -228,7 +221,6 @@ function handleSend() {
     remote_urls: remoteUrls,
   });
 
-  // Очистка
   text.value = '';
   selectedFiles.value.forEach((item) => {
     if (item.previewUrl && item.previewUrl.startsWith('blob:')) {
@@ -248,94 +240,39 @@ function handleSend() {
 <style scoped>
 .chat-input-wrapper {
   padding: 12px 20px;
-  background: #ffffff; /* Білий фон, як на скріні */
+  background: #ffffff;
   border-top: 1px solid #f1f5f9;
 }
 
-/* --- Прев'ю файлів --- */
-.file-preview-area {
+/* Контейнер форми */
+.chat-input-bar-container {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column; /* Мобільний вигляд за замовчуванням: інструменти під текстом */
   gap: 8px;
-  margin-bottom: 10px;
-}
-
-.file-badge {
-  display: flex;
-  align-items: center;
-  background: #f1f5f9;
-  border-radius: 8px;
-  padding: 4px 8px 4px 4px;
-  font-size: 0.85rem;
-  border: 1px solid #e2e8f0;
-}
-
-.file-info {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 150px;
-}
-
-.file-thumb {
-  width: 70px;
-  height: 70px;
-  border-radius: 4px;
-  object-fit: cover;
-}
-
-.file-icon {
-  font-size: 1.2rem;
-  color: #64748b;
-  margin-left: 4px;
-}
-
-.file-name {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: #334155;
-}
-
-.remove-btn {
-  background: none;
-  border: none;
-  color: #94a3b8;
-  cursor: pointer;
-  margin-left: 6px;
-  padding: 0 4px;
-  font-size: 1.1rem;
-}
-
-.remove-btn:hover { color: #ef4444; }
-
-
-/* --- Основний рядок вводу (Стиль Messenger) --- */
-.chat-input-bar {
-  display: flex;
-  align-items: flex-end; /* Вирівнювання по низу, щоб іконки були на рівні тексту при багаторядковості */
-  gap: 12px;
   background: #ffffff;
-  border: 1px solid #cbd5e1; /* Сіра рамка */
-  border-radius: 24px; /* Сильне заокруглення */
-  padding: 10px 16px;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  border: 1px solid #cbd5e1;
+  border-radius: 20px;
+  padding: 8px 12px;
+  transition: border-color 0.2s;
 }
 
-.chat-input-bar:focus-within {
+.chat-input-bar-container:focus-within {
   border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
-.chat-input-bar.has-error {
+.chat-input-bar-container.has-error {
   border-color: #ef4444;
 }
 
-/* Область тексту */
-.input-area {
-  flex: 1; /* Займає весь вільний простір */
+/* Рядок: Текст + Відправити */
+.chat-input-main-row {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.input-area {
+  flex: 1;
   min-height: 24px;
 }
 
@@ -348,21 +285,18 @@ function handleSend() {
   font-size: 0.95rem;
   color: #1e293b;
   line-height: 1.5;
-  max-height: 150px; /* Скрол, якщо тексту дуже багато */
-  padding: 0;
+  max-height: 150px;
+  padding: 4px 0;
   margin: 0;
 }
 
-.chat-textarea::placeholder {
-  color: #94a3b8;
-}
-
-/* --- Інструменти (Іконки) --- */
+/* Панель інструментів (кнопки) */
 .chat-tools {
   display: flex;
   align-items: center;
-  gap: 14px; /* Відступи між іконками */
-  padding-bottom: 2px; /* Мікро-корекція для вирівнювання з текстом */
+  gap: 18px;
+  padding-top: 4px;
+  border-top: 1px solid #f1f5f9;
 }
 
 .relative-container {
@@ -373,11 +307,10 @@ function handleSend() {
 .tool-btn {
   background: none;
   border: none;
-  padding: 0;
-  color: #64748b; /* Темно-сірий колір іконок, як на скріні */
+  padding: 4px 0;
+  color: #64748b;
   font-size: 1.25rem;
   cursor: pointer;
-  transition: color 0.2s, transform 0.1s;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -387,35 +320,20 @@ function handleSend() {
   color: #3b82f6;
 }
 
-.tool-btn:active {
-  transform: scale(0.95);
-}
-
-/* Кнопка дії (Лайк / Send) */
+/* Кнопка відправки */
 .action-btn {
   background: none;
   border: none;
-  padding: 0;
+  padding: 0 0 4px 0;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-left: 4px; /* Трохи відсунути від решти */
 }
 
-.like-icon {
+.send-icon, .like-icon {
   font-size: 1.35rem;
-  color: #3b82f6; /* Лайк синій */
-  transition: transform 0.2s;
-}
-
-.like-icon:hover {
-  transform: scale(1.1);
-}
-
-.send-icon {
-  font-size: 1.25rem;
-  color: #3b82f6; /* Літачок синій */
+  color: #3b82f6;
 }
 
 .action-btn:disabled {
@@ -423,41 +341,63 @@ function handleSend() {
   cursor: not-allowed;
 }
 
-/* --- Футер з підказками --- */
-.input-footer {
-  display: flex;
-  justify-content: flex-end; /* Текст помилки/підказки справа або зліва */
-  margin-top: 6px;
-  padding: 0 12px;
+/* --- АДАПТАЦІЯ ДЛЯ ДЕСКТОПА --- */
+@media (min-width: 769px) {
+  .chat-input-bar-container {
+    flex-direction: row; /* Все в один рядок */
+    align-items: flex-end;
+    border-radius: 24px;
+    padding: 10px 16px;
+  }
+
+  .chat-input-main-row {
+    flex: 1;
+    order: 1; /* Текст спочатку */
+  }
+
+  .chat-tools {
+    order: 2; /* Кнопки посередині */
+    border-top: none;
+    padding-top: 0;
+    padding-bottom: 2px;
+  }
+
+  .action-btn {
+    order: 3; /* Відправити в кінці */
+    margin-left: 4px;
+  }
 }
 
-.hint-text {
-  font-size: 0.75rem;
-  color: #cbd5e1;
-}
-
-.error-text {
-  font-size: 0.75rem;
-  color: #ef4444;
-}
-
-/* Скролбар для textarea */
-.custom-scrollbar::-webkit-scrollbar { width: 4px; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-
+/* --- АДАПТАЦІЯ ДЛЯ МОБІЛОК --- */
 @media (max-width: 768px) {
   .chat-input-wrapper {
-    padding: 10px 12px;
+    padding: 8px 10px;
   }
-
-  .chat-input-bar {
-    padding: 8px 12px;
-    gap: 10px;
-  }
-
+  
   .chat-textarea {
-    font-size: 16px;
-    max-height: 120px;
+    font-size: 16px; /* Щоб iPhone не збільшував сторінку при фокусі */
+  }
+
+  .mobile-hide {
+    display: none;
+  }
+
+  .chat-tools {
+    justify-content: flex-start;
+    gap: 25px; /* Збільшена відстань для зручності пальців */
   }
 }
+
+/* СТИЛІ ПРЕВ'Ю ТА ФУТЕРА */
+.file-preview-area { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.file-badge { display: flex; align-items: center; background: #f1f5f9; border-radius: 8px; padding: 4px; border: 1px solid #e2e8f0; }
+.file-thumb { width: 60px; height: 60px; border-radius: 4px; object-fit: cover; }
+.file-icon { font-size: 1.2rem; color: #64748b; margin: 0 4px; }
+.remove-btn { background: none; border: none; color: #94a3b8; cursor: pointer; margin-left: 4px; font-size: 1.1rem; }
+.input-footer { display: flex; justify-content: flex-end; margin-top: 4px; padding: 0 10px; }
+.hint-text { font-size: 0.7rem; color: #cbd5e1; }
+.error-text { font-size: 0.75rem; color: #ef4444; }
+
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
 </style>
