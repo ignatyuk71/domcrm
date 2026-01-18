@@ -2,291 +2,229 @@
   <div class="right-sidebar">
     <transition name="toast">
       <div v-if="toast.show" class="toast-notification" :class="toast.type">
-        <i class="bi" :class="toast.type === 'success' ? 'bi-check-circle-fill' : 'bi-exclamation-triangle-fill'"></i>
-        <span>{{ toast.message }}</span>
+        <div class="toast-content">
+          <i class="bi" :class="toast.type === 'success' ? 'bi-check2-circle' : 'bi-exclamation-octagon'"></i>
+          <span>{{ toast.message }}</span>
+        </div>
       </div>
     </transition>
 
-    <div v-if="customerId" class="profile-content">
+    <div v-if="customerId" class="profile-container">
+      
       <div class="profile-view">
         <div class="header-section">
-        <div class="avatar-wrap">
-          <img v-if="avatarUrl" :src="avatarUrl" class="avatar-img">
-          <div v-else class="avatar-placeholder">{{ displayInitial }}</div>
-          
-          <div 
-            class="platform-icon-indicator" 
-            :class="[isInstagram ? 'ig-bg' : 'fb-bg', isProfileComplete ? 'glow-green' : 'glow-red']"
-          >
-            <i class="bi" :class="isInstagram ? 'bi-instagram' : 'bi-messenger'"></i>
-          </div>
-        </div>
-        
-        <div class="info">
-          <div v-if="!showNameInput" class="name-display-wrapper" @click="enableNameEdit">
-            <span class="name-text" :class="{ 'text-error': !isNameValid }">{{ displayName }}</span>
-            <button class="btn-edit-purple">
-              <i class="bi bi-pencil-square"></i>
-            </button>
-          </div>
-
-          <div v-else class="name-edit-flow">
-            <div class="inputs-stack">
-              <input v-model="form.first_name" class="modern-input" placeholder="Ім'я (кирилиця)">
-              <input v-model="form.last_name" class="modern-input" placeholder="Прізвище (кирилиця)">
+          <div class="avatar-wrap">
+            <img v-if="avatarUrl" :src="avatarUrl" class="avatar-img">
+            <div v-else class="avatar-placeholder">{{ displayInitial }}</div>
+            
+            <div 
+              class="platform-icon-indicator" 
+              :class="[isInstagram ? 'ig-bg' : 'fb-bg', isProfileComplete ? 'glow-green' : 'glow-red']"
+            >
+              <i class="bi" :class="isInstagram ? 'bi-instagram' : 'bi-messenger'"></i>
             </div>
-            <button class="btn-confirm-tick" @click="showNameInput = false">
-              <i class="bi bi-check2"></i>
-            </button>
           </div>
           
-          <div class="id-badge">ID: {{ customer.fb_user_id || customer.instagram_user_id || customerId }}</div>
-        </div>
-
-        <button 
-          class="btn-status-indicator" 
-          :class="isProfileComplete ? 'status-ready' : 'status-attention'"
-          title="Статус заповнення"
-        >
-          <i class="bi" :class="isProfileComplete ? 'bi-person-check-fill' : 'bi-person-x-fill'"></i>
-        </button>
-      </div>
-
-      <hr class="divider" />
-
-      <div class="fields-section">
-        <div class="field-row">
-          <div class="icon-col"><i class="bi bi-telephone"></i></div>
-          <div class="input-col">
-            <label>Телефон</label>
-            <div v-if="form.phone || showPhoneInput" class="input-group" :class="{ 'is-focused': phoneFocused, 'is-invalid': form.phone && !isPhoneValid }">
-              <input 
-                v-model="form.phone" 
-                class="simple-input" 
-                placeholder="380XXXXXXXXX" 
-                ref="phoneRef"
-                type="tel"
-                @focus="phoneFocused = true"
-                @blur="phoneFocused = false"
-              >
+          <div class="info">
+            <div v-if="!showNameInput" class="name-display-wrapper" @click="enableNameEdit">
+              <span class="name-text" :class="{ 'text-error': !isNameValid }">{{ displayName }}</span>
+              <button class="btn-edit-purple"><i class="bi bi-pencil-fill"></i></button>
             </div>
-            <div v-else class="add-btn" @click="enablePhone"><i class="bi bi-plus-circle"></i> Додати телефон</div>
-            <small v-if="form.phone && !isPhoneValid" class="error-text">Має бути 12 цифр (380...)</small>
+
+            <div v-else class="name-edit-flow">
+              <div class="inputs-stack">
+                <input v-model="form.first_name" class="modern-input" placeholder="Ім'я">
+                <input v-model="form.last_name" class="modern-input" placeholder="Прізвище">
+              </div>
+              <button class="btn-confirm-tick" @click="showNameInput = false"><i class="bi bi-check2"></i></button>
+            </div>
+            
+            <div class="id-badge">ID: {{ customer.fb_user_id || customer.instagram_user_id || customerId }}</div>
+          </div>
+
+          <div class="status-indicator-box" :class="isProfileComplete ? 'ready' : 'pending'">
+            <i class="bi" :class="isProfileComplete ? 'bi-person-check-fill' : 'bi-person-x-fill'"></i>
           </div>
         </div>
 
-        <div class="field-row">
-          <div class="icon-col"><i class="bi bi-envelope"></i></div>
-          <div class="input-col">
-            <label>E-mail</label>
-            <div v-if="form.email || showEmailInput" class="input-group" :class="{ 'is-focused': emailFocused }">
-              <input v-model="form.email" class="simple-input" placeholder="email@example.com" @focus="emailFocused = true" @blur="emailFocused = false">
-            </div>
-            <div v-else class="add-btn" @click="enableEmail"><i class="bi bi-plus-circle"></i> Додати email</div>
-          </div>
-        </div>
+        <hr class="divider" />
 
-        <div class="action-row">
-          <button class="btn-save-modern" @click="saveData" :disabled="isLoading || !isProfileComplete">
-            <span v-if="isLoading" class="spinner"></span>
-            {{ isLoading ? 'Зберігаємо...' : 'Зберегти покупця' }}
-          </button>
-          <button class="btn-create-order" type="button" @click="viewMode = 'create_order'">
-            <i class="bi bi-bag-plus"></i>
-            Створити замовлення
-          </button>
+        <div class="fields-section">
+          <div class="field-row">
+            <div class="icon-col"><i class="bi bi-telephone"></i></div>
+            <div class="input-col">
+              <label>Телефон</label>
+              <div v-if="form.phone || showPhoneInput" class="input-group" :class="{ 'is-focused': phoneFocused, 'is-invalid': form.phone && !isPhoneValid }">
+                <input v-model="form.phone" class="simple-input" placeholder="380XXXXXXXXX" ref="phoneRef" type="tel" @focus="phoneFocused = true" @blur="phoneFocused = false">
+                <button class="btn-clear" @click="clearPhone"><i class="bi bi-x"></i></button>
+              </div>
+              <div v-else class="add-btn" @click="enablePhone"><i class="bi bi-plus-lg"></i> Додати телефон</div>
+              <small v-if="form.phone && !isPhoneValid" class="error-text">Має бути 12 цифр</small>
+            </div>
+          </div>
+
+          <div class="field-row">
+            <div class="icon-col"><i class="bi bi-envelope"></i></div>
+            <div class="input-col">
+              <label>E-mail</label>
+              <div v-if="form.email || showEmailInput" class="input-group" :class="{ 'is-focused': emailFocused }">
+                <input v-model="form.email" class="simple-input" placeholder="email@example.com" @focus="emailFocused = true" @blur="emailFocused = false">
+                <button class="btn-clear" @click="clearEmail"><i class="bi bi-x"></i></button>
+              </div>
+              <div v-else class="add-btn" @click="enableEmail"><i class="bi bi-plus-lg"></i> Додати email</div>
+            </div>
+          </div>
+
+          <div class="action-row">
+            <button class="btn-save-modern" @click="saveData" :disabled="isLoading || !isProfileComplete">
+              <span v-if="isLoading" class="spinner"></span>
+              {{ isLoading ? 'Зберігаємо...' : 'Зберегти покупця' }}
+            </button>
+            
+            <button class="btn-create-order" type="button" @click="viewMode = 'create_order'">
+              <div class="icon-bg"><i class="bi bi-bag-plus-fill"></i></div>
+              <span>Створити замовлення</span>
+              <i class="bi bi-chevron-right arrow-icon"></i>
+            </button>
+          </div>
         </div>
       </div>
 
-      <transition name="order-canvas">
+      <transition name="slide">
         <div v-if="viewMode === 'create_order'" class="order-offcanvas">
+          
           <div class="order-header">
-            <button class="btn-back" type="button" @click="viewMode = 'profile'">
+            <button class="btn-back" @click="viewMode = 'profile'">
               <i class="bi bi-arrow-left"></i>
             </button>
-            <div class="order-title">Швидке замовлення</div>
-            <button class="btn-close-canvas" type="button" @click="viewMode = 'profile'">
-              <i class="bi bi-x-lg"></i>
-            </button>
+            <div class="order-title">Нове замовлення</div>
+            <div class="order-steps">
+               <span class="step-badge">{{ orderDraft.items.length }}</span>
+            </div>
           </div>
 
-          <div class="order-scroll">
-            <section class="order-section">
-              <div class="section-title">Товари</div>
-              <div class="search-box">
-                <i class="bi bi-search"></i>
-                <input v-model="productSearch" type="text" placeholder="Пошук за назвою або артикулом">
+          <div class="order-scroll-content">
+            
+            <section class="order-card">
+              <div class="card-header">
+                <i class="bi bi-box-seam"></i> Товари
+              </div>
+              
+              <div class="search-wrapper">
+                <i class="bi bi-search search-icon"></i>
+                <input v-model="productSearch" type="text" class="search-input" placeholder="Пошук товару...">
                 <span v-if="productLoading" class="mini-spinner"></span>
-              </div>
-
-              <div v-if="productResults.length" class="search-results">
-                <button
-                  v-for="product in productResults"
-                  :key="product.id"
-                  type="button"
-                  class="result-item"
-                  @click="addProduct(product)"
-                >
-                  <div class="result-main">
-                    <div class="result-title">{{ product.title || 'Товар' }}</div>
-                    <div class="result-meta">{{ product.sku || 'NO-SKU' }}</div>
-                  </div>
-                  <div class="result-price">{{ formatMoney(getProductPrice(product)) }} грн</div>
-                </button>
-              </div>
-
-              <div v-if="!orderDraft.items.length" class="empty-products">
-                <i class="bi bi-basket"></i>
-                <span>Додайте товари до замовлення</span>
-              </div>
-              <div v-else class="items-list">
-                <div v-for="(item, index) in orderDraft.items" :key="item.key" class="item-row">
-                  <div class="item-info">
-                    <div class="item-title">{{ item.title }}</div>
-                    <div class="item-sku">{{ item.sku || 'NO-SKU' }}</div>
-                  </div>
-                  <div class="item-controls">
-                    <input v-model.number="item.qty" type="number" min="1" class="qty-input">
-                    <input v-model.number="item.price" type="number" min="0" step="0.01" class="price-input">
-                    <div class="item-sum">{{ formatMoney(itemTotal(item)) }} грн</div>
-                    <button class="btn-remove" type="button" @click="removeItem(index)">
-                      <i class="bi bi-x-lg"></i>
-                    </button>
+                
+                <div v-if="productResults.length" class="search-dropdown">
+                  <div v-for="product in productResults" :key="product.id" class="search-item" @click="addProduct(product)">
+                    <div class="s-info">
+                      <div class="s-title">{{ product.title }}</div>
+                      <div class="s-sku">{{ product.sku || 'No SKU' }}</div>
+                    </div>
+                    <div class="s-price">{{ formatMoney(getProductPrice(product)) }} ₴</div>
                   </div>
                 </div>
               </div>
 
-              <div class="total-row">
-                <span>Загальна сума</span>
-                <strong>{{ formatMoney(itemsTotal) }} грн</strong>
+              <div v-if="orderDraft.items.length" class="selected-items">
+                <div v-for="(item, index) in orderDraft.items" :key="item.key" class="item-card">
+                  <div class="item-top">
+                    <span class="item-name">{{ item.title }}</span>
+                    <button class="btn-remove-item" @click="removeItem(index)"><i class="bi bi-trash3"></i></button>
+                  </div>
+                  <div class="item-bottom">
+                    <div class="qty-control">
+                      <button @click="item.qty > 1 ? item.qty-- : null">-</button>
+                      <span>{{ item.qty }}</span>
+                      <button @click="item.qty++">+</button>
+                    </div>
+                    <div class="price-edit">
+                      <input v-model.number="item.price" type="number" class="price-input-mini">
+                      <span class="currency">₴</span>
+                    </div>
+                    <div class="item-total-display">
+                      {{ formatMoney(itemTotal(item)) }} ₴
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div v-else class="empty-placeholder">
+                <i class="bi bi-basket3"></i>
+                <span>Кошик порожній</span>
+              </div>
+
+              <div class="total-summary" v-if="orderDraft.items.length">
+                <span>Разом:</span>
+                <span class="sum-value">{{ formatMoney(itemsTotal) }} ₴</span>
               </div>
             </section>
 
-            <section class="order-section">
-              <div class="section-title">Доставка</div>
-              <div class="delivery-toggle">
-                <button
-                  type="button"
-                  class="toggle-btn"
-                  :class="{ active: orderDraft.delivery.carrier === 'nova_poshta' }"
-                  @click="setCarrier('nova_poshta')"
-                >
-                  Нова Пошта
-                </button>
-                <button
-                  type="button"
-                  class="toggle-btn"
-                  :class="{ active: orderDraft.delivery.carrier === 'ukrposhta' }"
-                  @click="setCarrier('ukrposhta')"
-                >
-                  Укрпошта
-                </button>
-                <button
-                  type="button"
-                  class="toggle-btn"
-                  :class="{ active: orderDraft.delivery.carrier === 'self_pickup' }"
-                  @click="setCarrier('self_pickup')"
-                >
-                  Самовивіз
-                </button>
+            <section class="order-card">
+              <div class="card-header"><i class="bi bi-truck"></i> Доставка</div>
+              
+              <div class="segmented-control">
+                <button :class="{ active: orderDraft.delivery.carrier === 'nova_poshta' }" @click="setCarrier('nova_poshta')">НП</button>
+                <button :class="{ active: orderDraft.delivery.carrier === 'ukrposhta' }" @click="setCarrier('ukrposhta')">Укрпошта</button>
+                <button :class="{ active: orderDraft.delivery.carrier === 'self_pickup' }" @click="setCarrier('self_pickup')">Самовивіз</button>
               </div>
 
-              <div v-if="orderDraft.delivery.carrier !== 'self_pickup'" class="delivery-fields">
-                <div class="field">
+              <div v-if="orderDraft.delivery.carrier !== 'self_pickup'" class="delivery-form">
+                <div class="form-group">
                   <label>Місто</label>
-                  <div class="dropdown-field">
-                    <input
-                      v-model="cityQuery"
-                      type="text"
-                      class="text-input"
-                      placeholder="Почніть вводити..."
-                    >
-                    <div v-if="cityOptions.length" class="dropdown-list">
-                      <button v-for="city in cityOptions" :key="city.Ref" type="button" @click="selectCity(city)">
-                        {{ city.Description }}
-                      </button>
+                  <div class="autocomplete-wrap">
+                    <input v-model="cityQuery" class="form-input" placeholder="Введіть місто...">
+                    <div v-if="cityOptions.length" class="dropdown-options">
+                      <div v-for="city in cityOptions" :key="city.Ref" @click="selectCity(city)">{{ city.Description }}</div>
                     </div>
                   </div>
                 </div>
-
-                <div class="field">
+                <div class="form-group" v-if="orderDraft.delivery.city_ref">
                   <label>Відділення</label>
-                  <div class="dropdown-field">
-                    <input
-                      v-model="warehouseQuery"
-                      type="text"
-                      class="text-input"
-                      :disabled="!orderDraft.delivery.city_ref"
-                      placeholder="Оберіть місто"
-                    >
-                    <div v-if="warehouseOptions.length" class="dropdown-list">
-                      <button
-                        v-for="warehouse in warehouseOptions"
-                        :key="warehouse.Ref"
-                        type="button"
-                        @click="selectWarehouse(warehouse)"
-                      >
-                        {{ warehouse.Description }}
-                      </button>
+                  <div class="autocomplete-wrap">
+                    <input v-model="warehouseQuery" class="form-input" placeholder="Номер або адреса...">
+                    <div v-if="warehouseOptions.length" class="dropdown-options">
+                      <div v-for="wh in warehouseOptions" :key="wh.Ref" @click="selectWarehouse(wh)">{{ wh.Description }}</div>
                     </div>
                   </div>
                 </div>
               </div>
-
-              <div v-else class="delivery-fields">
-                <div class="field">
-                  <label>Коментар</label>
-                  <input
-                    v-model="orderDraft.delivery.address_note"
-                    type="text"
-                    class="text-input"
-                    placeholder="Наприклад: забере сам"
-                  >
-                </div>
+              <div v-else class="form-group">
+                 <label>Коментар до самовивозу</label>
+                 <input v-model="orderDraft.delivery.address_note" class="form-input" placeholder="Коли забере?">
               </div>
             </section>
 
-            <section class="order-section">
-              <div class="section-title">Оплата</div>
+            <section class="order-card">
+              <div class="card-header"><i class="bi bi-credit-card"></i> Оплата</div>
               <div class="payment-grid">
-                <div class="field">
-                  <label>Метод оплати</label>
-                  <select v-model="orderDraft.payment.method" class="select-input">
-                    <option value="cod">Накладений платіж</option>
-                    <option value="card">На карту</option>
-                    <option value="iban">IBAN</option>
-                  </select>
-                </div>
-                <div class="field">
-                  <label>Статус оплати</label>
-                  <select v-model="orderDraft.payment.status" class="select-input">
-                    <option value="unpaid">Не оплачено</option>
-                    <option value="paid">Оплачено</option>
-                  </select>
-                </div>
+                <select v-model="orderDraft.payment.method" class="form-select">
+                  <option value="cod">Накладений платіж</option>
+                  <option value="card">На карту</option>
+                  <option value="iban">IBAN</option>
+                </select>
+                <select v-model="orderDraft.payment.status" class="form-select" :class="orderDraft.payment.status">
+                  <option value="unpaid">Не оплачено</option>
+                  <option value="paid">Оплачено</option>
+                </select>
               </div>
             </section>
 
-            <section class="order-section">
-              <div class="section-title">Коментар</div>
-              <textarea
-                v-model="orderDraft.comment"
-                rows="3"
-                class="textarea-input"
-                placeholder="Коментар менеджера"
-              ></textarea>
-            </section>
+             <section class="order-card">
+                <textarea v-model="orderDraft.comment" class="form-textarea" placeholder="Внутрішній коментар до замовлення..."></textarea>
+             </section>
+
+             <div style="height: 80px;"></div>
           </div>
 
           <div class="order-footer">
-            <button class="btn-save-order" @click="saveOrder" :disabled="isSavingOrder || !canSaveOrder">
-              <span v-if="isSavingOrder" class="spinner"></span>
-              {{ isSavingOrder ? 'Збереження...' : 'Зберегти замовлення' }}
+            <button class="btn-submit-order" @click="saveOrder" :disabled="isSavingOrder || !canSaveOrder">
+              <span v-if="!isSavingOrder">Створити замовлення</span>
+              <span v-else>Зберігаємо...</span>
+              <span v-if="!isSavingOrder" class="price-tag">{{ formatMoney(itemsTotal) }} ₴</span>
             </button>
           </div>
         </div>
       </transition>
-
     </div>
 
     <div v-else class="empty-state">
@@ -305,6 +243,7 @@ import { fetchCities, fetchWarehouses } from '@/crm/api/novaPoshta';
 
 const props = defineProps({ customer: Object });
 
+// --- STATES ---
 const showNameInput = ref(false);
 const phoneFocused = ref(false);
 const emailFocused = ref(false);
@@ -312,7 +251,7 @@ const isLoading = ref(false);
 const showPhoneInput = ref(false);
 const showEmailInput = ref(false);
 const phoneRef = ref(null);
-const viewMode = ref('profile');
+const viewMode = ref('profile'); // 'profile' | 'create_order'
 const isSavingOrder = ref(false);
 
 const productSearch = ref('');
@@ -329,12 +268,7 @@ const skipWarehouseFetch = ref(false);
 let cityTimer = null;
 let warehouseTimer = null;
 
-// Стан для сповіщень
-const toast = reactive({
-  show: false,
-  message: '',
-  type: 'success'
-});
+const toast = reactive({ show: false, message: '', type: 'success' });
 
 const form = reactive({ 
   first_name: '',
@@ -348,30 +282,17 @@ const orderDraft = reactive({
   delivery: {
     carrier: 'nova_poshta',
     delivery_type: 'warehouse',
-    city_ref: '',
-    city_name: '',
-    warehouse_ref: '',
-    warehouse_name: '',
-    address_note: '',
-    recipient_name: '',
-    recipient_phone: ''
+    city_ref: '', city_name: '',
+    warehouse_ref: '', warehouse_name: '',
+    address_note: '', recipient_name: '', recipient_phone: ''
   },
-  payment: {
-    method: 'cod',
-    status: 'unpaid'
-  },
+  payment: { method: 'cod', status: 'unpaid' },
   comment: ''
 });
 
+// --- COMPUTED & LOGIC ---
 const cyrillicRegex = /^[А-Яа-яЁёЇїІіЄєҐґ' \-]+$/;
-
-const isNameValid = computed(() => {
-  return form.first_name.trim().length >= 2 && 
-         form.last_name.trim().length >= 2 && 
-         cyrillicRegex.test(form.first_name) && 
-         cyrillicRegex.test(form.last_name);
-});
-
+const isNameValid = computed(() => form.first_name.trim().length >= 2 && form.last_name.trim().length >= 2 && cyrillicRegex.test(form.first_name));
 const isPhoneValid = computed(() => /^380\d{9}$/.test(form.phone));
 const isProfileComplete = computed(() => isNameValid.value && isPhoneValid.value);
 
@@ -405,90 +326,51 @@ watch(() => props.customer, (newVal) => {
   }
 }, { immediate: true });
 
+// --- PRODUCT SEARCH ---
 watch(productSearch, (query) => {
   const term = query.trim();
   if (productTimer) clearTimeout(productTimer);
-  if (!term) {
-    productResults.value = [];
-    return;
-  }
+  if (!term) { productResults.value = []; return; }
   productTimer = setTimeout(async () => {
     productLoading.value = true;
     try {
       const { data } = await searchProducts(term);
       productResults.value = Array.isArray(data) ? data : (data?.data || []);
-    } catch (e) {
-      console.error(e);
-      productResults.value = [];
-    } finally {
-      productLoading.value = false;
-    }
+    } catch (e) { console.error(e); productResults.value = []; } 
+    finally { productLoading.value = false; }
   }, 250);
 });
 
+// --- NOVA POSHTA LOGIC ---
 watch(cityQuery, (query) => {
-  if (orderDraft.delivery.carrier === 'self_pickup') return;
-  if (skipCityFetch.value) {
-    skipCityFetch.value = false;
-    return;
-  }
+  if (orderDraft.delivery.carrier === 'self_pickup' || skipCityFetch.value) { skipCityFetch.value = false; return; }
   const term = query.trim();
   if (cityTimer) clearTimeout(cityTimer);
-  if (!term) {
-    cityOptions.value = [];
-    orderDraft.delivery.city_ref = '';
-    orderDraft.delivery.city_name = '';
-    orderDraft.delivery.warehouse_ref = '';
-    orderDraft.delivery.warehouse_name = '';
-    return;
-  }
-  if (term.length < 2) {
-    cityOptions.value = [];
-    return;
-  }
+  if (term.length < 2) { cityOptions.value = []; return; }
   cityTimer = setTimeout(async () => {
     try {
       const { data } = await fetchCities(term);
       cityOptions.value = data?.data || [];
-    } catch (e) {
-      console.error(e);
-      cityOptions.value = [];
-    }
+    } catch (e) { cityOptions.value = []; }
   }, 300);
 });
 
 watch(warehouseQuery, (query) => {
-  if (orderDraft.delivery.carrier === 'self_pickup') return;
-  if (!orderDraft.delivery.city_ref) return;
-  if (skipWarehouseFetch.value) {
-    skipWarehouseFetch.value = false;
-    return;
-  }
+  if (!orderDraft.delivery.city_ref || skipWarehouseFetch.value) { skipWarehouseFetch.value = false; return; }
   const term = query.trim();
   if (warehouseTimer) clearTimeout(warehouseTimer);
-  if (term.length < 2) {
-    warehouseOptions.value = [];
-    if (!term) {
-      orderDraft.delivery.warehouse_ref = '';
-      orderDraft.delivery.warehouse_name = '';
-    }
-    return;
-  }
+  if (term.length < 1) { warehouseOptions.value = []; return; }
   warehouseTimer = setTimeout(async () => {
     try {
       const { data } = await fetchWarehouses({ cityRef: orderDraft.delivery.city_ref, query: term });
       warehouseOptions.value = data?.data || [];
-    } catch (e) {
-      console.error(e);
-      warehouseOptions.value = [];
-    }
+    } catch (e) { warehouseOptions.value = []; }
   }, 300);
 });
 
+// --- UTILS ---
 const showToast = (msg, type = 'success') => {
-  toast.message = msg;
-  toast.type = type;
-  toast.show = true;
+  toast.message = msg; toast.type = type; toast.show = true;
   setTimeout(() => { toast.show = false; }, 3000);
 };
 
@@ -497,26 +379,14 @@ const enablePhone = async () => { showPhoneInput.value = true; if (!form.phone) 
 const clearPhone = () => { form.phone = ''; showPhoneInput.value = false; };
 const enableEmail = async () => { showEmailInput.value = true; await nextTick(); };
 const clearEmail = () => { form.email = ''; showEmailInput.value = false; };
+
+const formatMoney = (value) => Number(value || 0).toFixed(2);
+const getProductPrice = (product) => Number(product?.sale_price ?? product?.price ?? product?.cost_price ?? 0);
+const itemTotal = (item) => (Number(item.qty) || 0) * (Number(item.price) || 0);
+const itemsTotal = computed(() => orderDraft.items.reduce((sum, item) => sum + itemTotal(item), 0));
 const canSaveOrder = computed(() => orderDraft.items.length > 0);
 
-const formatMoney = (value) => {
-  const number = Number(value) || 0;
-  return number.toFixed(2);
-};
-
-const getProductPrice = (product) => {
-  const price = product?.sale_price ?? product?.price ?? product?.cost_price ?? 0;
-  return Number(price) || 0;
-};
-
-const itemTotal = (item) => {
-  return (Number(item.qty) || 0) * (Number(item.price) || 0);
-};
-
-const itemsTotal = computed(() =>
-  orderDraft.items.reduce((sum, item) => sum + itemTotal(item), 0)
-);
-
+// --- ORDER ACTIONS ---
 const addProduct = (product) => {
   const existing = orderDraft.items.find((item) => item.product_id === product.id);
   if (existing) {
@@ -535,64 +405,36 @@ const addProduct = (product) => {
   productResults.value = [];
 };
 
-const removeItem = (index) => {
-  orderDraft.items.splice(index, 1);
-};
+const removeItem = (index) => { orderDraft.items.splice(index, 1); };
 
 const setCarrier = (carrier) => {
   orderDraft.delivery.carrier = carrier;
   orderDraft.delivery.delivery_type = carrier === 'self_pickup' ? 'self_pickup' : 'warehouse';
-  orderDraft.delivery.city_ref = '';
-  orderDraft.delivery.city_name = '';
-  orderDraft.delivery.warehouse_ref = '';
-  orderDraft.delivery.warehouse_name = '';
-  cityQuery.value = '';
-  warehouseQuery.value = '';
-  cityOptions.value = [];
-  warehouseOptions.value = [];
+  orderDraft.delivery.city_ref = ''; cityQuery.value = '';
+  orderDraft.delivery.warehouse_ref = ''; warehouseQuery.value = '';
 };
 
 const selectCity = (city) => {
-  orderDraft.delivery.city_ref = city.Ref || '';
-  orderDraft.delivery.city_name = city.Description || '';
+  orderDraft.delivery.city_ref = city.Ref;
+  orderDraft.delivery.city_name = city.Description;
   skipCityFetch.value = true;
-  cityQuery.value = city.Description || '';
+  cityQuery.value = city.Description;
   cityOptions.value = [];
-  orderDraft.delivery.warehouse_ref = '';
-  orderDraft.delivery.warehouse_name = '';
-  warehouseQuery.value = '';
-  warehouseOptions.value = [];
 };
 
-const selectWarehouse = (warehouse) => {
-  orderDraft.delivery.warehouse_ref = warehouse.Ref || '';
-  orderDraft.delivery.warehouse_name = warehouse.Description || '';
+const selectWarehouse = (wh) => {
+  orderDraft.delivery.warehouse_ref = wh.Ref;
+  orderDraft.delivery.warehouse_name = wh.Description;
   skipWarehouseFetch.value = true;
-  warehouseQuery.value = warehouse.Description || '';
+  warehouseQuery.value = wh.Description;
   warehouseOptions.value = [];
 };
 
 function resetOrderDraft() {
   orderDraft.items = [];
-  orderDraft.delivery = {
-    carrier: 'nova_poshta',
-    delivery_type: 'warehouse',
-    city_ref: '',
-    city_name: '',
-    warehouse_ref: '',
-    warehouse_name: '',
-    address_note: '',
-    recipient_name: '',
-    recipient_phone: ''
-  };
+  orderDraft.delivery = { carrier: 'nova_poshta', delivery_type: 'warehouse', city_ref: '', city_name: '', warehouse_ref: '', warehouse_name: '', address_note: '' };
   orderDraft.payment = { method: 'cod', status: 'unpaid' };
   orderDraft.comment = '';
-  productSearch.value = '';
-  productResults.value = [];
-  cityQuery.value = '';
-  warehouseQuery.value = '';
-  cityOptions.value = [];
-  warehouseOptions.value = [];
 }
 
 const saveData = async () => {
@@ -600,393 +442,183 @@ const saveData = async () => {
   isLoading.value = true;
   try {
     const response = await axios.put(`/api/customers/${customerId.value}`, form);
-    // Оновлюємо локальні дані даними з сервера, щоб все було синхронізовано
     const updatedCustomer = response?.data?.data;
-    if (props.customer && updatedCustomer) {
-      Object.assign(props.customer, updatedCustomer);
-    } else if (props.customer) {
-      // Фолбек, якщо сервер не повернув об'єкт
-      Object.assign(props.customer, form);
-    }
-
+    if (props.customer && updatedCustomer) Object.assign(props.customer, updatedCustomer);
+    else if (props.customer) Object.assign(props.customer, form);
     showNameInput.value = false;
     showToast('Дані покупця успішно збережено!');
-  } catch (e) { 
-    console.error(e); 
-    showToast('Помилка сервера. Дані не збережено.', 'error');
-  } finally { 
-    isLoading.value = false; 
-  }
+  } catch (e) { showToast('Помилка сервера.', 'error'); } 
+  finally { isLoading.value = false; }
 };
 
 const saveOrder = async () => {
-  if (!canSaveOrder.value) {
-    showToast('Додайте хоча б один товар.', 'error');
-    return;
-  }
+  if (!canSaveOrder.value) { showToast('Додайте хоча б один товар.', 'error'); return; }
   isSavingOrder.value = true;
   try {
     const payload = {
-      customer: {
-        first_name: form.first_name || null,
-        last_name: form.last_name || null,
-        phone: form.phone || null,
-        email: form.email || null
-      },
-      order: {
-        currency: 'UAH',
-        source: 'chat',
-        status: 'new',
-        payment_status: orderDraft.payment.status,
-        comment_internal: orderDraft.comment || null
-      },
-      items: orderDraft.items.map((item) => ({
-        product_id: item.product_id || null,
-        title: item.title || null,
-        sku: item.sku || null,
-        qty: Number(item.qty) || 1,
-        price: Number(item.price) || 0
-      })),
-      payment: {
-        method: orderDraft.payment.method === 'iban' ? 'card' : orderDraft.payment.method,
-        prepay_amount: 0,
-        currency: 'UAH'
-      },
-      delivery: {
-        carrier: orderDraft.delivery.carrier,
-        delivery_type: orderDraft.delivery.delivery_type,
-        payer: 'recipient',
-        city_ref: orderDraft.delivery.city_ref || null,
-        city_name: orderDraft.delivery.city_name || null,
-        warehouse_ref: orderDraft.delivery.warehouse_ref || null,
-        warehouse_name: orderDraft.delivery.warehouse_name || null,
-        address_note: orderDraft.delivery.address_note || null,
-        recipient_name: orderDraft.delivery.recipient_name || null,
-        recipient_phone: orderDraft.delivery.recipient_phone || null
-      },
+      customer: { ...form },
+      order: { currency: 'UAH', source: 'chat', status: 'new', payment_status: orderDraft.payment.status, comment_internal: orderDraft.comment },
+      items: orderDraft.items.map(item => ({ product_id: item.product_id, qty: item.qty, price: item.price })),
+      payment: { method: orderDraft.payment.method, prepay_amount: 0, currency: 'UAH' },
+      delivery: { ...orderDraft.delivery },
       tag_ids: []
     };
-
     await createOrder(payload);
     showToast('Замовлення створено успішно!');
     resetOrderDraft();
     viewMode.value = 'profile';
-  } catch (e) {
-    console.error(e);
-    showToast('Помилка збереження замовлення.', 'error');
-  } finally {
-    isSavingOrder.value = false;
-  }
+  } catch (e) { showToast('Помилка збереження замовлення.', 'error'); } 
+  finally { isSavingOrder.value = false; }
 };
 </script>
 
 <style scoped>
-.right-sidebar { width: 100%; height: 100%; background: #ffffff; border-left: 1px solid #edf2f7; display: flex; flex-direction: column; position: relative; }
-.profile-content { padding: 10px; height: 100%; display: flex; flex-direction: column; position: relative; overflow: hidden; }
-.profile-view { display: flex; flex-direction: column; gap: 8px; }
+/* GLOBAL & LAYOUT */
+.right-sidebar { width: 100%; height: 100%; background: #fff; border-left: 1px solid #edf2f7; display: flex; flex-direction: column; position: relative; overflow: hidden; font-family: 'Inter', sans-serif; }
+.profile-container { height: 100%; position: relative; }
+.profile-view { padding: 16px; height: 100%; display: flex; flex-direction: column; }
 
-/* TOAST STYLES */
-.toast-notification {
-  position: absolute; top: 10px; left: 10%; right: 10%; z-index: 100;
-  padding: 10px 15px; border-radius: 10px; display: flex; align-items: center; gap: 10px;
-  font-size: 13px; font-weight: 600; color: white; box-shadow: 0 5px 15px rgba(0,0,0,0.15);
-}
-.toast-notification.success { background: #10b981; }
-.toast-notification.error { background: #ef4444; }
-.toast-enter-active, .toast-leave-active { transition: all 0.4s ease; }
-.toast-enter-from, .toast-leave-to { opacity: 0; transform: translateY(-20px); }
-
-/* HEADER */
+/* HEADER PROFILE */
 .header-section { display: flex; align-items: flex-start; gap: 12px; }
-.avatar-wrap { position: relative; width: 52px; height: 52px; flex-shrink: 0; }
-.avatar-img, .avatar-placeholder { width: 100%; height: 100%; border-radius: 12px; object-fit: cover; }
-.avatar-placeholder { background: #edf2f7; color: #a0aec0; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 20px; }
-
-.platform-icon-indicator {
-  position: absolute; bottom: -4px; right: -4px; width: 22px; height: 22px;
-  border-radius: 50%; display: flex; align-items: center; justify-content: center;
-  border: 2px solid #fff; transition: all 0.4s ease; color: white;
-}
+.avatar-wrap { position: relative; width: 56px; height: 56px; flex-shrink: 0; }
+.avatar-img, .avatar-placeholder { width: 100%; height: 100%; border-radius: 14px; object-fit: cover; }
+.avatar-placeholder { background: #f1f5f9; color: #94a3b8; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 22px; }
+.platform-icon-indicator { position: absolute; bottom: -4px; right: -4px; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid #fff; color: white; }
 .ig-bg { background: radial-gradient(circle at 30% 107%, #fdf497 0%, #fd5949 45%, #d6249f 60%, #285AEB 90%); }
 .fb-bg { background: #0084FF; }
 .glow-red { box-shadow: 0 0 10px #ef4444; border-color: #ef4444; }
 .glow-green { box-shadow: 0 0 10px #10b981; border-color: #10b981; }
-.platform-icon-indicator i { font-size: 11px; }
 
 .info { flex: 1; min-width: 0; padding-top: 2px; }
-.name-display-wrapper { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
-.name-text { font-size: 15px; font-weight: 700; color: #1a202c; }
+.name-text { font-size: 16px; font-weight: 700; color: #1e293b; }
 .text-error { color: #ef4444; }
+.btn-edit-purple { background: #f5f3ff; color: #8b5cf6; border: none; width: 28px; height: 28px; border-radius: 8px; margin-left: 8px; cursor: pointer; }
+.inputs-stack { display: flex; flex-direction: column; gap: 4px; }
+.modern-input { border: none; border-bottom: 2px solid #f1f5f9; font-size: 14px; font-weight: 600; padding: 4px 0; outline: none; }
+.modern-input:focus { border-color: #8b5cf6; }
+.id-badge { font-size: 11px; color: #94a3b8; background: #f8fafc; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 4px; }
 
-.btn-status-indicator {
-  background: none; border: none; cursor: pointer; transition: all 0.4s ease;
-  font-size: 24px; padding: 0; margin-left: auto; display: flex; align-items: center;
-}
-.status-attention { color: #ef4444; filter: drop-shadow(0 0 5px rgba(239, 68, 68, 0.4)); }
-.status-ready { color: #10b981; filter: drop-shadow(0 0 5px rgba(16, 185, 129, 0.4)); }
+.status-indicator-box { margin-left: auto; font-size: 24px; }
+.ready { color: #10b981; }
+.pending { color: #fca5a5; }
 
-.btn-edit-purple {
-  background: #a78bfa; color: white; border: none;
-  width: 30px; height: 30px; border-radius: 8px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 16px; cursor: pointer; transition: all 0.3s ease; margin-left: 10px;
-}
-.btn-edit-purple:hover { background: #8b5cf6; transform: scale(1.1); }
+/* FIELDS */
+.divider { border: 0; border-top: 1px solid #f1f5f9; margin: 16px 0; }
+.fields-section { display: flex; flex-direction: column; gap: 14px; }
+.field-row { display: flex; gap: 12px; }
+.icon-col { width: 32px; color: #cbd5e0; font-size: 18px; padding-top: 18px; text-align: center; }
+.input-col label { font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; display: block; margin-bottom: 4px; }
+.input-group { display: flex; align-items: center; border-bottom: 2px solid #edf2f7; padding: 4px 0; }
+.simple-input { flex: 1; border: none; font-size: 14px; font-weight: 600; color: #334155; outline: none; background: transparent; }
+.btn-clear { background: none; border: none; color: #94a3b8; cursor: pointer; }
+.add-btn { color: #8b5cf6; font-size: 13px; font-weight: 600; cursor: pointer; padding: 6px 0; }
 
-.name-edit-flow { display: flex; align-items: center; gap: 8px; }
-.inputs-stack { display: flex; flex-direction: column; gap: 4px; flex: 1; }
-.modern-input { border: none; border-bottom: 1.5px solid #e2e8f0; font-size: 13px; font-weight: 600; outline: none; transition: 0.3s; padding: 2px 0; }
-.modern-input:focus { border-color: #6366f1; }
-.btn-confirm-tick { background: #6366f1; color: white; border: none; width: 26px; height: 26px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.action-row { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.btn-save-modern { background: #A78BFB; color: white; border: none; border-radius: 10px; height: 40px; font-size: 14px; font-weight: 600; width: 100%; cursor: pointer; transition: 0.2s; }
+.btn-save-modern:hover { background: #9061f9; }
 
-.id-badge { font-size: 11px; color: #a0aec0; margin-top: 4px; display: inline-block; background: #f7fafc; padding: 2px 6px; border-radius: 4px; }
-.divider { border: 0; border-top: 1px solid #f3f4f6; margin: 16px 0; }
-
-.fields-section { display: flex; flex-direction: column; gap: 12px; }
-.field-row { display: flex; align-items: flex-start; }
-.icon-col { width: 32px; color: #cbd5e0; font-size: 18px; padding-top: 18px; }
-.input-col label { font-size: 10px; font-weight: 700; color: #a0aec0; text-transform: uppercase; margin-bottom: 2px; display: block; }
-.input-group { display: flex; align-items: center; border-bottom: 2px solid #edf2f7; padding: 2px 0; }
-.simple-input { flex: 1; border: none; background: transparent; font-size: 14px; color: #2d3748; outline: none; font-weight: 600; }
-.error-text { color: #ef4444; font-size: 10px; margin-top: 2px; }
-.add-btn { color: #6366f1; font-size: 13px; font-weight: 600; cursor: pointer; padding: 4px 0; }
-.action-row { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
 .btn-create-order {
-  background: #1f2937;
-  color: #ffffff;
-  border: none;
-  border-radius: 10px;
-  height: 42px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  font-size: 14px;
-  font-weight: 700;
-  width: 100%;
-  cursor: pointer;
-  transition: all 0.2s ease;
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; height: 56px;
+  display: flex; align-items: center; gap: 12px; padding: 0 16px; width: 100%; cursor: pointer; transition: 0.2s;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.03);
 }
-.btn-create-order:hover { background: #111827; }
+.btn-create-order:hover { border-color: #A78BFB; background: #fcfaff; transform: translateY(-1px); }
+.btn-create-order .icon-bg { width: 32px; height: 32px; background: #f5f3ff; color: #8b5cf6; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+.btn-create-order span { flex: 1; text-align: left; font-size: 14px; font-weight: 700; color: #1e293b; }
+.btn-create-order .arrow-icon { color: #cbd5e0; font-size: 14px; }
 
+/* === OFFCANVAS ORDER === */
 .order-offcanvas {
-  position: absolute;
-  inset: 0;
-  background: #ffffff;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  z-index: 5;
-  box-shadow: -6px 0 18px rgba(15, 23, 42, 0.08);
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  background: #f8fafc; z-index: 20; display: flex; flex-direction: column;
 }
-.order-header { display: flex; align-items: center; gap: 8px; }
-.btn-close-canvas {
-  margin-left: auto;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-  color: #94a3b8;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-.btn-back {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-  color: #1f2937;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-.order-title { font-size: 15px; font-weight: 700; color: #111827; }
-.order-scroll { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding-right: 2px; }
-.order-section { background: #ffffff; border: 1px solid #edf2f7; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
-.section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #94a3b8; font-weight: 700; }
-.search-box { position: relative; display: flex; align-items: center; gap: 8px; }
-.search-box i { color: #94a3b8; }
-.search-box input {
-  flex: 1;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 8px 10px;
-  font-size: 13px;
-  outline: none;
-}
-.search-results { display: flex; flex-direction: column; gap: 6px; max-height: 180px; overflow-y: auto; }
-.result-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 8px 10px;
-  background: #f8fafc;
-  cursor: pointer;
-}
-.result-title { font-size: 13px; font-weight: 600; color: #111827; }
-.result-meta { font-size: 11px; color: #94a3b8; }
-.result-price { font-size: 12px; font-weight: 700; color: #0f172a; white-space: nowrap; }
-.empty-products { display: flex; align-items: center; gap: 8px; color: #94a3b8; font-size: 12px; }
-.items-list { display: flex; flex-direction: column; gap: 10px; }
-.item-row { display: flex; flex-direction: column; gap: 8px; border: 1px dashed #e2e8f0; border-radius: 10px; padding: 8px; }
-.item-info { display: flex; flex-direction: column; gap: 2px; }
-.item-title { font-size: 13px; font-weight: 600; color: #111827; }
-.item-sku { font-size: 11px; color: #94a3b8; }
-.item-controls { display: grid; grid-template-columns: 56px 80px 1fr 32px; gap: 8px; align-items: center; }
-.qty-input,
-.price-input {
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 6px 8px;
-  font-size: 12px;
-  text-align: center;
-}
-.price-input { text-align: right; }
-.item-sum { font-size: 12px; font-weight: 700; color: #1f2937; text-align: right; }
-.btn-remove {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  border: 1px solid #fee2e2;
-  background: #fef2f2;
-  color: #dc2626;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.total-row { display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-weight: 700; color: #0f172a; }
+/* Slide Animation */
+.slide-enter-active, .slide-leave-active { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+.slide-enter-from, .slide-leave-to { transform: translateX(100%); }
 
-.delivery-toggle { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-.toggle-btn {
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 8px 6px;
-  font-size: 12px;
-  font-weight: 600;
-  background: #ffffff;
-  color: #475569;
-  cursor: pointer;
+.order-header {
+  background: #fff; padding: 12px 16px; border-bottom: 1px solid #e2e8f0;
+  display: flex; align-items: center; gap: 12px; height: 60px; flex-shrink: 0;
 }
-.toggle-btn.active { background: #eff6ff; border-color: #3b82f6; color: #2563eb; }
-.delivery-fields { display: flex; flex-direction: column; gap: 10px; }
-.field { display: flex; flex-direction: column; gap: 6px; }
-.field label { font-size: 11px; font-weight: 600; color: #64748b; }
-.text-input,
-.select-input,
-.textarea-input {
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 8px 10px;
-  font-size: 13px;
-  outline: none;
-  background: #ffffff;
-}
-.textarea-input { resize: vertical; }
-.dropdown-field { position: relative; }
-.dropdown-list {
-  position: absolute;
-  top: 110%;
-  left: 0;
-  right: 0;
-  z-index: 50;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  max-height: 180px;
-  overflow-y: auto;
-  box-shadow: 0 10px 15px rgba(15, 23, 42, 0.08);
-}
-.dropdown-list button {
-  width: 100%;
-  text-align: left;
-  padding: 8px 10px;
-  border: none;
-  background: none;
-  font-size: 12px;
-  cursor: pointer;
-}
-.dropdown-list button:hover { background: #f8fafc; }
+.btn-back { background: transparent; border: none; font-size: 20px; color: #64748b; cursor: pointer; padding: 4px; }
+.btn-back:hover { color: #1e293b; }
+.order-title { font-size: 16px; font-weight: 800; color: #0f172a; flex: 1; }
+.step-badge { background: #A78BFB; color: white; padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 700; }
 
-.payment-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.order-footer { padding-top: 4px; }
-.btn-save-order {
-  background: #2563eb;
-  color: #ffffff;
-  border: none;
-  border-radius: 10px;
-  height: 44px;
-  width: 100%;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-.btn-save-order:disabled { background: #93c5fd; cursor: not-allowed; }
-.order-canvas-enter-active,
-.order-canvas-leave-active {
-  transition: transform 0.25s ease, opacity 0.25s ease;
-}
-.order-canvas-enter-from,
-.order-canvas-leave-to {
-  transform: translateX(12%);
-  opacity: 0;
-}
-.mini-spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgba(148, 163, 184, 0.4);
-  border-top-color: #64748b;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
+.order-scroll-content { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
 
+/* CARD STYLE */
+.order-card { background: #fff; border-radius: 12px; border: 1px solid #e2e8f0; padding: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
+.card-header { font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
 
-
-/* --- НОВІ СТИЛІ ДЛЯ КНОПКИ ЗБЕРЕЖЕННЯ --- */
-.btn-save-modern {
-  background: #A78BFB; /* М'який фіолетовий колір */
-  color: white;
-  border: none;
-  border-radius: 8px;
-  height: 40px; /* Фіксована менша висота */
-  display: flex; /* Для центрування вмісту */
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  width: 100%;
-  cursor: pointer;
-  transition: all 0.3s ease;
+/* SEARCH */
+.search-wrapper { position: relative; margin-bottom: 10px; }
+.search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #94a3b8; }
+.search-input {
+  width: 100%; border: 1px solid #e2e8f0; background: #f8fafc; border-radius: 8px;
+  padding: 10px 10px 10px 34px; font-size: 13px; outline: none; transition: 0.2s;
 }
-
-.btn-save-modern:hover:not(:disabled) {
-  background: #9061f9; /* Трохи темніший при наведенні */
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(167, 139, 251, 0.3);
+.search-input:focus { border-color: #A78BFB; background: #fff; }
+.search-dropdown {
+  position: absolute; top: 105%; left: 0; width: 100%; background: #fff; border: 1px solid #e2e8f0;
+  border-radius: 8px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); z-index: 50; max-height: 200px; overflow-y: auto;
 }
+.search-item { padding: 8px 12px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; border-bottom: 1px solid #f1f5f9; }
+.search-item:hover { background: #f8fafc; }
+.s-title { font-size: 13px; font-weight: 600; color: #1e293b; }
+.s-sku { font-size: 11px; color: #94a3b8; }
+.s-price { font-weight: 700; color: #A78BFB; font-size: 13px; }
 
-.btn-save-modern:disabled {
-  background: #e2e8f0;
-  color: #94a3b8;
-  cursor: not-allowed;
-  box-shadow: none;
+/* SELECTED ITEMS */
+.item-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; margin-bottom: 8px; }
+.item-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+.item-name { font-size: 13px; font-weight: 600; color: #334155; line-height: 1.3; }
+.btn-remove-item { background: none; border: none; color: #ef4444; cursor: pointer; opacity: 0.6; }
+.btn-remove-item:hover { opacity: 1; }
+.item-bottom { display: flex; align-items: center; justify-content: space-between; }
+.qty-control { display: flex; align-items: center; gap: 4px; background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 2px; }
+.qty-control button { width: 24px; height: 24px; background: #fff; border: none; font-weight: 700; cursor: pointer; border-radius: 4px; }
+.qty-control button:hover { background: #f1f5f9; }
+.qty-control span { font-size: 13px; font-weight: 600; width: 20px; text-align: center; }
+.price-edit { display: flex; align-items: center; gap: 2px; }
+.price-input-mini { width: 60px; border: none; background: transparent; text-align: right; font-weight: 600; font-size: 13px; border-bottom: 1px dashed #cbd5e0; }
+.item-total-display { font-size: 13px; font-weight: 700; color: #1e293b; }
+
+.empty-placeholder { text-align: center; padding: 20px; color: #94a3b8; font-size: 13px; display: flex; flex-direction: column; gap: 6px; align-items: center; }
+.total-summary { display: flex; justify-content: space-between; align-items: center; font-size: 14px; font-weight: 700; color: #0f172a; border-top: 1px dashed #e2e8f0; padding-top: 10px; margin-top: 5px; }
+.sum-value { color: #A78BFB; font-size: 16px; }
+
+/* DELIVERY TABS */
+.segmented-control { display: flex; background: #f1f5f9; padding: 3px; border-radius: 8px; margin-bottom: 12px; }
+.segmented-control button { flex: 1; border: none; background: transparent; padding: 6px; font-size: 12px; font-weight: 600; color: #64748b; border-radius: 6px; cursor: pointer; transition: 0.2s; }
+.segmented-control button.active { background: #fff; color: #A78BFB; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.form-group { margin-bottom: 10px; }
+.form-group label { font-size: 11px; font-weight: 700; color: #94a3b8; display: block; margin-bottom: 4px; }
+.form-input, .form-select, .form-textarea { width: 100%; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px; font-size: 13px; outline: none; background: #fff; }
+.form-input:focus, .form-select:focus, .form-textarea:focus { border-color: #A78BFB; }
+.autocomplete-wrap { position: relative; }
+.dropdown-options { position: absolute; top: 100%; width: 100%; background: #fff; border: 1px solid #e2e8f0; z-index: 10; max-height: 150px; overflow-y: auto; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border-radius: 6px; }
+.dropdown-options div { padding: 8px; font-size: 12px; cursor: pointer; }
+.dropdown-options div:hover { background: #f8fafc; }
+
+/* FOOTER */
+.order-footer {
+  position: sticky; bottom: 0; background: #fff; border-top: 1px solid #e2e8f0;
+  padding: 16px; box-shadow: 0 -4px 10px rgba(0,0,0,0.03);
 }
-/* --------------------------------------- */
+.btn-submit-order {
+  width: 100%; height: 48px; background: #1e293b; color: white; border: none; border-radius: 12px;
+  font-size: 15px; font-weight: 700; display: flex; justify-content: space-between; align-items: center; padding: 0 20px;
+  cursor: pointer; transition: 0.2s;
+}
+.btn-submit-order:hover { background: #0f172a; transform: translateY(-1px); }
+.btn-submit-order:disabled { background: #cbd5e1; cursor: not-allowed; }
+.price-tag { background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 6px; font-size: 13px; }
 
-.spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: #fff; animation: spin 0.8s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
+/* TOAST */
+.toast-notification { position: absolute; top: 20px; left: 20px; right: 20px; z-index: 1000; background: rgba(16, 185, 129, 0.95); padding: 12px; border-radius: 10px; color: white; display: flex; justify-content: center; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
+.toast-content { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; }
+.toast-notification.error { background: rgba(239, 68, 68, 0.95); }
+.mini-spinner { width: 14px; height: 14px; border: 2px solid #cbd5e0; border-top-color: #8b5cf6; border-radius: 50%; animation: spin 0.8s linear infinite; position: absolute; right: 10px; top: 12px; }
 .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #cbd5e0; gap: 8px; }
 </style>
