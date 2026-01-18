@@ -18,7 +18,10 @@
         v-else
         :conversations="filteredConversations"
         :active-chat-id="activeChatId"
+        :is-loading-more="isLoadingMore"
+        :has-more="currentPage < lastPage"
         @select="handleSelectChat"
+        @load-more="handleLoadMore"
       />
     </template>
 
@@ -78,9 +81,13 @@ const {
   activeChatId,
   messages,
   isLoading, // Ця змінна відповідає за стан завантаження
+  isLoadingMore,
   isSending,
   isSyncing,
+  currentPage,
+  lastPage,
   fetchConversations,
+  loadMoreConversations,
   selectChat,
   sendMessage,
   forceSync,
@@ -108,6 +115,10 @@ const handleSelectChat = (chat) => {
   }
 };
 
+const handleLoadMore = () => {
+  loadMoreConversations();
+};
+
 const handleSendMessage = (payload) => {
   sendMessage({
     ...payload,
@@ -129,7 +140,7 @@ const closeMobileList = () => {
 
 // Lifecycle
 onMounted(() => {
-  fetchConversations();
+  fetchConversations(1);
 });
 
 onUnmounted(() => {

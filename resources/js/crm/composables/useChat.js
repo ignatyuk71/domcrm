@@ -13,9 +13,12 @@ export function useChat() {
   const activeChatId = ref(null);
   const messages = ref([]);
   const isLoading = ref(false);
+  const isLoadingMore = ref(false);
   const isSending = ref(false);
   const isSyncing = ref(false);
   const error = ref('');
+  const currentPage = ref(1);
+  const lastPage = ref(1);
   
   // Змінили назву змінної, бо це тепер таймер, а не інтервал
   let pollingTimer = null;
@@ -24,18 +27,38 @@ export function useChat() {
     conversations.value.find((chat) => chat.customer_id === activeChatId.value) || null
   );
 
-  async function fetchConversations() {
-    isLoading.value = true;
+  async function fetchConversations(page = 1) {
+    if (page === 1) {
+      isLoading.value = true;
+    } else {
+      if (isLoadingMore.value) return;
+      isLoadingMore.value = true;
+    }
     error.value = '';
     try {
-      const { data } = await getConversations();
-      conversations.value = data?.data || data || [];
+      const { data } = await getConversations(page);
+      const items = data?.data || data || [];
+
+      if (page === 1) {
+        conversations.value = items;
+      } else {
+        conversations.value = [...conversations.value, ...items];
+      }
+
+      currentPage.value = data?.current_page || page;
+      lastPage.value = data?.last_page || page;
     } catch (e) {
       console.error('Не вдалося завантажити список чатів', e);
       error.value = 'Не вдалося завантажити список чатів';
     } finally {
       isLoading.value = false;
+      isLoadingMore.value = false;
     }
+  }
+
+  function loadMoreConversations() {
+    if (currentPage.value >= lastPage.value) return;
+    fetchConversations(currentPage.value + 1);
   }
 
   async function selectChat(customerId) {
@@ -242,10 +265,14 @@ export function useChat() {
     activeChat,
     messages,
     isLoading,
+    isLoadingMore,
     isSending,
     isSyncing,
     error,
+    currentPage,
+    lastPage,
     fetchConversations,
+    loadMoreConversations,
     selectChat,
     sendMessage,
     forceSync,

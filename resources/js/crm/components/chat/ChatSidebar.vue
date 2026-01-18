@@ -1,6 +1,6 @@
 <template>
   <div class="chat-sidebar-inner">
-    <div class="chat-sidebar-list custom-scrollbar">
+    <div class="chat-sidebar-list custom-scrollbar" @scroll="handleScroll">
       <ChatSidebarItem
         v-for="chat in conversations"
         :key="chat.customer_id"
@@ -15,6 +15,10 @@
         </div>
         <p>Чатів не знайдено</p>
       </div>
+
+      <div v-if="isLoadingMore" class="chat-sidebar-loading">
+        <div class="spinner"></div>
+      </div>
     </div>
   </div>
 </template>
@@ -22,12 +26,22 @@
 <script setup>
 import ChatSidebarItem from './ChatSidebarItem.vue';
 
-defineProps({
+const props = defineProps({
   conversations: { type: Array, default: () => [] },
   activeChatId: { type: [Number, String, null], default: null },
+  isLoadingMore: { type: Boolean, default: false },
+  hasMore: { type: Boolean, default: false },
 });
 
-defineEmits(['select']);
+const emit = defineEmits(['select', 'load-more']);
+
+function handleScroll(event) {
+  if (!props.hasMore || props.isLoadingMore) return;
+  const { scrollTop, clientHeight, scrollHeight } = event.target;
+  if (scrollTop + clientHeight >= scrollHeight - 50) {
+    emit('load-more');
+  }
+}
 </script>
 
 <style scoped>
@@ -91,6 +105,26 @@ defineEmits(['select']);
 .chat-sidebar-empty p {
   font-weight: 500;
   font-size: 0.9rem;
+}
+
+.chat-sidebar-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 0;
+}
+
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid #e2e8f0;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 </style>
