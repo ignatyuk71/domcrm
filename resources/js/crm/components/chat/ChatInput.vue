@@ -33,7 +33,16 @@
 
       <div class="chat-actions">
         <div class="chat-tools">
-          <button type="button" class="tool-btn" title="Шаблони"><i class="bi bi-file-text"></i></button>
+          <ChatTemplates v-if="showTemplates" @select="handleTemplateSelect" />
+          <button
+            type="button"
+            class="tool-btn"
+            :class="{ active: showTemplates }"
+            title="Шаблони"
+            @click="showTemplates = !showTemplates"
+          >
+            <i class="bi bi-file-text"></i>
+          </button>
           <button type="button" class="tool-btn" title="Швидкі відповіді"><i class="bi bi-lightning"></i></button>
           <button type="button" class="tool-btn" title="Товари"><i class="bi bi-box-seam"></i></button>
           <button type="button" class="tool-btn" title="Емодзі"><i class="bi bi-emoji-smile"></i></button>
@@ -41,7 +50,7 @@
           <button
             type="button"
             class="tool-btn"
-            :class="{ active: selectedFile }"
+            :class="{ active: selectedFiles.length }"
             @click="triggerFileInput"
             title="Прикріпити фото"
           >
@@ -74,6 +83,7 @@
 
 <script setup>
 import { computed, ref } from 'vue';
+import ChatTemplates from './ChatTemplates.vue';
 
 const props = defineProps({
   disabled: { type: Boolean, default: false },
@@ -86,6 +96,7 @@ const selectedFiles = ref([]);
 const fileError = ref('');
 const fileInputRef = ref(null);
 const textareaRef = ref(null);
+const showTemplates = ref(false);
 
 const maxFileSize = 5 * 1024 * 1024;
 const canSend = computed(() => text.value.trim().length > 0 || selectedFiles.value.length > 0);
@@ -124,6 +135,15 @@ function removeFile(index) {
     URL.revokeObjectURL(item.previewUrl);
   }
   selectedFiles.value.splice(index, 1);
+}
+
+function handleTemplateSelect(content) {
+  text.value = (text.value ? text.value + ' ' : '') + content;
+  showTemplates.value = false;
+  if (textareaRef.value) {
+    textareaRef.value.focus();
+    setTimeout(() => textareaRef.value.dispatchEvent(new Event('input')), 0);
+  }
 }
 
 function autoResize() {
@@ -235,6 +255,7 @@ function handleSend() {
 }
 
 .chat-tools {
+  position: relative;
   display: flex;
   gap: 16px;
 }

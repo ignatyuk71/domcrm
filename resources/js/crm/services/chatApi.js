@@ -32,3 +32,7 @@ export function fetchNewMessages(threadId, sinceId) {
     })
     .then((res) => res.data);
 }
+
+export function getTemplates() {
+  return axios.get('/api/chat/templates');
+}

@@ -20,6 +20,20 @@ class MessageTemplateController extends Controller
     }
 
     /**
+     * API для чату: отримати список активних шаблонів.
+     */
+    public function apiList()
+    {
+        $templates = MessageTemplate::query()
+            ->where('is_active', true)
+            ->orderBy('sort_order', 'desc')
+            ->orderBy('title', 'asc')
+            ->get(['id', 'title', 'content']);
+
+        return response()->json(['data' => $templates]);
+    }
+
+    /**
      * Форма створення.
      */
     public function create()
