@@ -8,7 +8,7 @@
     </transition>
 
     <div v-if="customerId" class="profile-content">
-      <div v-if="viewMode === 'profile'" class="profile-view">
+      <div class="profile-view">
         <div class="header-section">
         <div class="avatar-wrap">
           <img v-if="avatarUrl" :src="avatarUrl" class="avatar-img">
@@ -98,191 +98,194 @@
         </div>
       </div>
 
-      </div>
+      <transition name="order-canvas">
+        <div v-if="viewMode === 'create_order'" class="order-offcanvas">
+          <div class="order-header">
+            <button class="btn-back" type="button" @click="viewMode = 'profile'">
+              <i class="bi bi-arrow-left"></i>
+            </button>
+            <div class="order-title">Швидке замовлення</div>
+            <button class="btn-close-canvas" type="button" @click="viewMode = 'profile'">
+              <i class="bi bi-x-lg"></i>
+            </button>
+          </div>
 
-      <div v-else class="order-view">
-        <div class="order-header">
-          <button class="btn-back" type="button" @click="viewMode = 'profile'">
-            <i class="bi bi-arrow-left"></i>
-          </button>
-          <div class="order-title">Швидке замовлення</div>
-        </div>
-
-        <div class="order-scroll">
-          <section class="order-section">
-            <div class="section-title">Товари</div>
-            <div class="search-box">
-              <i class="bi bi-search"></i>
-              <input v-model="productSearch" type="text" placeholder="Пошук за назвою або артикулом">
-              <span v-if="productLoading" class="mini-spinner"></span>
-            </div>
-
-            <div v-if="productResults.length" class="search-results">
-              <button
-                v-for="product in productResults"
-                :key="product.id"
-                type="button"
-                class="result-item"
-                @click="addProduct(product)"
-              >
-                <div class="result-main">
-                  <div class="result-title">{{ product.title || 'Товар' }}</div>
-                  <div class="result-meta">{{ product.sku || 'NO-SKU' }}</div>
-                </div>
-                <div class="result-price">{{ formatMoney(getProductPrice(product)) }} грн</div>
-              </button>
-            </div>
-
-            <div v-if="!orderDraft.items.length" class="empty-products">
-              <i class="bi bi-basket"></i>
-              <span>Додайте товари до замовлення</span>
-            </div>
-            <div v-else class="items-list">
-              <div v-for="(item, index) in orderDraft.items" :key="item.key" class="item-row">
-                <div class="item-info">
-                  <div class="item-title">{{ item.title }}</div>
-                  <div class="item-sku">{{ item.sku || 'NO-SKU' }}</div>
-                </div>
-                <div class="item-controls">
-                  <input v-model.number="item.qty" type="number" min="1" class="qty-input">
-                  <input v-model.number="item.price" type="number" min="0" step="0.01" class="price-input">
-                  <div class="item-sum">{{ formatMoney(itemTotal(item)) }} грн</div>
-                  <button class="btn-remove" type="button" @click="removeItem(index)">
-                    <i class="bi bi-x-lg"></i>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div class="total-row">
-              <span>Загальна сума</span>
-              <strong>{{ formatMoney(itemsTotal) }} грн</strong>
-            </div>
-          </section>
-
-          <section class="order-section">
-            <div class="section-title">Доставка</div>
-            <div class="delivery-toggle">
-              <button
-                type="button"
-                class="toggle-btn"
-                :class="{ active: orderDraft.delivery.carrier === 'nova_poshta' }"
-                @click="setCarrier('nova_poshta')"
-              >
-                Нова Пошта
-              </button>
-              <button
-                type="button"
-                class="toggle-btn"
-                :class="{ active: orderDraft.delivery.carrier === 'ukrposhta' }"
-                @click="setCarrier('ukrposhta')"
-              >
-                Укрпошта
-              </button>
-              <button
-                type="button"
-                class="toggle-btn"
-                :class="{ active: orderDraft.delivery.carrier === 'self_pickup' }"
-                @click="setCarrier('self_pickup')"
-              >
-                Самовивіз
-              </button>
-            </div>
-
-            <div v-if="orderDraft.delivery.carrier !== 'self_pickup'" class="delivery-fields">
-              <div class="field">
-                <label>Місто</label>
-                <div class="dropdown-field">
-                  <input
-                    v-model="cityQuery"
-                    type="text"
-                    class="text-input"
-                    placeholder="Почніть вводити..."
-                  >
-                  <div v-if="cityOptions.length" class="dropdown-list">
-                    <button v-for="city in cityOptions" :key="city.Ref" type="button" @click="selectCity(city)">
-                      {{ city.Description }}
-                    </button>
-                  </div>
-                </div>
+          <div class="order-scroll">
+            <section class="order-section">
+              <div class="section-title">Товари</div>
+              <div class="search-box">
+                <i class="bi bi-search"></i>
+                <input v-model="productSearch" type="text" placeholder="Пошук за назвою або артикулом">
+                <span v-if="productLoading" class="mini-spinner"></span>
               </div>
 
-              <div class="field">
-                <label>Відділення</label>
-                <div class="dropdown-field">
-                  <input
-                    v-model="warehouseQuery"
-                    type="text"
-                    class="text-input"
-                    :disabled="!orderDraft.delivery.city_ref"
-                    placeholder="Оберіть місто"
-                  >
-                  <div v-if="warehouseOptions.length" class="dropdown-list">
-                    <button
-                      v-for="warehouse in warehouseOptions"
-                      :key="warehouse.Ref"
-                      type="button"
-                      @click="selectWarehouse(warehouse)"
-                    >
-                      {{ warehouse.Description }}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div v-else class="delivery-fields">
-              <div class="field">
-                <label>Коментар</label>
-                <input
-                  v-model="orderDraft.delivery.address_note"
-                  type="text"
-                  class="text-input"
-                  placeholder="Наприклад: забере сам"
+              <div v-if="productResults.length" class="search-results">
+                <button
+                  v-for="product in productResults"
+                  :key="product.id"
+                  type="button"
+                  class="result-item"
+                  @click="addProduct(product)"
                 >
+                  <div class="result-main">
+                    <div class="result-title">{{ product.title || 'Товар' }}</div>
+                    <div class="result-meta">{{ product.sku || 'NO-SKU' }}</div>
+                  </div>
+                  <div class="result-price">{{ formatMoney(getProductPrice(product)) }} грн</div>
+                </button>
               </div>
-            </div>
-          </section>
 
-          <section class="order-section">
-            <div class="section-title">Оплата</div>
-            <div class="payment-grid">
-              <div class="field">
-                <label>Метод оплати</label>
-                <select v-model="orderDraft.payment.method" class="select-input">
-                  <option value="cod">Накладений платіж</option>
-                  <option value="card">На карту</option>
-                  <option value="iban">IBAN</option>
-                </select>
+              <div v-if="!orderDraft.items.length" class="empty-products">
+                <i class="bi bi-basket"></i>
+                <span>Додайте товари до замовлення</span>
               </div>
-              <div class="field">
-                <label>Статус оплати</label>
-                <select v-model="orderDraft.payment.status" class="select-input">
-                  <option value="unpaid">Не оплачено</option>
-                  <option value="paid">Оплачено</option>
-                </select>
+              <div v-else class="items-list">
+                <div v-for="(item, index) in orderDraft.items" :key="item.key" class="item-row">
+                  <div class="item-info">
+                    <div class="item-title">{{ item.title }}</div>
+                    <div class="item-sku">{{ item.sku || 'NO-SKU' }}</div>
+                  </div>
+                  <div class="item-controls">
+                    <input v-model.number="item.qty" type="number" min="1" class="qty-input">
+                    <input v-model.number="item.price" type="number" min="0" step="0.01" class="price-input">
+                    <div class="item-sum">{{ formatMoney(itemTotal(item)) }} грн</div>
+                    <button class="btn-remove" type="button" @click="removeItem(index)">
+                      <i class="bi bi-x-lg"></i>
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
-          </section>
 
-          <section class="order-section">
-            <div class="section-title">Коментар</div>
-            <textarea
-              v-model="orderDraft.comment"
-              rows="3"
-              class="textarea-input"
-              placeholder="Коментар менеджера"
-            ></textarea>
-          </section>
+              <div class="total-row">
+                <span>Загальна сума</span>
+                <strong>{{ formatMoney(itemsTotal) }} грн</strong>
+              </div>
+            </section>
+
+            <section class="order-section">
+              <div class="section-title">Доставка</div>
+              <div class="delivery-toggle">
+                <button
+                  type="button"
+                  class="toggle-btn"
+                  :class="{ active: orderDraft.delivery.carrier === 'nova_poshta' }"
+                  @click="setCarrier('nova_poshta')"
+                >
+                  Нова Пошта
+                </button>
+                <button
+                  type="button"
+                  class="toggle-btn"
+                  :class="{ active: orderDraft.delivery.carrier === 'ukrposhta' }"
+                  @click="setCarrier('ukrposhta')"
+                >
+                  Укрпошта
+                </button>
+                <button
+                  type="button"
+                  class="toggle-btn"
+                  :class="{ active: orderDraft.delivery.carrier === 'self_pickup' }"
+                  @click="setCarrier('self_pickup')"
+                >
+                  Самовивіз
+                </button>
+              </div>
+
+              <div v-if="orderDraft.delivery.carrier !== 'self_pickup'" class="delivery-fields">
+                <div class="field">
+                  <label>Місто</label>
+                  <div class="dropdown-field">
+                    <input
+                      v-model="cityQuery"
+                      type="text"
+                      class="text-input"
+                      placeholder="Почніть вводити..."
+                    >
+                    <div v-if="cityOptions.length" class="dropdown-list">
+                      <button v-for="city in cityOptions" :key="city.Ref" type="button" @click="selectCity(city)">
+                        {{ city.Description }}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label>Відділення</label>
+                  <div class="dropdown-field">
+                    <input
+                      v-model="warehouseQuery"
+                      type="text"
+                      class="text-input"
+                      :disabled="!orderDraft.delivery.city_ref"
+                      placeholder="Оберіть місто"
+                    >
+                    <div v-if="warehouseOptions.length" class="dropdown-list">
+                      <button
+                        v-for="warehouse in warehouseOptions"
+                        :key="warehouse.Ref"
+                        type="button"
+                        @click="selectWarehouse(warehouse)"
+                      >
+                        {{ warehouse.Description }}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div v-else class="delivery-fields">
+                <div class="field">
+                  <label>Коментар</label>
+                  <input
+                    v-model="orderDraft.delivery.address_note"
+                    type="text"
+                    class="text-input"
+                    placeholder="Наприклад: забере сам"
+                  >
+                </div>
+              </div>
+            </section>
+
+            <section class="order-section">
+              <div class="section-title">Оплата</div>
+              <div class="payment-grid">
+                <div class="field">
+                  <label>Метод оплати</label>
+                  <select v-model="orderDraft.payment.method" class="select-input">
+                    <option value="cod">Накладений платіж</option>
+                    <option value="card">На карту</option>
+                    <option value="iban">IBAN</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Статус оплати</label>
+                  <select v-model="orderDraft.payment.status" class="select-input">
+                    <option value="unpaid">Не оплачено</option>
+                    <option value="paid">Оплачено</option>
+                  </select>
+                </div>
+              </div>
+            </section>
+
+            <section class="order-section">
+              <div class="section-title">Коментар</div>
+              <textarea
+                v-model="orderDraft.comment"
+                rows="3"
+                class="textarea-input"
+                placeholder="Коментар менеджера"
+              ></textarea>
+            </section>
+          </div>
+
+          <div class="order-footer">
+            <button class="btn-save-order" @click="saveOrder" :disabled="isSavingOrder || !canSaveOrder">
+              <span v-if="isSavingOrder" class="spinner"></span>
+              {{ isSavingOrder ? 'Збереження...' : 'Зберегти замовлення' }}
+            </button>
+          </div>
         </div>
-
-        <div class="order-footer">
-          <button class="btn-save-order" @click="saveOrder" :disabled="isSavingOrder || !canSaveOrder">
-            <span v-if="isSavingOrder" class="spinner"></span>
-            {{ isSavingOrder ? 'Збереження...' : 'Зберегти замовлення' }}
-          </button>
-        </div>
-      </div>
+      </transition>
 
     </div>
 
@@ -679,7 +682,7 @@ const saveOrder = async () => {
 
 <style scoped>
 .right-sidebar { width: 100%; height: 100%; background: #ffffff; border-left: 1px solid #edf2f7; display: flex; flex-direction: column; position: relative; }
-.profile-content { padding: 10px; height: 100%; display: flex; flex-direction: column; }
+.profile-content { padding: 10px; height: 100%; display: flex; flex-direction: column; position: relative; overflow: hidden; }
 .profile-view { display: flex; flex-direction: column; gap: 8px; }
 
 /* TOAST STYLES */
@@ -766,8 +769,30 @@ const saveOrder = async () => {
 }
 .btn-create-order:hover { background: #111827; }
 
-.order-view { display: flex; flex-direction: column; height: 100%; gap: 12px; }
+.order-offcanvas {
+  position: absolute;
+  inset: 0;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 5;
+  box-shadow: -6px 0 18px rgba(15, 23, 42, 0.08);
+}
 .order-header { display: flex; align-items: center; gap: 8px; }
+.btn-close-canvas {
+  margin-left: auto;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
 .btn-back {
   width: 34px;
   height: 34px;
@@ -909,6 +934,15 @@ const saveOrder = async () => {
   gap: 8px;
 }
 .btn-save-order:disabled { background: #93c5fd; cursor: not-allowed; }
+.order-canvas-enter-active,
+.order-canvas-leave-active {
+  transition: transform 0.25s ease, opacity 0.25s ease;
+}
+.order-canvas-enter-from,
+.order-canvas-leave-to {
+  transform: translateX(12%);
+  opacity: 0;
+}
 .mini-spinner {
   width: 14px;
   height: 14px;
