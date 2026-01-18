@@ -2,15 +2,17 @@
   <div class="chat-message" :class="{ mine: isMine }">
     <div class="chat-message-bubble">
       <div v-if="message.reply_to" class="reply-wrapper">
-        <div
-          v-if="message.reply_to.attachments && message.reply_to.attachments.length"
-          class="reply-image"
-        >
-          <img
-            :src="fixUrl(message.reply_to.attachments[0].url)"
-            alt="Reply attachment"
-            loading="lazy"
-          />
+        <div v-if="hasReplyAttachment" class="reply-media">
+          <div v-if="isReplyVideo" class="reply-video-placeholder">
+            <i class="bi bi-play-circle-fill"></i>
+          </div>
+          <div v-else class="reply-image">
+            <img
+              :src="fixUrl(message.reply_to.attachments[0].url)"
+              alt="Reply attachment"
+              loading="lazy"
+            />
+          </div>
         </div>
         <div class="reply-content">
           <span class="reply-author">
@@ -100,6 +102,17 @@ const normalizedAttachments = computed(() => {
   });
 });
 
+const hasReplyAttachment = computed(() => {
+  return props.message.reply_to?.attachments?.length > 0;
+});
+
+const isReplyVideo = computed(() => {
+  if (!hasReplyAttachment.value) return false;
+  const att = props.message.reply_to.attachments[0];
+  const url = att?.url || '';
+  return att?.type === 'video' || (typeof url === 'string' && url.match(/\.(mp4|mov|webm)($|\?)/i));
+});
+
 // Форматування часу
 const formattedTime = computed(() => {
   if (!props.message.created_at) return '';
@@ -172,10 +185,14 @@ const statusIcon = computed(() => {
   border-left-color: rgba(255, 255, 255, 0.6);
 }
 
+.reply-media {
+  flex-shrink: 0;
+}
+
 .reply-image {
   flex-shrink: 0;
-  width: 80px;
-  height: 80px;
+  width: 36px;
+  height: 36px;
   border-radius: 4px;
   overflow: hidden;
   background: rgba(0, 0, 0, 0.1);
@@ -185,6 +202,18 @@ const statusIcon = computed(() => {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.reply-video-placeholder {
+  width: 36px;
+  height: 36px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  font-size: 1.2rem;
 }
 
 .reply-content {

@@ -26,10 +26,6 @@ class ChatApiController extends Controller
                 return $this->listFromMessages();
             }
 
-            Log::info('Chat list conversations', [
-                'total' => $conversations->total(),
-            ]);
-
             $conversations->getCollection()->transform(function (Conversation $conversation) {
                 $customer = $conversation->customer;
                 $name = $customer
@@ -90,10 +86,6 @@ class ChatApiController extends Controller
                 ->leftJoin('customers as customers', 'customers.id', '=', 'messages.customer_id')
                 ->orderByDesc('messages.created_at')
                 ->get($selectColumns);
-
-            Log::info('Chat list fallback messages', [
-                'count' => $latestMessages->count(),
-            ]);
 
             $data = $latestMessages->map(function ($message) use ($hasAvatar) {
                 $name = trim(($message->first_name ?? '').' '.($message->last_name ?? ''));

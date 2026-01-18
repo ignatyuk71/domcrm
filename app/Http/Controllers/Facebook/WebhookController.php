@@ -44,9 +44,6 @@ class WebhookController extends Controller
     public function handle(Request $request, MetaService $metaService)
     {
         $data = $request->all();
-        // Логуємо все для відладки, щоб бачити, що саме приходить з Meta.
-        Log::info('Facebook Webhook Headers', $request->headers->all());
-        Log::info('Facebook Webhook Body', $data);
 
         try {
             $platform = ($data['object'] ?? '') === 'instagram' ? 'instagram' : 'messenger';
