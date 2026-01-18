@@ -262,6 +262,11 @@
             <span id="chat-unread-badge" class="badge bg-danger rounded-pill ms-auto me-3 chat-badge-expanded d-none" style="font-size: 0.7rem;"></span>
         </a>
 
+        <a href="{{ route('gallery.index') }}" class="sidebar-link {{ request()->is('gallery*') ? 'active' : '' }}">
+            <span class="icon-frame"><i class="bi bi-images"></i></span>
+            <span class="item-text">Галерея</span>
+        </a>
+
         <a href="{{ route('templates.index') }}" class="sidebar-link {{ request()->is('templates*') ? 'active' : '' }}">
             <span class="icon-frame"><i class="bi bi-chat-text-fill"></i></span>
             <span class="item-text">Шаблони</span>

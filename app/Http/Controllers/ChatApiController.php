@@ -191,6 +191,8 @@ class ChatApiController extends Controller
                 'text' => 'nullable|string',
                 'files' => 'nullable|array',
                 'files.*' => 'file|mimes:jpg,jpeg,png,webp,gif,heic,heif|max:5120',
+                'remote_urls' => 'nullable|array',
+                'remote_urls.*' => 'string',
                 'platform' => 'nullable|string|in:messenger,instagram',
             ]);
         } catch (\Throwable $e) {
@@ -198,7 +200,7 @@ class ChatApiController extends Controller
             throw $e;
         }
 
-        if (empty($validated['text']) && !$request->hasFile('files')) {
+        if (empty($validated['text']) && !$request->hasFile('files') && empty($validated['remote_urls'])) {
             return response()->json(['error' => 'Повідомлення порожнє'], 422);
         }
 
@@ -231,6 +233,16 @@ class ChatApiController extends Controller
             $relativeUrl = "chat/attachments/{$datePath}/{$fileName}";
             $attachments[] = ['type' => 'image', 'url' => $relativeUrl];
             $metaAttachments[] = ['type' => 'image', 'url' => url($relativeUrl)];
+        }
+
+        if (!empty($validated['remote_urls'])) {
+            foreach ($validated['remote_urls'] as $remoteUrl) {
+                $attachments[] = ['type' => 'image', 'url' => $remoteUrl];
+                $metaAttachments[] = [
+                    'type' => 'image',
+                    'url' => str_starts_with($remoteUrl, 'http') ? $remoteUrl : url(ltrim($remoteUrl, '/')),
+                ];
+            }
         }
 
         $createdMessages = [];

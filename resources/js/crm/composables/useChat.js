@@ -93,7 +93,9 @@ export function useChat() {
 
   async function sendMessage(payload) {
     if (!payload?.customer_id) return;
-    if (!payload?.text && (!payload?.files || !payload.files.length)) return;
+    if (!payload?.text && (!payload?.files || !payload.files.length) && (!payload?.remote_urls || !payload.remote_urls.length)) {
+      return;
+    }
     
     isSending.value = true;
     error.value = '';
@@ -102,6 +104,7 @@ export function useChat() {
     const tempMessages = [];
     const tempIds = [];
     const files = payload.files || [];
+    const remoteUrls = payload.remote_urls || [];
 
     if (files.length) {
       files.forEach((file, index) => {
@@ -136,6 +139,27 @@ export function useChat() {
       tempIds.push(tempId);
     }
 
+    if (remoteUrls.length) {
+      remoteUrls.forEach((url, index) => {
+        const optimisticMessage = {
+          id: `${tempId}-remote-${index}`,
+          text: files.length === 0 && index === 0 ? payload.text || null : null,
+          direction: 'outbound',
+          created_at: new Date().toISOString(),
+          attachments: [
+            {
+              type: 'image',
+              url,
+            },
+          ],
+          status: 'sending',
+          is_read: true,
+        };
+        tempMessages.push(optimisticMessage);
+        tempIds.push(optimisticMessage.id);
+      });
+    }
+
     messages.value = [...messages.value, ...tempMessages];
 
     try {
@@ -147,6 +171,11 @@ export function useChat() {
       if (files.length) {
         files.forEach((file) => {
           formData.append('files[]', file);
+        });
+      }
+      if (remoteUrls.length) {
+        remoteUrls.forEach((url) => {
+          formData.append('remote_urls[]', url);
         });
       }
 

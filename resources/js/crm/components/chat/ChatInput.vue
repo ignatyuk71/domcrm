@@ -30,10 +30,21 @@
       </div>
 
       <div class="chat-tools">
-        
-        <button type="button" class="tool-btn" title="Товари">
-          <i class="bi bi-handbag"></i>
-        </button>
+        <div class="relative-container">
+          <ChatGallery
+            v-if="showGallery"
+            @confirm="handleGallerySelect"
+          />
+          <button
+            type="button"
+            class="tool-btn"
+            :class="{ active: showGallery }"
+            title="Галерея"
+            @click="showGallery = !showGallery"
+          >
+            <i class="bi bi-handbag"></i>
+          </button>
+        </div>
 
         <button
           type="button"
@@ -49,7 +60,7 @@
           ref="fileInputRef"
           style="display: none"
           @change="onFileChange"
-          accept="image/*, video/*, .pdf, .doc, .docx, .xls, .xlsx"
+          accept="image/*"
           multiple
         />
 
@@ -98,6 +109,7 @@
 <script setup>
 import { computed, ref } from 'vue';
 import ChatTemplates from './ChatTemplates.vue';
+import ChatGallery from './ChatGallery.vue';
 
 const props = defineProps({
   disabled: { type: Boolean, default: false },
@@ -111,8 +123,9 @@ const fileError = ref('');
 const fileInputRef = ref(null);
 const textareaRef = ref(null);
 const showTemplates = ref(false);
+const showGallery = ref(false);
 
-const maxFileSize = 10 * 1024 * 1024; // 10 MB
+const maxFileSize = 5 * 1024 * 1024; // 5 MB
 
 // Перевірка, чи є контент для відправки
 const hasContent = computed(() => text.value.trim().length > 0 || selectedFiles.value.length > 0);
@@ -129,7 +142,7 @@ function onFileChange(e) {
 
   files.forEach((file) => {
     if (file.size > maxFileSize) {
-      fileError.value = `Файл ${file.name} завеликий (макс 10МБ)`;
+      fileError.value = `Файл ${file.name} завеликий (макс 5 МБ)`;
       return;
     }
     const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : '';
@@ -139,6 +152,7 @@ function onFileChange(e) {
       file,
       previewUrl,
       isImage: file.type.startsWith('image/'),
+      isRemote: false,
     });
   });
 
@@ -147,7 +161,7 @@ function onFileChange(e) {
 
 function removeFile(index) {
   const item = selectedFiles.value[index];
-  if (item?.previewUrl) {
+  if (item?.previewUrl && item.previewUrl.startsWith('blob:')) {
     URL.revokeObjectURL(item.previewUrl);
   }
   selectedFiles.value.splice(index, 1);
@@ -156,6 +170,24 @@ function removeFile(index) {
 function handleTemplateSelect(content) {
   text.value = (text.value ? text.value + ' ' : '') + content;
   showTemplates.value = false;
+  if (textareaRef.value) {
+    textareaRef.value.focus();
+    setTimeout(autoResize, 0);
+  }
+}
+
+function handleGallerySelect(files) {
+  files.forEach((file) => {
+    selectedFiles.value.push({
+      id: `remote-${file.id}`,
+      file: { name: file.filename },
+      previewUrl: file.url,
+      isImage: file.type === 'image',
+      isRemote: true,
+      remoteUrl: file.url,
+    });
+  });
+  showGallery.value = false;
   if (textareaRef.value) {
     textareaRef.value.focus();
     setTimeout(autoResize, 0);
@@ -174,7 +206,8 @@ function autoResize() {
 function sendLike() {
   emit('send', {
     text: '👍', // Відправляємо смайлик
-    files: []
+    files: [],
+    remote_urls: [],
   });
 }
 
@@ -182,15 +215,26 @@ function handleSend() {
   // Якщо пусто - нічого не робимо (кнопка лайка обробляється окремо в @click)
   if (!hasContent.value) return;
 
+  const filesToUpload = selectedFiles.value
+    .filter((item) => !item.isRemote)
+    .map((item) => item.file);
+
+  const remoteUrls = selectedFiles.value
+    .filter((item) => item.isRemote)
+    .map((item) => item.remoteUrl);
+
   emit('send', {
     text: text.value.trim(),
-    files: selectedFiles.value.map((item) => item.file),
+    files: filesToUpload,
+    remote_urls: remoteUrls,
   });
 
   // Очистка
   text.value = '';
   selectedFiles.value.forEach((item) => {
-    if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+    if (item.previewUrl && item.previewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(item.previewUrl);
+    }
   });
   selectedFiles.value = [];
   fileError.value = '';

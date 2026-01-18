@@ -166,6 +166,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/api/chat/customers/{id}/refresh-profile', [ChatApiController::class, 'refreshProfile'])
         ->name('chat.refreshProfile');
 
+    // --- ГАЛЕРЕЯ ---
+    Route::view('/gallery', 'gallery.index')->name('gallery.index');
+
     // --- НОВА ПОШТА (Nova Poshta довідники) ---
     Route::controller(NovaPoshtaController::class)->prefix('nova-poshta')->name('novaPoshta.')->group(function () {
         Route::get('/cities', 'cities')->name('cities');
