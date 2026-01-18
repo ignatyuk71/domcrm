@@ -36,8 +36,6 @@ import { getTemplates } from '@/crm/services/chatApi';
 const templates = ref([]);
 const isLoading = ref(false);
 
-// Логіку filteredTemplates та searchQuery видалено
-
 onMounted(async () => {
   isLoading.value = true;
   try {
@@ -54,18 +52,31 @@ onMounted(async () => {
 <style scoped>
 .templates-popover {
   position: absolute;
-  bottom: 55px;
-  left: 0;
+  /* 👇 ВИПРАВЛЕНО ПОЗИЦІОНУВАННЯ */
+  bottom: 100%;        /* Прив'язка до верху батьківського елемента (кнопки) */
+  margin-bottom: 12px; /* Відступ від кнопки */
+  right: -60px;        /* Зміщення, щоб центрувати відносно іконки (підлаштуй за потребою) */
+  left: auto;          /* Скасовуємо left: 0 */
+  
   width: 320px;
   max-height: 400px;
   background: #fff;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+  
+  /* Тінь і порядок шарів */
+  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+  z-index: 100;        /* Вище за інші елементи */
+  
   display: flex;
   flex-direction: column;
-  z-index: 50;
   overflow: hidden;
+  animation: popUp 0.2s ease-out;
+}
+
+@keyframes popUp {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .templates-header {
@@ -89,8 +100,6 @@ onMounted(async () => {
   text-decoration: none; 
   font-weight: 600;
 }
-
-/* Стилі пошуку видалено */
 
 .templates-list {
   flex: 1;
@@ -150,7 +159,7 @@ onMounted(async () => {
   width: 20px; 
   height: 20px; 
   border: 2px solid #e2e8f0; 
-  border-top-color: #3b82f6;
+  border-top-color: #3b82f6; 
   border-radius: 50%; 
   animation: spin 0.8s linear infinite; 
   margin: 0 auto;
@@ -159,4 +168,9 @@ onMounted(async () => {
 @keyframes spin { 
   to { transform: rotate(360deg); } 
 }
+
+/* Скролбар */
+.custom-scrollbar::-webkit-scrollbar { width: 5px; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 </style>
