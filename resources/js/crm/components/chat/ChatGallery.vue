@@ -85,7 +85,11 @@ onMounted(load);
 .gallery-popover {
   position: absolute;
   bottom: 100%;
-  left: 0;
+  
+  /* 👇 ВИПРАВЛЕНО: Позиціонування відносно правого краю */
+  left: auto;          /* Скасовуємо прив'язку до лівого краю */
+  right: -60px;        /* Зміщуємо вліво, щоб центрувати над кнопкою */
+  
   margin-bottom: 12px;
   width: 360px;
   background: #fff;
@@ -96,6 +100,15 @@ onMounted(load);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  
+  /* Анімація появи */
+  transform-origin: bottom right;
+  animation: popUp 0.2s ease-out;
+}
+
+@keyframes popUp {
+  from { opacity: 0; transform: translateY(10px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .header {
@@ -218,4 +231,9 @@ onMounted(load);
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* Скролбар */
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 </style>
