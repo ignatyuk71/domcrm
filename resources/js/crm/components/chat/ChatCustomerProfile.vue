@@ -281,7 +281,7 @@ const saveData = async () => {
 .error-text { color: #ef4444; font-size: 10px; margin-top: 2px; }
 .add-btn { color: #6366f1; font-size: 13px; font-weight: 600; cursor: pointer; padding: 4px 0; }
 
-.action-row { padding-left: 32px; margin-top: 8px; }
+
 
 /* --- НОВІ СТИЛІ ДЛЯ КНОПКИ ЗБЕРЕЖЕННЯ --- */
 .btn-save-modern {
