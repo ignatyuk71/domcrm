@@ -3,7 +3,7 @@
     <transition name="toast">
       <div v-if="toast.show" class="toast-notification" :class="toast.type">
         <div class="toast-content">
-          <i class="bi" :class="toast.type === 'success' ? 'bi-check2-circle' : 'bi-shield-exclamation'"></i>
+          <i class="bi" :class="toast.type === 'success' ? 'bi-check2-all' : 'bi-exclamation-octagon'"></i>
           <span>{{ toast.message }}</span>
         </div>
       </div>
@@ -23,62 +23,65 @@
         <div class="info">
           <div v-if="!showNameInput" class="name-display-wrapper" @click="enableNameEdit">
             <span class="name-text" :class="{ 'text-error': !isNameValid }">{{ displayName }}</span>
-            <button class="btn-edit-purple"><i class="bi bi-pencil-fill"></i></button>
+            <button class="btn-edit-soft-purple"><i class="bi bi-pencil-fill"></i></button>
           </div>
 
           <div v-else class="name-edit-flow">
             <div class="inputs-stack">
-              <input v-model="form.first_name" @blur="formatName('first_name')" class="modern-input" placeholder="Ім'я">
-              <input v-model="form.last_name" @blur="formatName('last_name')" class="modern-input" placeholder="Прізвище">
+              <input v-model="form.first_name" @blur="capitalizeField('first_name')" class="modern-underline-input" placeholder="Ім'я">
+              <input v-model="form.last_name" @blur="capitalizeField('last_name')" class="modern-underline-input" placeholder="Прізвище">
             </div>
-            <button class="btn-confirm-tick" @click="showNameInput = false"><i class="bi bi-check2"></i></button>
+            <button class="btn-confirm-tick" @click="showNameInput = false"><i class="bi bi-check-lg"></i></button>
           </div>
-          <div class="id-badge">ID: {{ customer.fb_user_id || customer.instagram_user_id || customerId }}</div>
+          <div class="id-badge-minimal">ID: {{ customer.fb_user_id || customer.instagram_user_id || customerId }}</div>
         </div>
 
-        <div class="status-icon-wrap" :class="isProfileComplete ? 'is-complete' : 'is-pending'">
+        <div class="status-indicator-box" :class="isProfileComplete ? 'ready' : 'pending'">
            <i class="bi" :class="isProfileComplete ? 'bi-person-check-fill' : 'bi-person-x-fill'"></i>
         </div>
       </div>
 
-      <hr class="divider" />
+      <hr class="elegant-divider" />
 
-      <div class="fields-section">
-        <div class="field-row">
-          <div class="icon-col"><i class="bi bi-telephone"></i></div>
-          <div class="input-col">
+      <div class="fields-grid">
+        <div class="field-item">
+          <div class="field-icon"><i class="bi bi-telephone-fill"></i></div>
+          <div class="field-body">
             <label>Контактний телефон</label>
-            <div v-if="form.phone || showPhoneInput" class="input-group" 
-                 :class="{ 'is-focused': phoneFocused, 'is-invalid': form.phone && !isPhoneValid, 'pulse-error': form.phone && !isPhoneValid }">
-              <input v-model="form.phone" class="simple-input" placeholder="380..." ref="phoneRef" type="tel" @focus="phoneFocused = true" @blur="phoneFocused = false">
-              <button class="btn-clear" @click="clearPhone"><i class="bi bi-x"></i></button>
+            <div v-if="form.phone || showPhoneInput" class="input-wrapper" 
+                 :class="{ 'focused': phoneFocused, 'invalid-pulse': form.phone && !isPhoneValid }">
+              <input v-model="form.phone" class="clean-input" placeholder="380..." ref="phoneRef" type="tel" @focus="phoneFocused = true" @blur="phoneFocused = false">
+              <button v-if="form.phone" class="btn-input-clear" @click="clearPhone"><i class="bi bi-x"></i></button>
             </div>
-            <div v-else class="add-btn" @click="enablePhone"><i class="bi bi-plus-lg"></i> Додати телефон</div>
+            <div v-else class="action-link" @click="enablePhone"><i class="bi bi-plus-circle"></i> Додати телефон</div>
+            <transition name="fade">
+              <span v-if="form.phone && !isPhoneValid" class="helper-error">Має бути 12 цифр (380...)</span>
+            </transition>
           </div>
         </div>
 
-        <div class="field-row">
-          <div class="icon-col"><i class="bi bi-envelope-at"></i></div>
-          <div class="input-col">
+        <div class="field-item">
+          <div class="field-icon"><i class="bi bi-envelope-paper-fill"></i></div>
+          <div class="field-body">
             <label>E-mail адреса</label>
-            <div v-if="form.email || showEmailInput" class="input-group" :class="{ 'is-focused': emailFocused }">
-              <input v-model="form.email" class="simple-input" placeholder="email@example.com" @focus="emailFocused = true" @blur="emailFocused = false">
-              <button class="btn-clear" @click="clearEmail"><i class="bi bi-x"></i></button>
+            <div v-if="form.email || showEmailInput" class="input-wrapper" :class="{ 'focused': emailFocused }">
+              <input v-model="form.email" class="clean-input" placeholder="example@mail.com" @focus="emailFocused = true" @blur="emailFocused = false">
+              <button v-if="form.email" class="btn-input-clear" @click="clearEmail"><i class="bi bi-x"></i></button>
             </div>
-            <div v-else class="add-btn" @click="enableEmail"><i class="bi bi-plus-lg"></i> Додати email</div>
+            <div v-else class="action-link" @click="enableEmail"><i class="bi bi-plus-circle"></i> Додати email</div>
           </div>
         </div>
 
-        <div class="action-row">
-          <button class="btn-save-premium" 
+        <div class="action-footer">
+          <button class="btn-save-hero" 
                   @click="saveData" 
-                  :disabled="isLoading || !isProfileComplete || isSavedSuccess"
-                  :class="{ 'btn-success-active': isSavedSuccess }">
-            <template v-if="isSavedSuccess">
-              <i class="bi bi-check-lg"></i> Збережено!
+                  :disabled="isLoading || !isProfileComplete || saveSuccess"
+                  :class="{ 'btn-success': saveSuccess }">
+            <template v-if="saveSuccess">
+              <i class="bi bi-check-circle-fill"></i> Дані оновлено
             </template>
             <template v-else-if="isLoading">
-              <span class="spinner"></span> Оновлюємо...
+              <div class="loading-ring"></div> Обробка...
             </template>
             <template v-else>
               Зберегти покупця
@@ -100,7 +103,7 @@ const showNameInput = ref(false);
 const phoneFocused = ref(false);
 const emailFocused = ref(false);
 const isLoading = ref(false);
-const isSavedSuccess = ref(false);
+const saveSuccess = ref(false);
 const showPhoneInput = ref(false);
 const showEmailInput = ref(false);
 const phoneRef = ref(null);
@@ -110,8 +113,8 @@ const form = reactive({ first_name: '', last_name: '', phone: '', email: '' });
 
 const cyrillicRegex = /^[А-Яа-яЁёЇїІіЄєҐґ' \-]+$/;
 
-// Авто-форматування: робить першу літеру великою
-const formatName = (field) => {
+// Автоматичне виправлення регістру (Перша велика)
+const capitalizeField = (field) => {
   if (form[field]) {
     form[field] = form[field].trim().toLowerCase().replace(/^\w|^\u0430-\u044f/, l => l.toUpperCase());
   }
@@ -137,11 +140,11 @@ watch(() => form.phone, (newVal) => {
 const customerId = computed(() => props.customer?.id ?? props.customer?.customer_id ?? null);
 const displayName = computed(() => {
   const name = `${form.first_name} ${form.last_name}`.trim();
-  return name || props.customer?.customer_name || 'Дані не вказано';
+  return name || props.customer?.customer_name || 'Дані відсутні';
 });
 const displayInitial = computed(() => (displayName.value ? displayName.value[0].toUpperCase() : '?'));
 const avatarUrl = computed(() => props.customer?.fb_profile_pic || props.customer?.customer_avatar || '');
-const isInstagram = computed(() => (props.customer?.source || props.customer?.platform) === 'instagram' || !!props.customer?.instagram_user_id);
+const isInstagram = computed(() => (props.customer?.source || props.customer?.platform) === 'instagram');
 
 watch(() => props.customer, (newVal) => {
   if (newVal) {
@@ -155,9 +158,9 @@ watch(() => props.customer, (newVal) => {
   }
 }, { immediate: true });
 
-const showToast = (msg, type = 'success') => {
+const triggerToast = (msg, type = 'success') => {
   toast.message = msg; toast.type = type; toast.show = true;
-  setTimeout(() => { toast.show = false; }, 3000);
+  setTimeout(() => { toast.show = false; }, 3500);
 };
 
 const enableNameEdit = () => { showNameInput.value = true; };
@@ -170,18 +173,17 @@ const saveData = async () => {
   if (!customerId.value || !isProfileComplete.value) return;
   isLoading.value = true;
   try {
-    // ВАЖЛИВО: запит на твій сервер
+    // ВАЖЛИВО: Програміст має реалізувати цей ендпоінт на бекенді
     await axios.put(`/api/customers/${customerId.value}`, form);
     if (props.customer) Object.assign(props.customer, form);
     
     showNameInput.value = false;
-    isSavedSuccess.value = true; // Активуємо стан успіху на кнопці
-    showToast('Профіль оновлено успішно');
-    
-    setTimeout(() => { isSavedSuccess.value = false; }, 2000);
+    saveSuccess.value = true;
+    triggerToast('Профіль успішно оновлено');
+    setTimeout(() => { saveSuccess.value = false; }, 2500);
   } catch (e) { 
     console.error(e); 
-    showToast('Помилка запиту (404/500)', 'error');
+    triggerToast('Помилка сервера (404/500)', 'error');
   } finally { 
     isLoading.value = false; 
   }
@@ -189,69 +191,85 @@ const saveData = async () => {
 </script>
 
 <style scoped>
-.right-sidebar { width: 100%; height: 100%; background: #ffffff; border-left: 1px solid #edf2f7; display: flex; flex-direction: column; position: relative; }
-.profile-content { padding: 20px; }
+/* GENERAL LAYOUT */
+.right-sidebar { width: 100%; height: 100%; background: #ffffff; border-left: 1px solid #eef2f6; display: flex; flex-direction: column; position: relative; font-family: 'Inter', sans-serif; }
+.profile-content { padding: 24px; }
 
-/* TOAST (GLASSMORPHISM) */
+/* MODERN TOAST */
 .toast-notification {
-  position: absolute; top: 15px; left: 15px; right: 15px; z-index: 1000;
-  backdrop-filter: blur(8px); padding: 12px 20px; border-radius: 12px;
+  position: absolute; top: 20px; left: 20px; right: 20px; z-index: 1000;
+  backdrop-filter: blur(12px); padding: 14px 24px; border-radius: 14px;
   display: flex; align-items: center; justify-content: center;
-  color: white; box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+  color: white; box-shadow: 0 12px 30px rgba(0,0,0,0.12);
 }
-.toast-notification.success { background: rgba(16, 185, 129, 0.9); border: 1px solid rgba(255,255,255,0.2); }
-.toast-notification.error { background: rgba(239, 68, 68, 0.9); }
-.toast-content { display: flex; align-items: center; gap: 10px; font-weight: 600; }
+.toast-notification.success { background: rgba(16, 185, 129, 0.95); border: 1px solid rgba(255,255,255,0.25); }
+.toast-notification.error { background: rgba(239, 68, 68, 0.95); }
+.toast-content { display: flex; align-items: center; gap: 12px; font-weight: 600; font-size: 14px; }
 
-.header-section { display: flex; align-items: flex-start; gap: 14px; }
-.avatar-wrap { position: relative; width: 56px; height: 56px; flex-shrink: 0; }
-.avatar-img, .avatar-placeholder { width: 100%; height: 100%; border-radius: 16px; object-fit: cover; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
-.avatar-placeholder { background: linear-gradient(135deg, #6366f1, #a855f7); color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 22px; }
+/* HEADER */
+.header-section { display: flex; align-items: flex-start; gap: 16px; position: relative; }
+.avatar-wrap { position: relative; width: 64px; height: 64px; flex-shrink: 0; }
+.avatar-img, .avatar-placeholder { width: 100%; height: 100%; border-radius: 18px; object-fit: cover; box-shadow: 0 4px 15px rgba(0,0,0,0.06); }
+.avatar-placeholder { background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 24px; }
 
 .platform-icon-indicator {
-  position: absolute; bottom: -4px; right: -4px; width: 22px; height: 22px;
+  position: absolute; bottom: -6px; right: -6px; width: 24px; height: 24px;
   border-radius: 50%; display: flex; align-items: center; justify-content: center;
-  border: 2.5px solid #fff; color: white; font-size: 11px;
+  border: 3px solid #fff; color: white; font-size: 12px;
 }
 .ig-bg { background: radial-gradient(circle at 30% 107%, #fdf497 0%, #fd5949 45%, #d6249f 60%, #285AEB 90%); }
 .fb-bg { background: #0084FF; }
 
-/* АНІМОВАНИЙ СТАТУС */
-.status-icon-wrap { margin-left: auto; font-size: 24px; transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-.is-pending { color: #f87171; transform: rotate(-10deg); }
-.is-complete { color: #10b981; transform: scale(1.1); }
+/* STATUS INDICATOR RIGHT */
+.status-indicator-box { margin-left: auto; font-size: 28px; transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.pending { color: #fecaca; filter: drop-shadow(0 0 5px rgba(239, 68, 68, 0.2)); }
+.ready { color: #10b981; transform: scale(1.1); filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.3)); }
 
-/* КНОПКА РЕДАГУВАННЯ */
-.btn-edit-purple {
-  background: #f5f3ff; color: #7c3aed; border: none;
-  width: 28px; height: 28px; border-radius: 8px; margin-left: 8px;
-  cursor: pointer; transition: 0.2s;
-}
-.btn-edit-purple:hover { background: #ede9fe; transform: translateY(-1px); }
+/* NAME EDITING */
+.name-display-wrapper { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; transition: 0.2s; }
+.name-display-wrapper:hover .name-text { color: #4f46e5; }
+.name-text { font-size: 18px; font-weight: 800; color: #1e293b; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btn-edit-soft-purple { background: #f5f3ff; color: #8b5cf6; border: none; width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: pointer; transition: 0.2s; }
+.btn-edit-soft-purple:hover { background: #ede9fe; transform: translateY(-2px); }
 
-/* ПОЛЯ */
-.modern-input { border: none; border-bottom: 2px solid #f1f5f9; font-size: 14px; font-weight: 600; padding: 4px 0; outline: none; transition: 0.3s; }
-.modern-input:focus { border-color: #6366f1; }
+.inputs-stack { display: flex; flex-direction: column; gap: 6px; flex: 1; }
+.modern-underline-input { border: none; border-bottom: 2px solid #f1f5f9; font-size: 14px; font-weight: 700; padding: 4px 0; outline: none; transition: 0.3s; background: transparent; }
+.modern-underline-input:focus { border-color: #6366f1; }
 
-.divider { border: 0; border-top: 1px solid #f1f5f9; margin: 20px 0; }
-.input-col label { font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
-.input-group { display: flex; align-items: center; border-bottom: 2px solid #f1f5f9; padding: 4px 0; }
-.input-group.is-focused { border-color: #6366f1; }
-.pulse-error { animation: pulseRed 1.5s infinite; border-color: #f87171; }
+/* GRID & FIELDS */
+.elegant-divider { border: 0; border-top: 1px solid #f8fafc; margin: 24px 0; }
+.fields-grid { display: flex; flex-direction: column; gap: 20px; }
+.field-item { display: flex; align-items: flex-start; gap: 14px; }
+.field-icon { width: 36px; height: 36px; background: #f8fafc; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #94a3b8; font-size: 16px; margin-top: 4px; }
+.field-body { flex: 1; display: flex; flex-direction: column; }
+.field-body label { font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px; }
 
-@keyframes pulseRed { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+.input-wrapper { display: flex; align-items: center; border-bottom: 2px solid #f1f5f9; padding: 4px 0; transition: 0.3s; }
+.input-wrapper.focused { border-color: #6366f1; }
+.invalid-pulse { animation: softPulseRed 2s infinite; border-color: #fca5a5; }
 
-/* PREMIUM SAVE BUTTON */
-.btn-save-premium {
-  width: 100%; background: #1e293b; color: white; border: none; border-radius: 12px;
-  padding: 12px; font-size: 14px; font-weight: 700; cursor: pointer;
+@keyframes softPulseRed { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
+
+.clean-input { flex: 1; border: none; background: transparent; font-size: 15px; color: #334155; outline: none; font-weight: 600; }
+.action-link { color: #6366f1; font-size: 14px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 6px 0; transition: 0.2s; }
+.action-link:hover { color: #4f46e5; }
+.helper-error { font-size: 11px; color: #ef4444; font-weight: 600; margin-top: 6px; }
+
+/* FOOTER BUTTON */
+.action-footer { margin-top: 12px; }
+.btn-save-hero {
+  width: 100%; background: #1e293b; color: white; border: none; border-radius: 14px;
+  padding: 14px; font-size: 15px; font-weight: 700; cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  display: flex; align-items: center; justify-content: center; gap: 8px;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
 }
-.btn-save-premium:hover:not(:disabled) { background: #0f172a; transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.15); }
-.btn-save-premium:disabled { background: #f1f5f9; color: #94a3b8; cursor: not-allowed; }
-.btn-success-active { background: #10b981 !important; color: white !important; }
+.btn-save-hero:hover:not(:disabled) { background: #0f172a; transform: translateY(-3px); box-shadow: 0 8px 25px rgba(0,0,0,0.15); }
+.btn-save-hero:disabled { background: #f1f5f9; color: #cbd5e1; cursor: not-allowed; }
+.btn-success { background: #10b981 !important; box-shadow: 0 8px 25px rgba(16, 185, 129, 0.25) !important; }
 
-.spinner { width: 14px; height: 14px; border: 2.5px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: #fff; animation: spin 0.8s linear infinite; }
+/* ANIMATIONS */
+.fade-enter-active, .fade-leave-active { transition: opacity 0.3s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+.loading-ring { width: 16px; height: 16px; border: 3px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: #fff; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 </style>
