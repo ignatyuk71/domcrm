@@ -191,12 +191,15 @@ const saveData = async () => {
   isLoading.value = true;
   try {
     const response = await axios.put(`/api/customers/${customerId.value}`, form);
+    // Оновлюємо локальні дані даними з сервера, щоб все було синхронізовано
     const updatedCustomer = response?.data?.data;
     if (props.customer && updatedCustomer) {
       Object.assign(props.customer, updatedCustomer);
     } else if (props.customer) {
+      // Фолбек, якщо сервер не повернув об'єкт
       Object.assign(props.customer, form);
     }
+
     showNameInput.value = false;
     showToast('Дані покупця успішно збережено!');
   } catch (e) { 
@@ -277,10 +280,42 @@ const saveData = async () => {
 .simple-input { flex: 1; border: none; background: transparent; font-size: 14px; color: #2d3748; outline: none; font-weight: 600; }
 .error-text { color: #ef4444; font-size: 10px; margin-top: 2px; }
 .add-btn { color: #6366f1; font-size: 13px; font-weight: 600; cursor: pointer; padding: 4px 0; }
+
 .action-row { padding-left: 32px; margin-top: 8px; }
-.btn-save-modern { background: #111827; color: white; border: none; border-radius: 8px; padding: 10px 20px; font-size: 13px; font-weight: 700; width: 100%; cursor: pointer; }
-.btn-save-modern:disabled { background: #f3f4f6; color: #cbd5e0; cursor: not-allowed; }
-.spinner { width: 12px; height: 12px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: #fff; animation: spin 0.8s linear infinite; }
+
+/* --- НОВІ СТИЛІ ДЛЯ КНОПКИ ЗБЕРЕЖЕННЯ --- */
+.btn-save-modern {
+  background: #A78BFB; /* М'який фіолетовий колір */
+  color: white;
+  border: none;
+  border-radius: 8px;
+  height: 40px; /* Фіксована менша висота */
+  display: flex; /* Для центрування вмісту */
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  width: 100%;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-save-modern:hover:not(:disabled) {
+  background: #9061f9; /* Трохи темніший при наведенні */
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(167, 139, 251, 0.3);
+}
+
+.btn-save-modern:disabled {
+  background: #e2e8f0;
+  color: #94a3b8;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+/* --------------------------------------- */
+
+.spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: #fff; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #cbd5e0; gap: 8px; }
 </style>
