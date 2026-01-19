@@ -76,8 +76,7 @@
                 @focus="phoneFocused = true"
                 @blur="phoneFocused = false"
               >
-              <button class="btn-clear" type="button" @click="clearPhone"><i class="bi bi-x-circle-fill"></i></button>
-            </div>
+             </div>
             <div v-else class="add-btn" @click="enablePhone"><i class="bi bi-plus-circle"></i> Додати телефон</div>
             <small v-if="form.phone && !isPhoneValid" class="error-text">Має бути 12 цифр (380...)</small>
           </div>
@@ -89,7 +88,6 @@
             <label>E-mail</label>
             <div v-if="form.email || showEmailInput" class="input-group" :class="{ 'is-focused': emailFocused }">
               <input v-model="form.email" class="simple-input" placeholder="email@example.com" @focus="emailFocused = true" @blur="emailFocused = false">
-              <button class="btn-clear" type="button" @click="clearEmail"><i class="bi bi-x-circle-fill"></i></button>
             </div>
             <div v-else class="add-btn" @click="enableEmail"><i class="bi bi-plus-circle"></i> Додати email</div>
           </div>
