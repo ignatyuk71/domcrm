@@ -343,7 +343,8 @@ const createOrderFromDraft = async () => {
   const prepayAmount = Number(orderDraft.payment?.prepay_amount || 0);
   const paymentStatus = paymentMethod === 'card' ? 'paid' : 'unpaid';
 
-  const source = isInstagram.value ? 'instagram' : 'facebook';
+  const rawSource = (props.customer?.source || props.customer?.platform || '').toLowerCase();
+  const source = rawSource.includes('instagram') || rawSource === 'ig' || isInstagram.value ? 'instagram' : 'facebook';
   const delivery = orderDraft.delivery || {};
   const totalAmount = orderDraft.items.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.qty || 1)), 0);
 
