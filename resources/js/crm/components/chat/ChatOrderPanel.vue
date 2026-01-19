@@ -1,153 +1,153 @@
 <template>
   <teleport to="body">
-    <transition name="fade-fast">
-      <div v-show="open" class="offcanvas-backdrop-premium" @click="handleMinimize"></div>
+    <transition name="fade-overlay">
+      <div v-show="open" class="ultra-backdrop" @click="handleMinimize"></div>
     </transition>
 
-    <transition name="slide-premium">
-      <div v-show="open" class="order-panel-container">
+    <transition name="slide-premium-elastic">
+      <div v-show="open" class="order-panel-elite">
         
-        <div class="panel-header">
-          <div class="header-main">
-            <div class="header-icon-wrap">
-              <i class="bi bi-bag-heart-fill"></i>
+        <header class="elite-header">
+          <div class="header-left-group">
+            <div class="status-icon-glow" :class="{ 'has-items': hasDraft }">
+              <i class="bi bi-lightning-charge-fill"></i>
             </div>
-            <div class="header-text">
-              <h3>Нове замовлення</h3>
-              <div v-if="hasDraft" class="draft-indicator-modern">
-                <span class="pulse-dot"></span>
-                <span>Чернетка збережена</span>
+            <div class="title-stack">
+              <h3>Оформлення</h3>
+              <div class="stepper-dots">
+                <span class="dot active"></span>
+                <span class="dot" :class="{ active: hasDraft }"></span>
+                <span class="dot"></span>
               </div>
             </div>
           </div>
-          <div class="header-controls">
-            <button class="control-btn minimize" @click="handleMinimize" title="Згорнути">
-              <i class="bi bi-dash-lg"></i>
-            </button>
-            <button class="control-btn close" @click="handleClose" title="Видалити">
-              <i class="bi bi-x-lg"></i>
-            </button>
-          </div>
-        </div>
-
-        <div class="panel-body custom-scrollbar">
           
-          <transition name="zoom">
-            <div v-if="!hasDraft" class="premium-trigger" @click="openPicker">
-              <div class="trigger-inner">
-                <div class="plus-icon-anim">
-                  <i class="bi bi-plus-lg"></i>
-                </div>
-                <p>Додати перший товар</p>
-                <span>Натисніть для вибору з каталогу</span>
-              </div>
+          <div class="header-right-group">
+             <button class="action-circle-btn" @click="handleMinimize"><i class="bi bi-fullscreen-exit"></i></button>
+             <button class="action-circle-btn delete" @click="handleClose"><i class="bi bi-trash3"></i></button>
+          </div>
+        </header>
+
+        <div class="panel-scroller custom-scrollbar">
+          
+          <transition name="zoom-in">
+            <div v-if="!hasDraft" class="empty-state-card" @click="openPicker">
+               <div class="animated-blob">
+                 <i class="bi bi-plus-lg"></i>
+               </div>
+               <h4>Почніть з вибору товарів</h4>
+               <p>Натисніть сюди, щоб переглянути каталог</p>
             </div>
           </transition>
 
-          <div v-if="hasDraft" class="order-content-wrap">
-            <div class="section-label">Ваш вибір</div>
+          <div v-if="hasDraft" class="order-flow-container">
             
-            <div class="cart-items-wrapper">
-              <div v-for="(item, index) in orderDraft.items" :key="item.id" class="premium-cart-item">
-                <div class="item-img-container">
-                  <img :src="item.image" alt="thumb">
-                </div>
-                
-                <div class="item-main-info">
-                  <div class="item-header-row">
-                    <span class="item-name">{{ item.title }}</span>
-                    <button class="item-delete-btn" @click="removeSingleItem(index)">
-                      <i class="bi bi-trash3"></i>
-                    </button>
-                  </div>
+            <section class="flow-section">
+              <div class="section-heading">
+                <span>ВИБРАНІ ПОЗИЦІЇ</span>
+                <button class="text-btn" @click="openPicker">+ Додати ще</button>
+              </div>
 
-                  <div class="item-actions-row">
-                    <div class="modern-qty-selector">
-                      <button @click="item.qty > 1 ? item.qty-- : null" :disabled="item.qty <= 1">−</button>
-                      <span class="qty-number">{{ item.qty }}</span>
-                      <button @click="item.qty++">+</button>
+              <transition-group name="list-stagger" tag="div" class="cart-items-list">
+                <div v-for="(item, index) in orderDraft.items" :key="item.id" class="elite-cart-card">
+                  <img :src="item.image" class="card-img" alt="product" />
+                  
+                  <div class="card-main">
+                    <div class="card-header-row">
+                      <span class="p-title">{{ item.title }}</span>
+                      <button class="p-delete" @click="removeSingleItem(index)"><i class="bi bi-x"></i></button>
                     </div>
-                    <div class="item-price-display">
-                      {{ formatMoney(item.price * item.qty) }} <span>грн</span>
+
+                    <div class="card-controls-row">
+                      <div class="mini-stepper">
+                        <button @click="item.qty > 1 ? item.qty-- : null" :disabled="item.qty <= 1">−</button>
+                        <span class="qty">{{ item.qty }}</span>
+                        <button @click="item.qty++">+</button>
+                      </div>
+                      <div class="p-price-total">
+                        {{ formatMoney(item.price * item.qty) }} <b>грн</b>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              </transition-group>
+            </section>
 
-              <button class="btn-add-more-modern" @click="openPicker">
-                <i class="bi bi-plus-circle"></i> Додати ще позицію
-              </button>
-            </div>
+            <section class="flow-section">
+               <div class="section-heading">ДОСТАВКА</div>
+               <div class="mock-input-card">
+                  <i class="bi bi-truck"></i>
+                  <span>Виберіть відділення Нової Пошти...</span>
+                  <i class="bi bi-chevron-right ms-auto"></i>
+               </div>
+            </section>
 
-            <div class="total-summary-card">
-              <div class="summary-line">
-                <span>Кількість позицій:</span>
-                <b>{{ orderDraft.items.length }}</b>
-              </div>
-              <div class="summary-line total">
-                <span>Загальна сума:</span>
-                <span class="total-amount">{{ formatMoney(totalAmount) }} ₴</span>
-              </div>
-            </div>
           </div>
         </div>
 
-        <div class="panel-footer">
-          <button class="btn-primary-shimmer" :disabled="!hasDraft" @click="handleSaved">
-            <div class="btn-content">
-              <span>ОФОРМИТИ ЗАМОВЛЕННЯ</span>
-              <i class="bi bi-arrow-right-short"></i>
-            </div>
-          </button>
-        </div>
+        <footer class="elite-footer">
+          <div class="summary-box">
+             <div class="summary-info">
+                <span>Разом до сплати:</span>
+                <div class="total-amount-glow">{{ formatMoney(totalAmount) }} ₴</div>
+             </div>
+             <button class="btn-checkout-shimmer" :disabled="!hasDraft" @click="handleSaved">
+               <span>ПІДТВЕРДИТИ</span>
+               <div class="shimmer-line"></div>
+             </button>
+          </div>
+        </footer>
+
       </div>
     </transition>
 
-    <transition name="modal-bounce">
-      <div v-if="productPickerOpen" class="picker-modal-overlay" @click.self="productPickerOpen = false">
-        <div class="picker-content">
-          <div class="picker-top">
-            <div class="picker-title-block">
-              <h4>Оберіть товари</h4>
-              <span>{{ mockProducts.length }} доступно для замовлення</span>
-            </div>
-            <button class="close-picker" @click="productPickerOpen = false">
-              <i class="bi bi-x"></i>
-            </button>
-          </div>
-          
-          <div class="picker-middle custom-scrollbar">
-            <div class="picker-list-compact">
-              <div v-for="p in mockProducts" :key="p.id" 
-                   class="list-item-modern" 
-                   :class="{ active: selectedProductIds.includes(p.id) }" 
-                   @click="toggleProductSelection(p)">
-                
-                <div class="check-box-modern" :class="{ checked: selectedProductIds.includes(p.id) }">
-                  <i class="bi bi-check-lg"></i>
-                </div>
-                
-                <div class="p-img-wrap">
-                  <img :src="p.image" alt="p">
-                </div>
-                
-                <div class="p-info-wrap">
-                  <div class="p-name">{{ p.title }}</div>
-                  <div class="p-meta">
-                    Арт: {{ p.sku }} <span class="stock-pill" :class="{ low: p.stock < 3 }">Склад: {{ p.stock }}</span>
-                  </div>
-                </div>
-                
-                <div class="p-price-wrap">{{ formatMoney(p.price) }} ₴</div>
-              </div>
-            </div>
+    <transition name="modal-spring">
+      <div v-if="productPickerOpen" class="picker-overlay-elite" @click.self="productPickerOpen = false">
+        <div class="picker-window">
+          <div class="picker-header-elite">
+             <div class="picker-title-group">
+                <h4>Каталог капців</h4>
+                <p>{{ mockProducts.length }} одиниць доступно</p>
+             </div>
+             <button class="close-picker-btn" @click="productPickerOpen = false"><i class="bi bi-x-lg"></i></button>
           </div>
 
-          <div class="picker-bottom">
-            <button class="btn-secondary" @click="productPickerOpen = false">Скасувати</button>
-            <button class="btn-primary-compact" :disabled="selectedProductIds.length === 0" @click="handleAddProducts">
-              Додати вибрані ({{ selectedProductIds.length }})
-            </button>
+          <div class="picker-body-list custom-scrollbar">
+             <div v-for="p in mockProducts" :key="p.id" 
+                  class="picker-row" 
+                  :class="{ selected: selectedProductIds.includes(p.id) }"
+                  @click="toggleProductSelection(p)">
+                
+                <div class="checkbox-wrapper">
+                   <div class="custom-cb" :class="{ checked: selectedProductIds.includes(p.id) }">
+                      <i class="bi bi-check-lg"></i>
+                   </div>
+                </div>
+
+                <div class="p-visual">
+                   <img :src="p.image" alt="p">
+                </div>
+
+                <div class="p-content">
+                   <div class="p-top-line">
+                      <span class="p-name">{{ p.title }}</span>
+                      <span class="p-price">{{ formatMoney(p.price) }} ₴</span>
+                   </div>
+                   <div class="p-bottom-line">
+                      <span class="p-sku">Арт: {{ p.sku }}</span>
+                      <span class="p-stock-badge" :class="{ warning: p.stock < 3 }">
+                         Склад: {{ p.stock }} шт.
+                      </span>
+                   </div>
+                </div>
+             </div>
+          </div>
+
+          <div class="picker-footer-elite">
+             <button class="btn-text-only" @click="productPickerOpen = false">Скасувати</button>
+             <button class="btn-confirm-elite" :disabled="selectedProductIds.length === 0" @click="handleAddProducts">
+               Додати в замовлення ({{ selectedProductIds.length }})
+             </button>
           </div>
         </div>
       </div>
@@ -181,7 +181,16 @@ const totalAmount = computed(() => (props.orderDraft.items || []).reduce((sum, i
 
 const openPicker = () => { selectedProductIds.value = props.orderDraft.items.map(item => item.id); productPickerOpen.value = true; };
 const toggleProductSelection = (p) => { const i = selectedProductIds.value.indexOf(p.id); if (i > -1) selectedProductIds.value.splice(i, 1); else selectedProductIds.value.push(p.id); };
-const handleAddProducts = () => { const newItems = mockProducts.filter(p => selectedProductIds.value.includes(p.id)).map(p => { const existing = props.orderDraft.items.find(item => item.id === p.id); return { id: p.id, title: p.title, sku: p.sku, price: p.price, image: p.image, qty: existing ? existing.qty : 1 }; }); props.orderDraft.items = newItems; productPickerOpen.value = false; };
+
+const handleAddProducts = () => {
+  const newItems = mockProducts.filter(p => selectedProductIds.value.includes(p.id)).map(p => {
+    const existing = props.orderDraft.items.find(item => item.id === p.id);
+    return { id: p.id, title: p.title, sku: p.sku, price: p.price, image: p.image, qty: existing ? existing.qty : 1 };
+  });
+  props.orderDraft.items = newItems;
+  productPickerOpen.value = false;
+};
+
 const removeSingleItem = (index) => { props.orderDraft.items.splice(index, 1); };
 const handleClose = () => { emit('close'); };
 const handleMinimize = () => { emit('minimize'); };
@@ -190,134 +199,86 @@ const formatMoney = (v) => Number(v || 0).toFixed(2);
 </script>
 
 <style scoped>
-/* PREMIUM LAYERS */
-.offcanvas-backdrop-premium { 
-  position: fixed; top: 0; left: 0; right: 0; height: 100vh; 
-  background: rgba(15, 23, 42, 0.5); z-index: 99998; 
-  backdrop-filter: blur(8px); 
-}
-.order-panel-container { 
-  position: fixed; top: 0; right: 0; width: 480px; max-width: 100%; height: 100vh; 
-  background: #ffffff; z-index: 99999; display: flex; flex-direction: column; 
-  box-shadow: -20px 0 60px rgba(0, 0, 0, 0.25); 
-}
+/* ELITE LAYOUT */
+.ultra-backdrop { position: fixed; inset: 0; background: rgba(10, 15, 30, 0.4); z-index: 99998; backdrop-filter: blur(12px); }
+.order-panel-elite { position: fixed; top: 0; right: 0; width: 480px; max-width: 100%; height: 100vh; background: #ffffff; z-index: 99999; display: flex; flex-direction: column; box-shadow: -20px 0 80px rgba(0, 0, 0, 0.2); }
 
 /* HEADER */
-.panel-header { padding: 20px 24px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between; }
-.header-main { display: flex; align-items: center; gap: 14px; }
-.header-icon-wrap { width: 44px; height: 44px; background: #f5f3ff; color: #a78bfb; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px; }
-.header-text h3 { font-size: 18px; font-weight: 800; color: #0f172a; margin: 0; }
+.elite-header { padding: 24px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between; background: #fff; }
+.header-left-group { display: flex; align-items: center; gap: 16px; }
+.status-icon-glow { width: 48px; height: 48px; background: #f1f5f9; color: #cbd5e1; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 24px; transition: 0.4s; }
+.status-icon-glow.has-items { background: #f5f3ff; color: #a78bfb; box-shadow: 0 0 15px rgba(167, 139, 251, 0.3); }
 
-.draft-indicator-modern { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
-.draft-indicator-modern span { font-size: 12px; font-weight: 600; color: #10b981; text-transform: uppercase; letter-spacing: 0.02em; }
-.pulse-dot { width: 8px; height: 8px; background: #10b981; border-radius: 50%; box-shadow: 0 0 10px rgba(16, 185, 129, 0.4); animation: pulse-premium 2s infinite; }
+.title-stack h3 { font-size: 18px; font-weight: 800; color: #0f172a; margin: 0; }
+.stepper-dots { display: flex; gap: 4px; margin-top: 4px; }
+.stepper-dots .dot { width: 14px; height: 4px; border-radius: 2px; background: #e2e8f0; transition: 0.3s; }
+.stepper-dots .dot.active { background: #a78bfb; width: 24px; }
 
-@keyframes pulse-premium { 0% { transform: scale(0.95); opacity: 0.8; } 50% { transform: scale(1.2); opacity: 0.3; } 100% { transform: scale(0.95); opacity: 0.8; } }
+.header-right-group { display: flex; gap: 8px; }
+.action-circle-btn { width: 36px; height: 36px; border-radius: 50%; border: none; background: #f8fafc; color: #94a3b8; cursor: pointer; transition: 0.3s; }
+.action-circle-btn:hover { background: #f1f5f9; color: #1e293b; transform: rotate(15deg); }
+.action-circle-btn.delete:hover { background: #fef2f2; color: #ef4444; }
 
-.header-controls { display: flex; gap: 10px; }
-.control-btn { border: none; width: 34px; height: 34px; border-radius: 10px; cursor: pointer; transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1); display: flex; align-items: center; justify-content: center; }
-.control-btn.minimize { background: #f8fafc; color: #64748b; }
-.control-btn.minimize:hover { background: #e2e8f0; transform: translateY(-2px); }
-.control-btn.close { background: #fef2f2; color: #f43f5e; }
-.control-btn.close:hover { background: #fee2e2; transform: scale(1.1) rotate(90deg); }
+/* EMPTY STATE */
+.panel-scroller { flex: 1; padding: 24px; overflow-y: auto; background: #fafafa; }
+.empty-state-card { background: #fff; border: 2px dashed #cbd5e1; border-radius: 32px; padding: 60px 40px; text-align: center; cursor: pointer; transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+.empty-state-card:hover { border-color: #a78bfb; transform: scale(1.02); box-shadow: 0 20px 40px rgba(167, 139, 251, 0.1); }
+.animated-blob { width: 64px; height: 64px; background: #f5f3ff; color: #a78bfb; border-radius: 40% 60% 60% 40% / 60% 30% 70% 40%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 28px; animation: morph 4s ease-in-out infinite; }
+@keyframes morph { 0% { border-radius: 40% 60% 60% 40% / 60% 30% 70% 40%; } 50% { border-radius: 30% 60% 70% 40% / 50% 60% 30% 60%; } 100% { border-radius: 40% 60% 60% 40% / 60% 30% 70% 40%; } }
 
-/* BODY */
-.panel-body { flex: 1; padding: 24px; overflow-y: auto; background: #fafafa; }
+/* CART CARDS */
+.section-heading { font-size: 11px; font-weight: 800; color: #94a3b8; letter-spacing: 0.1em; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
+.text-btn { background: none; border: none; color: #a78bfb; font-weight: 700; cursor: pointer; font-size: 11px; }
 
-/* PREMIUM TRIGGER */
-.premium-trigger { 
-  background: #fff; border: 2px dashed #cbd5e1; border-radius: 24px; padding: 50px 30px; 
-  text-align: center; cursor: pointer; transition: all 0.4s ease; 
-  box-shadow: 0 10px 20px rgba(0,0,0,0.02);
-}
-.premium-trigger:hover { border-color: #a78bfb; transform: translateY(-5px); box-shadow: 0 20px 40px rgba(167, 139, 251, 0.1); }
-.plus-icon-anim { width: 56px; height: 56px; background: #f5f3ff; color: #a78bfb; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: 24px; transition: 0.4s; }
-.premium-trigger:hover .plus-icon-anim { transform: rotate(180deg) scale(1.1); background: #a78bfb; color: #fff; }
-.premium-trigger p { font-size: 16px; font-weight: 700; color: #1e293b; margin: 0; }
-.premium-trigger span { font-size: 13px; color: #94a3b8; display: block; margin-top: 4px; }
+.elite-cart-card { background: #fff; border-radius: 20px; padding: 12px; display: flex; gap: 14px; margin-bottom: 12px; border: 1px solid #f1f5f9; box-shadow: 0 4px 6px rgba(0,0,0,0.02); }
+.card-img { width: 60px; height: 60px; border-radius: 14px; object-fit: cover; background: #f8fafc; }
+.card-main { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: space-between; }
+.card-header-row { display: flex; justify-content: space-between; align-items: center; }
+.p-title { font-size: 13px; font-weight: 700; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.p-delete { background: none; border: none; color: #cbd5e0; cursor: pointer; font-size: 18px; line-height: 1; }
+.p-delete:hover { color: #f43f5e; }
 
-/* CART ITEMS (COMPACT PREMIUM) */
-.section-label { font-size: 12px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 16px; }
-.premium-cart-item { 
-  background: #fff; border-radius: 18px; padding: 12px; display: flex; gap: 14px; 
-  margin-bottom: 12px; border: 1px solid #f1f5f9; box-shadow: 0 4px 6px rgba(0,0,0,0.02);
-}
-.item-img-container { width: 64px; height: 64px; border-radius: 12px; overflow: hidden; background: #f8fafc; flex-shrink: 0; }
-.item-img-container img { width: 100%; height: 100%; object-fit: cover; }
+.card-controls-row { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; }
+.mini-stepper { display: flex; align-items: center; background: #f8fafc; border-radius: 10px; height: 26px; border: 1px solid #edf2f7; }
+.mini-stepper button { width: 26px; border: none; background: transparent; cursor: pointer; font-weight: 700; color: #64748b; }
+.mini-stepper button:hover { color: #a78bfb; }
+.qty { width: 26px; text-align: center; font-size: 12px; font-weight: 800; }
+.p-price-total { font-size: 15px; font-weight: 800; color: #0f172a; }
+.p-price-total b { font-size: 10px; opacity: 0.5; font-weight: 600; }
 
-.item-main-info { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: space-between; }
-.item-header-row { display: flex; justify-content: space-between; align-items: flex-start; }
-.item-name { font-size: 14px; font-weight: 700; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.item-delete-btn { background: none; border: none; color: #cbd5e0; cursor: pointer; padding: 2px; transition: 0.2s; }
-.item-delete-btn:hover { color: #f43f5e; transform: scale(1.2); }
+.mock-input-card { background: #fff; padding: 16px; border-radius: 18px; border: 1px solid #f1f5f9; display: flex; align-items: center; gap: 12px; color: #94a3b8; font-size: 13px; font-weight: 600; cursor: pointer; }
 
-.item-actions-row { display: flex; justify-content: space-between; align-items: center; }
-.modern-qty-selector { display: flex; align-items: center; background: #f8fafc; border-radius: 10px; border: 1px solid #e2e8f0; height: 28px; }
-.modern-qty-selector button { width: 28px; border: none; background: transparent; cursor: pointer; font-size: 16px; font-weight: 700; color: #64748b; }
-.modern-qty-selector button:hover:not(:disabled) { color: #a78bfb; }
-.qty-number { width: 30px; text-align: center; font-size: 13px; font-weight: 800; color: #0f172a; }
+/* FOOTER */
+.elite-footer { padding: 24px; border-top: 1px solid #f1f5f9; background: #fff; }
+.summary-box { background: #0f172a; border-radius: 24px; padding: 12px 12px 12px 24px; display: flex; align-items: center; justify-content: space-between; }
+.summary-info span { font-size: 11px; color: #94a3b8; font-weight: 700; text-transform: uppercase; }
+.total-amount-glow { color: #fff; font-size: 22px; font-weight: 900; letter-spacing: -0.02em; }
 
-.item-price-display { font-size: 15px; font-weight: 800; color: #0f172a; }
-.item-price-display span { font-size: 11px; color: #94a3b8; font-weight: 600; }
+.btn-checkout-shimmer { background: #a78bfb; border: none; border-radius: 18px; height: 48px; padding: 0 24px; color: #fff; font-weight: 900; font-size: 13px; letter-spacing: 0.05em; cursor: pointer; position: relative; overflow: hidden; transition: 0.3s; }
+.btn-checkout-shimmer:hover { transform: scale(1.03); background: #9061f9; }
+.shimmer-line { position: absolute; top: 0; left: -100%; width: 50%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent); animation: shimmer 2s infinite; }
+@keyframes shimmer { 100% { left: 200%; } }
 
-.btn-add-more-modern { 
-  width: 100%; padding: 12px; background: #f5f3ff; border: 1px solid #ddd6fe; 
-  color: #7c3aed; border-radius: 14px; font-weight: 700; font-size: 13px; 
-  cursor: pointer; transition: 0.3s; margin-top: 8px;
-}
-.btn-add-more-modern:hover { background: #7c3aed; color: #fff; transform: translateY(-2px); }
+/* PICKER OVERLAY */
+.picker-overlay-elite { position: fixed; inset: 0; background: rgba(5, 10, 20, 0.7); z-index: 100000; backdrop-filter: blur(10px); display: flex; align-items: center; justify-content: center; }
+.picker-window { background: #fff; width: 620px; max-width: 95%; height: 80vh; border-radius: 36px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 40px 100px rgba(0,0,0,0.5); }
 
-/* SUMMARY CARD */
-.total-summary-card { 
-  background: #0f172a; border-radius: 20px; padding: 20px; margin-top: 24px; color: #fff; 
-  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.2);
-}
-.summary-line { display: flex; justify-content: space-between; font-size: 14px; opacity: 0.8; margin-bottom: 12px; }
-.summary-line.total { border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px; margin-top: 15px; opacity: 1; }
-.total-amount { font-size: 22px; font-weight: 900; color: #a78bfb; }
-
-/* FOOTER & SHIMMER BUTTON */
-.panel-footer { padding: 24px; border-top: 1px solid #f1f5f9; background: #fff; }
-.btn-primary-shimmer { 
-  width: 100%; height: 56px; background: #a78bfb; border: none; border-radius: 16px; 
-  cursor: pointer; position: relative; overflow: hidden; transition: 0.4s;
-}
-.btn-primary-shimmer:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 15px 30px rgba(167, 139, 251, 0.4); }
-.btn-primary-shimmer:disabled { background: #e2e8f0; cursor: not-allowed; }
-
-.btn-content { display: flex; align-items: center; justify-content: center; gap: 8px; color: #fff; font-weight: 900; font-size: 15px; letter-spacing: 0.05em; }
-
-.btn-primary-shimmer::after {
-  content: ''; position: absolute; top: -50%; left: -60%; width: 25%; height: 200%;
-  background: rgba(255, 255, 255, 0.3); transform: rotate(35deg);
-  animation: shimmer-premium 3s infinite;
-}
-@keyframes shimmer-premium { 0% { left: -60%; } 20% { left: 120%; } 100% { left: 120%; } }
-
-/* PICKER MODAL PREMIUM */
-.picker-modal-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); z-index: 100000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(5px); }
-.picker-content { background: #fff; width: 600px; max-width: 95%; max-height: 85vh; border-radius: 32px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 30px 70px rgba(0,0,0,0.4); }
-
-.list-item-modern { 
-  display: grid; grid-template-columns: 40px 60px 1fr auto; gap: 16px; 
-  align-items: center; padding: 16px 24px; cursor: pointer; 
-  border-bottom: 1px solid #f8fafc; transition: 0.3s;
-}
-.list-item-modern:hover { background: #f5f3ff; }
-.list-item-modern.active { background: #f5f3ff; }
-
-.check-box-modern { width: 24px; height: 24px; border: 2px solid #cbd5e1; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: transparent; transition: 0.2s; }
-.check-box-modern.checked { background: #a78bfb; border-color: #a78bfb; color: white; }
-
-.stock-pill { padding: 2px 8px; border-radius: 6px; background: #f0fdf4; color: #16a34a; font-size: 10px; font-weight: 700; }
-.stock-pill.low { background: #fef2f2; color: #f43f5e; }
+.picker-row { display: flex; align-items: center; padding: 16px 24px; cursor: pointer; border-bottom: 1px solid #f8fafc; transition: 0.2s; }
+.picker-row:hover, .picker-row.selected { background: #f5f3ff; }
+.custom-cb { width: 22px; height: 22px; border: 2px solid #cbd5e1; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: transparent; transition: 0.2s; }
+.custom-cb.checked { background: #a78bfb; border-color: #a78bfb; color: #fff; }
+.p-visual img { width: 50px; height: 50px; border-radius: 12px; object-fit: cover; margin-left: 16px; }
+.p-content { flex: 1; margin-left: 16px; }
+.p-top-line { display: flex; justify-content: space-between; font-weight: 700; font-size: 14px; }
+.p-bottom-line { display: flex; gap: 12px; font-size: 11px; color: #94a3b8; margin-top: 2px; }
+.p-stock-badge.warning { color: #f43f5e; font-weight: 700; }
 
 /* TRANSITIONS */
-.fade-fast-enter-active, .fade-fast-leave-active { transition: opacity 0.2s; }
-.slide-premium-enter-active, .slide-premium-leave-active { transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
-.slide-premium-enter-from, .slide-premium-leave-to { transform: translateX(100%); }
+.slide-premium-elastic-enter-active, .slide-premium-elastic-leave-active { transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
+.slide-premium-elastic-enter-from, .slide-premium-elastic-leave-to { transform: translateX(100%); }
 
 @media (max-width: 768px) {
-  .order-panel-container { width: 100%; border-radius: 0; }
+  .order-panel-elite { width: 100%; border-radius: 0; }
+  .picker-window { width: 100%; height: 100%; border-radius: 0; }
 }
 </style>
