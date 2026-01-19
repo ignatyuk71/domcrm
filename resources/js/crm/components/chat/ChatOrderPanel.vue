@@ -232,8 +232,8 @@ const formatMoney = (value) => Number(value || 0).toFixed(2);
 
 <style scoped>
 /* --- OFFCANVAS BASE --- */
-.offcanvas-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.4); z-index: 1000; backdrop-filter: blur(2px); }
-.order-offcanvas-global { position: fixed; top: 0; right: 0; width: 450px; max-width: 100%; height: 100vh; background: #ffffff; z-index: 1001; display: flex; flex-direction: column; box-shadow: -10px 0 30px rgba(0, 0, 0, 0.1); }
+.offcanvas-backdrop { position: fixed; top: var(--crm-header-height, 100px); left: 0; right: 0; height: calc(100vh - var(--crm-header-height, 100px)); background: rgba(15, 23, 42, 0.4); z-index: 1000; backdrop-filter: blur(2px); }
+.order-offcanvas-global { position: fixed; top: var(--crm-header-height, 100px); right: 0; width: 450px; max-width: 100%; height: calc(100vh - var(--crm-header-height, 100px)); background: #ffffff; z-index: 1001; display: flex; flex-direction: column; box-shadow: -10px 0 30px rgba(0, 0, 0, 0.1); }
 
 .offcanvas-header { padding: 16px 20px; border-bottom: 1px solid #edf2f7; display: flex; align-items: center; justify-content: space-between; background: #ffffff; }
 .header-left { display: flex; align-items: center; gap: 12px; }
@@ -293,7 +293,7 @@ const formatMoney = (value) => Number(value || 0).toFixed(2);
 .total-sum { font-size: 18px; color: #a78bfb; }
 
 /* --- PRODUCT PICKER (LIST VIEW) --- */
-.picker-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); z-index: 2000; display: flex; align-items: flex-end; justify-content: center; backdrop-filter: blur(4px); }
+.picker-overlay { position: fixed; top: var(--crm-header-height, 100px); left: 0; right: 0; height: calc(100vh - var(--crm-header-height, 100px)); background: rgba(15, 23, 42, 0.6); z-index: 2000; display: flex; align-items: flex-end; justify-content: center; backdrop-filter: blur(4px); }
 .picker-panel { background: #ffffff; width: 550px; max-width: 100%; height: 85vh; border-radius: 24px 24px 0 0; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 -10px 40px rgba(0,0,0,0.2); }
 
 .picker-header { padding: 20px 24px; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; }
