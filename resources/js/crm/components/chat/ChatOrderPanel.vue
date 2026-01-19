@@ -54,7 +54,7 @@
                   <div class="card-main">
                     <div class="card-header-row">
                       <span class="p-title">{{ item.title }}</span>
-                      <button class="btn-delete-accessible" @click="removeSingleItem(index)" title="Видалити товар">
+                      <button class="btn-delete-accessible" @click="removeSingleItem(index)">
                         <i class="bi bi-x-lg"></i>
                       </button>
                     </div>
@@ -81,15 +81,15 @@
                     <span class="delivery-label-red">Нова Пошта</span>
                     
                     <div v-if="orderDraft.delivery && orderDraft.delivery.city_name" class="delivery-details-stack">
-                      <span class="delivery-city">{{ orderDraft.delivery.city_name }}</span>
-                      <span class="delivery-point">
+                      <div class="delivery-row city-text">{{ orderDraft.delivery.city_name }}</div>
+                      <div class="delivery-row point-text">
                         {{ orderDraft.delivery.delivery_type === 'courier' 
-                          ? formatCourierAddress(orderDraft.delivery) 
-                          : orderDraft.delivery.warehouse_name }}
-                      </span>
-                      <span class="delivery-payer-line">
-                        Платник: <span class="payer-val">{{ orderDraft.delivery.payer === 'sender' ? 'Відправник' : 'Отримувач' }}</span>
-                      </span>
+                           ? formatCourierAddress(orderDraft.delivery) 
+                           : orderDraft.delivery.warehouse_name }}
+                      </div>
+                      <div class="delivery-row payer-text">
+                        Платник: <span>{{ orderDraft.delivery.payer === 'sender' ? 'Відправник' : 'Отримувач' }}</span>
+                      </div>
                     </div>
                     
                     <span v-else class="delivery-placeholder">Оберіть місто та відділення...</span>
@@ -123,41 +123,29 @@
           <div class="picker-header-refined">
              <div class="picker-title-group">
                 <h4>Каталог продукції</h4>
-                <p>{{ mockProducts.length }} позицій доступно</p>
              </div>
              <button class="close-picker-btn" @click="productPickerOpen = false"><i class="bi bi-x-lg"></i></button>
           </div>
-
           <div class="picker-body-list custom-scrollbar">
              <div v-for="p in mockProducts" :key="p.id" 
                   class="picker-row-modern" 
                   :class="{ active: selectedProductIds.includes(p.id) }"
                   @click="toggleProductSelection(p)">
-                
                 <div class="cb-modern" :class="{ checked: selectedProductIds.includes(p.id) }">
                    <i class="bi bi-check-lg" v-if="selectedProductIds.includes(p.id)"></i>
                 </div>
-
-                <img :src="p.image" class="p-img-refined" alt="p">
-
+                <img :src="p.image" class="p-img-refined" />
                 <div class="p-data">
                    <div class="p-row">
                       <span class="p-name">{{ p.title }}</span>
                       <span class="p-price">{{ formatMoney(p.price) }} ₴</span>
                    </div>
-                   <div class="p-row-meta">
-                      <span class="p-sku">Арт: {{ p.sku }}</span>
-                      <span class="p-stock" :class="{ low: p.stock < 3 }">Залишок: {{ p.stock }} шт.</span>
-                   </div>
                 </div>
              </div>
           </div>
-
           <div class="picker-footer-refined">
              <button class="btn-cancel-light" @click="productPickerOpen = false">Скасувати</button>
-             <button class="btn-add-highlight" :disabled="selectedProductIds.length === 0" @click="handleAddProducts">
-               Додати ({{ selectedProductIds.length }})
-             </button>
+             <button class="btn-add-highlight" @click="handleAddProducts">Додати</button>
           </div>
         </div>
       </div>
@@ -167,13 +155,12 @@
       :open="deliveryModalOpen"
       v-model="orderDraft.delivery"
       @close="deliveryModalOpen = false"
-      @save="handleDeliverySave"
     />
   </teleport>
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 import ChatOrderDeliveryModal from '@/crm/components/chat/ChatOrderDeliveryModal.vue';
 
 const props = defineProps({
@@ -189,83 +176,77 @@ const selectedProductIds = ref([]);
 const deliveryModalOpen = ref(false);
 
 const mockProducts = [
-  { id: 1, title: 'Домашні капці "Пухнастики" Рожеві', sku: 'KAP-001', price: 450, stock: 12, image: 'https://picsum.photos/id/102/100/100' },
-  { id: 2, title: 'Капці з вушками "Зайчик" Сірі', sku: 'KAP-002', price: 520, stock: 2, image: 'https://picsum.photos/id/103/100/100' },
-  { id: 3, title: 'Шкарпетки "Тепло" (3 пари)', sku: 'SCK-001', price: 199, stock: 45, image: 'https://picsum.photos/id/107/100/100' },
-  { id: 4, title: 'Капці чоловічі "Класик" Сині', sku: 'KAP-003', price: 480, stock: 5, image: 'https://picsum.photos/id/119/100/100' },
+  { id: 1, title: 'Домашні капці "Пухнастики" Рожеві', price: 450, image: 'https://picsum.photos/id/102/100/100' },
+  { id: 2, title: 'Капці з вушками "Зайчик" Сірі', price: 520, image: 'https://picsum.photos/id/103/100/100' },
+  { id: 3, title: 'Шкарпетки "Тепло" (3 пари)', price: 199, image: 'https://picsum.photos/id/107/100/100' },
 ];
 
 const hasDraft = computed(() => props.orderDraft.items?.length > 0);
 const totalAmount = computed(() => (props.orderDraft.items || []).reduce((sum, item) => sum + (item.price * item.qty), 0));
 
-// Допоміжна функція для форматування адреси кур'єра
-const formatCourierAddress = (d) => {
-  return [d.street_name, d.building && `буд. ${d.building}`, d.apartment && `кв. ${d.apartment}`]
-    .filter(Boolean)
-    .join(', ');
+const formatCourierAddress = (d) => [d.street_name, d.building && `буд. ${d.building}`, d.apartment && `кв. ${d.apartment}`].filter(Boolean).join(', ');
+
+const openPicker = () => { 
+  selectedProductIds.value = props.orderDraft.items.map(item => item.id); 
+  productPickerOpen.value = true; 
 };
 
-const openPicker = () => { selectedProductIds.value = props.orderDraft.items.map(item => item.id); productPickerOpen.value = true; };
-const toggleProductSelection = (p) => { const i = selectedProductIds.value.indexOf(p.id); if (i > -1) selectedProductIds.value.splice(i, 1); else selectedProductIds.value.push(p.id); };
+const toggleProductSelection = (p) => { 
+  const i = selectedProductIds.value.indexOf(p.id); 
+  if (i > -1) selectedProductIds.value.splice(i, 1); 
+  else selectedProductIds.value.push(p.id); 
+};
+
 const handleAddProducts = () => {
-  props.orderDraft.items = mockProducts.filter(p => selectedProductIds.value.includes(p.id)).map(p => {
+  const newItems = mockProducts.filter(p => selectedProductIds.value.includes(p.id)).map(p => {
     const existing = props.orderDraft.items.find(item => item.id === p.id);
-    return { id: p.id, title: p.title, sku: p.sku, price: p.price, image: p.image, qty: existing ? existing.qty : 1 };
+    return { ...p, qty: existing ? existing.qty : 1 };
   });
+  // Пряма мутація масиву для реактивності
+  props.orderDraft.items.splice(0, props.orderDraft.items.length, ...newItems);
   productPickerOpen.value = false;
 };
 
 const removeSingleItem = (index) => { props.orderDraft.items.splice(index, 1); };
 const openDeliveryModal = () => { deliveryModalOpen.value = true; };
-
-const handleDeliverySave = (data) => {
-  // Тут дані вже в моделі через v-model, але можемо додати логіку після збереження
-  deliveryModalOpen.value = false;
-};
-
 const handleClose = () => { emit('close'); };
 const handleMinimize = () => { emit('minimize'); };
 const handleSaved = () => { emit('saved'); };
 const formatMoney = (v) => Number(v || 0).toFixed(2);
-
-watch(() => props.open, (isOpen) => { if (!isOpen) deliveryModalOpen.value = false; });
 </script>
 
 <style scoped>
-/* Стилі виводу інформації доставки */
+/* Додані стилі для 3-рядкового виводу */
 .delivery-details-stack {
   display: flex;
   flex-direction: column;
-  gap: 2px;
   margin-top: 4px;
 }
-
-.delivery-city {
+.delivery-row {
+  line-height: 1.2;
+}
+.city-text {
   font-size: 14px;
   font-weight: 800;
   color: #1e293b;
 }
-
-.delivery-point {
+.point-text {
   font-size: 12px;
   color: #64748b;
   font-weight: 600;
-  line-height: 1.3;
 }
-
-.delivery-payer-line {
+.payer-text {
   font-size: 11px;
   color: #94a3b8;
-  text-transform: uppercase;
   font-weight: 700;
+  text-transform: uppercase;
   margin-top: 2px;
 }
-
-.payer-val {
-  color: #a78bfb; /* Фіолетовий акцент на платнику */
+.payer-text span {
+  color: #a78bfb;
 }
 
-/* Решта стилів залишається без змін */
+/* Решта стилів з Ultra V2 */
 .ultra-backdrop { position: fixed; inset: 0; background: rgba(10, 15, 30, 0.4); z-index: 99998; backdrop-filter: blur(12px); }
 .order-panel-elite { position: fixed; top: 0; right: 0; width: 480px; max-width: 100%; height: 100vh; background: #ffffff; z-index: 99999; display: flex; flex-direction: column; box-shadow: -20px 0 80px rgba(0, 0, 0, 0.2); }
 .elite-header { padding: 20px 24px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between; }
@@ -313,4 +294,22 @@ watch(() => props.open, (isOpen) => { if (!isOpen) deliveryModalOpen.value = fal
 .total-amount-glow { color: #fff; font-size: 20px; font-weight: 900; }
 .btn-checkout-premium { background: #a78bfb; border: none; border-radius: 16px; height: 48px; padding: 0 20px; color: #fff; font-weight: 900; font-size: 13px; cursor: pointer; position: relative; overflow: hidden; transition: 0.3s; }
 .btn-checkout-premium:hover { background: #9061f9; transform: translateY(-2px); }
+
+/* PRODUCT MODAL */
+.picker-overlay-elite { position: fixed; inset: 0; background: rgba(5, 10, 20, 0.6); z-index: 100000; backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; }
+.picker-window { background: #fff; width: 560px; max-width: 95%; height: 80vh; border-radius: 30px; display: flex; flex-direction: column; overflow: hidden; }
+.picker-header-refined { padding: 20px 24px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between; }
+.picker-title-group h4 { font-size: 18px; font-weight: 800; color: #0f172a; margin: 0; }
+.picker-body-list { flex: 1; overflow-y: auto; }
+.picker-row-modern { display: flex; align-items: center; padding: 14px 24px; cursor: pointer; border-bottom: 1px solid #f8fafc; transition: 0.2s; gap: 16px; }
+.cb-modern { width: 20px; height: 20px; border: 2px solid #cbd5e1; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #fff; }
+.picker-row-modern.active .cb-modern { background: #a78bfb; border-color: #a78bfb; }
+.p-img-refined { width: 48px; height: 48px; border-radius: 10px; object-fit: cover; }
+.p-data { flex: 1; min-width: 0; }
+.p-row { display: flex; justify-content: space-between; align-items: center; }
+.p-name { font-size: 14px; font-weight: 700; color: #1e293b; }
+.p-price { font-size: 15px; font-weight: 800; color: #0f172a; }
+.picker-footer-refined { padding: 16px 24px; border-top: 1px solid #f1f5f9; display: flex; gap: 12px; background: #fff; }
+.btn-cancel-light { flex: 1; border: 1.5px solid #edf2f7; background: #fff; height: 46px; border-radius: 14px; color: #64748b; font-weight: 700; cursor: pointer; }
+.btn-add-highlight { flex: 2; background: #a78bfb; border: none; height: 46px; border-radius: 14px; color: #fff; font-weight: 800; cursor: pointer; }
 </style>
