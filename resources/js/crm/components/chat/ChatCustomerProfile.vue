@@ -119,8 +119,8 @@
             <button class="history-header" type="button" @click="toggleOrder(order.id)">
               <div class="history-main">
                 <a :href="`/orders/${order.id}`" class="order-number">№ {{ order.id }}</a>
-                <span class="order-status" :style="{ backgroundColor: order.statusRef?.color || '#e2e8f0' }">
-                  <i v-if="order.statusRef?.icon" class="bi" :class="order.statusRef.icon"></i>
+                <span class="order-status" :style="{ backgroundColor: getStatusRef(order)?.color || '#e2e8f0' }">
+                  <i v-if="getStatusRef(order)?.icon" class="bi" :class="getStatusRef(order).icon"></i>
                   {{ getStatusLabel(order) }}
                 </span>
               </div>
@@ -368,8 +368,12 @@ const formatDate = (value) => {
 
 const formatMoney = (value) => Number(value || 0).toFixed(2);
 
+const getStatusRef = (order) => {
+  return order?.statusRef || order?.status_ref || null;
+};
+
 const getStatusLabel = (order) => {
-  return order?.statusRef?.name || '—';
+  return getStatusRef(order)?.name || '—';
 };
 
 const saveData = async () => {
