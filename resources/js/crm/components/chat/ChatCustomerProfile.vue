@@ -107,64 +107,102 @@
           </button>
         </div>
 
-        <div class="customer-history">
-          <div class="history-title">
-            Активні замовлення
-            <span v-if="historyLoading" class="history-loading">Завантаження...</span>
-          </div>
-          <div v-if="!historyOrders.length && !historyLoading" class="history-empty">
-            Немає замовлень
-          </div>
-          <div v-for="order in historyOrders" :key="order.id" class="history-card">
-            <button class="history-header" type="button" @click="toggleOrder(order.id)">
-              <div class="history-main">
-                <a :href="`/orders/${order.id}`" class="order-number">№ {{ order.id }}</a>
-                <span class="order-status" :style="{ backgroundColor: getStatusRef(order)?.color || '#e2e8f0' }">
-                  <i v-if="getStatusRef(order)?.icon" class="bi" :class="getStatusRef(order).icon"></i>
-                  {{ getStatusLabel(order) }}
-                </span>
-              </div>
-              <div class="history-meta">
-                <span class="order-total">{{ formatMoney(order.items_sum_total) }} ₴</span>
-                <span class="order-date">{{ formatDate(order.created_at) }}</span>
-                <i class="bi" :class="order.isOpen ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
-              </div>
-            </button>
+        <div class="history-container custom-scrollbar">
+  <div class="section-header">
+    <span class="section-title">Історія замовлень</span>
+    <span v-if="historyLoading" class="loader-mini"></span>
+    <span v-else-if="historyOrders.length" class="counter-badge">{{ historyOrders.length }}</span>
+  </div>
 
-            <div class="history-body" :class="{ open: order.isOpen }">
-              <div class="history-section">
-                <div class="history-label">Доставка</div>
-                <div class="history-text">
-                  <span class="history-line">{{ order.delivery?.city_name || '—' }}</span>
-                  <span v-if="order.delivery?.warehouse_name" class="history-line">{{ order.delivery?.warehouse_name }}</span>
-                </div>
-                
-                <div v-if="order.delivery?.ttn" class="history-text">
-                  ТТН: {{ order.delivery.ttn }}
+  <div v-if="!historyOrders.length && !historyLoading" class="empty-history">
+    <div class="empty-icon"><i class="bi bi-box-seam"></i></div>
+    <span>Замовлень ще немає</span>
+  </div>
+
+  <div v-else class="orders-list">
+    <div 
+      v-for="order in historyOrders" 
+      :key="order.id" 
+      class="order-card" 
+      :class="{ 'is-active': order.isOpen }"
+    >
+      <button class="order-header" type="button" @click="toggleOrder(order.id)">
+        <div class="header-left">
+          <div class="order-id-row">
+            <span class="id-text">#{{ order.id }}</span>
+            <span class="date-text">{{ formatDate(order.created_at) }}</span>
+          </div>
+          
+          <div 
+            class="status-badge" 
+            :style="{ 
+              backgroundColor: (getStatusRef(order)?.color || '#94a3b8') + '20', 
+              color: getStatusRef(order)?.color || '#64748b' 
+            }"
+          >
+            <i v-if="getStatusRef(order)?.icon" class="bi status-icon" :class="getStatusRef(order).icon"></i>
+            {{ getStatusLabel(order) }}
+          </div>
+        </div>
+
+        <div class="header-right">
+          <div class="price-tag">{{ formatMoney(order.items_sum_total) }} ₴</div>
+          <div class="toggle-btn">
+            <i class="bi bi-chevron-down"></i>
+          </div>
+        </div>
+      </button>
+
+      <div class="order-body-wrapper">
+        <div class="order-body">
+          
+          <div class="info-block">
+            <div class="block-label"><i class="bi bi-truck"></i> Доставка</div>
+            <div class="block-content">
+              <div class="delivery-dest">
+                {{ order.delivery?.city_name || 'Самовивіз/Не вказано' }}
+                <div v-if="order.delivery?.warehouse_name" class="sub-text">
+                  {{ order.delivery?.warehouse_name }}
                 </div>
               </div>
+              
+              <div v-if="order.delivery?.ttn" class="ttn-row">
+                <span class="ttn-label">ТТН:</span>
+                <span class="ttn-code">{{ order.delivery.ttn }}</span>
+                <i class="bi bi-copy copy-icon" title="Скопіювати"></i>
+              </div>
+            </div>
+          </div>
 
-              <div class="history-section">
-                <div class="history-label">Товари</div>
-                <div class="history-items">
-                  <div v-for="item in order.items || []" :key="item.id" class="history-item">
-                    <img
-                      class="history-thumb"
-                      :src="item.product?.main_photo_path ? `/storage/${item.product.main_photo_path}` : placeholderThumb"
-                      alt=""
-                    />
-                    <div class="history-item-info">
-                      <div class="history-item-title">{{ item.product_title || 'Товар' }}</div>
-                      <div class="history-item-qty">К-сть: {{ item.qty }}</div>
-                    </div>
+          <div class="info-block">
+            <div class="block-label"><i class="bi bi-bag"></i> Товари</div>
+            <div class="products-stack">
+              <div v-for="item in order.items || []" :key="item.id" class="mini-product">
+                <img
+                  class="mini-thumb"
+                  :src="item.product?.main_photo_path ? `/storage/${item.product.main_photo_path}` : placeholderThumb"
+                  loading="lazy"
+                />
+                <div class="mini-info">
+                  <div class="mini-title">{{ item.product_title || 'Товар без назви' }}</div>
+                  <div class="mini-meta">
+                    <span class="qty">x{{ item.qty }}</span>
+                    <span class="price" v-if="item.price">{{ Number(item.price).toFixed(0) }} ₴</span>
                   </div>
                 </div>
               </div>
-
-              <a class="history-link" :href="`/orders/${order.id}`">Відкрити повну картку замовлення</a>
             </div>
           </div>
+
+          <a :href="`/orders/${order.id}`" class="btn-full-order">
+            <span>Детальніше</span>
+            <i class="bi bi-arrow-right"></i>
+          </a>
         </div>
+      </div>
+    </div>
+  </div>
+</div>
       </div>
 
     </div>
@@ -707,4 +745,308 @@ const handleOrderClose = () => {
 .spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: #fff; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #cbd5e0; gap: 8px; }
+
+/* CONTAINER */
+.history-container {
+  margin-top: 24px;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding: 0 4px;
+}
+
+.section-title {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #94a3b8;
+  letter-spacing: 0.05em;
+}
+
+.counter-badge {
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+/* EMPTY STATE */
+.empty-history {
+  text-align: center;
+  padding: 24px;
+  border: 1px dashed #e2e8f0;
+  border-radius: 12px;
+  color: #94a3b8;
+}
+.empty-icon {
+  font-size: 24px;
+  margin-bottom: 8px;
+  opacity: 0.5;
+}
+
+/* ORDER CARD */
+.orders-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.order-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.order-card.is-active {
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+
+/* HEADER */
+.order-header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 12px;
+  background: white;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.order-id-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.id-text {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.date-text {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  width: fit-content;
+}
+
+.status-icon {
+  font-size: 10px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.price-tag {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.toggle-btn {
+  color: #cbd5e1;
+  transition: transform 0.3s ease;
+  font-size: 12px;
+}
+
+.order-card.is-active .toggle-btn {
+  transform: rotate(180deg);
+  color: #64748b;
+}
+
+/* BODY & ANIMATION */
+.order-body-wrapper {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: #f8fafc;
+}
+
+.order-card.is-active .order-body-wrapper {
+  max-height: 500px; /* Достатньо для контенту */
+  border-top: 1px solid #f1f5f9;
+}
+
+.order-body {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* BLOCKS */
+.info-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.block-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.block-content {
+  font-size: 13px;
+  color: #334155;
+  background: white;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid #f1f5f9;
+}
+
+.sub-text {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 2px;
+  line-height: 1.3;
+}
+
+.ttn-row {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed #e2e8f0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.ttn-code {
+  font-family: monospace;
+  font-weight: 600;
+  color: #0f172a;
+  background: #f1f5f9;
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+
+.copy-icon {
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 12px;
+}
+.copy-icon:hover { color: #6366f1; }
+
+/* PRODUCTS */
+.products-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mini-product {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: white;
+  padding: 6px;
+  border-radius: 8px;
+  border: 1px solid #f1f5f9;
+}
+
+.mini-thumb {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.mini-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.mini-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mini-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 1px;
+}
+
+.price {
+  font-weight: 600;
+  color: #475569;
+}
+
+/* FOOTER BUTTON */
+.btn-full-order {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px;
+  background: white;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  color: #4f46e5;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+.btn-full-order:hover {
+  background: #eef2ff;
+  border-color: #6366f1;
+}
+
+/* LOADER */
+.loader-mini {
+  width: 12px;
+  height: 12px;
+  border: 2px solid #cbd5e1;
+  border-top-color: #64748b;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 </style>
