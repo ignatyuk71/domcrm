@@ -7,6 +7,14 @@
       </div>
     </transition>
 
+    <!-- НОВА КНОПКА-ТАБ (ЗБОКУ ЕКРАНА) -->
+    <div class="side-order-tab" @click="showOrderPanel = true" title="Створити замовлення">
+      <div class="tab-content">
+        <i class="bi bi-bag-plus-fill"></i>
+        <span>ОФОРМИТИ ЗАМОВЛЕННЯ</span>
+      </div>
+    </div>
+
     <div v-if="customerId" class="profile-content custom-scrollbar" ref="profileContainer">
       <div class="profile-mobile-header">
         <button class="profile-back-btn" type="button" @click="emit('close')">
@@ -76,7 +84,8 @@
                 @focus="phoneFocused = true"
                 @blur="phoneFocused = false"
               >
-             </div>
+              <button class="btn-clear" type="button" @click="clearPhone"><i class="bi bi-x-circle-fill"></i></button>
+            </div>
             <div v-else class="add-btn" @click="enablePhone"><i class="bi bi-plus-circle"></i> Додати телефон</div>
             <small v-if="form.phone && !isPhoneValid" class="error-text">Має бути 12 цифр (380...)</small>
           </div>
@@ -88,6 +97,7 @@
             <label>E-mail</label>
             <div v-if="form.email || showEmailInput" class="input-group" :class="{ 'is-focused': emailFocused }">
               <input v-model="form.email" class="simple-input" placeholder="email@example.com" @focus="emailFocused = true" @blur="emailFocused = false">
+              <button class="btn-clear" type="button" @click="clearEmail"><i class="bi bi-x-circle-fill"></i></button>
             </div>
             <div v-else class="add-btn" @click="enableEmail"><i class="bi bi-plus-circle"></i> Додати email</div>
           </div>
@@ -99,10 +109,7 @@
             {{ isLoading ? 'Зберігаємо...' : 'Зберегти покупця' }}
           </button>
           
-          <button class="btn-create-order" type="button" @click="showOrderPanel = true">
-            <i class="bi bi-bag-plus"></i>
-            Створити замовлення
-          </button>
+          <!-- СТАРА КНОПКА ВИДАЛЕНА, ТЕПЕР ТІЛЬКИ БОКОВИЙ ТАБ -->
         </div>
 
         <div class="history-container">
@@ -405,7 +412,7 @@ const toggleOrder = (orderId) => {
       nextTick(() => {
         const el = orderRefs[orderId];
         if (el && profileContainer.value) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
       });
     }
@@ -588,20 +595,9 @@ const handleOrderClose = () => {
 <style scoped>
 .right-sidebar { width: 100%; height: 100%; background: #ffffff; border-left: 1px solid #edf2f7; display: flex; flex-direction: column; position: relative; overflow: hidden; font-family: 'Inter', sans-serif; color: #334155; }
 .profile-content { flex: 1; overflow-y: auto; padding: 16px; scroll-behavior: smooth; }
+.custom-scrollbar::-webkit-scrollbar { width: 6px; } .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; } .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 
-/* Scrollbar */
-.custom-scrollbar::-webkit-scrollbar { width: 6px; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-
-/* TOAST */
-.toast-notification { position: absolute; top: 10px; left: 10%; right: 10%; z-index: 100; padding: 10px 15px; border-radius: 10px; display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; color: white; box-shadow: 0 5px 15px rgba(0,0,0,0.15); }
-.toast-notification.success { background: #10b981; }
-.toast-notification.error { background: #ef4444; }
-.toast-enter-active, .toast-leave-active { transition: all 0.4s ease; }
-.toast-enter-from, .toast-leave-to { opacity: 0; transform: translateY(-20px); }
-
-/* HEADER */
+/* ... (Всі інші стилі без змін) ... */
 .header-section { display: flex; align-items: flex-start; gap: 12px; }
 .avatar-wrap { position: relative; width: 52px; height: 52px; flex-shrink: 0; }
 .avatar-img, .avatar-placeholder { width: 100%; height: 100%; border-radius: 12px; object-fit: cover; background: #f1f5f9; }
@@ -611,7 +607,6 @@ const handleOrderClose = () => {
 .fb-bg { background: #0084FF; }
 .glow-red { box-shadow: 0 0 10px #ef4444; border-color: #ef4444; }
 .glow-green { box-shadow: 0 0 10px #10b981; border-color: #10b981; }
-
 .info { flex: 1; min-width: 0; padding-top: 2px; }
 .name-display-wrapper { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
 .name-text { font-size: 15px; font-weight: 700; color: #1a202c; }
@@ -628,7 +623,6 @@ const handleOrderClose = () => {
 .btn-confirm-tick { background: #6366f1; color: white; border: none; width: 26px; height: 26px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .id-badge { font-size: 11px; color: #a0aec0; margin-top: 4px; display: inline-block; background: #f7fafc; padding: 2px 6px; border-radius: 4px; }
 .divider { border: 0; border-top: 1px solid #f3f4f6; margin: 16px 0; }
-
 .fields-section { display: flex; flex-direction: column; gap: 12px; }
 .field-row { display: flex; align-items: flex-start; }
 .icon-col { width: 32px; color: #cbd5e0; font-size: 18px; padding-top: 18px; }
@@ -638,8 +632,6 @@ const handleOrderClose = () => {
 .error-text { color: #ef4444; font-size: 10px; margin-top: 2px; }
 .add-btn { color: #6366f1; font-size: 13px; font-weight: 600; cursor: pointer; padding: 4px 0; }
 .action-row { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
-
-/* HISTORY */
 .history-container { margin-top: 24px; }
 .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding: 0 4px; }
 .section-title { font-size: 12px; font-weight: 800; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.05em; }
@@ -649,7 +641,6 @@ const handleOrderClose = () => {
 .orders-list { display: flex; flex-direction: column; gap: 12px; }
 .order-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; transition: all 0.2s ease; }
 .order-card.is-active { border-color: #cbd5e1; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
-
 .order-header { width: 100%; display: flex; justify-content: space-between; align-items: flex-start; padding: 12px; background: white; border: none; cursor: pointer; text-align: left; }
 .header-left { display: flex; flex-direction: column; gap: 6px; }
 .order-id-row { display: flex; align-items: center; gap: 8px; }
@@ -659,10 +650,9 @@ const handleOrderClose = () => {
 .status-icon { font-size: 10px; }
 .header-right { display: flex; align-items: center; gap: 12px; }
 .price-tag { font-size: 14px; font-weight: 700; color: #0f172a; white-space: nowrap; display: flex; align-items: baseline; gap: 2px; }
-.price-tag small { font-size: 11px; color: #64748b; font-weight: 600; }
+.price-tag small { font-size: 11px; font-weight: 600; color: #64748b; }
 .toggle-btn { color: #cbd5e1; transition: transform 0.3s ease; font-size: 12px; }
 .order-card.is-active .toggle-btn { transform: rotate(180deg); color: #64748b; }
-
 .order-body-wrapper { max-height: 0; overflow: hidden; transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1); background: #f8fafc; }
 .order-card.is-active .order-body-wrapper { max-height: 500px; border-top: 1px solid #f1f5f9; }
 .order-body { padding: 12px; display: flex; flex-direction: column; gap: 16px; }
@@ -684,14 +674,19 @@ const handleOrderClose = () => {
 .btn-full-order { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 8px; background: white; border: 1px solid #cbd5e1; border-radius: 8px; color: #4f46e5; font-size: 12px; font-weight: 600; text-decoration: none; transition: all 0.2s; }
 .btn-full-order:hover { background: #eef2ff; border-color: #6366f1; }
 
+.side-order-tab { position: fixed; right: 0; top: 50%; transform: translateY(-50%); background: #1e293b; color: white; padding: 12px 6px; border-top-left-radius: 12px; border-bottom-left-radius: 12px; cursor: pointer; z-index: 100; transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); box-shadow: -2px 0 10px rgba(0,0,0,0.1); }
+.side-order-tab:hover { padding-right: 12px; background: #6366f1; }
+.tab-content { writing-mode: vertical-rl; text-orientation: mixed; transform: rotate(180deg); display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 12px; letter-spacing: 1px; }
+.tab-content i { font-size: 16px; margin-bottom: 4px; transform: rotate(90deg); }
+
 .profile-mobile-header { display: none; margin-bottom: 12px; }
 .profile-back-btn { display: inline-flex; align-items: center; gap: 8px; border: 1px solid #e2e8f0; background: #f8fafc; color: #334155; border-radius: 10px; height: 40px; padding: 0 12px; font-size: 14px; font-weight: 600; cursor: pointer; }
-
 .btn-save-modern { background: #A78BFB; color: white; border: none; border-radius: 8px; height: 40px; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; font-weight: 600; width: 100%; cursor: pointer; transition: all 0.3s ease; }
 .btn-save-modern:hover:not(:disabled) { background: #9061f9; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(167, 139, 251, 0.3); }
 .btn-save-modern:disabled { background: #e2e8f0; color: #94a3b8; cursor: not-allowed; box-shadow: none; }
 .btn-create-order { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; height: 40px; display: flex; align-items: center; justify-content: center; gap: 8px; color: #1f2937; font-size: 14px; font-weight: 600; cursor: pointer; width: 100%; transition: 0.2s; }
 .btn-create-order:hover { background: #f8fafc; border-color: #cbd5e0; }
+
 .spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: #fff; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #cbd5e0; gap: 8px; }
@@ -700,5 +695,6 @@ const handleOrderClose = () => {
   .profile-content { padding: 14px 16px 24px; }
   .profile-mobile-header { display: flex; }
   .btn-save-modern, .btn-create-order { height: 48px; }
+  .side-order-tab { display: none; }
 }
 </style>
