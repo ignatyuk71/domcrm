@@ -325,9 +325,6 @@ watch(
 .btn-cancel-light { flex: 1; border: 1.5px solid #edf2f7; background: #fff; height: 46px; border-radius: 14px; color: #64748b; font-weight: 700; cursor: pointer; }
 .btn-add-highlight { flex: 2; background: #a78bfb; border: none; height: 46px; border-radius: 14px; color: #fff; font-weight: 800; cursor: pointer; }
 
-/* Transitions */
-.slide-premium-elastic-enter-active, .slide-premium-elastic-leave-active { transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
-.slide-premium-elastic-enter-from, .slide-premium-elastic-leave-to { transform: translateX(100%); }
 
 @media (max-width: 768px) {
   .order-panel-elite, .picker-window { width: 100%; border-radius: 0; }
