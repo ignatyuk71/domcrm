@@ -147,8 +147,8 @@ watch(
   border-bottom: 1px solid #e2e8f0;
   display: flex;
   align-items: center;
-  justify-content: space-between; /* Розносить ліву і праву групи */
-  gap: 12px;
+  justify-content: space-between; /* Розносить ліву і праву групи по краях */
+  gap: 8px;
   background: #ffffff;
   height: 64px;
   flex-shrink: 0;
@@ -159,8 +159,9 @@ watch(
   display: flex;
   align-items: center;
   gap: 12px;
-  flex: 1; /* Займає весь вільний простір */
+  flex: 1; /* Займає весь вільний простір зліва */
   min-width: 0; /* Для обрізки тексту */
+  overflow: hidden;
 }
 
 .chat-thread-user {
@@ -169,6 +170,7 @@ watch(
   gap: 12px;
   flex: 1;
   min-width: 0;
+  overflow: hidden;
 }
 
 .chat-thread-avatar {
@@ -200,6 +202,7 @@ watch(
   flex-direction: column;
   gap: 2px;
   min-width: 0; /* Важливо для обрізки */
+  overflow: hidden;
 }
 
 .chat-thread-title {
@@ -218,17 +221,23 @@ watch(
   gap: 6px;
   font-size: 12px;
   color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .chat-thread-platform {
   display: flex;
   align-items: center;
   gap: 4px;
+  flex-shrink: 0;
 }
 
 .chat-time-separator {
   white-space: nowrap;
   opacity: 0.7;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Кнопка списку (мобільна) */
@@ -253,6 +262,7 @@ watch(
   align-items: center;
   gap: 8px; /* Відступ між кнопками */
   flex-shrink: 0;
+  margin-left: auto; /* Притискає праву частину вправо */
 }
 
 .action-btn-icon {
@@ -326,22 +336,45 @@ watch(
 /* --- MOBILE ADAPTATION --- */
 @media (max-width: 768px) {
   .chat-thread-header {
-    padding: 10px 14px; /* Менші відступи */
+    padding: 8px 12px; /* Зменшені відступи по краях */
+    height: 56px;      /* Трохи менша висота шапки */
+    gap: 8px;
   }
 
   .chat-thread-list-btn {
     display: inline-flex; /* Показуємо кнопку меню */
+    width: 32px;
+    height: 32px;
   }
   
+  .header-left-group {
+    gap: 8px;
+  }
+
   .chat-thread-user {
-    margin-left: 4px; /* Відступ від кнопки меню */
+    gap: 8px;
   }
-  
-  /* Приховуємо час на дуже вузьких екранах, якщо не влазить */
+
+  .chat-thread-avatar {
+    width: 36px;
+    height: 36px;
+  }
+
+  .chat-thread-title {
+    font-size: 14px;
+    max-width: 140px; /* Обмеження ширини імені на малих екранах */
+  }
+
+  .action-btn-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  /* Ховаємо час на дуже вузьких екранах */
   .chat-time-separator {
     display: none; 
   }
-  @media (min-width: 380px) {
+  @media (min-width: 360px) {
     .chat-time-separator { display: inline; }
   }
 }
