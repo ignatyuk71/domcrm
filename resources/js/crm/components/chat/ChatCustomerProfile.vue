@@ -1,342 +1,419 @@
 <template>
-  <teleport to="body">
-    <transition name="fade">
-      <div v-show="open" class="offcanvas-backdrop" @click="handleMinimize"></div>
+  <div class="right-sidebar">
+    <transition name="toast">
+      <div v-if="toast.show" class="toast-notification" :class="toast.type">
+        <i class="bi" :class="toast.type === 'success' ? 'bi-check-circle-fill' : 'bi-exclamation-triangle-fill'"></i>
+        <span>{{ toast.message }}</span>
+      </div>
     </transition>
 
-    <transition name="slide-global">
-      <div v-show="open" class="order-offcanvas-global">
-        <div class="offcanvas-header">
-          <div class="header-left">
-            <i class="bi bi-bag-check-fill header-icon"></i>
-            <div class="header-meta">
-              <h3>Нове замовлення</h3>
-              <span v-if="hasDraft" class="draft-pill">
-                <span class="pulse-dot"></span> Чернетка
-              </span>
-            </div>
-          </div>
-          <div class="header-actions">
-            <button class="btn-minimize" type="button" @click="handleMinimize" title="Згорнути">
-              <i class="bi bi-fullscreen-exit"></i>
-            </button>
-            <button class="btn-close-panel" type="button" @click="handleClose" title="Видалити чернетку">
-              <i class="bi bi-trash3"></i>
-            </button>
-          </div>
-        </div>
-
-        <div class="offcanvas-body custom-scrollbar">
-          <button 
-            class="selection-trigger-area" 
-            type="button" 
-            @click="openPicker"
+    <div v-if="customerId" class="profile-content">
+      <div class="profile-mobile-header">
+        <button class="profile-back-btn" type="button" @click="emit('close')">
+          <i class="bi bi-arrow-left"></i>
+          Назад
+        </button>
+      </div>
+      
+      <div class="header-section">
+        <div class="avatar-wrap">
+          <img v-if="avatarUrl" :src="avatarUrl" class="avatar-img">
+          <div v-else class="avatar-placeholder">{{ displayInitial }}</div>
+          
+          <div 
+            class="platform-icon-indicator" 
+            :class="[isInstagram ? 'ig-bg' : 'fb-bg', isProfileComplete ? 'glow-green' : 'glow-red']"
           >
-            <div class="trigger-info">
-              <div class="trigger-title">Додати товари до замовлення</div>
-              <div class="trigger-subtitle">Відкрити каталог доступних моделей</div>
-            </div>
-            <div class="trigger-icon-box">
-              <i class="bi bi-plus-lg"></i>
-            </div>
-          </button>
-
-          <div class="order-block">
-            <div class="block-header">
-              <div class="block-title">Кошик замовлення</div>
-              <span class="items-count" v-if="hasDraft">{{ orderDraft.items.length }} поз.</span>
-            </div>
-
-            <div v-if="!orderDraft.items.length" class="empty-cart">
-              <i class="bi bi-basket3"></i>
-              <p>Натисніть на поле вище, щоб обрати товари</p>
-            </div>
-
-            <div v-else class="cart-list">
-              <div v-for="(item, index) in orderDraft.items" :key="item.id" class="cart-item">
-                <img :src="item.image" class="cart-thumb" alt="product" />
-                <div class="cart-info">
-                  <div class="cart-title">{{ item.title }}</div>
-                  <div class="cart-sku">Арт: {{ item.sku }}</div>
-                </div>
-                <div class="cart-meta">
-                  <button class="btn-remove-mini" @click="removeSingleItem(index)">
-                    <i class="bi bi-x"></i>
-                  </button>
-                  <div class="qty-controls">
-                    <button type="button" class="qty-btn" @click="item.qty > 1 ? item.qty-- : null">-</button>
-                    <span class="qty-value">{{ item.qty }}</span>
-                    <button type="button" class="qty-btn" @click="item.qty++">+</button>
-                  </div>
-                  <div class="item-total">{{ formatMoney(item.price * item.qty) }} грн</div>
-                </div>
-              </div>
-              
-              <button class="btn-add-more" type="button" @click="openPicker">
-                <i class="bi bi-plus"></i> Додати ще товар
-              </button>
-            </div>
-
-            <div class="order-total" v-if="hasDraft">
-              <span>Разом до сплати</span>
-              <strong class="total-sum">{{ formatMoney(totalAmount) }} грн</strong>
-            </div>
+            <i class="bi" :class="isInstagram ? 'bi-instagram' : 'bi-messenger'"></i>
           </div>
         </div>
+        
+        <div class="info">
+          <div v-if="!showNameInput" class="name-display-wrapper" @click="enableNameEdit">
+            <span class="name-text" :class="{ 'text-error': !isNameValid }">{{ displayName }}</span>
+            <button class="btn-edit-purple" type="button">
+              <i class="bi bi-pencil-square"></i>
+            </button>
+          </div>
 
-        <div class="offcanvas-footer">
-          <button class="btn-save-modern" type="button" :disabled="!hasDraft" @click="handleSaved">
-            Оформити замовлення
-          </button>
+          <div v-else class="name-edit-flow">
+            <div class="inputs-stack">
+              <input v-model="form.first_name" class="modern-input" placeholder="Ім'я (кирилиця)">
+              <input v-model="form.last_name" class="modern-input" placeholder="Прізвище (кирилиця)">
+            </div>
+            <button class="btn-confirm-tick" type="button" @click="showNameInput = false">
+              <i class="bi bi-check2"></i>
+            </button>
+          </div>
+          
+          <div class="id-badge">ID: {{ customer.fb_user_id || customer.instagram_user_id || customerId }}</div>
         </div>
+
+        <button
+          type="button"
+          class="btn-status-indicator" 
+          :class="isProfileComplete ? 'status-ready' : 'status-attention'"
+          title="Статус заповнення"
+        >
+          <i class="bi" :class="isProfileComplete ? 'bi-person-check-fill' : 'bi-person-x-fill'"></i>
+        </button>
       </div>
-    </transition>
 
-    <transition name="fade">
-      <div v-if="productPickerOpen" class="picker-overlay" @click.self="productPickerOpen = false">
-        <transition name="slide-up">
-          <div class="picker-panel">
-            <div class="picker-header">
-              <div class="picker-header-info">
-                <div class="picker-title">Каталог товарів</div>
-                <div class="picker-subtitle">Оберіть одну або кілька моделей</div>
-              </div>
-              <button class="btn-close-modal" type="button" @click="productPickerOpen = false">
-                <i class="bi bi-x-lg"></i>
-              </button>
-            </div>
+      <hr class="divider" />
 
-            <div class="picker-body custom-scrollbar">
-              <div class="picker-list">
-                <label 
-                  v-for="product in mockProducts" 
-                  :key="product.id" 
-                  class="picker-item"
-                  :class="{ active: selectedProductIds.includes(product.id) }"
-                >
-                  <div class="picker-checkbox">
-                    <input type="checkbox" v-model="selectedProductIds" :value="product.id" />
-                    <div class="checkbox-custom">
-                      <i class="bi bi-check-lg"></i>
-                    </div>
-                  </div>
-                  <img :src="product.image" class="picker-thumb-img" alt="p" />
-                  <div class="picker-info">
-                    <div class="picker-name">{{ product.title }}</div>
-                    <div class="picker-sku">Арт: {{ product.sku }}</div>
-                    <div class="picker-stock" :class="{ low: product.stock < 3 }">
-                      На складі: {{ product.stock }} шт.
-                    </div>
-                  </div>
-                  <div class="picker-price-box">
-                    <div class="picker-price">{{ formatMoney(product.price) }} ₴</div>
-                  </div>
-                </label>
-              </div>
-            </div>
-
-            <div class="picker-footer">
-              <button class="btn-cancel" @click="productPickerOpen = false">Скасувати</button>
-              <button
-                class="btn-save-modern btn-add-confirm"
-                type="button"
-                :disabled="selectedProductIds.length === 0"
-                @click="handleAddProducts"
+      <div class="fields-section">
+        <div class="field-row">
+          <div class="icon-col"><i class="bi bi-telephone"></i></div>
+          <div class="input-col">
+            <label>Телефон</label>
+            <div v-if="form.phone || showPhoneInput" class="input-group" :class="{ 'is-focused': phoneFocused, 'is-invalid': form.phone && !isPhoneValid }">
+              <input 
+                v-model="form.phone" 
+                class="simple-input" 
+                placeholder="380XXXXXXXXX" 
+                ref="phoneRef"
+                type="tel"
+                @focus="phoneFocused = true"
+                @blur="phoneFocused = false"
               >
-                Додати до замовлення ({{ selectedProductIds.length }})
-              </button>
+              <button class="btn-clear" type="button" @click="clearPhone"><i class="bi bi-x-circle-fill"></i></button>
             </div>
+            <div v-else class="add-btn" @click="enablePhone"><i class="bi bi-plus-circle"></i> Додати телефон</div>
+            <small v-if="form.phone && !isPhoneValid" class="error-text">Має бути 12 цифр (380...)</small>
           </div>
-        </transition>
+        </div>
+
+        <div class="field-row">
+          <div class="icon-col"><i class="bi bi-envelope"></i></div>
+          <div class="input-col">
+            <label>E-mail</label>
+            <div v-if="form.email || showEmailInput" class="input-group" :class="{ 'is-focused': emailFocused }">
+              <input v-model="form.email" class="simple-input" placeholder="email@example.com" @focus="emailFocused = true" @blur="emailFocused = false">
+              <button class="btn-clear" type="button" @click="clearEmail"><i class="bi bi-x-circle-fill"></i></button>
+            </div>
+            <div v-else class="add-btn" @click="enableEmail"><i class="bi bi-plus-circle"></i> Додати email</div>
+          </div>
+        </div>
+
+        <div class="action-row">
+          <button class="btn-save-modern" @click="saveData" :disabled="isLoading || !isProfileComplete">
+            <span v-if="isLoading" class="spinner"></span>
+            {{ isLoading ? 'Зберігаємо...' : 'Зберегти покупця' }}
+          </button>
+          
+          <button class="btn-create-order" type="button" @click="showOrderPanel = true">
+            <i class="bi bi-bag-plus"></i>
+            Створити замовлення
+          </button>
+        </div>
       </div>
-    </transition>
-  </teleport>
+
+    </div>
+
+    <div v-else class="empty-state">
+      <i class="bi bi-person-bounding-box"></i>
+      <p>Виберіть чат</p>
+    </div>
+
+    <ChatOrderPanel
+      v-show="showOrderPanel"
+      :open="showOrderPanel"
+      :customer="customer"
+      :order-draft="orderDraft"
+      @close="handleOrderClose"
+      @minimize="handleOrderMinimize"
+      @saved="handleOrderSaved"
+    />
+
+  </div>
 </template>
 
 <script setup>
-import { computed, ref, reactive } from 'vue';
+import { ref, reactive, watch, nextTick, computed } from 'vue';
+import axios from 'axios';
+import ChatOrderPanel from '@/crm/components/chat/ChatOrderPanel.vue';
 
-const props = defineProps({
-  open: { type: Boolean, default: false },
-  customer: { type: Object, default: null },
-  orderDraft: { type: Object, required: true },
+const props = defineProps({ customer: Object });
+const emit = defineEmits(['close']);
+
+const showNameInput = ref(false);
+const phoneFocused = ref(false);
+const emailFocused = ref(false);
+const isLoading = ref(false);
+const showPhoneInput = ref(false);
+const showEmailInput = ref(false);
+const phoneRef = ref(null);
+
+// Стан для панелі замовлення
+const showOrderPanel = ref(false);
+const orderDraft = reactive({ items: [] });
+
+function resetOrderDraft() {
+  orderDraft.items = [];
+}
+
+// Стан для сповіщень
+const toast = reactive({
+  show: false,
+  message: '',
+  type: 'success'
 });
 
-const emit = defineEmits(['close', 'saved', 'minimize']);
+const form = reactive({ 
+  first_name: '',
+  last_name: '',
+  phone: '', 
+  email: '' 
+});
 
-// --- ТЕСТОВІ ДАНІ ТОВАРІВ ---
-const mockProducts = [
-  { id: 1, title: 'Домашні капці "Пухнастики" Рожеві', sku: 'KAP-001', price: 450, stock: 12, image: 'https://picsum.photos/id/102/100/100' },
-  { id: 2, title: 'Капці з вушками "Зайчик" Сірі', sku: 'KAP-002', price: 520, stock: 2, image: 'https://picsum.photos/id/103/100/100' },
-  { id: 3, title: 'Шкарпетки "Тепло" (3 пари)', sku: 'SCK-001', price: 199, stock: 45, image: 'https://picsum.photos/id/107/100/100' },
-  { id: 4, title: 'Капці чоловічі "Класик" Сині', sku: 'KAP-003', price: 480, stock: 5, image: 'https://picsum.photos/id/119/100/100' },
-];
+const cyrillicRegex = /^[А-Яа-яЁёЇїІіЄєҐґ' \-]+$/;
 
-const productPickerOpen = ref(false);
-const selectedProductIds = ref([]);
+const isNameValid = computed(() => {
+  return form.first_name.trim().length >= 2 && 
+         form.last_name.trim().length >= 2 && 
+         cyrillicRegex.test(form.first_name) && 
+         cyrillicRegex.test(form.last_name);
+});
 
-const hasDraft = computed(() => props.orderDraft.items?.length > 0);
-const totalAmount = computed(() =>
-  (props.orderDraft.items || []).reduce((sum, item) => sum + (item.price * item.qty), 0)
-);
+const isPhoneValid = computed(() => /^380\d{9}$/.test(form.phone));
+const isProfileComplete = computed(() => isNameValid.value && isPhoneValid.value);
 
-const openPicker = () => {
-  // Синхронізуємо вибрані ID з тим, що вже є в кошику
-  selectedProductIds.value = props.orderDraft.items.map(item => item.id);
-  productPickerOpen.value = true;
+watch(() => form.phone, (newVal) => {
+  if (!newVal) return;
+  let cleaned = newVal.replace(/\D/g, '');
+  if (cleaned.length > 0 && !cleaned.startsWith('38')) cleaned = '380' + cleaned;
+  form.phone = cleaned.substring(0, 12);
+});
+
+const customerId = computed(() => props.customer?.id ?? props.customer?.customer_id ?? null);
+const displayName = computed(() => {
+  const name = `${form.first_name} ${form.last_name}`.trim();
+  return name || props.customer?.customer_name || 'Не заповнено';
+});
+const displayInitial = computed(() => (displayName.value ? displayName.value[0].toUpperCase() : '?'));
+const avatarUrl = computed(() => props.customer?.fb_profile_pic || props.customer?.customer_avatar || '');
+const isInstagram = computed(() => (props.customer?.source || props.customer?.platform) === 'instagram' || !!props.customer?.instagram_user_id);
+
+watch(() => props.customer, (newVal) => {
+  if (newVal) {
+    form.first_name = newVal.first_name || '';
+    form.last_name = newVal.last_name || '';
+    form.phone = newVal.phone ? newVal.phone.replace(/\D/g, '') : '';
+    form.email = newVal.email || '';
+    showPhoneInput.value = !!form.phone;
+    showEmailInput.value = !!form.email;
+    showNameInput.value = false;
+    showOrderPanel.value = false;
+    resetOrderDraft();
+  }
+}, { immediate: true });
+
+const showToast = (msg, type = 'success') => {
+  toast.message = msg;
+  toast.type = type;
+  toast.show = true;
+  setTimeout(() => { toast.show = false; }, 3000);
 };
 
-const handleAddProducts = () => {
-  // Створюємо нові елементи кошика на основі вибору
-  const newItems = mockProducts
-    .filter(p => selectedProductIds.value.includes(p.id))
-    .map(p => {
-      // Якщо товар вже був у кошику, зберігаємо його кількість
-      const existing = props.orderDraft.items.find(item => item.id === p.id);
-      return {
-        id: p.id,
-        title: p.title,
-        sku: p.sku,
-        price: p.price,
-        image: p.image,
-        qty: existing ? existing.qty : 1,
-        key: Date.now() + p.id // унікальний ключ для списку
-      };
-    });
-  
-  // Оновлюємо кошик у батька
-  props.orderDraft.items = newItems;
-  productPickerOpen.value = false;
+const enableNameEdit = () => { showNameInput.value = true; };
+const enablePhone = async () => { showPhoneInput.value = true; if (!form.phone) form.phone = '380'; await nextTick(); phoneRef.value?.focus(); };
+const clearPhone = () => { form.phone = ''; showPhoneInput.value = false; };
+const enableEmail = async () => { showEmailInput.value = true; await nextTick(); };
+const clearEmail = () => { form.email = ''; showEmailInput.value = false; };
+
+const saveData = async () => {
+  if (!customerId.value || !isProfileComplete.value) return;
+  isLoading.value = true;
+  try {
+    const response = await axios.put(`/api/customers/${customerId.value}`, form);
+    const updatedCustomer = response?.data?.data;
+    if (props.customer && updatedCustomer) {
+      Object.assign(props.customer, updatedCustomer);
+    } else if (props.customer) {
+      Object.assign(props.customer, form);
+    }
+
+    showNameInput.value = false;
+    showToast('Дані покупця успішно збережено!');
+  } catch (e) { 
+    console.error(e); 
+    showToast('Помилка сервера. Дані не збережено.', 'error');
+  } finally { 
+    isLoading.value = false; 
+  }
 };
 
-const removeSingleItem = (index) => {
-  props.orderDraft.items.splice(index, 1);
+const handleOrderSaved = () => {
+  showOrderPanel.value = false;
+  showToast('Замовлення створено!');
 };
 
-const handleClose = () => {
-  productPickerOpen.value = false;
-  emit('close');
+const handleOrderMinimize = () => {
+  showOrderPanel.value = false;
 };
 
-const handleMinimize = () => {
-  productPickerOpen.value = false;
-  emit('minimize');
+const handleOrderClose = () => {
+  if (orderDraft.items.length > 0) {
+    const confirmed = window.confirm('Видалити чернетку замовлення?');
+    if (!confirmed) return;
+  }
+  resetOrderDraft();
+  showOrderPanel.value = false;
 };
-
-const handleSaved = () => {
-  emit('saved');
-};
-
-const formatMoney = (value) => Number(value || 0).toFixed(2);
 </script>
 
 <style scoped>
-/* --- OFFCANVAS BASE --- */
-.offcanvas-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.4); z-index: 1000; backdrop-filter: blur(2px); }
-.order-offcanvas-global { position: fixed; top: 0; right: 0; width: 450px; max-width: 100%; height: 100vh; background: #ffffff; z-index: 1001; display: flex; flex-direction: column; box-shadow: -10px 0 30px rgba(0, 0, 0, 0.1); }
+.right-sidebar { width: 100%; height: 100%; background: #ffffff; border-left: 1px solid #edf2f7; display: flex; flex-direction: column; position: relative; overflow: hidden; }
+.profile-content { padding: 16px; }
 
-.offcanvas-header { padding: 16px 20px; border-bottom: 1px solid #edf2f7; display: flex; align-items: center; justify-content: space-between; background: #ffffff; }
-.header-left { display: flex; align-items: center; gap: 12px; }
-.header-icon { color: #a78bfb; font-size: 20px; }
-.header-meta h3 { font-size: 16px; font-weight: 700; color: #1f2937; margin: 0; }
-
-.draft-pill { display: flex; align-items: center; gap: 6px; background: #f0fdf4; color: #16a34a; border-radius: 999px; padding: 2px 10px; font-size: 11px; font-weight: 700; text-transform: uppercase; margin-top: 2px; }
-.pulse-dot { width: 6px; height: 6px; background: #16a34a; border-radius: 50%; animation: pulse 2s infinite; }
-@keyframes pulse { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(1.2); } 100% { opacity: 1; transform: scale(1); } }
-
-.header-actions { display: flex; align-items: center; gap: 8px; }
-.btn-minimize { background: #f1f5f9; border: none; width: 34px; height: 34px; border-radius: 10px; color: #64748b; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-.btn-close-panel { background: #fff1f2; border: none; width: 34px; height: 34px; border-radius: 10px; color: #f43f5e; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-
-/* --- TRIGGER AREA --- */
-.selection-trigger-area {
-  width: 100%; border: 2px dashed #e2e8f0; border-radius: 16px; padding: 24px; text-align: left; cursor: pointer; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  display: flex; align-items: center; justify-content: space-between; background: #ffffff; margin-bottom: 20px; outline: none;
+/* TOAST STYLES */
+.toast-notification {
+  position: absolute; top: 10px; left: 10%; right: 10%; z-index: 100;
+  padding: 10px 15px; border-radius: 10px; display: flex; align-items: center; gap: 10px;
+  font-size: 13px; font-weight: 600; color: white; box-shadow: 0 5px 15px rgba(0,0,0,0.15);
 }
-.selection-trigger-area:hover { border-color: #a78bfb; background: #fcfaff; transform: translateY(-2px); }
-.selection-trigger-area:active { transform: scale(0.97); background: #f5f3ff; }
+.toast-notification.success { background: #10b981; }
+.toast-notification.error { background: #ef4444; }
+.toast-enter-active, .toast-leave-active { transition: all 0.4s ease; }
+.toast-enter-from, .toast-leave-to { opacity: 0; transform: translateY(-20px); }
 
-.trigger-title { font-size: 15px; font-weight: 700; color: #1f2937; margin-bottom: 4px; }
-.trigger-subtitle { font-size: 12px; color: #94a3b8; }
-.trigger-icon-box { width: 40px; height: 40px; background: #f5f3ff; color: #a78bfb; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+/* HEADER */
+.header-section { display: flex; align-items: flex-start; gap: 12px; }
+.avatar-wrap { position: relative; width: 52px; height: 52px; flex-shrink: 0; }
+.avatar-img, .avatar-placeholder { width: 100%; height: 100%; border-radius: 12px; object-fit: cover; }
+.avatar-placeholder { background: #edf2f7; color: #a0aec0; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 20px; }
 
-/* --- CART LIST --- */
-.order-block { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
-.block-header { display: flex; justify-content: space-between; align-items: center; }
-.block-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; font-weight: 700; }
-.items-count { font-size: 12px; color: #a78bfb; font-weight: 600; }
-
-.empty-cart { color: #94a3b8; font-size: 14px; text-align: center; padding: 40px 0; }
-.empty-cart i { font-size: 32px; display: block; margin-bottom: 12px; opacity: 0.4; }
-
-.cart-list { display: flex; flex-direction: column; gap: 14px; }
-.cart-item { display: grid; grid-template-columns: 50px 1fr auto; gap: 14px; align-items: center; position: relative; padding-bottom: 14px; border-bottom: 1px solid #f1f5f9; }
-.cart-item:last-child { border-bottom: none; padding-bottom: 0; }
-
-.cart-thumb { width: 50px; height: 50px; border-radius: 10px; object-fit: cover; background: #f8fafc; }
-.cart-title { font-size: 14px; font-weight: 600; color: #1f2937; line-height: 1.3; }
-.cart-sku { font-size: 11px; color: #94a3b8; margin-top: 2px; }
-
-.cart-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
-.btn-remove-mini { border: none; background: none; color: #cbd5e0; cursor: pointer; padding: 2px; transition: 0.2s; }
-.btn-remove-mini:hover { color: #f43f5e; }
-
-.qty-controls { display: flex; align-items: center; background: #f8fafc; border-radius: 8px; padding: 2px; border: 1px solid #e2e8f0; }
-.qty-btn { width: 28px; height: 28px; border-radius: 6px; border: none; background: #ffffff; color: #64748b; font-weight: 700; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-.qty-value { min-width: 30px; text-align: center; font-size: 13px; font-weight: 700; color: #1e293b; }
-.item-total { font-size: 14px; font-weight: 700; color: #1f2937; }
-
-.btn-add-more { background: transparent; border: 1.5px solid #a78bfb; color: #a78bfb; border-radius: 10px; padding: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: 0.2s; }
-.btn-add-more:hover { background: #f5f3ff; }
-
-.order-total { display: flex; align-items: center; justify-content: space-between; border-top: 1px solid #e2e8f0; padding-top: 14px; margin-top: 4px; font-size: 14px; }
-.total-sum { font-size: 18px; color: #a78bfb; }
-
-/* --- PRODUCT PICKER (LIST VIEW) --- */
-.picker-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); z-index: 2000; display: flex; align-items: flex-end; justify-content: center; backdrop-filter: blur(4px); }
-.picker-panel { background: #ffffff; width: 550px; max-width: 100%; height: 85vh; border-radius: 24px 24px 0 0; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 -10px 40px rgba(0,0,0,0.2); }
-
-.picker-header { padding: 20px 24px; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; }
-.picker-title { font-size: 18px; font-weight: 800; color: #1f2937; }
-.picker-subtitle { font-size: 13px; color: #94a3b8; }
-.btn-close-modal { background: #f1f5f9; border: none; width: 36px; height: 36px; border-radius: 50%; color: #64748b; cursor: pointer; }
-
-.picker-body { flex: 1; padding: 12px 0; overflow-y: auto; background: #ffffff; }
-.picker-list { display: flex; flex-direction: column; }
-
-.picker-item {
-  display: grid; grid-template-columns: 40px 60px 1fr auto; gap: 16px; align-items: center; padding: 12px 24px; cursor: pointer; transition: 0.2s; border-bottom: 1px solid #f8fafc;
+.platform-icon-indicator {
+  position: absolute; bottom: -4px; right: -4px; width: 22px; height: 22px;
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  border: 2px solid #fff; transition: all 0.4s ease; color: white;
 }
-.picker-item:hover { background: #fcfaff; }
-.picker-item.active { background: #f5f3ff; }
+.ig-bg { background: radial-gradient(circle at 30% 107%, #fdf497 0%, #fd5949 45%, #d6249f 60%, #285AEB 90%); }
+.fb-bg { background: #0084FF; }
+.glow-red { box-shadow: 0 0 10px #ef4444; border-color: #ef4444; }
+.glow-green { box-shadow: 0 0 10px #10b981; border-color: #10b981; }
+.platform-icon-indicator i { font-size: 11px; }
 
-.picker-checkbox { display: flex; align-items: center; justify-content: center; position: relative; }
-.picker-checkbox input { position: absolute; opacity: 0; cursor: pointer; }
-.checkbox-custom { width: 22px; height: 22px; border: 2px solid #cbd5e1; border-radius: 7px; display: flex; align-items: center; justify-content: center; color: transparent; transition: 0.2s; }
-.picker-item.active .checkbox-custom { background: #a78bfb; border-color: #a78bfb; color: white; }
+.info { flex: 1; min-width: 0; padding-top: 2px; }
+.name-display-wrapper { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.name-text { font-size: 15px; font-weight: 700; color: #1a202c; }
+.text-error { color: #ef4444; }
 
-.picker-thumb-img { width: 60px; height: 60px; border-radius: 12px; object-fit: cover; background: #f1f5f9; }
-.picker-info { display: flex; flex-direction: column; gap: 4px; }
-.picker-name { font-size: 14px; font-weight: 700; color: #1f2937; }
-.picker-sku { font-size: 12px; color: #94a3b8; }
-.picker-stock { font-size: 12px; color: #10b981; font-weight: 600; }
-.picker-stock.low { color: #f43f5e; }
-.picker-price { font-size: 15px; font-weight: 800; color: #1e293b; }
+.btn-status-indicator {
+  background: none; border: none; cursor: pointer; transition: all 0.4s ease;
+  font-size: 24px; padding: 0; margin-left: auto; display: flex; align-items: center;
+}
+.status-attention { color: #ef4444; filter: drop-shadow(0 0 5px rgba(239, 68, 68, 0.4)); }
+.status-ready { color: #10b981; filter: drop-shadow(0 0 5px rgba(16, 185, 129, 0.4)); }
 
-.picker-footer { padding: 16px 24px; border-top: 1px solid #e2e8f0; display: flex; gap: 12px; }
-.btn-cancel { flex: 1; height: 44px; border-radius: 12px; border: 1px solid #e2e8f0; background: #fff; font-weight: 600; color: #64748b; cursor: pointer; }
-.btn-add-confirm { flex: 2; height: 44px; }
+.btn-edit-purple {
+  background: #a78bfa; color: white; border: none;
+  width: 30px; height: 30px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; cursor: pointer; transition: all 0.3s ease; margin-left: 10px;
+}
+.btn-edit-purple:hover { background: #8b5cf6; transform: scale(1.1); }
 
-/* Transitions */
-.slide-up-enter-active, .slide-up-leave-active { transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
-.slide-up-enter-from, .slide-up-leave-to { transform: translateY(100%); }
+.name-edit-flow { display: flex; align-items: center; gap: 8px; }
+.inputs-stack { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.modern-input { border: none; border-bottom: 1.5px solid #e2e8f0; font-size: 13px; font-weight: 600; outline: none; transition: 0.3s; padding: 2px 0; }
+.modern-input:focus { border-color: #6366f1; }
+.btn-confirm-tick { background: #6366f1; color: white; border: none; width: 26px; height: 26px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 
-.custom-scrollbar::-webkit-scrollbar { width: 5px; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+.id-badge { font-size: 11px; color: #a0aec0; margin-top: 4px; display: inline-block; background: #f7fafc; padding: 2px 6px; border-radius: 4px; }
+.divider { border: 0; border-top: 1px solid #f3f4f6; margin: 16px 0; }
+
+.fields-section { display: flex; flex-direction: column; gap: 12px; }
+.field-row { display: flex; align-items: flex-start; }
+.icon-col { width: 32px; color: #cbd5e0; font-size: 18px; padding-top: 18px; }
+.input-col label { font-size: 10px; font-weight: 700; color: #a0aec0; text-transform: uppercase; margin-bottom: 2px; display: block; }
+.input-group { display: flex; align-items: center; border-bottom: 2px solid #edf2f7; padding: 2px 0; }
+.simple-input { flex: 1; border: none; background: transparent; font-size: 14px; color: #2d3748; outline: none; font-weight: 600; }
+.error-text { color: #ef4444; font-size: 10px; margin-top: 2px; }
+.add-btn { color: #6366f1; font-size: 13px; font-weight: 600; cursor: pointer; padding: 4px 0; }
+
+.action-row { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+
+.profile-mobile-header {
+  display: none;
+  margin-bottom: 12px;
+}
+
+.profile-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #334155;
+  border-radius: 10px;
+  height: 40px;
+  padding: 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* КНОПКА ЗБЕРЕЖЕННЯ */
+.btn-save-modern {
+  background: #A78BFB; 
+  color: white;
+  border: none;
+  border-radius: 8px;
+  height: 40px; 
+  display: flex; 
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  width: 100%;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+.btn-save-modern:hover:not(:disabled) {
+  background: #9061f9; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(167, 139, 251, 0.3);
+}
+.btn-save-modern:disabled { background: #e2e8f0; color: #94a3b8; cursor: not-allowed; box-shadow: none; }
+
+/* НОВА КНОПКА: СТВОРИТИ ЗАМОВЛЕННЯ */
+.btn-create-order {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #1f2937;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  transition: 0.2s;
+}
+.btn-create-order:hover {
+  background: #f8fafc;
+  border-color: #cbd5e0;
+}
 
 @media (max-width: 768px) {
-  .order-offcanvas-global { width: 100%; }
-  .picker-panel { width: 100%; height: 100vh; border-radius: 0; }
-  .picker-item { padding: 14px 16px; gap: 12px; }
+  .profile-content {
+    padding: 14px 16px 24px;
+  }
+
+  .profile-mobile-header {
+    display: flex;
+  }
+
+  .btn-save-modern,
+  .btn-create-order {
+    height: 48px;
+  }
 }
+
+.spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: #fff; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #cbd5e0; gap: 8px; }
 </style>
