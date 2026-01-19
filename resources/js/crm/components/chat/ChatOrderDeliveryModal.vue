@@ -115,10 +115,13 @@
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue';
+import { reactive, ref, watch } from 'vue';
 
-const props = defineProps({ open: Boolean });
-const emit = defineEmits(['close', 'save']);
+const props = defineProps({
+  open: Boolean,
+  modelValue: { type: Object, default: () => ({}) },
+});
+const emit = defineEmits(['close', 'save', 'update:modelValue']);
 
 const isSaving = ref(false);
 const isSaved = ref(false);
@@ -127,31 +130,79 @@ const test = reactive({
   type: 'wh',
   city: 'Одеса',
   warehouse: '1',
-  payer: 'r'
+  street: '',
+  building: '',
+  apartment: '',
+  payer: 'r',
 });
+
+const syncFromModel = () => {
+  const data = props.modelValue || {};
+  const deliveryType = data.delivery_type || data.type || 'warehouse';
+  test.type = deliveryType === 'courier' ? 'cur' : 'wh';
+  test.city = data.city_name || data.city || 'Одеса';
+  test.warehouse = data.warehouse_ref || data.warehouse || '1';
+  test.street = data.street_name || data.street || '';
+  test.building = data.building || '';
+  test.apartment = data.apartment || '';
+  test.payer = data.payer === 'sender' || data.payer === 's' ? 's' : 'r';
+};
+
+watch(
+  () => props.open,
+  (isOpen) => {
+    if (isOpen) {
+      syncFromModel();
+    }
+  },
+  { immediate: true }
+);
+
+const readCourierInputs = () => {
+  const modal = document.querySelector('.god-mode-window');
+  if (!modal) return { street: test.street, building: test.building, apartment: test.apartment };
+  const streetInput = modal.querySelector('.neo-input.mb-3');
+  const rowInputs = modal.querySelectorAll('.row.g-3 .neo-input');
+  return {
+    street: streetInput?.value || test.street || '',
+    building: rowInputs?.[0]?.value || test.building || '',
+    apartment: rowInputs?.[1]?.value || test.apartment || '',
+  };
+};
+
+const resolveWarehouseName = () => {
+  const modal = document.querySelector('.god-mode-window');
+  const warehouseSelect = modal?.querySelector('.elite-section select.neo-select');
+  const selectedOption = warehouseSelect?.selectedOptions?.[0];
+  return selectedOption?.text || '';
+};
 
 const handleSave = () => {
   if (isSaving.value) return;
-  
-  // Починаємо процес збереження
   isSaving.value = true;
-  
-  // Симуляція затримки (анімація успіху)
+  isSaved.value = true;
+
+  const courier = readCourierInputs();
+  const payload = {
+    delivery_type: test.type === 'cur' ? 'courier' : 'warehouse',
+    city_name: test.city,
+    warehouse_name: resolveWarehouseName() || test.warehouse,
+    street_name: courier.street,
+    building: courier.building,
+    apartment: courier.apartment,
+    payer: test.payer === 's' ? 'sender' : 'recipient',
+  };
+
   setTimeout(() => {
-    isSaved.value = true;
-    
-    // Чекаємо завершення анімації перед закриттям (наприклад, 1.5 сек)
-    setTimeout(() => {
-      emit('save', test);
-      closeModal();
-    }, 1200);
-  }, 600); // Затримка перед появою галочки
+    emit('update:modelValue', payload);
+    emit('save', payload);
+    closeModal(true);
+  }, 1100);
 };
 
-const closeModal = () => {
-  if (isSaving.value && !isSaved.value) return; // Не закривати під час процесу
+const closeModal = (force = false) => {
+  if (!force && isSaving.value && !isSaved.value) return;
   emit('close');
-  // Скидаємо стан після закриття
   setTimeout(() => {
     isSaving.value = false;
     isSaved.value = false;
