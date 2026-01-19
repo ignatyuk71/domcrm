@@ -136,8 +136,9 @@
                 <div class="history-label">Доставка</div>
                 <div class="history-text">
                   {{ order.delivery?.city_name || '—' }}
-                  <span v-if="order.delivery?.warehouse_name">, {{ order.delivery?.warehouse_name }}</span>
+                 
                 </div>
+                <span v-if="order.delivery?.warehouse_name">, {{ order.delivery?.warehouse_name }}</span>
                 <div v-if="order.delivery?.ttn" class="history-text">
                   ТТН: {{ order.delivery.ttn }}
                 </div>
