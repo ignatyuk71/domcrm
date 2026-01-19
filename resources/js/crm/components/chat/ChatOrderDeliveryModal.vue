@@ -171,8 +171,10 @@ const readCourierInputs = () => {
 };
 
 const resolveWarehouseName = () => {
+  if (test.type !== 'wh') return '';
   const modal = document.querySelector('.god-mode-window');
-  const warehouseSelect = modal?.querySelector('.elite-section select.neo-select');
+  const selects = modal?.querySelectorAll('.elite-section select.neo-select') || [];
+  const warehouseSelect = selects.length > 1 ? selects[1] : selects[0];
   const selectedOption = warehouseSelect?.selectedOptions?.[0];
   return selectedOption?.text || '';
 };
