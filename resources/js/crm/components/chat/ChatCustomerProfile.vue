@@ -107,7 +107,7 @@
           </button>
         </div>
 
-        <div class="history-container custom-scrollbar">
+        <div class="history-container">
           <div class="section-header">
             <span class="section-title">Історія замовлень</span>
             <span v-if="historyLoading" class="loader-mini"></span>
@@ -147,7 +147,6 @@
                 </div>
 
                 <div class="header-right">
-                  <!-- ОНОВЛЕНИЙ ВИВІД ЦІНИ -->
                   <div class="price-tag">{{ formatPrice(order.items_sum_total) }} <small>грн.</small></div>
                   <div class="toggle-btn">
                     <i class="bi bi-chevron-down"></i>
@@ -189,7 +188,6 @@
                           <div class="mini-title">{{ item.product_title || 'Товар без назви' }}</div>
                           <div class="mini-meta">
                             <span class="qty">x{{ item.qty }}</span>
-                            <!-- ОНОВЛЕНИЙ ВИВІД ЦІНИ ТОВАРУ -->
                             <span class="price" v-if="item.price">{{ formatPrice(item.price) }} грн.</span>
                           </div>
                         </div>
@@ -401,7 +399,6 @@ const loadCustomerHistory = async (id) => {
   }
 };
 
-// --- ОНОВЛЕНА ЛОГІКА СКРОЛУ ---
 const toggleOrder = (orderId) => {
   const target = historyOrders.value.find((order) => order.id === orderId);
   if (target) {
@@ -410,7 +407,6 @@ const toggleOrder = (orderId) => {
       nextTick(() => {
         const el = orderRefs[orderId];
         if (el && profileContainer.value) {
-          // Плавно скролимо до елемента
           el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
       });
@@ -424,17 +420,14 @@ const formatDate = (value) => {
   return date.toLocaleDateString('uk-UA', { year: 'numeric', month: '2-digit', day: '2-digit' });
 };
 
-// --- ОНОВЛЕНИЙ ФОРМАТ ЦІНИ ---
 const formatPrice = (value) => {
   const num = Number(value);
   if (isNaN(num)) return '0';
-  // Використовуємо Intl для форматування з пробілами тисяч
   return new Intl.NumberFormat('uk-UA', { 
     minimumFractionDigits: 0, 
     maximumFractionDigits: 2 
-  }).format(num).replace(/\.00$/, ''); // Прибираємо .00
+  }).format(num).replace(/\.00$/, ''); 
 };
-// Стара функція для сумісності (якщо десь викликається)
 const formatMoney = formatPrice;
 
 const getStatusRef = (order) => {
