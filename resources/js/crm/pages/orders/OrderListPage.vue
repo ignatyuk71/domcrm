@@ -240,7 +240,7 @@ function mapOrder(order) {
   const statusRef = order.statusRef || order.status_ref || {};
   const sourceRef = order.source || {};
   const latestReceipt = order.latest_fiscal_receipt || order.latestFiscalReceipt || null;
-  const deliveryStatusUpdatedAt = delivery.delivery_status_updated_at || delivery.last_tracked_at || '';
+  const deliveryStatusUpdatedAt = delivery.delivery_status_updated_at || '';
   const deliveryHoldDays = deliveryStatusUpdatedAt
     ? Math.floor((Date.now() - new Date(deliveryStatusUpdatedAt).getTime()) / (1000 * 60 * 60 * 24))
     : null;
