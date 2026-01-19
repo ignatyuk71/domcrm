@@ -354,6 +354,12 @@
 
               <td class="cell-date">
                 <span class="date-text">{{ formatDate(order.created_at) }}</span>
+                <div
+                  v-if="order.delivery_status_code === 'at_warehouse' && order.delivery_hold_days >= 3"
+                  class="hold-alert"
+                >
+                  Посилка лежить {{ order.delivery_hold_days }} дні
+                </div>
               </td>
 
               <td class="text-end pe-3 cell-actions">
@@ -766,6 +772,19 @@
 }
 .date-text {
   font-size: 0.8rem;
+}
+.hold-alert {
+  margin-top: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fcd34d;
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 0.7rem;
+  font-weight: 700;
 }
 .tags-wrapper {
   display: flex;
