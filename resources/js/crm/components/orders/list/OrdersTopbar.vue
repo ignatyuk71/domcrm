@@ -54,6 +54,16 @@
             <option v-for="day in holdFilterOptions" :key="day" :value="day">{{ day }} дні</option>
           </select>
         </div>
+
+        <button
+          v-if="holdFilterEnabled"
+          class="filter-chip"
+          :class="{ active: holdFilterActive }"
+          @click="$emit('toggle-hold')"
+        >
+          <i class="bi bi-exclamation-circle"></i>
+          <span>Посилки у відділенні</span>
+        </button>
       </div>
     </div>
   </header>
@@ -70,7 +80,7 @@ const props = defineProps({
   holdFilterOptions: { type: Array, default: () => [3, 4, 5] },
 });
 
-const emit = defineEmits(['update:search', 'search', 'toggle-status', 'update:hold-days']);
+const emit = defineEmits(['update:search', 'search', 'toggle-status', 'toggle-hold', 'update:hold-days']);
 
 function onSearch(event) {
   const value = event.target.value;
