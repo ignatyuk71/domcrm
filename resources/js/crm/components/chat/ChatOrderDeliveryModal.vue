@@ -194,9 +194,9 @@ const closeModal = () => {
 /* МЕТОД ЛОГІСТИКИ */
 .method-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 .method-tile { 
-  background: #fff; border: 2.5px solid #f1f5f9; border-radius: 32px; padding: 30px; 
+  background: #fff; border: 2.5px solid #f1f5f9; border-radius: 15px; padding: 14px; 
   cursor: pointer; position: relative; transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
-  display: flex; flex-direction: column; align-items: center; gap: 15px;
+  display: flex; flex-direction: column; align-items: center; 
 }
 .tile-icon { font-size: 42px; color: #cbd5e1; transition: 0.3s; }
 .tile-label { font-size: 17px; font-weight: 800; color: #1e293b; }
