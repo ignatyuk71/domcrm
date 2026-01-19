@@ -57,12 +57,13 @@
 
         <button
           v-if="holdFilterEnabled"
-          class="filter-chip"
+          class="hold-toggle"
           :class="{ active: holdFilterActive }"
           @click="$emit('toggle-hold')"
         >
-          <i class="bi bi-exclamation-circle"></i>
-          <span>Посилки у відділенні</span>
+          <span class="hold-dot"></span>
+          <span>Контроль зберігання</span>
+          <i class="bi bi-hourglass-split"></i>
         </button>
       </div>
     </div>
@@ -209,6 +210,42 @@ function onSearch(event) {
   color: #334155;
   outline: none;
   cursor: pointer;
+}
+
+.hold-toggle {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 20px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #64748b;
+  font-size: 0.85rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.hold-toggle .hold-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #94a3b8;
+  box-shadow: 0 0 0 4px rgba(148, 163, 184, 0.15);
+}
+.hold-toggle.active {
+  background: #fff7ed;
+  border-color: #fdba74;
+  color: #9a3412;
+  box-shadow: 0 4px 12px rgba(251, 146, 60, 0.25);
+}
+.hold-toggle.active .hold-dot {
+  background: #f97316;
+  box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.2);
+}
+.hold-toggle:hover {
+  border-color: #cbd5e1;
 }
 
 /* --- Utilities --- */
