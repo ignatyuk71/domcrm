@@ -57,6 +57,13 @@
           <i class="bi bi-exclamation-circle"></i>
           <span>Посилка {{ holdFilterDays }} дні</span>
         </button>
+
+        <div v-if="holdFilterEnabled" class="hold-days-select">
+          <i class="bi bi-calendar3"></i>
+          <select :value="holdFilterDays" @change="$emit('update:hold-days', Number($event.target.value))">
+            <option v-for="day in holdFilterOptions" :key="day" :value="day">{{ day }} дні</option>
+          </select>
+        </div>
       </div>
     </div>
   </header>
@@ -70,9 +77,10 @@ const props = defineProps({
   holdFilterEnabled: { type: Boolean, default: false },
   holdFilterActive: { type: Boolean, default: false },
   holdFilterDays: { type: Number, default: 4 },
+  holdFilterOptions: { type: Array, default: () => [3, 4, 5] },
 });
 
-const emit = defineEmits(['update:search', 'search', 'toggle-status', 'toggle-hold']);
+const emit = defineEmits(['update:search', 'search', 'toggle-status', 'toggle-hold', 'update:hold-days']);
 
 function onSearch(event) {
   const value = event.target.value;
@@ -176,6 +184,31 @@ function onSearch(event) {
 
 .filter-chip i {
   font-size: 0.9rem;
+}
+
+.hold-days-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border-radius: 20px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  height: 34px;
+  color: #64748b;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.hold-days-select i {
+  font-size: 0.85rem;
+}
+.hold-days-select select {
+  border: none;
+  background: transparent;
+  font-weight: 600;
+  color: #334155;
+  outline: none;
+  cursor: pointer;
 }
 
 /* --- Utilities --- */

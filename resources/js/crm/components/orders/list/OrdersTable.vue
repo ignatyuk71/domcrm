@@ -13,6 +13,7 @@
     expandedRows: { type: Object, required: true },
     deletingId: { type: [Number, String, null], default: null },
     loading: { type: Boolean, default: false },
+    holdFilterDays: { type: Number, default: 3 },
   });
   
   defineEmits({
@@ -319,7 +320,7 @@
                   </div>
 
                   <div
-                    v-if="order.delivery_status_code === 'at_warehouse' && order.delivery_hold_days >= 4"
+                    v-if="order.delivery_status_code === 'at_warehouse' && order.delivery_hold_days >= holdFilterDays"
                     class="hold-badge"
                     :title="`Посилка у відділенні ${order.delivery_hold_days} дні`"
                   >
@@ -355,7 +356,7 @@
               <td class="cell-date">
                 <span class="date-text">{{ formatDate(order.created_at) }}</span>
                 <div
-                  v-if="order.delivery_status_code === 'at_warehouse' && order.delivery_hold_days >= 3"
+                  v-if="order.delivery_status_code === 'at_warehouse' && order.delivery_hold_days >= holdFilterDays"
                   class="hold-alert"
                 >
                   Посилка лежить {{ order.delivery_hold_days }} дні

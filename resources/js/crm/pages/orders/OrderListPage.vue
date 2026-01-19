@@ -7,9 +7,11 @@
       :hold-filter-enabled="true"
       :hold-filter-active="filters.delivery_hold_days === holdFilterDays"
       :hold-filter-days="holdFilterDays"
+      :hold-filter-options="holdFilterOptions"
       @search="handleSearch"
       @toggle-status="toggleStatus"
       @toggle-hold="toggleHoldFilter"
+      @update:hold-days="updateHoldDays"
     />
 
     <div class="card border-0 shadow-sm overflow-hidden">
@@ -18,6 +20,7 @@
         :expanded-rows="expandedRows"
         :deleting-id="deletingId"
         :loading="loading"
+        :hold-filter-days="holdFilterDays"
         @toggle-row="toggleRow"
         @delete="handleDelete"
         @open-tags="openTagsModal"
@@ -99,7 +102,8 @@ const statuses = ref([]);
 const statusesOrder = ref(null);
 const selectedStatusId = ref(null);
 const meta = ref({ current_page: 1, last_page: 1, total: 0 });
-const holdFilterDays = 3;
+const holdFilterOptions = [3, 4, 5];
+const holdFilterDays = ref(3);
 const filters = reactive({ search: '', statuses: [], payment_status: '', delivery_hold_days: null, page: 1, per_page: 20 });
 let searchTimer;
 
@@ -309,9 +313,18 @@ function mapOrder(order) {
 }
 
 function toggleHoldFilter() {
-  filters.delivery_hold_days = filters.delivery_hold_days ? null : holdFilterDays;
+  filters.delivery_hold_days = filters.delivery_hold_days ? null : holdFilterDays.value;
   filters.page = 1;
   fetchData();
+}
+
+function updateHoldDays(value) {
+  holdFilterDays.value = value;
+  if (filters.delivery_hold_days) {
+    filters.delivery_hold_days = value;
+    filters.page = 1;
+    fetchData();
+  }
 }
 
 function handleSearch() {
