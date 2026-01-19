@@ -1,235 +1,220 @@
 <template>
   <transition name="modal-spring">
-    <div v-if="open" class="delivery-modal-overlay" @click.self="$emit('close')">
-      <div class="delivery-window">
+    <div v-if="open" class="elite-modal-overlay" @click.self="$emit('close')">
+      <div class="elite-delivery-window">
         
-        <div class="delivery-header">
-          <div class="header-info">
-            <h4 class="m-0">Доставка</h4>
-            <p class="brand-red-text">Нова Пошта • Оберіть параметри</p>
+        <header class="elite-header">
+          <div class="header-main-info">
+            <h4 class="title-text">Оформлення доставки</h4>
+            <p class="brand-np-red">Нова Пошта • Експрес-доставка</p>
           </div>
-          <button class="btn-close-modal" @click="$emit('close')">
-            <i class="bi bi-x-lg"></i>
+          <button class="btn-close-circle" @click="$emit('close')">
+            <i class="bi bi-x"></i>
           </button>
-        </div>
+        </header>
 
-        <div class="delivery-body custom-scrollbar">
-          <div class="delivery-card p-3 border-0 bg-white">
-            <div class="d-flex flex-column gap-4">
-              
-              <section>
-                <label class="form-label-custom">Спосіб доставки</label>
-                <div class="delivery-toggle-group">
-                  <input type="radio" class="btn-check" id="dt_warehouse" value="warehouse" v-model="local.delivery_type">
-                  <label class="toggle-item" for="dt_warehouse">
-                    <i class="bi bi-box-seam"></i>
-                    <span>Відділення</span>
-                  </label>
-
-                  <input type="radio" class="btn-check" id="dt_courier" value="courier" v-model="local.delivery_type">
-                  <label class="toggle-item" for="dt_courier">
-                    <i class="bi bi-geo-fill"></i>
-                    <span>Курʼєр</span>
-                  </label>
-                </div>
-              </section>
-
-              <section class="position-relative">
-                <label class="form-label-custom">Місто доставки</label>
-                <div class="input-wrapper">
-                  <i class="bi bi-search input-prefix"></i>
-                  <input
-                    type="text"
-                    class="form-control custom-input"
-                    v-model="cityQuery"
-                    @focus="showCityDropdown = true"
-                    placeholder="Оберіть місто..."
-                  />
-                </div>
-                
-                <div v-if="showCityDropdown && cityQuery" class="custom-dropdown shadow">
-                  <button
-                    v-for="city in filteredCities"
-                    :key="city"
-                    type="button"
-                    class="dropdown-item"
-                    @click="selectCity(city)"
-                  >
-                    <i class="bi bi-geo-alt me-2 text-muted"></i>
-                    <span class="fw-bold">{{ city }}</span>
-                  </button>
-                </div>
-              </section>
-
-              <section v-if="local.delivery_type !== 'courier'" class="position-relative">
-                <label class="form-label-custom">Відділення або поштомат</label>
-                <div class="input-wrapper">
-                  <i class="bi bi-building-up input-prefix"></i>
-                  <input
-                    type="text"
-                    class="form-control custom-input"
-                    v-model="warehouseQuery"
-                    @focus="showWarehouseDropdown = true"
-                    placeholder="Введіть номер або назву..."
-                  />
-                </div>
-
-                <div v-if="showWarehouseDropdown && warehouseQuery" class="custom-dropdown shadow">
-                  <button
-                    v-for="wh in filteredWarehouses"
-                    :key="wh"
-                    type="button"
-                    class="dropdown-item"
-                    @click="selectWarehouse(wh)"
-                  >
-                    <i class="bi bi-door-open text-primary me-2"></i>
-                    <span class="small fw-medium">{{ wh }}</span>
-                  </button>
-                </div>
-                
-                <div class="mt-3">
-                  <label class="form-label-custom">Додатково (ПІБ або коментар)</label>
-                  <input class="form-control custom-input-small" v-model="local.address_note" placeholder="Наприклад: Отримувач інша особа" />
-                </div>
-              </section>
-
-              <section v-else>
-                <div class="mb-3">
-                  <label class="form-label-custom">Вулиця</label>
-                  <input type="text" class="form-control custom-input" v-model="local.street_name" placeholder="Введіть вулицю..." />
-                </div>
-                <div class="row g-2">
-                  <div class="col-6">
-                    <label class="form-label-custom">Будинок</label>
-                    <input class="form-control custom-input" v-model="local.building" placeholder="10/А" />
-                  </div>
-                  <div class="col-6">
-                    <label class="form-label-custom">Кв./Офіс</label>
-                    <input class="form-control custom-input" v-model="local.apartment" placeholder="42" />
-                  </div>
-                </div>
-              </section>
-
-              <section>
-                <label class="form-label-custom">Платник доставки</label>
-                <div class="payer-selector">
-                  <div class="payer-option" :class="{ active: local.payer === 'recipient' }" @click="local.payer = 'recipient'">
-                    <i class="bi bi-person"></i>
-                    <span>Отримувач</span>
-                  </div>
-                  <div class="payer-option" :class="{ active: local.payer === 'sender' }" @click="local.payer = 'sender'">
-                    <i class="bi bi-shop"></i>
-                    <span>Відправник</span>
-                  </div>
-                </div>
-              </section>
-
+        <div class="elite-body custom-scrollbar">
+          
+          <div class="form-elite-group">
+            <label class="label-elite">Дані отримувача</label>
+            <div class="row g-2 mb-2">
+              <div class="col-6">
+                <input type="text" class="elite-input-field" placeholder="Прізвище" v-model="test.lastName">
+              </div>
+              <div class="col-6">
+                <input type="text" class="elite-input-field" placeholder="Ім'я" v-model="test.firstName">
+              </div>
+            </div>
+            <div class="input-with-icon-elite">
+              <i class="bi bi-phone-vibrate"></i>
+              <input type="tel" class="elite-input-field icon-pad" placeholder="380XXXXXXXXX" v-model="test.phone">
             </div>
           </div>
+
+          <div class="form-elite-group">
+            <label class="label-elite">Метод отримання</label>
+            <div class="delivery-toggle-elite">
+              <button class="toggle-btn" :class="{ active: test.type === 'wh' }" @click="test.type = 'wh'">
+                <i class="bi bi-box-seam"></i> Відділення
+              </button>
+              <button class="toggle-btn" :class="{ active: test.type === 'cur' }" @click="test.type = 'cur'">
+                <i class="bi bi-geo-fill"></i> Кур'єр
+              </button>
+            </div>
+          </div>
+
+          <div class="form-elite-group">
+            <label class="label-elite">Локація доставки</label>
+            <div class="input-with-icon-elite">
+              <i class="bi bi-search"></i>
+              <select class="elite-input-field select-elite" v-model="test.city">
+                <option value="Київ">Київ</option>
+                <option value="Львів">Львів</option>
+                <option value="Одеса">Одеса</option>
+                <option value="Харків">Харків</option>
+              </select>
+            </div>
+          </div>
+
+          <div v-if="test.type === 'wh'" class="form-elite-group animate-in">
+            <label class="label-elite">Вибір відділення або поштомату</label>
+            <div class="input-with-icon-elite">
+              <i class="bi bi-building"></i>
+              <select class="elite-input-field select-elite" v-model="test.warehouse">
+                <option value="1">Відділення №1: вул. Пирогова, 13</option>
+                <option value="2">Поштомат №5522: пр. Перемоги, 4</option>
+                <option value="3">Відділення №15: вул. Мазепи, 2</option>
+              </select>
+            </div>
+            <div class="mt-3">
+              <label class="label-elite">Додатковий коментар</label>
+              <input class="elite-input-field small-f" v-model="test.note" placeholder="Наприклад: Отримувач інша особа">
+            </div>
+          </div>
+
+          <div v-else class="form-elite-group animate-in">
+             <label class="label-elite">Адреса для кур'єра</label>
+             <input type="text" class="elite-input-field mb-2" placeholder="Вулиця">
+             <div class="row g-2">
+               <div class="col-6"><input type="text" class="elite-input-field" placeholder="Буд."></div>
+               <div class="col-6"><input type="text" class="elite-input-field" placeholder="Кв."></div>
+             </div>
+          </div>
+
+          <div class="form-elite-group">
+            <label class="label-elite">Хто сплачує за доставку?</label>
+            <div class="payer-grid-elite">
+              <button class="payer-card" :class="{ active: test.payer === 'r' }" @click="test.payer = 'r'">
+                <i class="bi bi-person-badge"></i> Отримувач
+              </button>
+              <button class="payer-card" :class="{ active: test.payer === 's' }" @click="test.payer = 's'">
+                <i class="bi bi-shop-window"></i> Відправник
+              </button>
+            </div>
+          </div>
+
         </div>
 
-        <div class="delivery-footer">
-          <button class="btn-cancel" @click="$emit('close')">Скасувати</button>
-          <button class="btn-save" @click="$emit('save', local)">Зберегти дані</button>
-        </div>
+        <footer class="elite-footer">
+          <button class="btn-secondary-elite" @click="$emit('close')">Скасувати</button>
+          <button class="btn-primary-shimmer-elite" @click="$emit('save', test)">
+            <span>ЗБЕРЕГТИ ДАНІ</span>
+            <div class="shimmer-effect"></div>
+          </button>
+        </footer>
       </div>
     </div>
   </transition>
 </template>
 
 <script setup>
-import { reactive, ref, computed } from 'vue';
+import { reactive } from 'vue';
 
-const props = defineProps({ open: Boolean });
-const emit = defineEmits(['close', 'save']);
+defineProps({ open: Boolean });
+defineEmits(['close', 'save']);
 
-// Тестові дані для списків
-const mockCities = ['Київ', 'Одеса', 'Львів', 'Харків', 'Дніпро'];
-const mockWarehouses = ['Відділення №1: вул. Пирогова, 13', 'Поштомат №5522', 'Відділення №15'];
-
-const local = reactive({
-  city_name: '', 
-  warehouse_name: '',
-  delivery_type: 'warehouse', 
-  payer: 'recipient',
-  street_name: '', 
-  building: '', 
-  apartment: '', 
-  address_note: ''
+// ТЕСТОВИЙ НАБІР ДАНИХ (БЕЗ ЛОГІКИ API)
+const test = reactive({
+  lastName: 'Остапчук',
+  firstName: 'Дмитро',
+  phone: '380991234567',
+  type: 'wh',
+  city: 'Київ',
+  warehouse: '1',
+  payer: 'r',
+  note: ''
 });
-
-const cityQuery = ref('');
-const warehouseQuery = ref('');
-const showCityDropdown = ref(false);
-const showWarehouseDropdown = ref(false);
-
-const filteredCities = computed(() => mockCities.filter(c => c.toLowerCase().includes(cityQuery.value.toLowerCase())));
-const filteredWarehouses = computed(() => mockWarehouses.filter(w => w.toLowerCase().includes(warehouseQuery.value.toLowerCase())));
-
-function selectCity(city) {
-  local.city_name = city;
-  cityQuery.value = city;
-  showCityDropdown.value = false;
-}
-
-function selectWarehouse(wh) {
-  local.warehouse_name = wh;
-  warehouseQuery.value = wh;
-  showWarehouseDropdown.value = false;
-}
 </script>
 
 <style scoped>
-/* МОДАЛЬНЕ ВІКНО */
-.delivery-modal-overlay { 
-  position: fixed; inset: 0; background: rgba(10, 15, 30, 0.4); 
-  z-index: 100005; backdrop-filter: blur(8px); 
+/* PREMIUM OVERLAY & WINDOW */
+.elite-modal-overlay { 
+  position: fixed; inset: 0; background: rgba(10, 15, 30, 0.5); 
+  z-index: 100005; backdrop-filter: blur(12px); 
   display: flex; align-items: center; justify-content: center; 
 }
-
-.delivery-window { 
-  background: #fff; width: 500px; max-width: 95%; max-height: 90vh; 
-  border-radius: 24px; display: flex; flex-direction: column; 
-  overflow: hidden; box-shadow: 0 40px 100px rgba(0,0,0,0.4); 
+.elite-delivery-window { 
+  background: #ffffff; width: 540px; max-width: 95%; max-height: 88vh; 
+  border-radius: 32px; display: flex; flex-direction: column; 
+  overflow: hidden; box-shadow: 0 40px 100px rgba(0,0,0,0.45); 
 }
 
-/* ШАПКА ТА ЧЕРВОНИЙ ТЕКСТ */
-.delivery-header { padding: 16px 20px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; }
-.brand-red-text { color: #dc2626; font-size: 11px; font-weight: 800; text-transform: uppercase; margin: 2px 0 0; }
+/* HEADER */
+.elite-header { padding: 24px 30px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between; }
+.title-text { font-size: 20px; font-weight: 800; color: #0f172a; margin: 0; }
+.brand-np-red { font-size: 11px; color: #dc2626; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; margin-top: 4px; }
+.btn-close-circle { border: none; background: #f1f5f9; width: 38px; height: 38px; border-radius: 50%; color: #64748b; font-size: 24px; cursor: pointer; transition: 0.3s; }
+.btn-close-circle:hover { transform: rotate(90deg); background: #fee2e2; color: #ef4444; }
 
-.delivery-body { flex: 1; overflow-y: auto; background: #fff; padding: 10px; }
-.delivery-footer { padding: 16px 20px; border-top: 1px solid #f1f5f9; display: flex; gap: 12px; }
+/* BODY */
+.elite-body { flex: 1; padding: 30px; overflow-y: auto; background: #fafafa; }
+.form-elite-group { margin-bottom: 28px; }
+.label-elite { font-size: 10px; font-weight: 900; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.1em; margin-bottom: 12px; display: block; }
 
-/* ТВОЇ ОРИГІНАЛЬНІ СТИЛІ */
-.form-label-custom { font-size: 0.7rem; font-weight: 800; text-transform: uppercase; color: #8898aa; margin-bottom: 0.4rem; display: block; }
-.input-wrapper { position: relative; display: flex; align-items: center; }
-.custom-input { border-radius: 10px; padding: 0.65rem 2.6rem 0.65rem 2.4rem; border: 1px solid #e9ecef; width: 100%; font-size: 0.9rem; }
-.input-prefix { position: absolute; left: 0.9rem; color: #adb5bd; }
+/* INPUT STYLES */
+.elite-input-field { 
+  width: 100%; padding: 15px 20px; border-radius: 16px; 
+  border: 1.5px solid #edf2f7; font-size: 14px; font-weight: 700; 
+  color: #1e293b; background: #fff; transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1); outline: none; 
+}
+.elite-input-field:focus { border-color: #a78bfb; background: #fff; box-shadow: 0 0 0 5px rgba(167, 139, 251, 0.15); }
+.input-with-icon-elite { position: relative; display: flex; align-items: center; }
+.input-with-icon-elite i { position: absolute; left: 18px; color: #a78bfb; font-size: 18px; }
+.icon-pad { padding-left: 52px; }
 
-.delivery-toggle-group { display: flex; background: #f4f6f9; padding: 4px; border-radius: 12px; gap: 4px; }
-.toggle-item { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px; border-radius: 9px; cursor: pointer; transition: 0.2s; font-weight: 600; font-size: 0.9rem; color: #6c757d; }
-.btn-check { display: none; }
-.btn-check:checked + .toggle-item { background: #fff; color: #a78bfb; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+/* CUSTOM SELECT */
+.select-elite { 
+  cursor: pointer; appearance: none; padding-left: 52px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%23a78bfb' viewBox='0 0 16 16'%3E%3Cpath d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3E%3C/svg%3E"); 
+  background-repeat: no-repeat; background-position: right 20px center; 
+}
 
-.custom-dropdown { position: absolute; top: 105%; left: 0; right: 0; z-index: 1050; background: white; border-radius: 10px; max-height: 200px; overflow-y: auto; border: 1px solid #eee; }
-.dropdown-item { padding: 10px; border: none; background: none; width: 100%; text-align: left; border-bottom: 1px solid #f8f9fa; font-size: 0.85rem; cursor: pointer; }
-.dropdown-item:hover { background: #f5f3ff; }
+/* TOGGLE GROUP */
+.delivery-toggle-elite { display: flex; background: #f1f5f9; padding: 6px; border-radius: 20px; gap: 6px; }
+.toggle-btn { 
+  flex: 1; border: none; background: transparent; padding: 14px; 
+  border-radius: 14px; font-size: 13px; font-weight: 800; color: #64748b; 
+  cursor: pointer; transition: 0.3s; display: flex; align-items: center; justify-content: center; gap: 10px; 
+}
+.toggle-btn.active { background: #fff; color: #a78bfb; box-shadow: 0 8px 16px rgba(0,0,0,0.06); }
 
-.payer-selector { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.payer-option { border: 1px solid #e9ecef; padding: 10px; border-radius: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; font-size: 0.9rem; color: #6c757d; }
-.payer-option.active { border-color: #a78bfb; background: #f5f3ff; color: #a78bfb; }
+/* PAYER SELECTOR */
+.payer-grid-elite { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+.payer-card { 
+  border: 2px solid #edf2f7; background: #fff; padding: 16px; 
+  border-radius: 20px; font-size: 13px; font-weight: 800; color: #64748b; 
+  cursor: pointer; transition: 0.3s; display: flex; flex-direction: column; align-items: center; gap: 8px; 
+}
+.payer-card i { font-size: 20px; }
+.payer-card.active { border-color: #a78bfb; background: #f5f3ff; color: #a78bfb; transform: translateY(-3px); box-shadow: 0 10px 20px rgba(167, 139, 251, 0.1); }
 
-/* КНОПКИ */
-.btn-cancel { flex: 1; border: 1px solid #e2e8f0; background: #fff; padding: 10px; border-radius: 12px; font-weight: 700; color: #64748b; }
-.btn-save { flex: 2; background: #a78bfb; color: #fff; border: none; padding: 10px; border-radius: 12px; font-weight: 800; }
+/* FOOTER & SHIMMER */
+.elite-footer { padding: 20px 30px; border-top: 1px solid #f1f5f9; display: flex; gap: 16px; background: #fff; }
+.btn-secondary-elite { 
+  flex: 1; border: 2.5px solid #edf2f7; background: #fff; height: 56px; 
+  border-radius: 20px; color: #64748b; font-weight: 800; cursor: pointer; 
+}
+.btn-primary-shimmer-elite { 
+  flex: 2; background: #a78bfb; border: none; height: 56px; 
+  border-radius: 20px; color: #fff; font-weight: 900; cursor: pointer; 
+  position: relative; overflow: hidden; transition: 0.3s; letter-spacing: 0.05em;
+}
+.btn-primary-shimmer-elite:hover { background: #9061f9; transform: translateY(-3px); box-shadow: 0 15px 30px rgba(167, 139, 251, 0.4); }
 
-/* МОБІЛЬНА ВЕРСІЯ: НА ВЕСЬ ЕКРАН */
+.shimmer-effect { position: absolute; top: 0; left: -100%; width: 50%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent); animation: shimmer 2.5s infinite; }
+@keyframes shimmer { 100% { left: 200%; } }
+
+/* MOBILE ADAPTATION: FULL SCREEN */
 @media (max-width: 768px) {
-  .delivery-window { width: 100%; height: 100vh; max-height: 100vh; border-radius: 0; }
-  .delivery-modal-overlay { align-items: flex-start; }
+  .elite-delivery-window { width: 100%; height: 100vh; max-height: 100vh; border-radius: 0; }
+  .elite-modal-overlay { align-items: flex-start; }
 }
 
-/* Анімація модалки */
-.modal-spring-enter-active { animation: spring-in 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-@keyframes spring-in { from { opacity: 0; transform: scale(0.9) translateY(20px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+/* ANIMATIONS */
+.modal-spring-enter-active { animation: spring-in 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+.modal-spring-leave-active { animation: spring-in 0.3s reverse; }
+@keyframes spring-in { from { opacity: 0; transform: scale(0.9) translateY(40px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+
+.custom-scrollbar::-webkit-scrollbar { width: 5px; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
 </style>
