@@ -91,10 +91,6 @@
             <i class="bi bi-chat-square-dots"></i>
           </button>
         </div>
-
-        <button type="button" class="tool-btn" title="Емодзі">
-          <i class="bi bi-emoji-smile"></i>
-        </button>
       </div>
 
     </form>
