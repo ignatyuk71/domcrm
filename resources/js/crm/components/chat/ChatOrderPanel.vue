@@ -160,13 +160,13 @@ const formatMoney = (v) => Number(v || 0).toFixed(2);
 <style scoped>
 /* ПОВЕРНУВ ПОВНУ ВИСОТУ ТА Z-INDEX */
 .offcanvas-backdrop { 
-  position: fixed; top: 0; left: 0; right: 0; height: 100vh; 
-  background: rgba(15, 23, 42, 0.4); z-index: 99998; backdrop-filter: blur(4px); 
+  position: fixed; inset: 0; 
+  background: rgba(15, 23, 42, 0.4); z-index: 200000; backdrop-filter: blur(4px); 
 }
 .order-offcanvas-global { 
-  position: fixed; top: 0; right: 0; width: 460px; max-width: 100%; height: 100vh; 
-  background: #ffffff; z-index: 99999; display: flex; flex-direction: column; 
-  box-shadow: -15px 0 40px rgba(0, 0, 0, 0.2); 
+  position: fixed; inset: 0; width: 100%; height: 100vh; 
+  background: #ffffff; z-index: 200001; display: flex; flex-direction: column; 
+  box-shadow: none; 
 }
 
 /* HEADER */
@@ -249,7 +249,7 @@ const formatMoney = (v) => Number(v || 0).toFixed(2);
 .btn-save-modern:hover::after { left: 150%; transition: all 0.8s ease; }
 
 /* PICKER MODAL */
-.picker-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); z-index: 100000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(3px); }
+.picker-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); z-index: 200002; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(3px); }
 .product-selection-modal { background: #fff; width: 580px; max-width: 95%; max-height: 85vh; border-radius: 28px; display: flex; flex-direction: column; overflow: hidden; }
 
 /* ANIMATIONS */
