@@ -106,6 +106,63 @@
             Створити замовлення
           </button>
         </div>
+
+        <div class="customer-history">
+          <div class="history-title">
+            Активні замовлення
+            <span v-if="historyLoading" class="history-loading">Завантаження...</span>
+          </div>
+          <div v-if="!historyOrders.length && !historyLoading" class="history-empty">
+            Немає замовлень
+          </div>
+          <div v-for="order in historyOrders" :key="order.id" class="history-card">
+            <button class="history-header" type="button" @click="toggleOrder(order.id)">
+              <div class="history-main">
+                <a :href="`/orders/${order.id}`" class="order-number">№ {{ order.order_number || order.id }}</a>
+                <span class="order-status" :style="{ backgroundColor: order.statusRef?.color || '#e2e8f0' }">
+                  {{ order.statusRef?.name || order.status }}
+                </span>
+              </div>
+              <div class="history-meta">
+                <span class="order-total">{{ formatMoney(order.items_sum_total) }} ₴</span>
+                <span class="order-date">{{ formatDate(order.created_at) }}</span>
+                <i class="bi" :class="order.isOpen ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+              </div>
+            </button>
+
+            <div class="history-body" :class="{ open: order.isOpen }">
+              <div class="history-section">
+                <div class="history-label">Доставка</div>
+                <div class="history-text">
+                  {{ order.delivery?.city_name || '—' }}
+                  <span v-if="order.delivery?.warehouse_name">, {{ order.delivery?.warehouse_name }}</span>
+                </div>
+                <div v-if="order.delivery?.ttn" class="history-text">
+                  ТТН: {{ order.delivery.ttn }}
+                </div>
+              </div>
+
+              <div class="history-section">
+                <div class="history-label">Товари</div>
+                <div class="history-items">
+                  <div v-for="item in order.items || []" :key="item.id" class="history-item">
+                    <img
+                      class="history-thumb"
+                      :src="item.product?.main_photo_path ? `/storage/${item.product.main_photo_path}` : placeholderThumb"
+                      alt=""
+                    />
+                    <div class="history-item-info">
+                      <div class="history-item-title">{{ item.product_title || 'Товар' }}</div>
+                      <div class="history-item-qty">К-сть: {{ item.qty }}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <a class="history-link" :href="`/orders/${order.id}`">Відкрити повну картку замовлення</a>
+            </div>
+          </div>
+        </div>
       </div>
 
     </div>
@@ -146,6 +203,9 @@ const showPhoneInput = ref(false);
 const showEmailInput = ref(false);
 const phoneRef = ref(null);
 const isOrderSaving = ref(false);
+const historyOrders = ref([]);
+const historyLoading = ref(false);
+const placeholderThumb = 'https://via.placeholder.com/48x48?text=%20';
 
 // Стан для панелі замовлення
 const showOrderPanel = ref(false);
@@ -259,8 +319,13 @@ watch(() => props.customer, (newVal) => {
     showNameInput.value = false;
     showOrderPanel.value = false;
     resetOrderDraft();
+    if (customerId.value) loadCustomerHistory(customerId.value);
   }
 }, { immediate: true });
+
+watch(customerId, (id) => {
+  if (id) loadCustomerHistory(id);
+});
 
 const showToast = (msg, type = 'success') => {
   toast.message = msg;
@@ -274,6 +339,33 @@ const enablePhone = async () => { showPhoneInput.value = true; if (!form.phone) 
 const clearPhone = () => { form.phone = ''; showPhoneInput.value = false; };
 const enableEmail = async () => { showEmailInput.value = true; await nextTick(); };
 const clearEmail = () => { form.email = ''; showEmailInput.value = false; };
+
+const loadCustomerHistory = async (id) => {
+  historyLoading.value = true;
+  try {
+    const { data } = await axios.get(`/customers/${id}`);
+    const recent = data?.data?.recent_orders || [];
+    historyOrders.value = recent.map((order) => ({ ...order, isOpen: false }));
+  } catch (e) {
+    console.error(e);
+    historyOrders.value = [];
+  } finally {
+    historyLoading.value = false;
+  }
+};
+
+const toggleOrder = (orderId) => {
+  const target = historyOrders.value.find((order) => order.id === orderId);
+  if (target) target.isOpen = !target.isOpen;
+};
+
+const formatDate = (value) => {
+  if (!value) return '—';
+  const date = new Date(value);
+  return date.toLocaleDateString('uk-UA', { year: 'numeric', month: '2-digit', day: '2-digit' });
+};
+
+const formatMoney = (value) => Number(value || 0).toFixed(2);
 
 const saveData = async () => {
   if (!customerId.value || !isProfileComplete.value) return;
@@ -495,6 +587,32 @@ const handleOrderClose = () => {
 .add-btn { color: #6366f1; font-size: 13px; font-weight: 600; cursor: pointer; padding: 4px 0; }
 
 .action-row { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+
+.customer-history { margin-top: 18px; display: flex; flex-direction: column; gap: 10px; }
+.history-title { font-size: 11px; font-weight: 800; color: #94a3b8; letter-spacing: 0.08em; text-transform: uppercase; display: flex; align-items: center; gap: 8px; }
+.history-loading { font-size: 11px; color: #a0aec0; font-weight: 600; }
+.history-empty { font-size: 12px; color: #94a3b8; padding: 8px 0; }
+.history-card { background: #fff; border: 1px solid #f1f5f9; border-radius: 14px; overflow: hidden; transition: all 0.3s ease; }
+.history-header { width: 100%; text-align: left; background: transparent; border: none; padding: 12px 14px; cursor: pointer; display: flex; flex-direction: column; gap: 6px; }
+.history-main { display: flex; align-items: center; gap: 8px; }
+.order-number { font-weight: 800; color: #1e293b; text-decoration: none; }
+.order-number:hover { text-decoration: underline; }
+.order-status { font-size: 10px; font-weight: 800; color: #0f172a; padding: 2px 6px; border-radius: 6px; }
+.history-meta { display: flex; align-items: center; gap: 10px; color: #64748b; font-size: 12px; }
+.order-total { font-weight: 800; color: #0f172a; }
+.order-date { font-size: 11px; color: #94a3b8; }
+.history-body { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; padding: 0 14px; }
+.history-body.open { max-height: 600px; padding-bottom: 12px; }
+.history-section { margin-top: 10px; }
+.history-label { font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+.history-text { font-size: 12px; color: #475569; }
+.history-items { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.history-item { display: flex; align-items: center; gap: 8px; }
+.history-thumb { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; background: #f8fafc; }
+.history-item-title { font-size: 12px; font-weight: 700; color: #1e293b; }
+.history-item-qty { font-size: 11px; color: #94a3b8; }
+.history-link { display: inline-flex; margin-top: 10px; font-size: 12px; font-weight: 700; color: #6366f1; text-decoration: none; }
+.history-link:hover { text-decoration: underline; }
 
 .profile-mobile-header {
   display: none;

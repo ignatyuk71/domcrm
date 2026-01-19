@@ -57,6 +57,8 @@ class CustomerController extends Controller
             ->with([
                 'delivery:id,order_id,ttn,delivery_status_label,delivery_status_code,city_name,warehouse_name',
                 'statusRef:id,code,name,icon,color',
+                'items' => fn ($q) => $q->select('id', 'order_id', 'product_title', 'qty', 'price', 'product_id')
+                    ->with('product:id,main_photo_path'),
             ])
             ->withSum('items', 'total')
             ->latest('id')
