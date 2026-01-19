@@ -143,6 +143,7 @@ const isLoading = ref(false);
 const showPhoneInput = ref(false);
 const showEmailInput = ref(false);
 const phoneRef = ref(null);
+const isOrderSaving = ref(false);
 
 // Стан для панелі замовлення
 const showOrderPanel = ref(false);
@@ -280,8 +281,76 @@ const saveData = async () => {
 };
 
 const handleOrderSaved = () => {
-  showOrderPanel.value = false;
-  showToast('Замовлення створено!');
+  createOrderFromDraft();
+};
+
+const createOrderFromDraft = async () => {
+  if (!orderDraft.items.length) {
+    showToast('Додайте товари до замовлення.', 'error');
+    return;
+  }
+  if (isOrderSaving.value) return;
+  isOrderSaving.value = true;
+
+  const paymentMethod = orderDraft.payment?.method || 'cod';
+  const prepayAmount = Number(orderDraft.payment?.prepay_amount || 0);
+  let paymentStatus = 'unpaid';
+  if (paymentMethod === 'prepay' && prepayAmount > 0) paymentStatus = 'prepayment';
+  if (paymentMethod === 'card') paymentStatus = 'paid';
+
+  const source = isInstagram.value ? 'instagram' : 'facebook';
+  const delivery = orderDraft.delivery || {};
+
+  const payload = {
+    customer: {
+      first_name: form.first_name || '',
+      last_name: form.last_name || '',
+      phone: form.phone || '',
+      email: form.email || '',
+    },
+    order: {
+      status: 'new',
+      payment_status: paymentStatus,
+      currency: 'UAH',
+      source,
+    },
+    items: orderDraft.items.map((item) => ({
+      product_id: item.product_id || item.id || null,
+      title: item.title || '',
+      sku: item.sku || '',
+      qty: Number(item.qty || 1),
+      price: Number(item.price || 0),
+    })),
+    payment: {
+      method: paymentMethod,
+      prepay_amount: paymentMethod === 'prepay' ? prepayAmount : 0,
+      currency: 'UAH',
+    },
+    delivery: {
+      carrier: 'nova_poshta',
+      delivery_type: delivery.delivery_type || 'warehouse',
+      payer: delivery.payer || 'recipient',
+      city_name: delivery.city_name || delivery.city || '',
+      warehouse_name: delivery.warehouse_name || delivery.warehouse || '',
+      street_name: delivery.street_name || '',
+      building: delivery.building || '',
+      apartment: delivery.apartment || '',
+      recipient_name: [delivery.last_name, delivery.first_name, delivery.middle_name].filter(Boolean).join(' '),
+      recipient_phone: delivery.phone || '',
+    },
+  };
+
+  try {
+    await axios.post('/orders', payload);
+    showToast('Замовлення створено!');
+    resetOrderDraft();
+    showOrderPanel.value = false;
+  } catch (e) {
+    console.error(e);
+    showToast('Не вдалося створити замовлення.', 'error');
+  } finally {
+    isOrderSaving.value = false;
+  }
 };
 
 const handleOrderMinimize = () => {

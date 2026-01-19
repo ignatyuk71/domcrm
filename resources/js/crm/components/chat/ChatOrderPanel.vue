@@ -138,34 +138,57 @@
     </transition>
 
     <transition name="modal-spring">
-      <div v-if="productPickerOpen" class="picker-overlay-elite" @click.self="productPickerOpen = false">
+        <div v-if="productPickerOpen" class="picker-overlay-elite" @click.self="productPickerOpen = false">
         <div class="picker-window">
           <div class="picker-header-refined">
              <div class="picker-title-group">
                 <h4>Каталог продукції</h4>
              </div>
+             <div class="picker-search">
+               <i class="bi bi-search"></i>
+               <input
+                 v-model="productSearch"
+                 type="text"
+                 placeholder="Пошук за назвою або артикулом..."
+               />
+             </div>
              <button class="close-picker-btn" @click="productPickerOpen = false"><i class="bi bi-x-lg"></i></button>
           </div>
           <div class="picker-body-list custom-scrollbar">
-             <div v-for="p in mockProducts" :key="p.id" 
+             <div v-if="productsLoading" class="picker-loading">
+               <div class="spinner-border text-primary"></div>
+               <span>Завантаження каталогу...</span>
+             </div>
+             <div v-else-if="!products.length" class="picker-empty">
+               Нічого не знайдено
+             </div>
+             <div v-else v-for="p in products" :key="p.id" 
                   class="picker-row-modern" 
                   :class="{ active: selectedProductIds.includes(p.id) }"
                   @click="toggleProductSelection(p)">
                 <div class="cb-modern" :class="{ checked: selectedProductIds.includes(p.id) }">
                    <i class="bi bi-check-lg" v-if="selectedProductIds.includes(p.id)"></i>
                 </div>
-                <img :src="p.image" class="p-img-refined" />
+                <img :src="p.main_photo_url || placeholderImage" class="p-img-refined" />
                 <div class="p-data">
                    <div class="p-row">
                       <span class="p-name">{{ p.title }}</span>
-                      <span class="p-price">{{ formatMoney(p.price) }} ₴</span>
+                      <span class="p-price">{{ formatMoney(p.sale_price) }} ₴</span>
+                   </div>
+                   <div class="p-meta">
+                     <span class="p-sku">{{ p.sku || '—' }}</span>
+                     <span class="p-stock" :class="{ 'low-stock': isLowStock(p) }">
+                       {{ p.stock_qty ?? 0 }} шт.
+                     </span>
                    </div>
                 </div>
              </div>
           </div>
           <div class="picker-footer-refined">
              <button class="btn-cancel-light" @click="productPickerOpen = false">Скасувати</button>
-             <button class="btn-add-highlight" @click="handleAddProducts">Додати</button>
+             <button class="btn-add-highlight" :disabled="!selectedProductIds.length" @click="handleAddProducts">
+               Додати ({{ selectedProductIds.length }})
+             </button>
           </div>
         </div>
       </div>
@@ -186,7 +209,8 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
+import axios from 'axios';
 import ChatOrderDeliveryModal from '@/crm/components/chat/ChatOrderDeliveryModal.vue';
 import ChatOrderPaymentModal from '@/crm/components/chat/ChatOrderPaymentModal.vue';
 
@@ -202,12 +226,31 @@ const productPickerOpen = ref(false);
 const selectedProductIds = ref([]);
 const deliveryModalOpen = ref(false);
 const paymentModalOpen = ref(false);
+const productSearch = ref('');
+const products = ref([]);
+const productsLoading = ref(false);
+const placeholderImage = 'https://via.placeholder.com/96x96?text=%20';
+let searchTimer = null;
 
-const mockProducts = [
-  { id: 1, title: 'Домашні капці "Пухнастики" Рожеві', price: 450, image: 'https://picsum.photos/id/102/100/100' },
-  { id: 2, title: 'Капці з вушками "Зайчик" Сірі', price: 520, image: 'https://picsum.photos/id/103/100/100' },
-  { id: 3, title: 'Шкарпетки "Тепло" (3 пари)', price: 199, image: 'https://picsum.photos/id/107/100/100' },
-];
+const fetchProducts = async (query = '') => {
+  productsLoading.value = true;
+  try {
+    const { data } = await axios.get('/products', { params: query ? { q: query } : {} });
+    products.value = Array.isArray(data) ? data : [];
+  } catch (e) {
+    console.error('Product fetch failed', e);
+    products.value = [];
+  } finally {
+    productsLoading.value = false;
+  }
+};
+
+watch(productSearch, (val) => {
+  if (searchTimer) clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    fetchProducts(val.trim());
+  }, 400);
+});
 
 const hasDraft = computed(() => props.orderDraft.items?.length > 0);
 const totalAmount = computed(() => (props.orderDraft.items || []).reduce((sum, item) => sum + (item.price * item.qty), 0));
@@ -234,6 +277,7 @@ const formatCourierAddress = (d) => [d.street_name, d.building && `буд. ${d.b
 const openPicker = () => { 
   selectedProductIds.value = props.orderDraft.items.map(item => item.id); 
   productPickerOpen.value = true; 
+  if (!products.value.length) fetchProducts('');
 };
 
 const toggleProductSelection = (p) => { 
@@ -243,9 +287,19 @@ const toggleProductSelection = (p) => {
 };
 
 const handleAddProducts = () => {
-  const newItems = mockProducts.filter(p => selectedProductIds.value.includes(p.id)).map(p => {
+  const newItems = products.value.filter(p => selectedProductIds.value.includes(p.id)).map(p => {
     const existing = props.orderDraft.items.find(item => item.id === p.id);
-    return { ...p, qty: existing ? existing.qty : 1 };
+    const price = Number(p.sale_price || 0);
+    return {
+      id: p.id,
+      product_id: p.id,
+      title: p.title,
+      sku: p.sku,
+      price,
+      qty: existing ? existing.qty : 1,
+      total: price * (existing ? existing.qty : 1),
+      image: p.main_photo_url || '',
+    };
   });
   // Пряма мутація масиву для реактивності
   props.orderDraft.items.splice(0, props.orderDraft.items.length, ...newItems);
@@ -259,6 +313,13 @@ const handleClose = () => { emit('close'); };
 const handleMinimize = () => { emit('minimize'); };
 const handleSaved = () => { emit('saved'); };
 const formatMoney = (v) => Number(v || 0).toFixed(2);
+const isLowStock = (p) => {
+  const stock = Number(p.stock_qty ?? 0);
+  const min = Number(p.min_stock ?? 0);
+  if (stock <= 0) return true;
+  if (min > 0 && stock <= min) return true;
+  return false;
+};
 </script>
 
 <style scoped>
@@ -346,7 +407,11 @@ const formatMoney = (v) => Number(v || 0).toFixed(2);
 .picker-window { background: #fff; width: 560px; max-width: 95%; height: 80vh; border-radius: 30px; display: flex; flex-direction: column; overflow: hidden; }
 .picker-header-refined { padding: 20px 24px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between; }
 .picker-title-group h4 { font-size: 18px; font-weight: 800; color: #0f172a; margin: 0; }
+.picker-search { flex: 1; margin: 0 16px; position: relative; }
+.picker-search i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #94a3b8; }
+.picker-search input { width: 100%; height: 38px; border-radius: 12px; border: 1px solid #e2e8f0; padding: 0 12px 0 34px; font-size: 13px; outline: none; }
 .picker-body-list { flex: 1; overflow-y: auto; }
+.picker-loading, .picker-empty { padding: 24px; text-align: center; color: #94a3b8; display: flex; flex-direction: column; gap: 8px; align-items: center; }
 .picker-row-modern { display: flex; align-items: center; padding: 14px 24px; cursor: pointer; border-bottom: 1px solid #f8fafc; transition: 0.2s; gap: 16px; }
 .cb-modern { width: 20px; height: 20px; border: 2px solid #cbd5e1; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #fff; }
 .picker-row-modern.active .cb-modern { background: #a78bfb; border-color: #a78bfb; }
@@ -355,7 +420,10 @@ const formatMoney = (v) => Number(v || 0).toFixed(2);
 .p-row { display: flex; justify-content: space-between; align-items: center; }
 .p-name { font-size: 14px; font-weight: 700; color: #1e293b; }
 .p-price { font-size: 15px; font-weight: 800; color: #0f172a; }
+.p-meta { display: flex; justify-content: space-between; font-size: 11px; color: #94a3b8; margin-top: 4px; }
+.p-stock.low-stock { color: #ef4444; font-weight: 700; }
 .picker-footer-refined { padding: 16px 24px; border-top: 1px solid #f1f5f9; display: flex; gap: 12px; background: #fff; }
 .btn-cancel-light { flex: 1; border: 1.5px solid #edf2f7; background: #fff; height: 46px; border-radius: 14px; color: #64748b; font-weight: 700; cursor: pointer; }
 .btn-add-highlight { flex: 2; background: #a78bfb; border: none; height: 46px; border-radius: 14px; color: #fff; font-weight: 800; cursor: pointer; }
+.btn-add-highlight:disabled { opacity: 0.6; cursor: not-allowed; }
 </style>
