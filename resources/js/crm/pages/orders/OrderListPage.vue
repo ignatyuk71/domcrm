@@ -99,7 +99,7 @@ const statuses = ref([]);
 const statusesOrder = ref(null);
 const selectedStatusId = ref(null);
 const meta = ref({ current_page: 1, last_page: 1, total: 0 });
-const holdFilterDays = 4;
+const holdFilterDays = 3;
 const filters = reactive({ search: '', statuses: [], payment_status: '', delivery_hold_days: null, page: 1, per_page: 20 });
 let searchTimer;
 
