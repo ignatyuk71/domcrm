@@ -38,6 +38,10 @@
                 </div>
               </div>
               <div class="field">
+                <label>По батькові</label>
+                <input class="elite-input" v-model="draft.middle_name" placeholder="Іванович" />
+              </div>
+              <div class="field">
                 <label>Телефон</label>
                 <input class="elite-input" v-model="draft.phone" placeholder="380XXXXXXXXX" />
               </div>
@@ -50,6 +54,7 @@
                   type="button"
                   class="toggle-btn"
                   :class="{ active: draft.delivery_type === 'warehouse' }"
+                  @click="draft.delivery_type = 'warehouse'"
                 >
                   Відділення
                 </button>
@@ -57,6 +62,7 @@
                   type="button"
                   class="toggle-btn"
                   :class="{ active: draft.delivery_type === 'courier' }"
+                  @click="draft.delivery_type = 'courier'"
                 >
                   Кур'єр
                 </button>
@@ -68,7 +74,12 @@
               <div class="field">
                 <input class="elite-input" v-model="draft.city" placeholder="Почніть вводити..." />
                 <div class="dropdown">
-                  <button v-for="city in cityOptions" :key="city.ref" type="button">
+                  <button
+                    v-for="city in cityOptions"
+                    :key="city.ref"
+                    type="button"
+                    @click="draft.city = city.name"
+                  >
                     {{ city.name }} — {{ city.area }}
                   </button>
                 </div>
@@ -80,7 +91,12 @@
               <div class="field">
                 <input class="elite-input" v-model="draft.warehouse" placeholder="Введіть номер..." />
                 <div class="dropdown">
-                  <button v-for="wh in warehouseOptions" :key="wh.ref" type="button">
+                  <button
+                    v-for="wh in warehouseOptions"
+                    :key="wh.ref"
+                    type="button"
+                    @click="draft.warehouse = wh.name"
+                  >
                     {{ wh.name }}
                   </button>
                 </div>
@@ -92,7 +108,12 @@
               <div class="field">
                 <input class="elite-input" v-model="draft.street" placeholder="Почніть вводити..." />
                 <div class="dropdown">
-                  <button v-for="street in streetOptions" :key="street.ref" type="button">
+                  <button
+                    v-for="street in streetOptions"
+                    :key="street.ref"
+                    type="button"
+                    @click="draft.street = street.name"
+                  >
                     {{ street.name }}
                   </button>
                 </div>
@@ -116,6 +137,7 @@
                   type="button"
                   class="payer-btn"
                   :class="{ active: draft.payer === 'recipient' }"
+                  @click="draft.payer = 'recipient'"
                 >
                   Отримувач
                 </button>
@@ -123,6 +145,7 @@
                   type="button"
                   class="payer-btn"
                   :class="{ active: draft.payer === 'sender' }"
+                  @click="draft.payer = 'sender'"
                 >
                   Відправник
                 </button>
@@ -141,10 +164,11 @@
 </template>
 
 <script setup>
-import { reactive } from 'vue';
+import { reactive, watch } from 'vue';
 
-defineProps({
+const props = defineProps({
   open: { type: Boolean, default: true },
+  initialData: { type: Object, default: () => ({}) },
 });
 
 const emit = defineEmits(['close', 'save']);
@@ -152,6 +176,7 @@ const emit = defineEmits(['close', 'save']);
 const draft = reactive({
   first_name: 'Іван',
   last_name: 'Іванов',
+  middle_name: 'Іванович',
   phone: '380631234567',
   delivery_type: 'warehouse',
   city: 'Київ',
@@ -161,6 +186,28 @@ const draft = reactive({
   apartment: '42',
   payer: 'recipient',
 });
+
+watch(
+  () => props.open,
+  (isOpen) => {
+    if (!isOpen) return;
+    Object.assign(draft, {
+      first_name: 'Іван',
+      last_name: 'Іванов',
+      middle_name: 'Іванович',
+      phone: '380631234567',
+      delivery_type: 'warehouse',
+      city: 'Київ',
+      warehouse: 'Відділення №12 (Хрещатик, 10)',
+      street: '',
+      building: '10/А',
+      apartment: '42',
+      payer: 'recipient',
+      ...props.initialData,
+    });
+  },
+  { immediate: true }
+);
 
 const cityOptions = [
   { ref: 'c1', name: 'Київ', area: 'Київська' },

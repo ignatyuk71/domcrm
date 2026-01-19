@@ -73,13 +73,15 @@
 
             <section class="flow-section">
                <div class="section-heading">ДАНІ ДОСТАВКИ</div>
-               <div class="delivery-trigger-card" @click="console.log('Open City Picker')">
+               <div class="delivery-trigger-card" @click="openDeliveryModal">
                   <div class="delivery-icon">
                     <i class="bi bi-truck"></i>
                   </div>
                   <div class="delivery-info">
                     <span class="delivery-label-red">Нова Пошта</span>
-                    <span class="delivery-placeholder">Оберіть місто та відділення...</span>
+                    <span class="delivery-placeholder">
+                      {{ deliverySummary || 'Оберіть місто та відділення...' }}
+                    </span>
                   </div>
                   <i class="bi bi-chevron-right arrow-icon"></i>
                </div>
@@ -149,11 +151,19 @@
         </div>
       </div>
     </transition>
+
+    <ChatOrderDeliveryModal
+      :open="deliveryModalOpen"
+      :initial-data="orderDraft.delivery"
+      @close="deliveryModalOpen = false"
+      @save="handleDeliverySave"
+    />
   </teleport>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
+import ChatOrderDeliveryModal from '@/crm/components/chat/ChatOrderDeliveryModal.vue';
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -165,6 +175,7 @@ const emit = defineEmits(['close', 'saved', 'minimize']);
 
 const productPickerOpen = ref(false);
 const selectedProductIds = ref([]);
+const deliveryModalOpen = ref(false);
 
 const mockProducts = [
   { id: 1, title: 'Домашні капці "Пухнастики" Рожеві', sku: 'KAP-001', price: 450, stock: 12, image: 'https://picsum.photos/id/102/100/100' },
@@ -175,6 +186,22 @@ const mockProducts = [
 
 const hasDraft = computed(() => props.orderDraft.items?.length > 0);
 const totalAmount = computed(() => (props.orderDraft.items || []).reduce((sum, item) => sum + (item.price * item.qty), 0));
+const deliverySummary = computed(() => {
+  const delivery = props.orderDraft.delivery || {};
+  const city = delivery.city?.trim();
+  if (!city) return '';
+  if (delivery.delivery_type === 'courier') {
+    const street = delivery.street?.trim();
+    const building = delivery.building?.trim();
+    const apartment = delivery.apartment?.trim();
+    const addressParts = [street, building && `буд. ${building}`, apartment && `кв. ${apartment}`]
+      .filter(Boolean)
+      .join(', ');
+    return addressParts ? `${city}, ${addressParts}` : city;
+  }
+  const warehouse = delivery.warehouse?.trim();
+  return warehouse ? `${city}, ${warehouse}` : city;
+});
 
 const openPicker = () => { selectedProductIds.value = props.orderDraft.items.map(item => item.id); productPickerOpen.value = true; };
 const toggleProductSelection = (p) => { const i = selectedProductIds.value.indexOf(p.id); if (i > -1) selectedProductIds.value.splice(i, 1); else selectedProductIds.value.push(p.id); };
@@ -187,10 +214,22 @@ const handleAddProducts = () => {
 };
 
 const removeSingleItem = (index) => { props.orderDraft.items.splice(index, 1); };
+const openDeliveryModal = () => { deliveryModalOpen.value = true; };
+const handleDeliverySave = (data) => {
+  props.orderDraft.delivery = { ...props.orderDraft.delivery, ...data };
+  deliveryModalOpen.value = false;
+};
 const handleClose = () => { emit('close'); };
 const handleMinimize = () => { emit('minimize'); };
 const handleSaved = () => { emit('saved'); };
 const formatMoney = (v) => Number(v || 0).toFixed(2);
+
+watch(
+  () => props.open,
+  (isOpen) => {
+    if (!isOpen) deliveryModalOpen.value = false;
+  }
+);
 </script>
 
 <style scoped>

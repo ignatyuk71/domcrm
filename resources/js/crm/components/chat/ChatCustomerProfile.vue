@@ -146,10 +146,38 @@ const phoneRef = ref(null);
 
 // Стан для панелі замовлення
 const showOrderPanel = ref(false);
-const orderDraft = reactive({ items: [] });
+const orderDraft = reactive({
+  items: [],
+  delivery: {
+    first_name: '',
+    last_name: '',
+    middle_name: '',
+    phone: '',
+    delivery_type: 'warehouse',
+    city: '',
+    warehouse: '',
+    street: '',
+    building: '',
+    apartment: '',
+    payer: 'recipient',
+  },
+});
 
 function resetOrderDraft() {
   orderDraft.items = [];
+  orderDraft.delivery = {
+    first_name: '',
+    last_name: '',
+    middle_name: '',
+    phone: '',
+    delivery_type: 'warehouse',
+    city: '',
+    warehouse: '',
+    street: '',
+    building: '',
+    apartment: '',
+    payer: 'recipient',
+  };
 }
 
 // Стан для сповіщень
