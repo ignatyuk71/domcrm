@@ -7,14 +7,6 @@
       </div>
     </transition>
 
-    <!-- НОВА КНОПКА-ТАБ (ЗБОКУ ЕКРАНА) -->
-    <div class="side-order-tab" @click="showOrderPanel = true" title="Створити замовлення">
-      <div class="tab-content">
-        <i class="bi bi-bag-plus-fill"></i>
-        <span>ОФОРМИТИ ЗАМОВЛЕННЯ</span>
-      </div>
-    </div>
-
     <div v-if="customerId" class="profile-content custom-scrollbar" ref="profileContainer">
       <div class="profile-mobile-header">
         <button class="profile-back-btn" type="button" @click="emit('close')">
@@ -109,7 +101,17 @@
             {{ isLoading ? 'Зберігаємо...' : 'Зберегти покупця' }}
           </button>
           
-          <!-- СТАРА КНОПКА ВИДАЛЕНА, ТЕПЕР ТІЛЬКИ БОКОВИЙ ТАБ -->
+          <!-- ОНОВЛЕНА КНОПКА: Блокується і збільшена -->
+          <button 
+            class="btn-create-order" 
+            type="button" 
+            @click="showOrderPanel = true"
+            :disabled="!isProfileComplete"
+            :title="!isProfileComplete ? 'Спочатку заповніть дані клієнта' : 'Створити замовлення'"
+          >
+            <i class="bi bi-bag-plus"></i>
+            Створити замовлення
+          </button>
         </div>
 
         <div class="history-container">
@@ -412,7 +414,7 @@ const toggleOrder = (orderId) => {
       nextTick(() => {
         const el = orderRefs[orderId];
         if (el && profileContainer.value) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
       });
     }
@@ -597,7 +599,7 @@ const handleOrderClose = () => {
 .profile-content { flex: 1; overflow-y: auto; padding: 16px; scroll-behavior: smooth; }
 .custom-scrollbar::-webkit-scrollbar { width: 6px; } .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; } .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 
-/* ... (Всі інші стилі без змін) ... */
+/* ... (Інші стилі залишаються без змін) ... */
 .header-section { display: flex; align-items: flex-start; gap: 12px; }
 .avatar-wrap { position: relative; width: 52px; height: 52px; flex-shrink: 0; }
 .avatar-img, .avatar-placeholder { width: 100%; height: 100%; border-radius: 12px; object-fit: cover; background: #f1f5f9; }
@@ -607,6 +609,7 @@ const handleOrderClose = () => {
 .fb-bg { background: #0084FF; }
 .glow-red { box-shadow: 0 0 10px #ef4444; border-color: #ef4444; }
 .glow-green { box-shadow: 0 0 10px #10b981; border-color: #10b981; }
+.platform-icon-indicator i { font-size: 11px; }
 .info { flex: 1; min-width: 0; padding-top: 2px; }
 .name-display-wrapper { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
 .name-text { font-size: 15px; font-weight: 700; color: #1a202c; }
@@ -674,27 +677,75 @@ const handleOrderClose = () => {
 .btn-full-order { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 8px; background: white; border: 1px solid #cbd5e1; border-radius: 8px; color: #4f46e5; font-size: 12px; font-weight: 600; text-decoration: none; transition: all 0.2s; }
 .btn-full-order:hover { background: #eef2ff; border-color: #6366f1; }
 
-.side-order-tab { position: fixed; right: 0; top: 50%; transform: translateY(-50%); background: #1e293b; color: white; padding: 12px 6px; border-top-left-radius: 12px; border-bottom-left-radius: 12px; cursor: pointer; z-index: 100; transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); box-shadow: -2px 0 10px rgba(0,0,0,0.1); }
-.side-order-tab:hover { padding-right: 12px; background: #6366f1; }
-.tab-content { writing-mode: vertical-rl; text-orientation: mixed; transform: rotate(180deg); display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 12px; letter-spacing: 1px; }
-.tab-content i { font-size: 16px; margin-bottom: 4px; transform: rotate(90deg); }
-
 .profile-mobile-header { display: none; margin-bottom: 12px; }
 .profile-back-btn { display: inline-flex; align-items: center; gap: 8px; border: 1px solid #e2e8f0; background: #f8fafc; color: #334155; border-radius: 10px; height: 40px; padding: 0 12px; font-size: 14px; font-weight: 600; cursor: pointer; }
-.btn-save-modern { background: #A78BFB; color: white; border: none; border-radius: 8px; height: 40px; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; font-weight: 600; width: 100%; cursor: pointer; transition: all 0.3s ease; }
-.btn-save-modern:hover:not(:disabled) { background: #9061f9; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(167, 139, 251, 0.3); }
-.btn-save-modern:disabled { background: #e2e8f0; color: #94a3b8; cursor: not-allowed; box-shadow: none; }
-.btn-create-order { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; height: 40px; display: flex; align-items: center; justify-content: center; gap: 8px; color: #1f2937; font-size: 14px; font-weight: 600; cursor: pointer; width: 100%; transition: 0.2s; }
-.btn-create-order:hover { background: #f8fafc; border-color: #cbd5e0; }
+
+.btn-save-modern {
+  background: #A78BFB; 
+  color: white;
+  border: none;
+  border-radius: 8px;
+  height: 60px; /* Збільшено з 40px до 60px */
+  display: flex; 
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  width: 100%;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+.btn-save-modern:hover:not(:disabled) {
+  background: #9061f9; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(167, 139, 251, 0.3);
+}
+.btn-save-modern:disabled { 
+  background: #e2e8f0; 
+  color: #94a3b8; 
+  cursor: not-allowed; 
+  box-shadow: none; 
+}
+
+/* ОНОВЛЕНО: Блокування і збільшення кнопки "Створити замовлення" */
+.btn-create-order {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  height: 60px; /* Збільшено з 40px до 60px */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #1f2937;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  transition: 0.2s;
+}
+.btn-create-order:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #cbd5e0;
+}
+.btn-create-order:disabled {
+  background: #f8fafc;
+  color: #cbd5e0;
+  border-color: #e2e8f0;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+@media (max-width: 768px) {
+  .profile-content {
+    padding: 14px 16px 24px;
+  }
+
+  .profile-mobile-header {
+    display: flex;
+  }
+}
 
 .spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: #fff; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #cbd5e0; gap: 8px; }
-
-@media (max-width: 768px) {
-  .profile-content { padding: 14px 16px 24px; }
-  .profile-mobile-header { display: flex; }
-  .btn-save-modern, .btn-create-order { height: 48px; }
-  .side-order-tab { display: none; }
-}
 </style>
