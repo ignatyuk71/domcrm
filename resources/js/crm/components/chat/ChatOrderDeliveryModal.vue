@@ -96,7 +96,7 @@
               <section v-else>
                 <div class="mb-3">
                   <label class="form-label-custom">Вулиця</label>
-                  <input type="text" class="form-control custom-input" v-model="local.street_name" placeholder="Вулиця..." />
+                  <input type="text" class="form-control custom-input" v-model="local.street_name" placeholder="Введіть вулицю..." />
                 </div>
                 <div class="row g-2">
                   <div class="col-6">
@@ -143,7 +143,7 @@ import { reactive, ref, computed } from 'vue';
 const props = defineProps({ open: Boolean });
 const emit = defineEmits(['close', 'save']);
 
-// Тестові дані замість API
+// Тестові дані для списків
 const mockCities = ['Київ', 'Одеса', 'Львів', 'Харків', 'Дніпро'];
 const mockWarehouses = ['Відділення №1: вул. Пирогова, 13', 'Поштомат №5522', 'Відділення №15'];
 
@@ -180,48 +180,56 @@ function selectWarehouse(wh) {
 </script>
 
 <style scoped>
-/* ПОВНОЕКРАННА ВЕРСТКА ДЛЯ МОБІЛЬНИХ ПРИСТРОЇВ */
-.delivery-modal-overlay { position: fixed; inset: 0; background: rgba(10, 15, 30, 0.4); z-index: 100005; backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; }
+/* МОДАЛЬНЕ ВІКНО */
+.delivery-modal-overlay { 
+  position: fixed; inset: 0; background: rgba(10, 15, 30, 0.4); 
+  z-index: 100005; backdrop-filter: blur(8px); 
+  display: flex; align-items: center; justify-content: center; 
+}
 
-.delivery-window { background: #fff; width: 500px; max-width: 95%; max-height: 90vh; border-radius: 24px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 40px 100px rgba(0,0,0,0.4); transition: 0.3s; }
+.delivery-window { 
+  background: #fff; width: 500px; max-width: 95%; max-height: 90vh; 
+  border-radius: 24px; display: flex; flex-direction: column; 
+  overflow: hidden; box-shadow: 0 40px 100px rgba(0,0,0,0.4); 
+}
 
+/* ШАПКА ТА ЧЕРВОНИЙ ТЕКСТ */
 .delivery-header { padding: 16px 20px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; }
 .brand-red-text { color: #dc2626; font-size: 11px; font-weight: 800; text-transform: uppercase; margin: 2px 0 0; }
 
 .delivery-body { flex: 1; overflow-y: auto; background: #fff; padding: 10px; }
-
 .delivery-footer { padding: 16px 20px; border-top: 1px solid #f1f5f9; display: flex; gap: 12px; }
 
-/* Твої оригінальні стилі */
+/* ТВОЇ ОРИГІНАЛЬНІ СТИЛІ */
 .form-label-custom { font-size: 0.7rem; font-weight: 800; text-transform: uppercase; color: #8898aa; margin-bottom: 0.4rem; display: block; }
 .input-wrapper { position: relative; display: flex; align-items: center; }
 .custom-input { border-radius: 10px; padding: 0.65rem 2.6rem 0.65rem 2.4rem; border: 1px solid #e9ecef; width: 100%; font-size: 0.9rem; }
 .input-prefix { position: absolute; left: 0.9rem; color: #adb5bd; }
+
 .delivery-toggle-group { display: flex; background: #f4f6f9; padding: 4px; border-radius: 12px; gap: 4px; }
 .toggle-item { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px; border-radius: 9px; cursor: pointer; transition: 0.2s; font-weight: 600; font-size: 0.9rem; color: #6c757d; }
 .btn-check { display: none; }
 .btn-check:checked + .toggle-item { background: #fff; color: #a78bfb; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
 
 .custom-dropdown { position: absolute; top: 105%; left: 0; right: 0; z-index: 1050; background: white; border-radius: 10px; max-height: 200px; overflow-y: auto; border: 1px solid #eee; }
-.dropdown-item { padding: 10px; border: none; background: none; width: 100%; text-align: left; border-bottom: 1px solid #f8f9fa; font-size: 0.85rem; }
+.dropdown-item { padding: 10px; border: none; background: none; width: 100%; text-align: left; border-bottom: 1px solid #f8f9fa; font-size: 0.85rem; cursor: pointer; }
 .dropdown-item:hover { background: #f5f3ff; }
 
 .payer-selector { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .payer-option { border: 1px solid #e9ecef; padding: 10px; border-radius: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; font-size: 0.9rem; color: #6c757d; }
 .payer-option.active { border-color: #a78bfb; background: #f5f3ff; color: #a78bfb; }
 
-.btn-cancel { flex: 1; border: 1px solid #e2e8f0; background: #fff; padding: 10px; border-radius: 12px; font-weight: 700; color: #64748b; cursor: pointer; }
-.btn-save { flex: 2; background: #a78bfb; color: #fff; border: none; padding: 10px; border-radius: 12px; font-weight: 800; cursor: pointer; }
+/* КНОПКИ */
+.btn-cancel { flex: 1; border: 1px solid #e2e8f0; background: #fff; padding: 10px; border-radius: 12px; font-weight: 700; color: #64748b; }
+.btn-save { flex: 2; background: #a78bfb; color: #fff; border: none; padding: 10px; border-radius: 12px; font-weight: 800; }
 
-/* АДАПТИВНІСТЬ: НА ВЕСЬ ЕКРАН ДЛЯ МОБІЛОК */
+/* МОБІЛЬНА ВЕРСІЯ: НА ВЕСЬ ЕКРАН */
 @media (max-width: 768px) {
   .delivery-window { width: 100%; height: 100vh; max-height: 100vh; border-radius: 0; }
   .delivery-modal-overlay { align-items: flex-start; }
 }
 
-.custom-scrollbar::-webkit-scrollbar { width: 4px; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-
+/* Анімація модалки */
 .modal-spring-enter-active { animation: spring-in 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
 @keyframes spring-in { from { opacity: 0; transform: scale(0.9) translateY(20px); } to { opacity: 1; transform: scale(1) translateY(0); } }
 </style>
