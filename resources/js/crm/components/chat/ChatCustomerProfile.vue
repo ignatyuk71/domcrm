@@ -7,13 +7,8 @@
       </div>
     </transition>
 
+    <!-- ДОДАНО: Правильні класи для скролу -->
     <div v-if="customerId" class="profile-content custom-scrollbar" ref="profileContainer">
-      <div class="profile-mobile-header">
-        <button class="profile-back-btn" type="button" @click="emit('close')">
-          <i class="bi bi-arrow-left"></i>
-          Назад
-        </button>
-      </div>
       
       <div class="header-section">
         <div class="avatar-wrap">
@@ -147,8 +142,7 @@
                 </div>
 
                 <div class="header-right">
-                  <!-- ЦІНА БЕЗ ПЕРЕНОСУ І БЕЗ КОПІЙОК -->
-                  <div class="price-tag">{{ formatMoney(order.items_sum_total) }} <small>грн.</small></div>
+                  <div class="price-tag">{{ formatPrice(order.items_sum_total) }} <small>грн.</small></div>
                   <div class="toggle-btn">
                     <i class="bi bi-chevron-down"></i>
                   </div>
@@ -189,7 +183,7 @@
                           <div class="mini-title">{{ item.product_title || 'Товар без назви' }}</div>
                           <div class="mini-meta">
                             <span class="qty">x{{ item.qty }}</span>
-                            <span class="price" v-if="item.price">{{ Number(item.price).toFixed(0) }} ₴</span>
+                            <span class="price" v-if="item.price">{{ formatPrice(item.price) }} грн.</span>
                           </div>
                         </div>
                       </div>
@@ -400,18 +394,15 @@ const loadCustomerHistory = async (id) => {
   }
 };
 
-// --- ОНОВЛЕНО: СКРОЛ ДО КАРТКИ ПРИ ВІДКРИТТІ ---
 const toggleOrder = (orderId) => {
   const target = historyOrders.value.find((order) => order.id === orderId);
   if (target) {
     target.isOpen = !target.isOpen;
-    
-    // Якщо відкриваємо - чекаємо на DOM і скролимо
     if (target.isOpen) {
       nextTick(() => {
         const el = orderRefs[orderId];
         if (el && profileContainer.value) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
       });
     }
@@ -424,16 +415,15 @@ const formatDate = (value) => {
   return date.toLocaleDateString('uk-UA', { year: 'numeric', month: '2-digit', day: '2-digit' });
 };
 
-// --- ОНОВЛЕНО: ФОРМАТУВАННЯ ЦІНИ ---
-const formatMoney = (value) => {
+const formatPrice = (value) => {
   const num = Number(value);
   if (isNaN(num)) return '0';
-  // Використовуємо Intl, обрізаємо .00
   return new Intl.NumberFormat('uk-UA', { 
     minimumFractionDigits: 0, 
     maximumFractionDigits: 2 
   }).format(num).replace(/\.00$/, ''); 
 };
+const formatMoney = formatPrice;
 
 const getStatusRef = (order) => {
   return order?.statusRef || order?.status_ref || null;
@@ -593,8 +583,31 @@ const handleOrderClose = () => {
 </script>
 
 <style scoped>
-.right-sidebar { width: 100%; height: 100%; background: #ffffff; border-left: 1px solid #edf2f7; display: flex; flex-direction: column; position: relative; overflow: hidden; }
-.profile-content { padding: 16px; }
+.right-sidebar {
+  width: 100%;
+  height: 100%;
+  background: #ffffff;
+  border-left: 1px solid #edf2f7;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  font-family: 'Inter', sans-serif;
+  color: #334155;
+}
+
+/* ОНОВЛЕНО: flex: 1 та overflow-y: auto для скролу */
+.profile-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  scroll-behavior: smooth;
+}
+
+/* Scrollbar styles */
+.custom-scrollbar::-webkit-scrollbar { width: 6px; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 
 /* TOAST STYLES */
 .toast-notification {
@@ -684,23 +697,7 @@ const handleOrderClose = () => {
 .status-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 6px; width: fit-content; }
 .status-icon { font-size: 10px; }
 .header-right { display: flex; align-items: center; gap: 12px; }
-
-/* ОНОВЛЕНО: Ціна в один рядок */
-.price-tag { 
-  font-size: 14px; 
-  font-weight: 700; 
-  color: #0f172a; 
-  white-space: nowrap; 
-  display: flex; 
-  align-items: baseline; 
-  gap: 2px; 
-}
-.price-tag small { 
-  font-size: 11px; 
-  font-weight: 600; 
-  color: #64748b; 
-}
-
+.price-tag { font-size: 14px; font-weight: 700; color: #0f172a; }
 .toggle-btn { color: #cbd5e1; transition: transform 0.3s ease; font-size: 12px; }
 .order-card.is-active .toggle-btn { transform: rotate(180deg); color: #64748b; }
 
