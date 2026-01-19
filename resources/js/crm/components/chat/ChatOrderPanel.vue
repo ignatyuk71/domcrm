@@ -136,7 +136,29 @@ const emit = defineEmits(['close', 'saved', 'minimize']);
 
 const productPickerOpen = ref(false);
 const selectedProductIds = ref([]);
-const productOptions = ref([]);
+const productOptions = ref([
+  {
+    id: 1,
+    title: 'Капці домашні "Soft Cozy"',
+    sku: 'SLP-SFT-01',
+    stock: 12,
+    price: 390,
+  },
+  {
+    id: 2,
+    title: 'Плед "Warm Lines" 140x200',
+    sku: 'PLD-WRM-02',
+    stock: 2,
+    price: 890,
+  },
+  {
+    id: 3,
+    title: 'Свічка ароматична "Lavender"',
+    sku: 'CND-LAV-03',
+    stock: 7,
+    price: 220,
+  },
+]);
 
 const hasDraft = computed(() => props.orderDraft.items?.length > 0);
 const totalAmount = computed(() =>
