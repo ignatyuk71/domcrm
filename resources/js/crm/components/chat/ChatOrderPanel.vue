@@ -27,8 +27,23 @@
         </header>
 
         <div class="panel-scroller custom-scrollbar">
+
+          <div v-if="isSuccess" class="order-success-view">
+            <div class="success-icon">
+              <i class="bi bi-check-circle-fill"></i>
+            </div>
+            <h4>Замовлення оформлено!</h4>
+            <div class="success-meta">
+              <div>Номер: <strong>{{ submitState.orderNumber || submitState.orderId }}</strong></div>
+              <div>Сума: <strong>{{ formatMoney(submitState.totalAmount || totalAmount) }} ₴</strong></div>
+            </div>
+            <div class="success-actions">
+              <button class="btn-success-secondary" type="button" @click="goToOrder">Детальніше</button>
+              <button class="btn-success-primary" type="button" @click="handleCloseSuccess">Закрити</button>
+            </div>
+          </div>
           
-          <transition name="zoom-in">
+          <transition v-else name="zoom-in">
             <div v-if="!hasDraft" class="empty-state-card" @click="openPicker">
                <div class="animated-blob">
                  <i class="bi bi-plus-lg"></i>
@@ -38,7 +53,7 @@
             </div>
           </transition>
 
-          <div v-if="hasDraft" class="order-flow-container">
+          <div v-if="hasDraft && !isSuccess" class="order-flow-container">
             
             <section class="flow-section">
               <div class="section-heading">
@@ -127,8 +142,9 @@
                 <span>До сплати:</span>
                 <div class="total-amount-glow">{{ formatMoney(totalAmount) }} ₴</div>
              </div>
-             <button class="btn-checkout-premium" :disabled="!hasDraft" @click="handleSaved">
-               <span>ПІДТВЕРДИТИ</span>
+             <button class="btn-checkout-premium" :disabled="!canSubmit || isSubmitting || isSuccess" @click="handleSubmit">
+               <span v-if="!isSubmitting">ПІДТВЕРДИТИ</span>
+               <span v-else class="btn-spinner"></span>
                <div class="shimmer-line"></div>
              </button>
           </div>
@@ -218,9 +234,10 @@ const props = defineProps({
   open: { type: Boolean, default: false },
   customer: { type: Object, default: null },
   orderDraft: { type: Object, required: true },
+  submitState: { type: Object, default: () => ({ status: 'idle' }) },
 });
 
-const emit = defineEmits(['close', 'saved', 'minimize']);
+const emit = defineEmits(['close', 'submit', 'minimize', 'close-success']);
 
 const productPickerOpen = ref(false);
 const selectedProductIds = ref([]);
@@ -253,6 +270,17 @@ watch(productSearch, (val) => {
 });
 
 const hasDraft = computed(() => props.orderDraft.items?.length > 0);
+const isSubmitting = computed(() => props.submitState?.status === 'loading');
+const isSuccess = computed(() => props.submitState?.status === 'success');
+const canSubmit = computed(() => {
+  if (!props.orderDraft.items?.length) return false;
+  const delivery = props.orderDraft.delivery || {};
+  if (!props.orderDraft.payment?.method) return false;
+  if (!delivery.delivery_type) return false;
+  if (!delivery.city_ref) return false;
+  if (delivery.delivery_type === 'warehouse' && !delivery.warehouse_ref) return false;
+  return true;
+});
 const totalAmount = computed(() => (props.orderDraft.items || []).reduce((sum, item) => sum + (item.price * item.qty), 0));
 const hasPayment = computed(() => !!props.orderDraft.payment?.method);
 
@@ -311,7 +339,12 @@ const openDeliveryModal = () => { deliveryModalOpen.value = true; };
 const openPaymentModal = () => { paymentModalOpen.value = true; };
 const handleClose = () => { emit('close'); };
 const handleMinimize = () => { emit('minimize'); };
-const handleSaved = () => { emit('saved'); };
+const handleSubmit = () => { if (canSubmit.value) emit('submit'); };
+const handleCloseSuccess = () => { emit('close-success'); };
+const goToOrder = () => {
+  const id = props.submitState?.orderId || props.submitState?.orderNumber;
+  if (id) window.location.href = `/orders/${id}`;
+};
 const formatMoney = (v) => Number(v || 0).toFixed(2);
 const isLowStock = (p) => {
   const stock = Number(p.stock_qty ?? 0);
@@ -401,6 +434,15 @@ const isLowStock = (p) => {
 .total-amount-glow { color: #fff; font-size: 20px; font-weight: 900; }
 .btn-checkout-premium { background: #a78bfb; border: none; border-radius: 16px; height: 48px; padding: 0 20px; color: #fff; font-weight: 900; font-size: 13px; cursor: pointer; position: relative; overflow: hidden; transition: 0.3s; }
 .btn-checkout-premium:hover { background: #9061f9; transform: translateY(-2px); }
+.btn-spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.35); border-top-color: #fff; border-radius: 50%; display: inline-block; animation: spin 0.8s linear infinite; }
+
+.order-success-view { background: #ffffff; border-radius: 24px; padding: 40px 24px; text-align: center; border: 1px solid #f1f5f9; box-shadow: 0 10px 20px rgba(15, 23, 42, 0.06); }
+.order-success-view h4 { margin: 14px 0 10px; font-size: 18px; font-weight: 800; color: #0f172a; }
+.order-success-view .success-icon { width: 58px; height: 58px; border-radius: 50%; background: #ecfdf5; color: #10b981; display: inline-flex; align-items: center; justify-content: center; font-size: 28px; }
+.order-success-view .success-meta { margin-top: 10px; color: #475569; font-size: 14px; display: flex; flex-direction: column; gap: 6px; }
+.order-success-view .success-actions { margin-top: 18px; display: flex; gap: 10px; justify-content: center; }
+.btn-success-primary { background: #10b981; color: #fff; border: none; height: 40px; border-radius: 12px; padding: 0 16px; font-weight: 800; cursor: pointer; }
+.btn-success-secondary { background: #f1f5f9; color: #0f172a; border: none; height: 40px; border-radius: 12px; padding: 0 16px; font-weight: 800; cursor: pointer; }
 
 /* PRODUCT MODAL */
 .picker-overlay-elite { position: fixed; inset: 0; background: rgba(5, 10, 20, 0.6); z-index: 100000; backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; }
@@ -426,4 +468,5 @@ const isLowStock = (p) => {
 .btn-cancel-light { flex: 1; border: 1.5px solid #edf2f7; background: #fff; height: 46px; border-radius: 14px; color: #64748b; font-weight: 700; cursor: pointer; }
 .btn-add-highlight { flex: 2; background: #a78bfb; border: none; height: 46px; border-radius: 14px; color: #fff; font-weight: 800; cursor: pointer; }
 .btn-add-highlight:disabled { opacity: 0.6; cursor: not-allowed; }
+@keyframes spin { to { transform: rotate(360deg); } }
 </style>

@@ -120,9 +120,11 @@
       :open="showOrderPanel"
       :customer="customer"
       :order-draft="orderDraft"
+      :submit-state="orderSubmitState"
       @close="handleOrderClose"
       @minimize="handleOrderMinimize"
-      @saved="handleOrderSaved"
+      @submit="handleOrderSubmit"
+      @close-success="handleOrderSuccessClose"
     />
 
   </div>
@@ -155,9 +157,12 @@ const orderDraft = reactive({
     middle_name: '',
     phone: '',
     delivery_type: 'warehouse',
-    city: '',
-    warehouse: '',
-    street: '',
+    carrier: 'nova_poshta',
+    city_name: '',
+    city_ref: '',
+    warehouse_name: '',
+    warehouse_ref: '',
+    street_name: '',
     building: '',
     apartment: '',
     payer: 'recipient',
@@ -165,6 +170,7 @@ const orderDraft = reactive({
   payment: {
     method: '',
     prepay_amount: 0,
+    currency: 'UAH',
   },
 });
 
@@ -176,9 +182,12 @@ function resetOrderDraft() {
     middle_name: '',
     phone: '',
     delivery_type: 'warehouse',
-    city: '',
-    warehouse: '',
-    street: '',
+    carrier: 'nova_poshta',
+    city_name: '',
+    city_ref: '',
+    warehouse_name: '',
+    warehouse_ref: '',
+    street_name: '',
     building: '',
     apartment: '',
     payer: 'recipient',
@@ -186,6 +195,7 @@ function resetOrderDraft() {
   orderDraft.payment = {
     method: '',
     prepay_amount: 0,
+    currency: 'UAH',
   };
 }
 
@@ -194,6 +204,13 @@ const toast = reactive({
   show: false,
   message: '',
   type: 'success'
+});
+
+const orderSubmitState = reactive({
+  status: 'idle',
+  orderId: null,
+  orderNumber: null,
+  totalAmount: 0,
 });
 
 const form = reactive({ 
@@ -280,8 +297,17 @@ const saveData = async () => {
   }
 };
 
-const handleOrderSaved = () => {
+const handleOrderSubmit = () => {
   createOrderFromDraft();
+};
+
+const handleOrderSuccessClose = () => {
+  orderSubmitState.status = 'idle';
+  orderSubmitState.orderId = null;
+  orderSubmitState.orderNumber = null;
+  orderSubmitState.totalAmount = 0;
+  resetOrderDraft();
+  showOrderPanel.value = false;
 };
 
 const createOrderFromDraft = async () => {
@@ -289,17 +315,37 @@ const createOrderFromDraft = async () => {
     showToast('Додайте товари до замовлення.', 'error');
     return;
   }
+  if (!orderDraft.payment?.method) {
+    showToast('Оберіть спосіб оплати.', 'error');
+    return;
+  }
+  if (!orderDraft.delivery?.delivery_type) {
+    showToast('Оберіть тип доставки.', 'error');
+    return;
+  }
+  if (!orderDraft.delivery?.city_ref) {
+    showToast('Оберіть місто доставки.', 'error');
+    return;
+  }
+  if (orderDraft.delivery.delivery_type === 'warehouse' && !orderDraft.delivery.warehouse_ref) {
+    showToast('Оберіть відділення.', 'error');
+    return;
+  }
+  if (!form.phone) {
+    showToast('Вкажіть телефон клієнта.', 'error');
+    return;
+  }
   if (isOrderSaving.value) return;
   isOrderSaving.value = true;
+  orderSubmitState.status = 'loading';
 
   const paymentMethod = orderDraft.payment?.method || 'cod';
   const prepayAmount = Number(orderDraft.payment?.prepay_amount || 0);
-  let paymentStatus = 'unpaid';
-  if (paymentMethod === 'prepay' && prepayAmount > 0) paymentStatus = 'prepayment';
-  if (paymentMethod === 'card') paymentStatus = 'paid';
+  const paymentStatus = paymentMethod === 'card' ? 'paid' : 'unpaid';
 
-  const source = isInstagram.value ? 'instagram' : 'facebook';
+  const source = 'messenger';
   const delivery = orderDraft.delivery || {};
+  const totalAmount = orderDraft.items.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.qty || 1)), 0);
 
   const payload = {
     customer: {
@@ -309,9 +355,9 @@ const createOrderFromDraft = async () => {
       email: form.email || '',
     },
     order: {
-      status: 'new',
+      status: 'confirmed',
       payment_status: paymentStatus,
-      currency: 'UAH',
+      currency: orderDraft.payment?.currency || 'UAH',
       source,
     },
     items: orderDraft.items.map((item) => ({
@@ -324,30 +370,36 @@ const createOrderFromDraft = async () => {
     payment: {
       method: paymentMethod,
       prepay_amount: paymentMethod === 'prepay' ? prepayAmount : 0,
-      currency: 'UAH',
+      currency: orderDraft.payment?.currency || 'UAH',
     },
     delivery: {
-      carrier: 'nova_poshta',
+      carrier: delivery.carrier || 'nova_poshta',
       delivery_type: delivery.delivery_type || 'warehouse',
       payer: delivery.payer || 'recipient',
-      city_name: delivery.city_name || delivery.city || '',
-      warehouse_name: delivery.warehouse_name || delivery.warehouse || '',
+      city_ref: delivery.city_ref || '',
+      city_name: delivery.city_name || '',
+      warehouse_ref: delivery.warehouse_ref || '',
+      warehouse_name: delivery.warehouse_name || '',
       street_name: delivery.street_name || '',
       building: delivery.building || '',
       apartment: delivery.apartment || '',
       recipient_name: [delivery.last_name, delivery.first_name, delivery.middle_name].filter(Boolean).join(' '),
-      recipient_phone: delivery.phone || '',
+      recipient_phone: delivery.phone || form.phone || '',
     },
   };
 
   try {
-    await axios.post('/orders', payload);
+    const response = await axios.post('/orders', payload);
+    const order = response?.data?.data || {};
     showToast('Замовлення створено!');
-    resetOrderDraft();
-    showOrderPanel.value = false;
+    orderSubmitState.status = 'success';
+    orderSubmitState.orderId = order.id || null;
+    orderSubmitState.orderNumber = order.order_number || order.id || null;
+    orderSubmitState.totalAmount = totalAmount;
   } catch (e) {
     console.error(e);
     showToast('Не вдалося створити замовлення.', 'error');
+    orderSubmitState.status = 'idle';
   } finally {
     isOrderSaving.value = false;
   }
@@ -358,6 +410,10 @@ const handleOrderMinimize = () => {
 };
 
 const handleOrderClose = () => {
+  orderSubmitState.status = 'idle';
+  orderSubmitState.orderId = null;
+  orderSubmitState.orderNumber = null;
+  orderSubmitState.totalAmount = 0;
   if (orderDraft.items.length > 0) {
     const confirmed = window.confirm('Видалити чернетку замовлення?');
     if (!confirmed) return;
