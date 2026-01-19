@@ -116,9 +116,12 @@
     </div>
 
     <ChatOrderPanel
-      v-if="showOrderPanel"
+      v-show="showOrderPanel"
+      :open="showOrderPanel"
       :customer="customer"
-      @close="showOrderPanel = false"
+      :order-draft="orderDraft"
+      @close="handleOrderClose"
+      @minimize="handleOrderMinimize"
       @saved="handleOrderSaved"
     />
 
@@ -143,6 +146,11 @@ const phoneRef = ref(null);
 
 // Стан для панелі замовлення
 const showOrderPanel = ref(false);
+const orderDraft = reactive({ items: [] });
+
+function resetOrderDraft() {
+  orderDraft.items = [];
+}
 
 // Стан для сповіщень
 const toast = reactive({
@@ -196,6 +204,7 @@ watch(() => props.customer, (newVal) => {
     showEmailInput.value = !!form.email;
     showNameInput.value = false;
     showOrderPanel.value = false;
+    resetOrderDraft();
   }
 }, { immediate: true });
 
@@ -237,6 +246,19 @@ const saveData = async () => {
 const handleOrderSaved = () => {
   showOrderPanel.value = false;
   showToast('Замовлення створено!');
+};
+
+const handleOrderMinimize = () => {
+  showOrderPanel.value = false;
+};
+
+const handleOrderClose = () => {
+  if (orderDraft.items.length > 0) {
+    const confirmed = window.confirm('Видалити чернетку замовлення?');
+    if (!confirmed) return;
+  }
+  resetOrderDraft();
+  showOrderPanel.value = false;
 };
 </script>
 

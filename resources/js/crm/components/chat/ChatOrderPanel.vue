@@ -1,119 +1,120 @@
 <template>
   <teleport to="body">
     <transition name="fade">
-      <div v-show="isVisible" class="offcanvas-backdrop" @click="handleMinimize"></div>
+      <div v-show="open" class="offcanvas-backdrop" @click="handleMinimize"></div>
     </transition>
 
     <transition name="slide-global">
-      <div v-show="isVisible" class="order-offcanvas-global">
+      <div v-show="open" class="order-offcanvas-global">
         <div class="offcanvas-header">
           <div class="header-left">
-            <div class="draft-indicator" v-if="orderDraft.items.length > 0">
-              <span class="dot"></span> Чернетка
+            <i class="bi bi-bag-check-fill header-icon"></i>
+            <div class="header-meta">
+              <h3>Нове замовлення</h3>
+              <span v-if="hasDraft" class="draft-pill">Чернетка</span>
             </div>
-            <h3>Нове замовлення</h3>
           </div>
           <div class="header-actions">
-            <button class="btn-minimize" @click="handleMinimize" title="Згорнути і подивитись чат">
-              <i class="bi bi-fullscreen-exit"></i>
-            </button>
-            <button class="btn-close-panel" @click="confirmCancel">
-              <i class="bi bi-trash3"></i>
+            <button class="btn-ghost" type="button" @click="handleMinimize">Згорнути</button>
+            <button class="btn-close-panel" type="button" @click="handleClose">
+              <i class="bi bi-x-lg"></i>
             </button>
           </div>
         </div>
 
-        <div class="offcanvas-body custom-scrollbar">
-          <div class="cart-section">
-            <h4 class="section-title">Товари</h4>
+        <div class="offcanvas-body">
+          <button class="selection-trigger-area" type="button" @click="productPickerOpen = true">
+            <div>
+              <div class="trigger-title">Додати товари</div>
+              <div class="trigger-subtitle">Пошук за назвою або артикулом</div>
+            </div>
+            <i class="bi bi-plus-circle"></i>
+          </button>
 
-            <div v-if="orderDraft.items.length > 0" class="cart-items-list">
-              <div v-for="(item, index) in orderDraft.items" :key="item.id" class="cart-item">
-                <div class="cart-item-main">
-                   <img :src="item.image" alt="product" class="cart-thumb">
-                   <div class="cart-item-info">
-                     <div class="cart-item-name">{{ item.name }}</div>
-                     <div class="cart-item-price-single">{{ formatPrice(item.price) }}</div>
-                   </div>
-                   <button class="btn-remove-item" @click="removeItem(index)">
-                     <i class="bi bi-x-lg"></i>
-                   </button>
+          <div class="order-block">
+            <div class="block-title">Кошик</div>
+            <div v-if="!orderDraft.items.length" class="empty-cart">
+              Поки що немає товарів.
+            </div>
+
+            <div v-else class="cart-list">
+              <div v-for="item in orderDraft.items" :key="item.key" class="cart-item">
+                <div class="cart-thumb">
+                  <i class="bi bi-image"></i>
                 </div>
-                <div class="cart-item-controls">
-                   <div class="quantity-control">
-                     <button @click="decrementQty(item)" :disabled="item.quantity <= 1">-</button>
-                     <input type="number" v-model.number="item.quantity" min="1" class="qty-input">
-                     <button @click="incrementQty(item)">+</button>
-                   </div>
-                   <div class="cart-item-sum">{{ formatPrice(item.price * item.quantity) }}</div>
+                <div class="cart-info">
+                  <div class="cart-title">{{ item.title || 'Товар' }}</div>
+                  <div class="cart-sku">{{ item.sku || 'NO-SKU' }}</div>
+                </div>
+                <div class="cart-meta">
+                  <div class="qty-controls">
+                    <button type="button" class="qty-btn" disabled>-</button>
+                    <span class="qty-value">{{ item.qty || 1 }}</span>
+                    <button type="button" class="qty-btn" disabled>+</button>
+                  </div>
+                  <div class="item-total">{{ formatMoney(itemTotal(item)) }} грн</div>
                 </div>
               </div>
-              <button class="btn-add-more-modern" @click="openProductModal">
-                <i class="bi bi-plus-lg"></i> Додати ще один товар
-              </button>
             </div>
-            
-            <div v-else class="selection-trigger-area" @click="openProductModal">
-              <div class="trigger-content">
-                <div class="icon-circle"><i class="bi bi-search"></i></div>
-                <p>Виберіть товари для замовлення</p>
-                <span>Дані зберігаються автоматично</span>
-              </div>
-            </div>
-          </div>
 
-          <div v-if="orderDraft.items.length > 0" class="summary-section">
-            <div class="summary-row">
-              <span>Всього до сплати:</span>
-              <span class="total-price">{{ formatPrice(calculateTotal) }}</span>
+            <div class="order-total">
+              <span>Загальна сума</span>
+              <strong>{{ formatMoney(totalAmount) }} грн</strong>
             </div>
           </div>
         </div>
 
         <div class="offcanvas-footer">
-          <button class="btn-save-modern" :disabled="orderDraft.items.length === 0" @click="handleSaved">
+          <button class="btn-save-modern" type="button" :disabled="!hasDraft" @click="handleSaved">
             Оформити замовлення
           </button>
         </div>
       </div>
     </transition>
 
-    <transition name="modal-fade">
-      <div v-if="isProductModalVisible" class="modal-overlay" @click.self="closeProductModal">
-        <div class="product-selection-modal">
-          <div class="modal-header">
-            <h4>Каталог товарів</h4>
-            <button class="btn-close-modal" @click="closeProductModal"><i class="bi bi-x-lg"></i></button>
+    <transition name="fade">
+      <div v-show="productPickerOpen" class="picker-overlay">
+        <div class="picker-panel">
+          <div class="picker-header">
+            <div>
+              <div class="picker-title">Вибір товарів</div>
+              <div class="picker-subtitle">Список товарів у вигляді списку</div>
+            </div>
+            <button class="btn-close-panel" type="button" @click="productPickerOpen = false">
+              <i class="bi bi-x-lg"></i>
+            </button>
           </div>
-          <div class="modal-body custom-scrollbar">
-            <div class="product-list-container">
-              <div 
-                v-for="product in availableProducts" 
-                :key="product.id" 
-                class="selection-list-item"
-                :class="{ 'is-selected': isSelected(product) }"
-                @click="toggleProductSelection(product)"
-              >
-                <div class="item-checkbox">
-                  <div class="checkbox-ui" :class="{ 'checked': isSelected(product) }">
-                    <i class="bi bi-check-lg" v-if="isSelected(product)"></i>
+
+          <div class="picker-body">
+            <div v-if="!productOptions.length" class="empty-cart">
+              Список товарів буде тут.
+            </div>
+            <div v-else class="picker-list">
+              <label v-for="product in productOptions" :key="product.id" class="picker-item">
+                <input type="checkbox" v-model="selectedProductIds" :value="product.id" />
+                <div class="picker-thumb">
+                  <i class="bi bi-image"></i>
+                </div>
+                <div class="picker-info">
+                  <div class="picker-name">{{ product.title }}</div>
+                  <div class="picker-sku">{{ product.sku }}</div>
+                  <div class="picker-stock" :class="{ low: product.stock < 3 }">
+                    Залишок: {{ product.stock }}
                   </div>
                 </div>
-                <img :src="product.image" alt="p" class="item-img">
-                <div class="item-details">
-                  <div class="item-name">{{ product.name }}</div>
-                  <div class="item-meta">
-                    <span>Арт: {{ product.sku }}</span>
-                    <span class="stock-label">На складі: {{ product.stock }}</span>
-                  </div>
-                </div>
-                <div class="item-price">{{ formatPrice(product.price) }}</div>
-              </div>
+                <div class="picker-price">{{ formatMoney(product.price) }} грн</div>
+              </label>
             </div>
           </div>
-          <div class="modal-footer">
-            <button class="btn-confirm-selection" @click="confirmSelection">
-              Додати вибрані ({{ tempSelected.length }})
+
+          <div class="picker-footer">
+            <button
+              class="btn-save-modern"
+              type="button"
+              :disabled="selectedProductIds.length === 0"
+              @click="handleAddProducts"
+            >
+              Додати ({{ selectedProductIds.length }})
             </button>
           </div>
         </div>
@@ -123,93 +124,345 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue';
+import { computed, ref } from 'vue';
 
 const props = defineProps({
-  isVisible: Boolean, // Керується ззовні через v-show
-  customer: Object
+  open: { type: Boolean, default: false },
+  customer: { type: Object, default: null },
+  orderDraft: { type: Object, required: true },
 });
 
 const emit = defineEmits(['close', 'saved', 'minimize']);
 
-const isProductModalVisible = ref(false);
-const tempSelected = ref([]);
+const productPickerOpen = ref(false);
+const selectedProductIds = ref([]);
+const productOptions = ref([]);
 
-// Цей об'єкт замовлення не зникає, поки ви не видалите його або не збережете замовлення
-const orderDraft = reactive({
-  items: []
-});
+const hasDraft = computed(() => props.orderDraft.items?.length > 0);
+const totalAmount = computed(() =>
+  (props.orderDraft.items || []).reduce((sum, item) => sum + itemTotal(item), 0)
+);
 
-const availableProducts = [
-  { id: 101, name: 'Домашні капці "Пухнастики" Рожеві', sku: 'SLP-PNK-38', price: 450, stock: 12, image: 'https://picsum.photos/id/102/80/80' },
-  { id: 102, name: 'Капці з вушками Зайчик Сірі', sku: 'SLP-GRY-40', price: 520, stock: 2, image: 'https://picsum.photos/id/103/80/80' },
-  { id: 103, name: 'Шкарпетки "Тепло"', sku: 'SCK-01', price: 199, stock: 45, image: 'https://picsum.photos/id/107/80/80' }
-];
-
-const handleMinimize = () => { emit('minimize'); };
-const confirmCancel = () => { if (confirm('Видалити чернетку замовлення?')) { orderDraft.items = []; emit('close'); } };
-
-const openProductModal = () => { tempSelected.value = [...orderDraft.items]; isProductModalVisible.value = true; };
-const closeProductModal = () => { isProductModalVisible.value = false; };
-const isSelected = (product) => tempSelected.value.some(p => p.id === product.id);
-
-const toggleProductSelection = (product) => {
-  const index = tempSelected.value.findIndex(p => p.id === product.id);
-  if (index > -1) tempSelected.value.splice(index, 1);
-  else tempSelected.value.push({ ...product, quantity: 1 });
+const handleClose = () => {
+  productPickerOpen.value = false;
+  emit('close');
 };
 
-const confirmSelection = () => { orderDraft.items = [...tempSelected.value]; closeProductModal(); };
+const handleMinimize = () => {
+  productPickerOpen.value = false;
+  emit('minimize');
+};
 
-const calculateTotal = computed(() => orderDraft.items.reduce((t, i) => t + (i.price * i.quantity), 0));
-const formatPrice = (v) => new Intl.NumberFormat('uk-UA', { style: 'currency', currency: 'UAH' }).format(v);
-const removeItem = (index) => { orderDraft.items.splice(index, 1); };
-const incrementQty = (item) => { item.quantity++; };
-const decrementQty = (item) => { if (item.quantity > 1) item.quantity--; };
-const handleSaved = () => { emit('saved', orderDraft); orderDraft.items = []; };
+const handleSaved = () => {
+  emit('saved');
+};
+
+const handleAddProducts = () => {
+  productPickerOpen.value = false;
+};
+
+const formatMoney = (value) => {
+  const number = Number(value) || 0;
+  return number.toFixed(2);
+};
+
+const itemTotal = (item) => {
+  return (Number(item.qty) || 0) * (Number(item.price) || 0);
+};
 </script>
 
 <style scoped>
-/* Стилі Offcanvas */
-.offcanvas-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.4); z-index: 1000; backdrop-filter: blur(4px); }
-.order-offcanvas-global { position: fixed; top: 0; right: 0; width: 450px; max-width: 100%; height: 100vh; background: #fff; z-index: 1001; display: flex; flex-direction: column; box-shadow: -10px 0 30px rgba(0,0,0,0.1); }
+.offcanvas-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.4);
+  z-index: 1000;
+  backdrop-filter: blur(2px);
+}
 
-/* Індикатор чернетки */
-.draft-indicator { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: #10b981; text-transform: uppercase; background: #ecfdf5; padding: 2px 8px; border-radius: 20px; margin-bottom: 4px; }
-.draft-indicator .dot { width: 6px; height: 6px; background: #10b981; border-radius: 50%; animation: pulse 1.5s infinite; }
+.order-offcanvas-global {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 450px;
+  max-width: 100%;
+  height: 100vh;
+  background: #ffffff;
+  z-index: 1001;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.1);
+}
 
-@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+.offcanvas-header {
+  padding: 16px;
+  border-bottom: 1px solid #edf2f7;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #ffffff;
+}
 
-.header-actions { display: flex; gap: 8px; }
-.btn-minimize { background: #f1f5f9; border: none; width: 32px; height: 32px; border-radius: 8px; color: #64748b; cursor: pointer; }
-.btn-minimize:hover { background: #e2e8f0; color: #1e293b; }
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
 
-/* Поле вибору */
-.selection-trigger-area { background: #fff; border: 2px dashed #e2e8f0; border-radius: 20px; padding: 30px; text-align: center; cursor: pointer; transition: 0.2s; }
+.header-icon { color: #a78bfb; font-size: 18px; }
+
+.header-meta { display: flex; align-items: center; gap: 8px; }
+
+.offcanvas-header h3 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0;
+}
+
+.draft-pill {
+  background: #fff7ed;
+  color: #c2410c;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.header-actions { display: flex; align-items: center; gap: 10px; }
+
+.btn-ghost {
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #475569;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-close-panel {
+  background: #f1f5f9;
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: #64748b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: 0.2s;
+}
+
+.btn-close-panel:hover { background: #fee2e2; color: #ef4444; }
+
+.offcanvas-body {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  background: #f8fafc;
+}
+
+.offcanvas-footer {
+  padding: 16px;
+  border-top: 1px solid #edf2f7;
+  background: #ffffff;
+}
+
+.selection-trigger-area {
+  width: 100%;
+  border: 2px dashed #e2e8f0;
+  border-radius: 20px;
+  padding: 20px;
+  text-align: left;
+  cursor: pointer;
+  transition: 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: #ffffff;
+  margin-bottom: 16px;
+}
+
 .selection-trigger-area:hover { border-color: #a78bfb; background: #f5f3ff; }
-.selection-trigger-area:active { transform: scale(0.97); }
+.selection-trigger-area:active { transform: scale(0.98); }
 
-.btn-add-more-modern { background: #f5f3ff; border: 1.5px solid #ddd6fe; color: #7c3aed; width: 100%; padding: 12px; border-radius: 12px; font-weight: 700; cursor: pointer; margin-top: 15px; font-size: 13px; }
+.trigger-title { font-size: 14px; font-weight: 700; color: #1f2937; }
+.trigger-subtitle { font-size: 12px; color: #94a3b8; }
 
-/* Список товарів у модалці */
-.selection-list-item { display: flex; align-items: center; padding: 12px 20px; cursor: pointer; border-bottom: 1px solid #f8fafc; gap: 15px; }
-.selection-list-item:hover { background: #f5f3ff; }
-.selection-list-item.is-selected { background: #f5f3ff; }
-.item-img { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; }
-.item-name { font-size: 14px; font-weight: 700; color: #1e293b; }
-.item-meta { font-size: 12px; color: #94a3b8; display: flex; gap: 10px; }
-.checkbox-ui { width: 20px; height: 20px; border: 2px solid #cbd5e1; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #fff; }
-.checkbox-ui.checked { background: #a78bfb; border-color: #a78bfb; }
+.order-block {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
 
-.modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); z-index: 2000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
-.product-selection-modal { background: #fff; width: 500px; max-width: 95%; max-height: 80vh; border-radius: 24px; display: flex; flex-direction: column; overflow: hidden; }
+.block-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: #94a3b8; font-weight: 700; }
+.empty-cart { color: #94a3b8; font-size: 13px; }
+.cart-list { display: flex; flex-direction: column; gap: 12px; }
+.cart-item { display: grid; grid-template-columns: 48px 1fr auto; gap: 12px; align-items: center; }
 
-/* Анімації */
-.slide-global-enter-active, .slide-global-leave-active { transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+.cart-thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+}
+
+.cart-info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.cart-title { font-size: 14px; font-weight: 600; color: #1f2937; }
+.cart-sku { font-size: 12px; color: #94a3b8; }
+
+.cart-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+
+.qty-controls { display: inline-flex; align-items: center; gap: 6px; }
+
+.qty-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #64748b;
+  font-size: 16px;
+}
+
+.qty-value { min-width: 24px; text-align: center; font-weight: 700; color: #1f2937; }
+.item-total { font-weight: 700; color: #1f2937; }
+
+.order-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 10px;
+  font-size: 14px;
+}
+
+.btn-save-modern {
+  background: #a78bfb;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  width: 100%;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-save-modern:disabled {
+  background: #e2e8f0;
+  color: #94a3b8;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.picker-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.6);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  backdrop-filter: blur(2px);
+}
+
+.picker-panel {
+  background: #ffffff;
+  width: 500px;
+  max-width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.picker-header {
+  padding: 16px;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.picker-title { font-size: 16px; font-weight: 700; color: #1f2937; }
+.picker-subtitle { font-size: 12px; color: #94a3b8; }
+
+.picker-body { flex: 1; padding: 16px; overflow-y: auto; background: #f8fafc; }
+.picker-list { display: flex; flex-direction: column; gap: 12px; }
+
+.picker-item {
+  display: grid;
+  grid-template-columns: 24px 48px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.picker-thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+}
+
+.picker-info { display: flex; flex-direction: column; gap: 4px; }
+.picker-name { font-size: 14px; font-weight: 600; color: #1f2937; }
+.picker-sku { font-size: 12px; color: #94a3b8; }
+.picker-stock { font-size: 12px; color: #64748b; }
+.picker-stock.low { color: #dc2626; font-weight: 600; }
+.picker-price { font-weight: 700; color: #0f172a; }
+
+.picker-footer { padding: 16px; border-top: 1px solid #e2e8f0; }
+
+.fade-enter-active, .fade-leave-active { transition: opacity 0.3s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+
+.slide-global-enter-active, .slide-global-leave-active {
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 .slide-global-enter-from, .slide-global-leave-to { transform: translateX(100%); }
 
 @media (max-width: 768px) {
   .order-offcanvas-global { width: 100%; }
-  .product-selection-modal { width: 100%; height: 100%; max-height: 100%; border-radius: 0; }
+  .picker-panel { width: 100%; }
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  .selection-trigger-area,
+  .btn-save-modern,
+  .qty-btn,
+  .btn-ghost,
+  .picker-item {
+    min-height: 40px;
+  }
 }
 </style>
