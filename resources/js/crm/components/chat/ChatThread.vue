@@ -1,46 +1,56 @@
 <template>
   <div class="chat-thread-wrapper">
     <header class="chat-thread-header">
-      <button
-        type="button"
-        class="chat-thread-list-btn"
-        title="Список чатів"
-        @click="$emit('open-list')"
-      >
-        <i class="bi bi-list"></i>
-      </button>
-      <div class="chat-thread-user">
-        <div class="chat-thread-avatar">
-          <img v-if="activeChat?.customer_avatar" :src="activeChat.customer_avatar" alt="avatar" />
-          <span v-else class="chat-thread-avatar-fallback">
-            {{ (activeChat?.customer_name || '?').charAt(0).toUpperCase() }}
-          </span>
-        </div>
-        <div class="chat-thread-meta">
-          <div class="chat-thread-title-row">
-            <h2 class="chat-thread-title">{{ activeChat?.customer_name || 'Чат' }}</h2>
-            <button
-              type="button"
-              class="chat-thread-sync"
-              :class="{ 'is-syncing': isSyncing }"
-              :disabled="isSyncing || loading"
-              title="Оновити історію"
-              @click="$emit('force-sync')"
-            >
-              <i class="bi bi-arrow-clockwise"></i>
-            </button>
+      <!-- ЛІВА ЧАСТИНА: Меню (моб) + Аватар + Інфо -->
+      <div class="header-left-group">
+        <button
+          type="button"
+          class="chat-thread-list-btn"
+          title="Список чатів"
+          @click="$emit('open-list')"
+        >
+          <i class="bi bi-list"></i>
+        </button>
+
+        <div class="chat-thread-user">
+          <div class="chat-thread-avatar">
+            <img v-if="activeChat?.customer_avatar" :src="activeChat.customer_avatar" alt="avatar" />
+            <span v-else class="chat-thread-avatar-fallback">
+              {{ (activeChat?.customer_name || '?').charAt(0).toUpperCase() }}
+            </span>
           </div>
-          <div class="chat-thread-platform" v-if="activeChat?.platform">
-            <i :class="activeChat.platform === 'instagram' ? 'bi bi-instagram' : 'bi bi-messenger'"></i>
-            <span>{{ activeChat.platform === 'instagram' ? 'Instagram' : 'Facebook' }}</span>
+          
+          <div class="chat-thread-meta">
+            <h2 class="chat-thread-title">{{ activeChat?.customer_name || 'Чат' }}</h2>
+            
+            <div class="meta-row">
+              <div class="chat-thread-platform" v-if="activeChat?.platform">
+                <i :class="activeChat.platform === 'instagram' ? 'bi bi-instagram' : 'bi bi-messenger'"></i>
+                <span>{{ activeChat.platform === 'instagram' ? 'Instagram' : 'Facebook' }}</span>
+              </div>
+              <span v-if="activeChat?.last_message_time" class="chat-time-separator">• {{ activeChat.last_message_time }}</span>
+            </div>
           </div>
         </div>
       </div>
+
+      <!-- ПРАВА ЧАСТИНА: Кнопки дій (Оновити + Профіль) -->
       <div class="chat-thread-actions">
         <button
           type="button"
-          class="chat-thread-profile-btn"
-          title="Профіль"
+          class="action-btn-icon"
+          :class="{ 'is-syncing': isSyncing }"
+          :disabled="isSyncing || loading"
+          title="Оновити історію"
+          @click="$emit('force-sync')"
+        >
+          <i class="bi bi-arrow-clockwise"></i>
+        </button>
+
+        <button
+          type="button"
+          class="action-btn-icon"
+          title="Профіль клієнта"
           @click="$emit('open-profile')"
         >
           <i class="bi bi-person-circle"></i>
@@ -85,7 +95,7 @@ const props = defineProps({
   activeChat: { type: Object, default: null },
   messages: { type: Array, default: () => [] },
   isSending: { type: Boolean, default: false },
-  loading: { type: Boolean, default: false }, // <--- ДОДАНО НОВИЙ PROPS
+  loading: { type: Boolean, default: false },
   isSyncing: { type: Boolean, default: false },
 });
 
@@ -98,12 +108,10 @@ function scrollToBottom() {
   threadBody.value.scrollTop = threadBody.value.scrollHeight;
 }
 
-// Скролимо вниз при монтуванні
 onMounted(() => {
   scrollToBottom();
 });
 
-// Скролимо вниз, коли приходять нові повідомлення
 watch(
   () => props.messages.length,
   async () => {
@@ -112,11 +120,10 @@ watch(
   }
 );
 
-// Також бажано скролити вниз, коли закінчується завантаження
 watch(
   () => props.loading,
   async (newVal) => {
-    if (!newVal) { // Якщо завантаження завершилось (false)
+    if (!newVal) {
       await nextTick();
       scrollToBottom();
     }
@@ -130,29 +137,46 @@ watch(
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  background: #fff;
+  position: relative;
 }
 
+/* --- HEADER --- */
 .chat-thread-header {
-  padding: 16px 20px;
+  padding: 12px 20px;
   border-bottom: 1px solid #e2e8f0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: space-between; /* Розносить ліву і праву групи */
   gap: 12px;
+  background: #ffffff;
+  height: 64px;
+  flex-shrink: 0;
+}
+
+/* Ліва група (Меню + Аватар + Текст) */
+.header-left-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1; /* Займає весь вільний простір */
+  min-width: 0; /* Для обрізки тексту */
 }
 
 .chat-thread-user {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex: 1;
+  min-width: 0;
 }
 
 .chat-thread-avatar {
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
   overflow: hidden;
-  background: #e2e8f0;
+  background: #f1f5f9;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -167,144 +191,116 @@ watch(
 
 .chat-thread-avatar-fallback {
   font-weight: 700;
-  color: #475569;
+  color: #64748b;
   font-size: 1rem;
 }
 
 .chat-thread-meta {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-}
-
-.chat-thread-title-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  gap: 2px;
+  min-width: 0; /* Важливо для обрізки */
 }
 
 .chat-thread-title {
-  font-size: 1rem;
+  font-size: 15px;
   font-weight: 700;
   color: #0f172a;
   margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.chat-thread-platform {
-  font-size: 0.75rem;
-  color: #64748b;
+.meta-row {
   display: flex;
   align-items: center;
   gap: 6px;
+  font-size: 12px;
+  color: #64748b;
 }
 
-.chat-thread-subtitle {
-  font-size: 0.75rem;
-  color: #94a3b8;
-}
-
-.chat-thread-actions {
+.chat-thread-platform {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
 }
 
-.chat-thread-profile-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  border: 1px solid #e2e8f0;
-  background: #f8fafc;
-  color: #64748b;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  padding: 0;
+.chat-time-separator {
+  white-space: nowrap;
+  opacity: 0.7;
 }
 
-.chat-thread-profile-btn:hover {
-  background: #e2e8f0;
-}
-
+/* Кнопка списку (мобільна) */
 .chat-thread-list-btn {
-  display: none;
+  display: none; /* Прихована на десктопі */
   width: 36px;
   height: 36px;
   border-radius: 10px;
   border: 1px solid #e2e8f0;
-  background: #f8fafc;
+  background: #fff;
   color: #475569;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  padding: 0;
+  flex-shrink: 0;
+}
+.chat-thread-list-btn:hover { background: #f8fafc; }
+
+/* ПРАВА ЧАСТИНА: Кнопки дій */
+.chat-thread-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px; /* Відступ між кнопками */
   flex-shrink: 0;
 }
 
-.chat-thread-list-btn:hover {
-  background: #e2e8f0;
-}
-
-@media (max-width: 768px) {
-  .chat-thread-header {
-    justify-content: flex-start;
-  }
-
-  .chat-thread-actions {
-    margin-left: auto;
-  }
-
-  .chat-thread-list-btn {
-    display: inline-flex;
-  }
-}
-
-.chat-thread-sync {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  background: rgba(148, 163, 184, 0.12);
+.action-btn-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0; /* Легка рамка */
+  background: #fff;
   color: #64748b;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: all 0.2s ease;
-  padding: 0;
 }
 
-.chat-thread-sync:hover:not(:disabled) {
-  background: rgba(59, 130, 246, 0.12);
-  color: #2563eb;
+.action-btn-icon:hover {
+  background: #f1f5f9;
+  color: #3b82f6;
+  border-color: #cbd5e1;
 }
 
-.chat-thread-sync:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.action-btn-icon:active {
+  transform: scale(0.96);
 }
 
-.chat-thread-sync.is-syncing i {
+.action-btn-icon.is-syncing i {
   animation: spin 1s linear infinite;
 }
 
+/* --- BODY --- */
 .chat-thread-body {
   flex: 1;
   padding: 16px 20px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  background: #f8fafc; /* Трохи світліший фон для чату */
 }
 
 .chat-thread-empty {
   color: #94a3b8;
   text-align: center;
-  margin-top: 32px;
+  margin-top: 40px;
   font-size: 0.9rem;
 }
 
-/* --- СТИЛІ ДЛЯ ЗАВАНТАЖЕННЯ --- */
+/* LOADING */
 .chat-loading {
   display: flex;
   flex-direction: column;
@@ -320,12 +316,33 @@ watch(
   width: 32px;
   height: 32px;
   border: 3px solid #e2e8f0;
-  border-top-color: #3b82f6; /* Синій колір */
+  border-top-color: #3b82f6;
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* --- MOBILE ADAPTATION --- */
+@media (max-width: 768px) {
+  .chat-thread-header {
+    padding: 10px 14px; /* Менші відступи */
+  }
+
+  .chat-thread-list-btn {
+    display: inline-flex; /* Показуємо кнопку меню */
+  }
+  
+  .chat-thread-user {
+    margin-left: 4px; /* Відступ від кнопки меню */
+  }
+  
+  /* Приховуємо час на дуже вузьких екранах, якщо не влазить */
+  .chat-time-separator {
+    display: none; 
+  }
+  @media (min-width: 380px) {
+    .chat-time-separator { display: inline; }
+  }
 }
 </style>
