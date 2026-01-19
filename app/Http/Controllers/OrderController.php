@@ -78,6 +78,15 @@ class OrderController extends Controller
                 return $q->where('status', $statusString);
             })
             ->when($request->filled('payment_status'), fn ($q) => $q->where('payment_status', $request->string('payment_status')))
+            ->when($request->filled('delivery_hold_days'), function ($q) use ($request) {
+                $days = max((int) $request->get('delivery_hold_days'), 1);
+                $threshold = now()->subDays($days);
+                $q->whereHas('delivery', function ($dq) use ($threshold) {
+                    $dq->where('delivery_status_code', 'at_warehouse')
+                        ->whereNotNull('delivery_status_updated_at')
+                        ->where('delivery_status_updated_at', '<=', $threshold);
+                });
+            })
             ->when($request->filled('search'), function ($q) use ($request) {
                 $term = trim((string) $request->get('search'));
                 $q->where(function ($inner) use ($term) {

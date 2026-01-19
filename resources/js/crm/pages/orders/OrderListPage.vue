@@ -4,8 +4,12 @@
       v-model:search="filters.search"
       :status-chips="statusChips"
       :is-status-active="isStatusActive"
+      :hold-filter-enabled="true"
+      :hold-filter-active="filters.delivery_hold_days === holdFilterDays"
+      :hold-filter-days="holdFilterDays"
       @search="handleSearch"
       @toggle-status="toggleStatus"
+      @toggle-hold="toggleHoldFilter"
     />
 
     <div class="card border-0 shadow-sm overflow-hidden">
@@ -95,7 +99,8 @@ const statuses = ref([]);
 const statusesOrder = ref(null);
 const selectedStatusId = ref(null);
 const meta = ref({ current_page: 1, last_page: 1, total: 0 });
-const filters = reactive({ search: '', statuses: [], payment_status: '', page: 1, per_page: 20 });
+const holdFilterDays = 4;
+const filters = reactive({ search: '', statuses: [], payment_status: '', delivery_hold_days: null, page: 1, per_page: 20 });
 let searchTimer;
 
 const statusChips = ref([{ value: '', label: 'Всі', icon: 'bi-grid', color: null }]);
@@ -207,6 +212,7 @@ async function fetchData() {
       search: filters.search || undefined,
       status: filters.statuses?.length ? filters.statuses : undefined,
       payment_status: filters.payment_status || undefined,
+      delivery_hold_days: filters.delivery_hold_days || undefined,
     });
 
     const payload = data.data || data?.data?.data || [];
@@ -234,6 +240,11 @@ function mapOrder(order) {
   const statusRef = order.statusRef || order.status_ref || {};
   const sourceRef = order.source || {};
   const latestReceipt = order.latest_fiscal_receipt || order.latestFiscalReceipt || null;
+  const deliveryStatusUpdatedAt = delivery.delivery_status_updated_at || delivery.last_tracked_at || '';
+  const deliveryHoldDays = deliveryStatusUpdatedAt
+    ? Math.floor((Date.now() - new Date(deliveryStatusUpdatedAt).getTime()) / (1000 * 60 * 60 * 24))
+    : null;
+
   return {
     ...order,
     payment_method: payment.method || order.payment_method || '',
@@ -277,7 +288,7 @@ function mapOrder(order) {
     city_name: delivery.city_name || '',
     delivery_status: delivery.delivery_status_label || '',
     delivery_status_code: delivery.delivery_status_code || '',
-    delivery_status_updated_at: delivery.delivery_status_updated_at || delivery.last_tracked_at || '',
+    delivery_status_updated_at: deliveryStatusUpdatedAt,
     last_tracked_at: delivery.last_tracked_at || '',
     delivery_status_color: delivery.delivery_status_color || '',
     delivery_status_icon: delivery.delivery_status_icon || '',
@@ -293,7 +304,14 @@ function mapOrder(order) {
     comment: order.comment_internal || '',
     created_at: order.created_at,
     latestFiscalReceipt: latestReceipt,
+    delivery_hold_days: deliveryHoldDays,
   };
+}
+
+function toggleHoldFilter() {
+  filters.delivery_hold_days = filters.delivery_hold_days ? null : holdFilterDays;
+  filters.page = 1;
+  fetchData();
 }
 
 function handleSearch() {

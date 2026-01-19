@@ -319,6 +319,15 @@
                   </div>
 
                   <div
+                    v-if="order.delivery_status_code === 'at_warehouse' && order.delivery_hold_days >= 4"
+                    class="hold-badge"
+                    :title="`Посилка у відділенні ${order.delivery_hold_days} дні`"
+                  >
+                    <i class="bi bi-exclamation-circle"></i>
+                    {{ order.delivery_hold_days }} дні
+                  </div>
+
+                  <div
                     class="d-flex align-items-center gap-2 ttn-row"
                     @click.stop="$emit('copy-ttn', order.ttn)"
                     title="Копіювати ТТН"
@@ -613,6 +622,20 @@
 }
 .delivery-empty:hover .text-muted {
   color: #3b82f6 !important;
+}
+
+.hold-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fcd34d;
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  margin-bottom: 6px;
 }
 
 /* =========================================

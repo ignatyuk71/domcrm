@@ -47,6 +47,16 @@
           ></i>
           <span>{{ opt.label }}</span>
         </button>
+
+        <button
+          v-if="holdFilterEnabled"
+          class="filter-chip"
+          :class="{ active: holdFilterActive }"
+          @click="$emit('toggle-hold')"
+        >
+          <i class="bi bi-exclamation-circle"></i>
+          <span>Посилка {{ holdFilterDays }} дні</span>
+        </button>
       </div>
     </div>
   </header>
@@ -57,9 +67,12 @@ const props = defineProps({
   search: { type: String, default: '' },
   statusChips: { type: Array, default: () => [] },
   isStatusActive: { type: Function, required: true },
+  holdFilterEnabled: { type: Boolean, default: false },
+  holdFilterActive: { type: Boolean, default: false },
+  holdFilterDays: { type: Number, default: 4 },
 });
 
-const emit = defineEmits(['update:search', 'search', 'toggle-status']);
+const emit = defineEmits(['update:search', 'search', 'toggle-status', 'toggle-hold']);
 
 function onSearch(event) {
   const value = event.target.value;
