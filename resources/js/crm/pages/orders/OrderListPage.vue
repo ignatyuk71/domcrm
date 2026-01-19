@@ -5,12 +5,10 @@
       :status-chips="statusChips"
       :is-status-active="isStatusActive"
       :hold-filter-enabled="true"
-      :hold-filter-active="filters.delivery_hold_days === holdFilterDays"
       :hold-filter-days="holdFilterDays"
       :hold-filter-options="holdFilterOptions"
       @search="handleSearch"
       @toggle-status="toggleStatus"
-      @toggle-hold="toggleHoldFilter"
       @update:hold-days="updateHoldDays"
     />
 
@@ -102,9 +100,9 @@ const statuses = ref([]);
 const statusesOrder = ref(null);
 const selectedStatusId = ref(null);
 const meta = ref({ current_page: 1, last_page: 1, total: 0 });
-const holdFilterOptions = [3, 4, 5];
+const holdFilterOptions = [3, 4, 5, 6];
 const holdFilterDays = ref(3);
-const filters = reactive({ search: '', statuses: [], payment_status: '', delivery_hold_days: null, page: 1, per_page: 20 });
+const filters = reactive({ search: '', statuses: [], payment_status: '', delivery_hold_days: holdFilterDays.value, page: 1, per_page: 20 });
 let searchTimer;
 
 const statusChips = ref([{ value: '', label: 'Всі', icon: 'bi-grid', color: null }]);
@@ -312,19 +310,11 @@ function mapOrder(order) {
   };
 }
 
-function toggleHoldFilter() {
-  filters.delivery_hold_days = filters.delivery_hold_days ? null : holdFilterDays.value;
-  filters.page = 1;
-  fetchData();
-}
-
 function updateHoldDays(value) {
   holdFilterDays.value = value;
-  if (filters.delivery_hold_days) {
-    filters.delivery_hold_days = value;
-    filters.page = 1;
-    fetchData();
-  }
+  filters.delivery_hold_days = value;
+  filters.page = 1;
+  fetchData();
 }
 
 function handleSearch() {

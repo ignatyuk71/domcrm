@@ -48,16 +48,6 @@
           <span>{{ opt.label }}</span>
         </button>
 
-        <button
-          v-if="holdFilterEnabled"
-          class="filter-chip"
-          :class="{ active: holdFilterActive }"
-          @click="$emit('toggle-hold')"
-        >
-          <i class="bi bi-exclamation-circle"></i>
-          <span>Посилка {{ holdFilterDays }} дні</span>
-        </button>
-
         <div v-if="holdFilterEnabled" class="hold-days-select">
           <i class="bi bi-calendar3"></i>
           <select :value="holdFilterDays" @change="$emit('update:hold-days', Number($event.target.value))">
@@ -80,7 +70,7 @@ const props = defineProps({
   holdFilterOptions: { type: Array, default: () => [3, 4, 5] },
 });
 
-const emit = defineEmits(['update:search', 'search', 'toggle-status', 'toggle-hold', 'update:hold-days']);
+const emit = defineEmits(['update:search', 'search', 'toggle-status', 'update:hold-days']);
 
 function onSearch(event) {
   const value = event.target.value;
