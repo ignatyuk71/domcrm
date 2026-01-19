@@ -45,9 +45,6 @@
         >
           <i class="bi bi-person-circle"></i>
         </button>
-        <span v-if="activeChat?.last_message_time" class="chat-thread-subtitle">
-          {{ activeChat.last_message_time }}
-        </span>
       </div>
     </header>
 
