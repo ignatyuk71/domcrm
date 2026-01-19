@@ -120,7 +120,8 @@
               <div class="history-main">
                 <a :href="`/orders/${order.id}`" class="order-number">№ {{ order.order_number || order.id }}</a>
                 <span class="order-status" :style="{ backgroundColor: order.statusRef?.color || '#e2e8f0' }">
-                  {{ order.statusRef?.name || order.status }}
+                  <i v-if="order.statusRef?.icon" class="bi" :class="order.statusRef.icon"></i>
+                  {{ getStatusLabel(order) }}
                 </span>
               </div>
               <div class="history-meta">
@@ -366,6 +367,10 @@ const formatDate = (value) => {
 };
 
 const formatMoney = (value) => Number(value || 0).toFixed(2);
+
+const getStatusLabel = (order) => {
+  return order?.statusRef?.name || '—';
+};
 
 const saveData = async () => {
   if (!customerId.value || !isProfileComplete.value) return;
