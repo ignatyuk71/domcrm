@@ -46,7 +46,7 @@ const props = defineProps({
   open: { type: Boolean, default: false },
   modelValue: {
     type: Object,
-    default: () => ({ method: '', prepay_amount: 0 }),
+    default: () => ({ method: '', prepay_amount: 0, currency: 'UAH' }),
   },
 });
 
@@ -55,6 +55,7 @@ const emit = defineEmits(['close', 'save', 'update:modelValue']);
 const local = reactive({
   method: '',
   prepay_amount: 0,
+  currency: 'UAH',
 });
 
 const isSaving = ref(false);
@@ -64,6 +65,7 @@ let saveTimer = null;
 const syncFromModel = (val) => {
   local.method = val?.method || '';
   local.prepay_amount = Number(val?.prepay_amount || 0);
+  local.currency = val?.currency || 'UAH';
 };
 
 watch(
@@ -94,6 +96,25 @@ watch(
   }
 );
 
+watch(
+  () => local.prepay_amount,
+  (amount) => {
+    if (amount < 0) local.prepay_amount = 0;
+  }
+);
+
+watch(
+  local,
+  () => {
+    emit('update:modelValue', {
+      method: local.method || '',
+      prepay_amount: local.method === 'prepay' ? Number(local.prepay_amount || 0) : 0,
+      currency: local.currency || 'UAH',
+    });
+  },
+  { deep: true }
+);
+
 const handleClose = () => {
   if (isSaving.value) return;
   emit('close');
@@ -107,6 +128,7 @@ const handleSave = () => {
   const payload = {
     method: local.method || '',
     prepay_amount: local.method === 'prepay' ? Number(local.prepay_amount || 0) : 0,
+    currency: local.currency || 'UAH',
   };
 
   saveTimer = setTimeout(() => {

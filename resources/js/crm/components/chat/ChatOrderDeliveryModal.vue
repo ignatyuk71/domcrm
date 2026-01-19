@@ -260,6 +260,25 @@ watch(
   { deep: true }
 );
 
+watch(
+  local,
+  () => {
+    emit('update:modelValue', {
+      carrier: 'nova_poshta',
+      delivery_type: local.delivery_type,
+      city_name: local.city_name,
+      city_ref: local.city_ref,
+      warehouse_name: local.warehouse_name,
+      warehouse_ref: local.warehouse_ref,
+      street_name: local.street_name,
+      building: local.building,
+      apartment: local.apartment,
+      payer: local.payer,
+    });
+  },
+  { deep: true }
+);
+
 const setDeliveryType = (type) => {
   local.delivery_type = type;
   if (type === 'courier') {
