@@ -27,12 +27,12 @@
             <div class="elite-section">
               <label class="elite-label">Метод логістики</label>
               <div class="method-tiles">
-                <div class="method-tile" :class="{ selected: test.type === 'wh' }" @click="test.type = 'wh'">
+                <div class="method-tile" :class="{ selected: local.delivery_type === 'warehouse' }" @click="setDeliveryType('warehouse')">
                   <div class="tile-icon"><i class="bi bi-box-seam"></i></div>
                   <div class="tile-label">Відділення</div>
                   <div class="tile-status"><i class="bi bi-check2-circle"></i></div>
                 </div>
-                <div class="method-tile" :class="{ selected: test.type === 'cur' }" @click="test.type = 'cur'">
+                <div class="method-tile" :class="{ selected: local.delivery_type === 'courier' }" @click="setDeliveryType('courier')">
                   <div class="tile-icon"><i class="bi bi-house-door"></i></div>
                   <div class="tile-label">Кур'єр</div>
                   <div class="tile-status"><i class="bi bi-check2-circle"></i></div>
@@ -44,34 +44,94 @@
               <label class="elite-label">Населений пункт</label>
               <div class="neo-input-wrap">
                 <i class="bi bi-geo-alt-fill pin-icon"></i>
-                <select class="neo-select" v-model="test.city">
-                  <option value="Одеса">Одеса, Одеська область</option>
-                  <option value="Київ">Київ, Київська область</option>
-                  <option value="Львів">Львів, Львівська область</option>
-                </select>
-                <i class="bi bi-chevron-down arrow-icon"></i>
+                <input
+                  class="neo-select"
+                  type="text"
+                  v-model="cityQuery"
+                  @focus="showCityDropdown = true"
+                  @blur="scheduleCloseCity"
+                  placeholder="Оберіть місто..."
+                />
+                <i v-if="cityLoading" class="bi bi-arrow-repeat arrow-icon np-spinner"></i>
+                <i v-else class="bi bi-chevron-down arrow-icon"></i>
+              </div>
+              <div v-if="showCityDropdown" class="np-dropdown">
+                <div v-if="cityError" class="np-dropdown-item muted">{{ cityError }}</div>
+                <button
+                  v-for="city in cityOptions"
+                  :key="city.ref"
+                  type="button"
+                  class="np-dropdown-item"
+                  @mousedown.prevent="selectCity(city)"
+                >
+                  <div class="np-option-title">{{ city.name }}</div>
+                  <div class="np-option-sub">{{ city.area }}</div>
+                </button>
+                <div v-if="!cityOptions.length && !cityError" class="np-dropdown-item muted">Нічого не знайдено</div>
               </div>
             </div>
 
             <transition name="slide-fade" mode="out-in">
-              <div v-if="test.type === 'wh'" :key="'wh'" class="elite-section">
+              <div v-if="local.delivery_type === 'warehouse'" :key="'wh'" class="elite-section">
                 <label class="elite-label">Пункт призначення</label>
                 <div class="neo-input-wrap">
                   <i class="bi bi-signpost-split-fill pin-icon"></i>
-                  <select class="neo-select" v-model="test.warehouse">
-                    <option value="1">Поштомат №5522: пр. Перемоги, 4</option>
-                    <option value="2">Відділення №1: вул. Пирогова, 13</option>
-                  </select>
-                  <i class="bi bi-chevron-down arrow-icon"></i>
+                  <input
+                    class="neo-select"
+                    type="text"
+                    v-model="warehouseQuery"
+                    :disabled="!local.city_ref"
+                    @focus="onWarehouseFocus"
+                    @blur="scheduleCloseWarehouse"
+                    placeholder="Виберіть відділення..."
+                  />
+                  <i v-if="warehouseLoading" class="bi bi-arrow-repeat arrow-icon np-spinner"></i>
+                  <i v-else class="bi bi-chevron-down arrow-icon"></i>
+                </div>
+                <div v-if="showWarehouseDropdown" class="np-dropdown">
+                  <button
+                    v-for="wh in warehouseOptions"
+                    :key="wh.ref || wh.name"
+                    type="button"
+                    class="np-dropdown-item"
+                    @mousedown.prevent="selectWarehouse(wh)"
+                  >
+                    <div class="np-option-title">{{ wh.name }}</div>
+                    <div class="np-option-sub">{{ wh.category || wh.type || '' }}</div>
+                  </button>
+                  <div v-if="!warehouseOptions.length" class="np-dropdown-item muted">Нічого не знайдено</div>
                 </div>
               </div>
 
               <div v-else :key="'cur'" class="elite-section">
                 <label class="elite-label">Адресація</label>
-                <input type="text" class="neo-input mb-3" placeholder="Вулиця (пошук...)">
+                <div class="neo-input-wrap mb-3">
+                  <input
+                    type="text"
+                    class="neo-input"
+                    v-model="streetQuery"
+                    :disabled="!local.city_ref"
+                    @focus="onStreetFocus"
+                    @blur="scheduleCloseStreet"
+                    placeholder="Вулиця (пошук...)"
+                  >
+                  <i v-if="streetLoading" class="bi bi-arrow-repeat arrow-icon np-spinner"></i>
+                </div>
+                <div v-if="showStreetDropdown" class="np-dropdown">
+                  <button
+                    v-for="street in streetOptions"
+                    :key="street.ref"
+                    type="button"
+                    class="np-dropdown-item"
+                    @mousedown.prevent="selectStreet(street)"
+                  >
+                    <div class="np-option-title">{{ street.name }}</div>
+                  </button>
+                  <div v-if="!streetOptions.length" class="np-dropdown-item muted">Нічого не знайдено</div>
+                </div>
                 <div class="row g-3">
-                  <div class="col-6"><input type="text" class="neo-input" placeholder="Будинок"></div>
-                  <div class="col-6"><input type="text" class="neo-input" placeholder="Кв. / Офіс"></div>
+                  <div class="col-6"><input type="text" class="neo-input" v-model="local.building" placeholder="Будинок"></div>
+                  <div class="col-6"><input type="text" class="neo-input" v-model="local.apartment" placeholder="Кв. / Офіс"></div>
                 </div>
               </div>
             </transition>
@@ -79,13 +139,13 @@
             <div class="elite-section no-border">
               <label class="elite-label">Розподіл витрат</label>
               <div class="segmented-control">
-                <div class="segment" :class="{ active: test.payer === 'r' }" @click="test.payer = 'r'">
+                <div class="segment" :class="{ active: local.payer === 'recipient' }" @click="local.payer = 'recipient'">
                   <i class="bi bi-person"></i> Отримувач
                 </div>
-                <div class="segment" :class="{ active: test.payer === 's' }" @click="test.payer = 's'">
+                <div class="segment" :class="{ active: local.payer === 'sender' }" @click="local.payer = 'sender'">
                   <i class="bi bi-shop"></i> Відправник
                 </div>
-                <div class="active-bg" :style="{ left: test.payer === 'r' ? '4px' : '50%' }"></div>
+                <div class="active-bg" :style="{ left: local.payer === 'recipient' ? '4px' : '50%' }"></div>
               </div>
             </div>
 
@@ -116,6 +176,7 @@
 
 <script setup>
 import { reactive, ref, watch } from 'vue';
+import { fetchCities, fetchWarehouses, fetchStreets } from '@/crm/api/novaPoshta';
 
 const props = defineProps({
   open: Boolean,
@@ -126,26 +187,59 @@ const emit = defineEmits(['close', 'save', 'update:modelValue']);
 const isSaving = ref(false);
 const isSaved = ref(false);
 
-const test = reactive({
-  type: 'wh',
-  city: 'Одеса',
-  warehouse: '1',
-  street: '',
+const local = reactive({
+  carrier: 'nova_poshta',
+  delivery_type: 'warehouse',
+  city_name: '',
+  city_ref: '',
+  warehouse_name: '',
+  warehouse_ref: '',
+  street_name: '',
   building: '',
   apartment: '',
-  payer: 'r',
+  payer: 'recipient',
 });
+
+const cityQuery = ref('');
+const warehouseQuery = ref('');
+const streetQuery = ref('');
+
+const cityOptions = ref([]);
+const warehouseOptions = ref([]);
+const streetOptions = ref([]);
+
+const showCityDropdown = ref(false);
+const showWarehouseDropdown = ref(false);
+const showStreetDropdown = ref(false);
+
+const cityLoading = ref(false);
+const warehouseLoading = ref(false);
+const streetLoading = ref(false);
+const cityError = ref('');
+
+let cityTimer;
+let warehouseTimer;
+let streetTimer;
+const skipFetch = reactive({ city: false, warehouse: false, street: false });
 
 const syncFromModel = () => {
   const data = props.modelValue || {};
-  const deliveryType = data.delivery_type || data.type || 'warehouse';
-  test.type = deliveryType === 'courier' ? 'cur' : 'wh';
-  test.city = data.city_name || data.city || 'Одеса';
-  test.warehouse = data.warehouse_ref || data.warehouse || '1';
-  test.street = data.street_name || data.street || '';
-  test.building = data.building || '';
-  test.apartment = data.apartment || '';
-  test.payer = data.payer === 'sender' || data.payer === 's' ? 's' : 'r';
+  local.delivery_type = data.delivery_type || 'warehouse';
+  local.city_name = data.city_name || '';
+  local.city_ref = data.city_ref || '';
+  local.warehouse_name = data.warehouse_name || '';
+  local.warehouse_ref = data.warehouse_ref || '';
+  local.street_name = data.street_name || '';
+  local.building = data.building || '';
+  local.apartment = data.apartment || '';
+  local.payer = data.payer === 'sender' ? 'sender' : 'recipient';
+
+  skipFetch.city = true;
+  cityQuery.value = local.city_name || '';
+  skipFetch.warehouse = true;
+  warehouseQuery.value = local.warehouse_name || '';
+  skipFetch.street = true;
+  streetQuery.value = local.street_name || '';
 };
 
 watch(
@@ -158,25 +252,28 @@ watch(
   { immediate: true }
 );
 
-const readCourierInputs = () => {
-  const modal = document.querySelector('.god-mode-window');
-  if (!modal) return { street: test.street, building: test.building, apartment: test.apartment };
-  const streetInput = modal.querySelector('.neo-input.mb-3');
-  const rowInputs = modal.querySelectorAll('.row.g-3 .neo-input');
-  return {
-    street: streetInput?.value || test.street || '',
-    building: rowInputs?.[0]?.value || test.building || '',
-    apartment: rowInputs?.[1]?.value || test.apartment || '',
-  };
-};
+watch(
+  () => props.modelValue,
+  (val) => {
+    if (props.open && val) syncFromModel();
+  },
+  { deep: true }
+);
 
-const resolveWarehouseName = () => {
-  if (test.type !== 'wh') return '';
-  const modal = document.querySelector('.god-mode-window');
-  const selects = modal?.querySelectorAll('.elite-section select.neo-select') || [];
-  const warehouseSelect = selects.length > 1 ? selects[1] : selects[0];
-  const selectedOption = warehouseSelect?.selectedOptions?.[0];
-  return selectedOption?.text || '';
+const setDeliveryType = (type) => {
+  local.delivery_type = type;
+  if (type === 'courier') {
+    local.warehouse_ref = '';
+    local.warehouse_name = '';
+    warehouseQuery.value = '';
+    warehouseOptions.value = [];
+  } else {
+    local.street_name = '';
+    local.building = '';
+    local.apartment = '';
+    streetQuery.value = '';
+    streetOptions.value = [];
+  }
 };
 
 const handleSave = () => {
@@ -184,15 +281,17 @@ const handleSave = () => {
   isSaving.value = true;
   isSaved.value = true;
 
-  const courier = readCourierInputs();
   const payload = {
-    delivery_type: test.type === 'cur' ? 'courier' : 'warehouse',
-    city_name: test.city,
-    warehouse_name: resolveWarehouseName() || test.warehouse,
-    street_name: courier.street,
-    building: courier.building,
-    apartment: courier.apartment,
-    payer: test.payer === 's' ? 'sender' : 'recipient',
+    carrier: 'nova_poshta',
+    delivery_type: local.delivery_type,
+    city_name: local.city_name,
+    city_ref: local.city_ref,
+    warehouse_name: local.warehouse_name,
+    warehouse_ref: local.warehouse_ref,
+    street_name: local.street_name,
+    building: local.building,
+    apartment: local.apartment,
+    payer: local.payer,
   };
 
   setTimeout(() => {
@@ -201,6 +300,131 @@ const handleSave = () => {
     closeModal(true);
   }, 1100);
 };
+
+watch(cityQuery, (val) => {
+  if (skipFetch.city) {
+    skipFetch.city = false;
+    return;
+  }
+  local.city_name = val;
+  local.city_ref = '';
+  local.warehouse_ref = '';
+  local.warehouse_name = '';
+  local.street_name = '';
+  warehouseQuery.value = '';
+  streetQuery.value = '';
+  warehouseOptions.value = [];
+  streetOptions.value = [];
+  cityError.value = '';
+
+  if (cityTimer) clearTimeout(cityTimer);
+  const query = val.trim();
+  if (query.length < 2) {
+    cityOptions.value = [];
+    return;
+  }
+  cityTimer = setTimeout(() => loadCities(query), 600);
+});
+
+watch(warehouseQuery, (val) => {
+  if (skipFetch.warehouse) {
+    skipFetch.warehouse = false;
+    return;
+  }
+  local.warehouse_name = val;
+  local.warehouse_ref = '';
+  if (warehouseTimer) clearTimeout(warehouseTimer);
+  if (!local.city_ref) return;
+  warehouseTimer = setTimeout(() => loadWarehouses(val.trim()), 600);
+});
+
+watch(streetQuery, (val) => {
+  if (skipFetch.street) {
+    skipFetch.street = false;
+    return;
+  }
+  local.street_name = val;
+  if (streetTimer) clearTimeout(streetTimer);
+  if (!local.city_ref || local.delivery_type !== 'courier') return;
+  streetTimer = setTimeout(() => loadStreets(val.trim()), 600);
+});
+
+const loadCities = async (query) => {
+  cityLoading.value = true;
+  cityError.value = '';
+  try {
+    const { data } = await fetchCities(query);
+    cityOptions.value = data?.data || data || [];
+  } catch (e) {
+    console.error(e);
+    cityError.value = 'Помилка завантаження';
+    cityOptions.value = [];
+  } finally {
+    cityLoading.value = false;
+  }
+};
+
+const loadWarehouses = async (query) => {
+  warehouseLoading.value = true;
+  try {
+    const { data } = await fetchWarehouses({ cityRef: local.city_ref, query, limit: 50 });
+    warehouseOptions.value = data?.data || data || [];
+  } finally {
+    warehouseLoading.value = false;
+  }
+};
+
+const loadStreets = async (query) => {
+  streetLoading.value = true;
+  try {
+    const { data } = await fetchStreets({ cityRef: local.city_ref, query });
+    streetOptions.value = data?.data || data || [];
+  } finally {
+    streetLoading.value = false;
+  }
+};
+
+const selectCity = (city) => {
+  local.city_ref = city.ref || '';
+  local.city_name = city.name || '';
+  skipFetch.city = true;
+  cityQuery.value = local.city_name;
+  showCityDropdown.value = false;
+  local.warehouse_ref = '';
+  local.warehouse_name = '';
+  warehouseQuery.value = '';
+  warehouseOptions.value = [];
+  if (local.delivery_type === 'warehouse') loadWarehouses('');
+};
+
+const selectWarehouse = (wh) => {
+  local.warehouse_ref = wh.ref || '';
+  local.warehouse_name = wh.name || '';
+  skipFetch.warehouse = true;
+  warehouseQuery.value = local.warehouse_name;
+  showWarehouseDropdown.value = false;
+};
+
+const selectStreet = (street) => {
+  local.street_name = street.name || '';
+  skipFetch.street = true;
+  streetQuery.value = local.street_name;
+  showStreetDropdown.value = false;
+};
+
+const onWarehouseFocus = () => {
+  showWarehouseDropdown.value = true;
+  if (local.city_ref && !warehouseOptions.value.length) loadWarehouses('');
+};
+
+const onStreetFocus = () => {
+  showStreetDropdown.value = true;
+  if (local.city_ref && !streetOptions.value.length) loadStreets('');
+};
+
+const scheduleCloseCity = () => setTimeout(() => { showCityDropdown.value = false; }, 200);
+const scheduleCloseWarehouse = () => setTimeout(() => { showWarehouseDropdown.value = false; }, 200);
+const scheduleCloseStreet = () => setTimeout(() => { showStreetDropdown.value = false; }, 200);
 
 const closeModal = (force = false) => {
   if (!force && isSaving.value && !isSaved.value) return;
@@ -270,6 +494,32 @@ const closeModal = (force = false) => {
 }
 .neo-input { padding-left: 25px; }
 .neo-select:focus, .neo-input:focus { border-color: #a78bfb; background: #fff; box-shadow: 0 15px 30px rgba(167, 139, 251, 0.1); }
+.np-spinner { animation: spin 1s linear infinite; }
+
+.np-dropdown {
+  background: #ffffff;
+  border: 1px solid #f1f5f9;
+  border-radius: 18px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+  margin-top: 10px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.np-dropdown-item {
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  color: #1e293b;
+  font-weight: 700;
+}
+.np-dropdown-item:hover { background: #f5f3ff; }
+.np-dropdown-item.muted { color: #94a3b8; font-weight: 600; }
+.np-option-title { font-size: 14px; }
+.np-option-sub { font-size: 12px; color: #94a3b8; margin-top: 2px; }
 
 /* SEGMENTED CONTROL */
 .segmented-control { 
@@ -322,6 +572,7 @@ const closeModal = (force = false) => {
 .ultra-modal-enter-active { animation: god-in 0.7s cubic-bezier(0.19, 1, 0.22, 1); }
 .ultra-modal-leave-active { transition: 0.3s opacity ease; opacity: 0; }
 @keyframes god-in { from { opacity: 0; transform: scale(0.8) translateY(80px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+@keyframes spin { to { transform: rotate(360deg); } }
 
 .slide-fade-enter-active, .slide-fade-leave-active { transition: all 0.4s ease; }
 .slide-fade-enter-from, .slide-fade-leave-to { opacity: 0; transform: translateY(20px); }
