@@ -135,8 +135,8 @@
               <div class="history-section">
                 <div class="history-label">Доставка</div>
                 <div class="history-text">
-                  <span v-if="order.delivery?.city_name">, {{ order.delivery?.city_name }}</span>
-                  <span v-if="order.delivery?.warehouse_name">, {{ order.delivery?.warehouse_name }}</span>
+                  <span class="history-line">{{ order.delivery?.city_name || '—' }}</span>
+                  <span v-if="order.delivery?.warehouse_name" class="history-line">{{ order.delivery?.warehouse_name }}</span>
                 </div>
                 
                 <div v-if="order.delivery?.ttn" class="history-text">
@@ -616,6 +616,7 @@ const handleOrderClose = () => {
 .history-section { margin-top: 10px; }
 .history-label { font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
 .history-text { font-size: 12px; color: #475569; }
+.history-line { display: block; }
 .history-items { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
 .history-item { display: flex; align-items: center; gap: 8px; }
 .history-thumb { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; background: #f8fafc; }
