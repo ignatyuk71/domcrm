@@ -48,7 +48,7 @@
           <span>{{ opt.label }}</span>
         </button>
 
-        <div v-if="holdFilterEnabled" class="hold-days-select">
+        <div v-if="holdFilterEnabled && holdFilterActive" class="hold-days-select">
           <i class="bi bi-calendar3"></i>
           <select :value="holdFilterDays" @change="$emit('update:hold-days', Number($event.target.value))">
             <option v-for="day in holdFilterOptions" :key="day" :value="day">{{ day }} дні</option>
