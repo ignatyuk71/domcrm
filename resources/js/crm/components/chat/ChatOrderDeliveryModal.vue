@@ -16,7 +16,6 @@
                   <span class="brand-tag">НОВА ПОШТА</span>
                 </div>
               </div>
-              <!-- ОНОВЛЕНА КНОПКА ЗАКРИТТЯ -->
               <button class="btn-close" @click="closeModal">
                 <i class="bi bi-x-lg"></i>
               </button>
@@ -85,7 +84,6 @@
 
               <!-- 3. ВІДДІЛЕННЯ (АБО АДРЕСА) -->
               <transition name="slide-up" mode="out-in">
-                <!-- ВАРІАНТ: ВІДДІЛЕННЯ -->
                 <section v-if="local.delivery_type === 'warehouse'" key="warehouse" class="form-section">
                   <label class="section-label">Відділення або Поштомат</label>
                   <div class="input-group-modern" :class="{ disabled: !local.city_ref }">
@@ -101,7 +99,6 @@
                     >
                     <div v-if="warehouseLoading" class="spinner-input"></div>
 
-                    <!-- Dropdown -->
                     <transition name="fade">
                       <div v-if="showWarehouseDropdown && warehouseOptions.length" class="dropdown-menu-custom custom-scrollbar">
                         <div 
@@ -117,7 +114,6 @@
                   </div>
                 </section>
 
-                <!-- ВАРІАНТ: КУР'ЄР -->
                 <section v-else key="courier" class="form-section">
                   <label class="section-label">Адреса доставки</label>
                   <div class="input-stack">
@@ -132,7 +128,6 @@
                         @blur="scheduleCloseStreet"
                         placeholder="Вулиця"
                       >
-                      <!-- Вулиці Dropdown -->
                       <div v-if="showStreetDropdown && streetOptions.length" class="dropdown-menu-custom">
                          <div v-for="st in streetOptions" :key="st.ref" class="dropdown-item" @mousedown.prevent="selectStreet(st)">
                             {{ st.name }}
@@ -176,6 +171,7 @@
                 </div>
               </section>
 
+              <!-- SPACER ДЛЯ МОБІЛОК -->
               <div class="mobile-spacer"></div>
 
             </div>
@@ -221,7 +217,6 @@ const local = reactive({
   payer: 'recipient',
 });
 
-// Search & UI States
 const cityQuery = ref('');
 const warehouseQuery = ref('');
 const streetQuery = ref('');
@@ -238,32 +233,37 @@ const warehouseLoading = ref(false);
 let cityTimer, warehouseTimer, streetTimer;
 const skipFetch = reactive({ city: false, warehouse: false, street: false });
 
-// --- Sync Logic ---
 const syncFromModel = () => {
   const data = props.modelValue || {};
   Object.assign(local, { ...local, ...data });
   
-  // Update inputs without triggering fetch
   skipFetch.city = true; cityQuery.value = local.city_name || '';
   skipFetch.warehouse = true; warehouseQuery.value = local.warehouse_name || '';
   skipFetch.street = true; streetQuery.value = local.street_name || '';
 };
 
-watch(() => props.open, (val) => { if(val) syncFromModel(); });
+watch(() => props.open, (val) => { if(val) syncFromModel(); }, { immediate: true });
 
-// Watch local changes -> emit up
+watch(() => props.modelValue, (val) => {
+  if (props.open && val) syncFromModel();
+}, { deep: true });
+
 watch(local, () => {
   emit('update:modelValue', { ...local });
 }, { deep: true });
 
-// --- Actions ---
 const setDeliveryType = (type) => {
   local.delivery_type = type;
+  if (type === 'courier') {
+    local.warehouse_ref = ''; local.warehouse_name = ''; warehouseQuery.value = ''; warehouseOptions.value = [];
+  } else {
+    local.street_name = ''; local.building = ''; local.apartment = ''; streetQuery.value = ''; streetOptions.value = [];
+  }
 };
 
 const handleSave = () => {
+  if (isSaving.value) return;
   isSaving.value = true;
-  // Емуляція збереження
   setTimeout(() => {
     isSaved.value = true;
     setTimeout(() => {
@@ -279,10 +279,10 @@ const closeModal = () => {
   setTimeout(() => { isSaving.value = false; isSaved.value = false; }, 300);
 };
 
-// --- API Logic ---
 watch(cityQuery, (val) => {
   if (skipFetch.city) { skipFetch.city = false; return; }
   local.city_name = val;
+  local.city_ref = '';
   if (cityTimer) clearTimeout(cityTimer);
   if (!val || val.length < 2) { cityOptions.value = []; return; }
   cityTimer = setTimeout(async () => {
@@ -313,11 +313,9 @@ const selectCity = (city) => {
   local.city_name = city.name;
   skipFetch.city = true; cityQuery.value = city.name;
   showCityDropdown.value = false;
-  // Reset child fields
   local.warehouse_ref = ''; local.warehouse_name = ''; warehouseQuery.value = '';
-  // Load warehouses immediately
   if (local.delivery_type === 'warehouse') {
-    skipFetch.warehouse = false; // allow loading
+    skipFetch.warehouse = false;
     warehouseTimer = setTimeout(async () => {
       const { data } = await fetchWarehouses({ cityRef: city.ref, query: '' });
       warehouseOptions.value = data?.data || [];
@@ -332,27 +330,24 @@ const selectWarehouse = (wh) => {
   showWarehouseDropdown.value = false;
 };
 
-// Utils
+// ... (решта логіки вулиць залишається) ...
+const onWarehouseFocus = () => { showWarehouseDropdown.value = true; if(local.city_ref && !warehouseOptions.value.length) loadWarehouses(''); };
+const onStreetFocus = () => { showStreetDropdown.value = true; };
 const scheduleCloseCity = () => setTimeout(() => showCityDropdown.value = false, 200);
 const scheduleCloseWarehouse = () => setTimeout(() => showWarehouseDropdown.value = false, 200);
 const scheduleCloseStreet = () => setTimeout(() => showStreetDropdown.value = false, 200);
-const onWarehouseFocus = () => { showWarehouseDropdown.value = true; };
-const onStreetFocus = () => { showStreetDropdown.value = true; };
-
 </script>
 
 <style scoped>
-/* === ANIMATIONS === */
+/* Анімації */
 .modal-fade-enter-active, .modal-fade-leave-active { transition: opacity 0.3s ease; }
 .modal-fade-enter-from, .modal-fade-leave-to { opacity: 0; }
-
 .modal-slide-enter-active, .modal-slide-leave-active { transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
 .modal-slide-enter-from, .modal-slide-leave-to { transform: translateY(100%); }
-
 .slide-up-enter-active, .slide-up-leave-active { transition: all 0.2s ease; }
 .slide-up-enter-from, .slide-up-leave-to { opacity: 0; transform: translateY(10px); }
 
-/* === LAYOUT === */
+/* LAYOUT */
 .modal-backdrop {
   position: fixed; inset: 0; 
   background: rgba(15, 23, 42, 0.65); 
@@ -365,7 +360,6 @@ const onStreetFocus = () => { showStreetDropdown.value = true; };
   background: #ffffff;
   width: 500px;
   max-width: 100%;
-  /* Desktop defaults */
   border-radius: 28px;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   display: flex; flex-direction: column;
@@ -374,96 +368,52 @@ const onStreetFocus = () => { showStreetDropdown.value = true; };
   overflow: hidden;
 }
 
-/* === HEADER === */
+/* HEADER */
 .modal-header {
   padding: 20px 24px;
   border-bottom: 1px solid #f1f5f9;
   display: flex; align-items: center; justify-content: space-between;
-  background: #fff;
-  flex-shrink: 0;
+  background: #fff; flex-shrink: 0;
 }
-
 .header-content { display: flex; align-items: center; gap: 14px; }
 .icon-brand {
-  width: 42px; height: 42px;
-  background: #fff1f2;
-  color: #dc2626; /* Nova Poshta Red */
-  border-radius: 12px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 20px;
+  width: 42px; height: 42px; background: #fff1f2; color: #dc2626; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center; font-size: 20px;
 }
 .title-group h3 { font-size: 18px; font-weight: 800; color: #0f172a; margin: 0; line-height: 1.2; }
 .brand-tag { font-size: 11px; font-weight: 800; color: #dc2626; letter-spacing: 0.05em; text-transform: uppercase; }
 
-/* ОНОВЛЕНА КНОПКА ЗАКРИТТЯ */
 .btn-close {
-  width: 44px; height: 44px;
-  border-radius: 12px; border: 1px solid rgba(167, 139, 251, 0.2);
-  background: #f5f3ff; /* Світло-фіолетовий */
-  color: #7c3aed; /* Насичений фіолетовий */
-  font-size: 20px; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  width: 36px; height: 36px; border-radius: 50%; border: none; background: #f8fafc;
+  color: #64748b; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: 0.2s;
 }
-.btn-close:hover { 
-  background: #ede9fe; 
-  transform: rotate(90deg);
-  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.15);
-}
-.btn-close:active {
-  transform: scale(0.9);
-}
+.btn-close:hover { background: #fee2e2; color: #ef4444; }
 
-/* === BODY === */
-.modal-body {
-  flex: 1;
-  padding: 24px;
-  overflow-y: auto;
-  background: #ffffff;
-}
-
+/* BODY */
+.modal-body { flex: 1; padding: 24px; overflow-y: auto; background: #ffffff; }
 .form-section { margin-bottom: 24px; }
-.section-label {
-  font-size: 12px; font-weight: 700; color: #64748b; 
-  text-transform: uppercase; letter-spacing: 0.03em;
-  margin-bottom: 10px; display: block;
-}
+.section-label { font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 10px; display: block; }
 
-/* CARDS GRID */
+/* GRID CARDS */
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .option-card {
-  border: 2px solid #f1f5f9;
-  border-radius: 16px;
-  padding: 16px;
-  cursor: pointer;
-  position: relative;
-  transition: 0.2s ease;
-  display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px;
+  border: 2px solid #f1f5f9; border-radius: 16px; padding: 16px; cursor: pointer; position: relative;
+  transition: 0.2s ease; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px;
 }
-.option-card:hover { border-color: #cbd5e1; background: #f8fafc; }
-.option-card.active {
-  border-color: #a78bfb; background: #f5f3ff; color: #5b21b6;
-}
+.option-card.active { border-color: #a78bfb; background: #f5f3ff; color: #5b21b6; }
 .card-icon { font-size: 24px; color: #94a3b8; transition: 0.2s; }
 .option-card.active .card-icon { color: #7c3aed; }
 .card-title { font-weight: 700; font-size: 14px; }
-.check-icon {
-  position: absolute; top: 10px; right: 10px;
-  font-size: 18px; color: #a78bfb;
-  opacity: 0; transform: scale(0.5); transition: 0.2s;
-}
+.check-icon { position: absolute; top: 10px; right: 10px; font-size: 18px; color: #a78bfb; opacity: 0; transform: scale(0.5); transition: 0.2s; }
 .option-card.active .check-icon { opacity: 1; transform: scale(1); }
 
 /* INPUTS */
 .input-group-modern { position: relative; }
 .input-icon { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: #94a3b8; font-size: 18px; pointer-events: none; }
 .modern-input {
-  width: 100%;
-  padding: 14px 16px 14px 48px;
-  border: 1px solid #e2e8f0;
-  border-radius: 14px;
-  font-size: 15px; font-weight: 500; color: #0f172a;
-  outline: none; transition: 0.2s; background: #fcfcfc;
+  width: 100%; padding: 14px 16px 14px 48px; border: 1px solid #e2e8f0; border-radius: 14px;
+  font-size: 15px; font-weight: 500; color: #0f172a; outline: none; transition: 0.2s; background: #fcfcfc;
 }
 .modern-input:focus { border-color: #a78bfb; background: #fff; box-shadow: 0 0 0 4px rgba(167, 139, 251, 0.1); }
 .modern-input:disabled { background: #f1f5f9; cursor: not-allowed; opacity: 0.7; }
@@ -471,87 +421,42 @@ const onStreetFocus = () => { showStreetDropdown.value = true; };
 
 /* DROPDOWN */
 .dropdown-menu-custom {
-  position: absolute; top: 105%; left: 0; right: 0;
-  background: #fff; border: 1px solid #f1f5f9;
-  border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-  max-height: 220px; overflow-y: auto; z-index: 50;
-  padding: 6px;
+  position: absolute; top: 105%; left: 0; right: 0; background: #fff; border: 1px solid #f1f5f9;
+  border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); max-height: 220px; overflow-y: auto; z-index: 50; padding: 6px;
 }
-.dropdown-item {
-  padding: 10px 12px; border-radius: 8px; cursor: pointer;
-  transition: 0.1s;
-}
+.dropdown-item { padding: 10px 12px; border-radius: 8px; cursor: pointer; transition: 0.1s; }
 .dropdown-item:hover { background: #f5f3ff; color: #7c3aed; }
 .item-main { font-weight: 600; font-size: 14px; }
 .item-sub { font-size: 11px; color: #94a3b8; margin-top: 2px; }
 
-/* TOGGLE SWITCH */
-.toggle-switch {
-  background: #f1f5f9; padding: 4px; border-radius: 14px;
-  display: flex; position: relative;
-}
-.switch-btn {
-  flex: 1; border: none; background: transparent;
-  padding: 10px; font-weight: 700; font-size: 13px; color: #64748b;
-  position: relative; z-index: 2; cursor: pointer; transition: 0.2s;
-}
+/* TOGGLE */
+.toggle-switch { background: #f1f5f9; padding: 4px; border-radius: 14px; display: flex; position: relative; }
+.switch-btn { flex: 1; border: none; background: transparent; padding: 10px; font-weight: 700; font-size: 13px; color: #64748b; position: relative; z-index: 2; cursor: pointer; transition: 0.2s; }
 .switch-btn.active { color: #0f172a; }
-.switch-bg {
-  position: absolute; top: 4px; bottom: 4px; width: calc(50% - 6px);
-  background: #fff; border-radius: 11px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-  transition: left 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  z-index: 1;
-}
+.switch-bg { position: absolute; top: 4px; bottom: 4px; width: calc(50% - 6px); background: #fff; border-radius: 11px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: left 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); z-index: 1; }
 
 /* FOOTER */
-.modal-footer {
-  padding: 20px 24px;
-  border-top: 1px solid #f1f5f9;
-  background: #fff;
-  flex-shrink: 0;
-}
+.modal-footer { padding: 20px 24px; border-top: 1px solid #f1f5f9; background: #fff; flex-shrink: 0; }
 .btn-save-primary {
-  width: 100%; height: 50px;
-  background: #0f172a;
-  color: #fff;
-  border: none; border-radius: 14px;
-  font-weight: 700; font-size: 15px;
-  cursor: pointer; transition: 0.2s;
-  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; height: 50px; background: #0f172a; color: #fff; border: none; border-radius: 14px;
+  font-weight: 700; font-size: 15px; cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px;
 }
 .btn-save-primary:hover { background: #1e293b; transform: translateY(-1px); }
 .btn-save-primary.success { background: #10b981; }
 
-.spinner-input {
-  position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
-  width: 18px; height: 18px; border: 2px solid #e2e8f0;
-  border-top-color: #a78bfb; border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
+.spinner-input { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; border: 2px solid #e2e8f0; border-top-color: #a78bfb; border-radius: 50%; animation: spin 0.8s linear infinite; }
 
-/* === MOBILE ADAPTATION === */
+/* MOBILE FIX */
 @media (max-width: 768px) {
-  .modal-window {
-    width: 100%;
-    height: 100%; /* Повна висота */
-    max-height: 100%;
-    border-radius: 0; /* Без скруглень */
-  }
-  
+  .modal-window { width: 100%; height: 100dvh; max-height: 100dvh; border-radius: 0; }
   .modal-fade-enter-active, .modal-fade-leave-active { transition: none; }
-  .modal-slide-enter-active, .modal-slide-leave-active {
-    transition: transform 0.3s ease-out;
-  }
-  .modal-slide-enter-from, .modal-slide-leave-to {
-    transform: translateY(100%);
-  }
+  .modal-slide-enter-active, .modal-slide-leave-active { transition: transform 0.3s ease-out; }
+  .modal-slide-enter-from, .modal-slide-leave-to { transform: translateY(100%); }
   
-  .mobile-spacer { height: 80px; } /* Місце для футера */
+  .mobile-spacer { height: 80px; }
   
-  .modal-footer {
-    padding-bottom: max(20px, env(safe-area-inset-bottom));
-  }
+  /* Піднімаємо кнопку вище системної зони */
+  .modal-footer { padding-bottom: calc(30px + env(safe-area-inset-bottom)); }
 }
 
 .custom-scrollbar::-webkit-scrollbar { width: 5px; }
