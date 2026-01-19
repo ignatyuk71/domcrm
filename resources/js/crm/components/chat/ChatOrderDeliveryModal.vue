@@ -16,6 +16,7 @@
                   <span class="brand-tag">НОВА ПОШТА</span>
                 </div>
               </div>
+              <!-- ОНОВЛЕНА КНОПКА ЗАКРИТТЯ -->
               <button class="btn-close" @click="closeModal">
                 <i class="bi bi-x-lg"></i>
               </button>
@@ -24,7 +25,7 @@
             <!-- BODY (SCROLLABLE) -->
             <div class="modal-body custom-scrollbar">
               
-              <!-- 1. ТИП ДОСТАВКИ (ВЕЛИКІ КАРТКИ) -->
+              <!-- 1. ТИП ДОСТАВКИ -->
               <section class="form-section">
                 <label class="section-label">Спосіб отримання</label>
                 <div class="grid-2">
@@ -131,7 +132,7 @@
                         @blur="scheduleCloseStreet"
                         placeholder="Вулиця"
                       >
-                      <!-- Вулиці Dropdown (спрощено для прикладу) -->
+                      <!-- Вулиці Dropdown -->
                       <div v-if="showStreetDropdown && streetOptions.length" class="dropdown-menu-custom">
                          <div v-for="st in streetOptions" :key="st.ref" class="dropdown-item" @mousedown.prevent="selectStreet(st)">
                             {{ st.name }}
@@ -175,7 +176,6 @@
                 </div>
               </section>
 
-              <!-- Padding для скролу на мобільному, щоб контент не ховався за кнопкою -->
               <div class="mobile-spacer"></div>
 
             </div>
@@ -279,8 +279,7 @@ const closeModal = () => {
   setTimeout(() => { isSaving.value = false; isSaved.value = false; }, 300);
 };
 
-// --- API Logic (Mocked or Real) ---
-// Тут скорочено, використовуємо ту саму логіку fetchCities/fetchWarehouses, що й була
+// --- API Logic ---
 watch(cityQuery, (val) => {
   if (skipFetch.city) { skipFetch.city = false; return; }
   local.city_name = val;
@@ -396,14 +395,24 @@ const onStreetFocus = () => { showStreetDropdown.value = true; };
 .title-group h3 { font-size: 18px; font-weight: 800; color: #0f172a; margin: 0; line-height: 1.2; }
 .brand-tag { font-size: 11px; font-weight: 800; color: #dc2626; letter-spacing: 0.05em; text-transform: uppercase; }
 
+/* ОНОВЛЕНА КНОПКА ЗАКРИТТЯ */
 .btn-close {
-  width: 36px; height: 36px;
-  border-radius: 50%; border: none; background: #f8fafc;
-  color: #64748b; font-size: 18px; cursor: pointer;
+  width: 44px; height: 44px;
+  border-radius: 12px; border: 1px solid rgba(167, 139, 251, 0.2);
+  background: #f5f3ff; /* Світло-фіолетовий */
+  color: #7c3aed; /* Насичений фіолетовий */
+  font-size: 20px; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  transition: 0.2s;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
-.btn-close:hover { background: #fee2e2; color: #ef4444; }
+.btn-close:hover { 
+  background: #ede9fe; 
+  transform: rotate(90deg);
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.15);
+}
+.btn-close:active {
+  transform: scale(0.9);
+}
 
 /* === BODY === */
 .modal-body {
