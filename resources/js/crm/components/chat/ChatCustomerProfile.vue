@@ -161,6 +161,10 @@ const orderDraft = reactive({
     apartment: '',
     payer: 'recipient',
   },
+  payment: {
+    method: '',
+    prepay_amount: 0,
+  },
 });
 
 function resetOrderDraft() {
@@ -177,6 +181,10 @@ function resetOrderDraft() {
     building: '',
     apartment: '',
     payer: 'recipient',
+  };
+  orderDraft.payment = {
+    method: '',
+    prepay_amount: 0,
   };
 }
 

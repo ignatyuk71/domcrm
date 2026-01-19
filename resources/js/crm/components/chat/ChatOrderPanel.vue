@@ -98,6 +98,26 @@
                </div>
             </section>
 
+            <section class="flow-section">
+               <div class="section-heading">ОПЛАТА</div>
+               <div class="delivery-trigger-card" @click="openPaymentModal">
+                  <div class="delivery-icon">
+                    <i class="bi bi-cash-stack"></i>
+                  </div>
+                  <div class="delivery-info">
+                    <span class="delivery-label-red" style="color: #10b981;">Оплата</span>
+
+                    <div v-if="hasPayment" class="delivery-details-stack">
+                      <div class="delivery-row city-text">{{ paymentMethodLabel }}</div>
+                      <div class="delivery-row point-text">{{ paymentDetail }}</div>
+                    </div>
+
+                    <span v-else class="delivery-placeholder">Оберіть спосіб оплати...</span>
+                  </div>
+                  <i class="bi bi-chevron-right arrow-icon"></i>
+               </div>
+            </section>
+
           </div>
         </div>
 
@@ -156,12 +176,19 @@
       v-model="orderDraft.delivery"
       @close="deliveryModalOpen = false"
     />
+
+    <ChatOrderPaymentModal
+      :open="paymentModalOpen"
+      v-model="orderDraft.payment"
+      @close="paymentModalOpen = false"
+    />
   </teleport>
 </template>
 
 <script setup>
 import { computed, ref } from 'vue';
 import ChatOrderDeliveryModal from '@/crm/components/chat/ChatOrderDeliveryModal.vue';
+import ChatOrderPaymentModal from '@/crm/components/chat/ChatOrderPaymentModal.vue';
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -174,6 +201,7 @@ const emit = defineEmits(['close', 'saved', 'minimize']);
 const productPickerOpen = ref(false);
 const selectedProductIds = ref([]);
 const deliveryModalOpen = ref(false);
+const paymentModalOpen = ref(false);
 
 const mockProducts = [
   { id: 1, title: 'Домашні капці "Пухнастики" Рожеві', price: 450, image: 'https://picsum.photos/id/102/100/100' },
@@ -183,6 +211,23 @@ const mockProducts = [
 
 const hasDraft = computed(() => props.orderDraft.items?.length > 0);
 const totalAmount = computed(() => (props.orderDraft.items || []).reduce((sum, item) => sum + (item.price * item.qty), 0));
+const hasPayment = computed(() => !!props.orderDraft.payment?.method);
+
+const paymentMeta = {
+  cod: { label: 'Накладений платіж', desc: 'Оплата при отриманні' },
+  card: { label: 'На рахунок IBAN', desc: 'Повна передоплата' },
+  prepay: { label: 'Часткова передоплата', desc: 'Аванс + накладений' },
+};
+
+const paymentMethodLabel = computed(() => paymentMeta[props.orderDraft.payment?.method]?.label || '');
+const paymentDetail = computed(() => {
+  const method = props.orderDraft.payment?.method;
+  if (!method) return '';
+  if (method === 'prepay') {
+    return `Сума авансу: ${formatMoney(props.orderDraft.payment?.prepay_amount)} грн`;
+  }
+  return paymentMeta[method]?.desc || '';
+});
 
 const formatCourierAddress = (d) => [d.street_name, d.building && `буд. ${d.building}`, d.apartment && `кв. ${d.apartment}`].filter(Boolean).join(', ');
 
@@ -209,6 +254,7 @@ const handleAddProducts = () => {
 
 const removeSingleItem = (index) => { props.orderDraft.items.splice(index, 1); };
 const openDeliveryModal = () => { deliveryModalOpen.value = true; };
+const openPaymentModal = () => { paymentModalOpen.value = true; };
 const handleClose = () => { emit('close'); };
 const handleMinimize = () => { emit('minimize'); };
 const handleSaved = () => { emit('saved'); };
