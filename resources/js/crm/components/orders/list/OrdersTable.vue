@@ -320,7 +320,7 @@
                   </div>
 
                   <div
-                    v-if="order.delivery_status_code === 'at_warehouse' && order.delivery_hold_days >= holdFilterDays"
+                    v-if="order.delivery_status_code === 'at_warehouse' && order.delivery_hold_days >= 3"
                     class="hold-badge"
                     :title="`Посилка у відділенні ${order.delivery_hold_days} дні`"
                   >
@@ -356,7 +356,7 @@
               <td class="cell-date">
                 <span class="date-text">{{ formatDate(order.created_at) }}</span>
                 <div
-                  v-if="order.delivery_status_code === 'at_warehouse' && order.delivery_hold_days >= holdFilterDays"
+                  v-if="order.delivery_status_code === 'at_warehouse' && order.delivery_hold_days >= 3"
                   class="hold-alert"
                 >
                   Посилка лежить {{ order.delivery_hold_days }} дні

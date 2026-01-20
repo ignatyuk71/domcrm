@@ -246,9 +246,7 @@ function mapOrder(order) {
   const sourceRef = order.source || {};
   const latestReceipt = order.latest_fiscal_receipt || order.latestFiscalReceipt || null;
   const deliveryStatusUpdatedAt = delivery.delivery_status_updated_at || '';
-  const deliveryHoldDays = deliveryStatusUpdatedAt
-    ? Math.floor((Date.now() - new Date(deliveryStatusUpdatedAt).getTime()) / (1000 * 60 * 60 * 24))
-    : null;
+  const deliveryHoldDays = deliveryStatusUpdatedAt ? calcHoldDays(deliveryStatusUpdatedAt) : null;
 
   return {
     ...order,
@@ -311,6 +309,16 @@ function mapOrder(order) {
     latestFiscalReceipt: latestReceipt,
     delivery_hold_days: deliveryHoldDays,
   };
+}
+
+function calcHoldDays(dateValue) {
+  const parsed = new Date(dateValue);
+  if (Number.isNaN(parsed.getTime())) return null;
+  const now = new Date();
+  const startNow = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startThen = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+  const diffMs = startNow.getTime() - startThen.getTime();
+  return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
 }
 
 function updateHoldDays(value) {
