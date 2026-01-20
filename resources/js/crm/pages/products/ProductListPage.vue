@@ -176,21 +176,26 @@ const loadProducts = async (page = 1) => {
       headers: { Accept: 'application/json' },
       params: { 
         q: query.value || undefined,
-        page: page
+        page: page,
+        per_page: pagination.per_page
       },
     })
-    const list = data?.data || data
-    const arr = Array.isArray(list?.data) ? list.data : Array.isArray(list) ? list : []
+    const payload = data || {}
+    const arr = Array.isArray(payload?.data)
+      ? payload.data
+      : Array.isArray(payload)
+        ? payload
+        : []
     products.value = arr.map((p) => ({
       ...p,
       imageUrl: p?.main_photo_path ? `/storage/${p.main_photo_path}` : '',
     }))
 
-    if (list?.current_page) {
-      pagination.current_page = list.current_page
-      pagination.last_page = list.last_page
-      pagination.total = list.total
-      pagination.per_page = list.per_page
+    if (payload?.current_page) {
+      pagination.current_page = payload.current_page
+      pagination.last_page = payload.last_page
+      pagination.total = payload.total
+      pagination.per_page = payload.per_page
     }
   } catch (e) {
     console.error('Не вдалося завантажити товари', e)
