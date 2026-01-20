@@ -17,7 +17,7 @@
               </a>
             </div>
 
-            <div class="d-flex gap-3 w-100">
+            <div class="d-flex gap-3 w-100 flex-wrap">
               <div class="search-wrapper w-100" style="max-width: 400px;">
                 <i class="bi bi-search search-icon"></i>
                 <input
@@ -27,6 +27,19 @@
                   placeholder="Пошук за назвою, SKU..."
                   @input="debouncedLoad"
                 />
+              </div>
+
+              <div class="category-wrapper" style="max-width: 260px;">
+                <select
+                  v-model="selectedCategory"
+                  class="form-select category-select"
+                  @change="loadProducts(1)"
+                >
+                  <option value="">Всі категорії</option>
+                  <option v-for="c in categories" :key="c" :value="c">
+                    {{ c }}
+                  </option>
+                </select>
               </div>
             </div>
           </div>
@@ -161,11 +174,14 @@ import http from '@/crm/api/http'
 const products = ref([])
 const query = ref('')
 const isLoading = ref(false)
+const categories = ref([])
+const selectedCategory = ref('')
+const isLoadingCategories = ref(false)
 const pagination = reactive({
   current_page: 1,
   last_page: 1,
   total: 0,
-  per_page: 15
+  per_page: 150
 })
 let timer = null
 
@@ -176,6 +192,7 @@ const loadProducts = async (page = 1) => {
       headers: { Accept: 'application/json' },
       params: { 
         q: query.value || undefined,
+        category: selectedCategory.value || undefined,
         page: page,
         per_page: pagination.per_page
       },
@@ -204,6 +221,22 @@ const loadProducts = async (page = 1) => {
   }
 }
 
+const loadCategories = async () => {
+  if (isLoadingCategories.value) return
+  isLoadingCategories.value = true
+  try {
+    const { data } = await http.get('/products/categories', {
+      headers: { Accept: 'application/json' },
+    })
+    categories.value = Array.isArray(data) ? data : []
+  } catch (e) {
+    console.error('Не вдалося завантажити категорії', e)
+    categories.value = []
+  } finally {
+    isLoadingCategories.value = false
+  }
+}
+
 const changePage = (page) => {
   if (page < 1 || page > pagination.last_page) return
   loadProducts(page)
@@ -220,6 +253,7 @@ const formatPrice = (price, currency = 'UAH') => {
 }
 
 onMounted(loadProducts)
+onMounted(loadCategories)
 
 onUnmounted(() => {
   if (timer) clearTimeout(timer)
@@ -264,6 +298,20 @@ onUnmounted(() => {
   border-color: #6366f1;
   box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
   color: #1e293b;
+}
+.category-select {
+  height: 42px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+.category-select:focus {
+  background: #fff;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
 }
 
 /* --- Create Button --- */

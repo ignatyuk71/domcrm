@@ -12,7 +12,8 @@ class ProductController extends Controller
     {
         if ($request->expectsJson()) {
             $q = $request->get('q');
-            $perPage = min((int) $request->get('per_page', 15), 100);
+            $category = $request->get('category');
+            $perPage = min((int) $request->get('per_page', 15), 200);
             $products = Product::query()
                 ->when($q, function ($query) use ($q) {
                     $query->where(function ($sub) use ($q) {
@@ -20,12 +21,27 @@ class ProductController extends Controller
                             ->orWhere('sku', 'like', '%' . $q . '%');
                     });
                 })
+                ->when($category, fn ($query) => $query->where('category', $category))
                 ->orderByDesc('id')
                 ->paginate($perPage);
             return response()->json($products);
         }
 
         return view('products.index');
+    }
+
+    public function categories(Request $request)
+    {
+        $categories = Product::query()
+            ->select('category')
+            ->whereNotNull('category')
+            ->where('category', '!=', '')
+            ->distinct()
+            ->orderBy('category')
+            ->pluck('category')
+            ->values();
+
+        return response()->json($categories);
     }
 
     public function create()

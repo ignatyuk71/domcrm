@@ -183,6 +183,7 @@ Route::middleware('auth')->group(function () {
     // --- ТОВАРИ (Products) ---
     Route::controller(ProductController::class)->prefix('products')->name('products.')->group(function () {
         Route::get('/', 'index')->name('index');
+        Route::get('/categories', 'categories')->name('categories');
         Route::get('/create', 'create')->name('create');
         Route::post('/', 'store')->name('store');
         Route::get('/{product}/edit', 'edit')->name('edit');
