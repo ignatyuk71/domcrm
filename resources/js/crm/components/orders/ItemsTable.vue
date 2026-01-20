@@ -120,10 +120,7 @@
                   <span class="position-absolute top-0 end-0 p-2 bg-primary border border-white rounded-circle"></span>
                 </div>
                 <h6 class="fw-bold text-dark">Список порожній</h6>
-                <p class="text-muted small mb-4">Почніть додавати товари до замовлення</p>
-                <button class="btn btn-sm btn-outline-primary rounded-pill px-4 fw-medium" @click="openPicker">
-                  Відкрити каталог
-                </button>
+               
               </div>
             </td>
           </tr>
