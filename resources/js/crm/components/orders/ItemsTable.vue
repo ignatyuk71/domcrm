@@ -120,7 +120,10 @@
                   <span class="position-absolute top-0 end-0 p-2 bg-primary border border-white rounded-circle"></span>
                 </div>
                 <h6 class="fw-bold text-dark">Список порожній</h6>
-               
+                <p class="text-muted small mb-4">Почніть додавати товари до замовлення</p>
+                <button class="btn btn-sm btn-outline-primary rounded-pill px-4 fw-medium" @click="openPicker">
+                  Відкрити каталог
+                </button>
               </div>
             </td>
           </tr>
@@ -209,10 +212,10 @@
                 v-for="p in filteredProducts"
                 :key="p.id"
                 type="button"
-                class="list-group-item list-group-item-action p-3 border-bottom-dashed d-flex align-items-center gap-3 product-item"
+                class="list-group-item list-group-item-action p-3 border-bottom-dashed d-flex align-items-start gap-3 product-item"
                 @click="addProductFromModal(p)"
               >
-                <div class="position-relative">
+                <div class="position-relative flex-shrink-0 mt-1">
                    <div class="product-thumb-md border rounded-3 overflow-hidden bg-light d-flex align-items-center justify-content-center">
                      <img v-if="p.imageUrl" :src="p.imageUrl" class="w-100 h-100 object-fit-cover" />
                      <i v-else class="bi bi-image text-muted fs-5"></i>
@@ -228,10 +231,10 @@
                       {{ p.stock > 0 ? `${p.stock} шт.` : 'Немає' }}
                     </span>
                   </div>
-                  <div class="fw-bold text-dark text-truncate">{{ p.title }}</div>
+                  <div class="fw-bold text-dark lh-sm product-title">{{ p.title }}</div>
                 </div>
 
-                <div class="text-end ps-2">
+                <div class="text-end ps-2 flex-shrink-0 mt-1">
                   <div class="fw-bold text-primary fs-5">{{ p.price }} <small class="text-muted fs-6 font-weight-normal">{{ currency }}</small></div>
                   <div class="btn btn-xs btn-light text-primary rounded-pill px-3 fw-bold mt-1 shadow-sm add-btn">
                     + Додати
@@ -252,6 +255,7 @@
 </template>
 
 <script setup>
+// Script section same as before
 import { computed, ref, watch } from 'vue';
 import http from '@/crm/api/http';
 import { searchProducts } from '@/crm/api/products';
@@ -307,9 +311,6 @@ function addProductFromModal(p) {
     product_id: p.id || null,
     sku: p.sku || '',
     title: p.title || '',
-    // size видалено з об'єкта, якщо він не потрібен для бекенду. 
-    // Якщо потрібен приховано - розкоментуйте:
-    // size: p.size, 
     qty: 1,
     price: p.price || 0,
     imageUrl: p.imageUrl || '',
@@ -331,7 +332,6 @@ async function fetchProducts(reset = false) {
       per_page: perPage,
     });
     
-    // ... logic remains same ...
     const payload = data || {};
     const list = Array.isArray(payload?.data) ? payload.data : (Array.isArray(payload) ? payload : []);
     
@@ -339,7 +339,6 @@ async function fetchProducts(reset = false) {
       id: p.id,
       sku: p.sku || '',
       title: p.title || '',
-      // size тут можемо не мапити, якщо не використовуємо
       price: p.sale_price || p.price || 0,
       stock: p.stock_qty,
       imageUrl: buildImageUrl(p),
@@ -474,6 +473,13 @@ const handleScroll = () => {
 .product-item { transition: background 0.15s; }
 .product-item:hover { background: #f8fafc; }
 .product-item:hover .add-btn { background: var(--bs-primary); color: #fff !important; }
+
+/* Product Title in Picker (NEW) */
+.product-title {
+  font-size: 0.85rem; 
+  white-space: normal;
+  word-wrap: break-word;
+}
 
 /* SCROLLBAR */
 .custom-scroll::-webkit-scrollbar { width: 5px; }
