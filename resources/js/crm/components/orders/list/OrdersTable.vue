@@ -320,15 +320,6 @@
                   </div>
 
                   <div
-                    v-if="order.delivery_status_code === 'at_warehouse' && order.delivery_hold_days >= 3"
-                    class="hold-badge"
-                    :title="`Посилка у відділенні ${order.delivery_hold_days} дні`"
-                  >
-                    <i class="bi bi-exclamation-circle"></i>
-                    {{ order.delivery_hold_days }} дні
-                  </div>
-
-                  <div
                     class="d-flex align-items-center gap-2 ttn-row"
                     @click.stop="$emit('copy-ttn', order.ttn)"
                     title="Копіювати ТТН"
@@ -353,13 +344,21 @@
                 </div>
               </td>
 
+              <!-- ОНОВЛЕНА КОЛОНКА ДАТИ -->
               <td class="cell-date">
-                <span class="date-text">{{ formatDate(order.created_at) }}</span>
-                <div
-                  v-if="order.delivery_status_code === 'at_warehouse' && order.delivery_hold_days >= 3"
-                  class="hold-alert"
-                >
-                  Посилка лежить {{ order.delivery_hold_days }} дні
+                <div class="date-wrapper">
+                  <span class="date-text">{{ formatDate(order.created_at) }}</span>
+                  
+                  <!-- ІНДИКАТОР ЗБЕРІГАННЯ -->
+                  <div
+                    v-if="order.delivery_status_code === 'at_warehouse' && order.delivery_hold_days >= 3"
+                    class="storage-badge"
+                    :class="order.delivery_hold_days >= 5 ? 'badge-critical' : 'badge-warning'"
+                    title="Час зберігання у відділенні"
+                  >
+                    <i class="bi" :class="order.delivery_hold_days >= 5 ? 'bi-fire' : 'bi-hourglass-split'"></i>
+                    <span>{{ order.delivery_hold_days }} дн.</span>
+                  </div>
                 </div>
               </td>
 
@@ -631,20 +630,6 @@
   color: #3b82f6 !important;
 }
 
-.hold-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: #fef3c7;
-  color: #b45309;
-  border: 1px solid #fcd34d;
-  border-radius: 6px;
-  padding: 2px 6px;
-  font-size: 0.7rem;
-  font-weight: 700;
-  margin-bottom: 6px;
-}
-
 /* =========================================
    3. BASIC STYLES
    ========================================= */
@@ -773,19 +758,6 @@
 }
 .date-text {
   font-size: 0.8rem;
-}
-.hold-alert {
-  margin-top: 6px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: #fef3c7;
-  color: #b45309;
-  border: 1px solid #fcd34d;
-  border-radius: 6px;
-  padding: 2px 6px;
-  font-size: 0.7rem;
-  font-weight: 700;
 }
 .tags-wrapper {
   display: flex;
@@ -959,6 +931,58 @@
   color: #94a3b8;
 }
 
+/* =========================================
+   NEW DATE & STORAGE STYLES
+   ========================================= */
+
+.date-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.storage-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 8px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  width: fit-content;
+  cursor: help;
+  transition: transform 0.2s;
+}
+
+.storage-badge:hover {
+  transform: scale(1.05);
+}
+
+.storage-badge i {
+  font-size: 0.7rem;
+}
+
+/* Жовтий: Попередження (3-4 дні) */
+.badge-warning {
+  background: #fffbeb; /* Amber-50 */
+  color: #b45309;      /* Amber-700 */
+  border: 1px solid #fcd34d;
+}
+
+/* Червоний: Критично (5+ днів) */
+.badge-critical {
+  background: #fef2f2; /* Red-50 */
+  color: #ef4444;      /* Red-500 */
+  border: 1px solid #fecaca;
+  animation: pulse-red 2s infinite;
+}
+
+@keyframes pulse-red {
+  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+  70% { box-shadow: 0 0 0 5px rgba(239, 68, 68, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+
 @media (min-width: 992px) {
   .th-w-40 {
     width: 40px;
@@ -1018,7 +1042,8 @@
       'id client'
       'status status'
       'phone phone'
-      'fiscal fiscal';
+      'fiscal fiscal'
+      'date date'; /* Added date row for mobile */
     gap: 10px;
     margin-bottom: 12px;
     border: 1px solid #e2e8f0;
@@ -1082,12 +1107,27 @@
     align-items: flex-start !important;
     min-width: 0;
   }
+  
+  /* Mobile Date Cell */
+  .cell-date {
+    grid-area: date;
+    margin-top: 4px;
+    padding-top: 8px !important;
+    border-top: 1px dashed #e2e8f0 !important;
+    display: flex !important; /* Force display on mobile */
+  }
+  
+  .date-wrapper {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+  }
 
   /* ховаємо зайве на мобільній */
   .cell-tags,
   .cell-products,
-  .cell-delivery,
-  .cell-date,
+  .cell-delivery, /* Hide standard delivery cell on mobile */
   .cell-actions,
   .source-tag {
     display: none !important;
