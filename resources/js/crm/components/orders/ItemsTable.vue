@@ -1,109 +1,128 @@
 <template>
-  <div class="h-100 d-flex flex-column bg-white rounded-4 overflow-hidden shadow-sm border border-light-subtle">
+  <div class="h-100 d-flex flex-column bg-white rounded-4 shadow-sm border border-light-subtle overflow-hidden wrapper-container">
     
-    <div class="px-4 py-3 border-bottom d-flex justify-content-between align-items-center bg-white">
-      <div class="d-flex align-items-center gap-2">
-        <div class="icon-square bg-primary bg-opacity-10 text-primary rounded-3">
-          <i class="bi bi-cart3"></i>
+    <div class="px-4 py-3 border-bottom d-flex justify-content-between align-items-center bg-white sticky-header">
+      <div class="d-flex align-items-center gap-3">
+        <div class="icon-box bg-primary bg-opacity-10 text-primary rounded-circle">
+          <i class="bi bi-bag-check-fill fs-5"></i>
         </div>
         <div>
-          <h6 class="mb-0 fw-bold text-dark">Кошик замовлення</h6>
-          <div class="text-muted small" style="font-size: 0.75rem;">Позицій: {{ model.length }}</div>
+          <h6 class="mb-0 fw-bold text-dark font-heading">Кошик замовлення</h6>
+          <div class="text-secondary x-small fw-medium text-uppercase ls-1">Позицій: {{ model.length }}</div>
         </div>
       </div>
       <button 
-        class="btn btn-primary rounded-3 shadow-sm d-flex align-items-center gap-2 px-3" 
+        class="btn btn-primary rounded-pill shadow-sm d-flex align-items-center gap-2 px-4 fw-medium btn-hover-effect" 
         type="button" 
         @click="openPicker"
       >
-        <i class="bi bi-plus-lg"></i>
-        <span class="d-none d-sm-inline">Додати товар</span>
+        <i class="bi bi-plus-lg text-white-50"></i>
+        <span>Додати</span>
       </button>
     </div>
 
-    <div class="flex-grow-1 overflow-auto custom-scroll bg-body-tertiary bg-opacity-10" style="min-height: 150px; position: relative;">
-      <table class="table table-hover align-middle mb-0 modern-table w-100">
-        <thead class="sticky-top bg-white shadow-sm" style="z-index: 5;">
+    <div class="flex-grow-1 overflow-auto custom-scroll bg-body-tertiary bg-opacity-10 position-relative">
+      <table class="table table-borderless align-middle mb-0 w-100 position-relative" style="border-collapse: separate; border-spacing: 0;">
+        <thead class="sticky-top bg-white shadow-sm z-index-10">
           <tr>
-            <th class="ps-4 py-3 text-secondary text-uppercase x-small fw-bold" style="width: 80px;">Фото</th>
-            <th class="py-3 text-secondary text-uppercase x-small fw-bold">Товар / SKU</th>
-            <th class="py-3 text-secondary text-uppercase x-small fw-bold text-center" style="width: 100px;">Розмір</th>
-            <th class="py-3 text-secondary text-uppercase x-small fw-bold text-center" style="width: 110px;">Кількість</th>
-            <th class="py-3 text-secondary text-uppercase x-small fw-bold text-end" style="width: 140px;">Ціна</th>
-            <th class="py-3 text-secondary text-uppercase x-small fw-bold" style="width: 60px;"></th>
+            <th class="ps-4 py-3 text-secondary x-small text-uppercase fw-bold bg-white border-bottom">Товар</th>
+            <th class="py-3 text-secondary x-small text-uppercase fw-bold text-center bg-white border-bottom" style="width: 140px;">Кількість</th>
+            <th class="py-3 text-secondary x-small text-uppercase fw-bold text-end bg-white border-bottom" style="width: 150px;">Ціна</th>
+            <th class="py-3 text-secondary x-small text-uppercase fw-bold text-end bg-white border-bottom pe-4" style="width: 60px;"></th>
           </tr>
         </thead>
+        
         <tbody v-if="model.length" class="bg-white">
-          <tr v-for="(item, idx) in model" :key="item.sku + '-' + idx" class="item-row position-relative">
-            <td class="ps-4 py-3">
-              <div class="item-thumb shadow-sm rounded-3 overflow-hidden position-relative group-hover-scale">
-                <img v-if="item.imageUrl" :src="item.imageUrl" alt="Product" class="w-100 h-100 object-fit-cover transition-transform" />
-                <div v-else class="w-100 h-100 d-flex align-items-center justify-content-center bg-light text-secondary">
-                  <i class="bi bi-image fs-5 opacity-50"></i>
+          <tr v-for="(item, idx) in model" :key="item.sku + '-' + idx" class="item-row">
+            <td class="ps-4 py-3 border-bottom-dashed">
+              <div class="d-flex align-items-center gap-3">
+                <div class="item-thumb rounded-3 shadow-sm flex-shrink-0 position-relative overflow-hidden">
+                  <img v-if="item.imageUrl" :src="item.imageUrl" class="w-100 h-100 object-fit-cover zoom-effect" alt="img" />
+                  <div v-else class="w-100 h-100 d-flex align-items-center justify-content-center bg-light text-secondary">
+                    <i class="bi bi-image opacity-50"></i>
+                  </div>
+                </div>
+                <div class="flex-grow-1 min-w-0">
+                  <div class="d-flex align-items-center gap-2 mb-1">
+                    <span v-if="item.sku" class="badge bg-light text-secondary border fw-normal font-monospace px-2" style="font-size: 0.7rem;">{{ item.sku }}</span>
+                  </div>
+                  <input 
+                    class="form-control form-control-flush fw-bold text-dark p-0 text-truncate" 
+                    v-model="item.title" 
+                    placeholder="Назва товару" 
+                  />
                 </div>
               </div>
             </td>
-            <td class="py-3">
-              <div class="d-flex flex-column gap-1 pe-3">
-                <div class="d-flex align-items-center gap-2">
-                   <span class="badge bg-light text-secondary border fw-normal font-monospace px-2 py-1">{{ item.sku || '---' }}</span>
-                </div>
+
+            <td class="text-center py-3 border-bottom-dashed">
+              <div class="d-inline-flex align-items-center bg-light rounded-pill border p-1 stepper-shadow">
+                <button 
+                  class="btn btn-icon-xs rounded-circle btn-white text-secondary hover-dark"
+                  @click="item.qty > 1 ? item.qty-- : remove(idx)"
+                  type="button"
+                >
+                  <i :class="item.qty > 1 ? 'bi bi-dash' : 'bi bi-trash3 text-danger'" style="font-size: 0.8rem;"></i>
+                </button>
                 <input 
-                  class="form-control form-control-flush fw-semibold text-dark p-0" 
-                  v-model="item.title" 
-                  placeholder="Назва товару" 
-                />
-              </div>
-            </td>
-            <td class="text-center py-3">
-               <input class="form-control form-control-sm text-center bg-light border-0 rounded-pill mx-auto" style="width: 60px;" v-model="item.size" placeholder="-" />
-            </td>
-            <td class="text-center py-3">
-              <div class="qty-control d-inline-flex align-items-center border rounded-pill p-1 bg-white">
-                <input 
-                  class="form-control border-0 text-center fw-bold p-0 shadow-none bg-transparent" 
-                  style="width: 50px; height: 24px;"
+                  class="form-control border-0 text-center fw-bold bg-transparent p-0 mx-1" 
+                  style="width: 40px; font-size: 0.95rem;"
                   v-model.number="item.qty" 
                   type="number" 
                   min="1" 
                 />
+                <button 
+                  class="btn btn-icon-xs rounded-circle btn-white text-primary hover-primary"
+                  @click="item.qty++"
+                  type="button"
+                >
+                  <i class="bi bi-plus" style="font-size: 1rem;"></i>
+                </button>
               </div>
             </td>
-            <td class="text-end py-3">
-              <div class="d-flex align-items-center justify-content-end gap-1">
+
+            <td class="text-end py-3 border-bottom-dashed">
+              <div class="d-flex justify-content-end align-items-center gap-1 group-focus-within">
                 <input 
-                  class="form-control form-control-flush text-end fw-bold text-primary p-0 fs-6" 
+                  class="form-control form-control-flush text-end fw-bold text-dark fs-6 p-0" 
                   style="width: 80px;"
                   v-model.number="item.price" 
                   type="number" 
                   step="0.01" 
                 />
-                <span class="text-muted small">{{ currency }}</span>
+                <span class="text-muted small fw-normal">{{ currency }}</span>
+              </div>
+              <div class="text-muted x-small text-end mt-1 fw-medium" v-if="item.qty > 1">
+                {{ (item.price * item.qty).toFixed(2) }} {{ currency }}
               </div>
             </td>
-            <td class="text-center py-3 pe-3">
+
+            <td class="text-end py-3 pe-4 border-bottom-dashed">
               <button 
-                class="btn btn-icon btn-sm text-secondary hover-danger rounded-circle" 
+                class="btn btn-icon-sm text-secondary opacity-25 hover-opacity-100 hover-danger transition-all" 
                 type="button" 
                 @click="remove(idx)"
-                title="Видалити"
               >
-                <i class="bi bi-trash3"></i>
+                <i class="bi bi-x-lg"></i>
               </button>
             </td>
           </tr>
         </tbody>
+        
         <tbody v-else>
           <tr>
-            <td colspan="6">
-              <div class="d-flex flex-column align-items-center justify-content-center py-5 text-center">
-                <div class="bg-light rounded-circle p-4 mb-3">
-                  <i class="bi bi-basket2 text-secondary opacity-25" style="font-size: 2.5rem;"></i>
+            <td colspan="4" class="py-5">
+              <div class="text-center py-5">
+                <div class="mb-3 position-relative d-inline-block">
+                  <div class="icon-circle-lg bg-light text-secondary opacity-50 rounded-circle d-flex align-items-center justify-content-center mx-auto">
+                    <i class="bi bi-basket2 fs-1"></i>
+                  </div>
+                  <span class="position-absolute top-0 end-0 p-2 bg-primary border border-white rounded-circle"></span>
                 </div>
-                <h6 class="text-dark fw-bold mb-1">Кошик порожній</h6>
-                <p class="text-muted small mb-3">Додайте товари зі складу або створіть власні позиції</p>
-                <button class="btn btn-sm btn-outline-primary rounded-pill px-4" @click="openPicker">
-                  Почати додавання
+                <h6 class="fw-bold text-dark">Список порожній</h6>
+                <p class="text-muted small mb-4">Почніть додавати товари до замовлення</p>
+                <button class="btn btn-sm btn-outline-primary rounded-pill px-4 fw-medium" @click="openPicker">
+                  Відкрити каталог
                 </button>
               </div>
             </td>
@@ -112,17 +131,25 @@
       </table>
     </div>
 
-    <div class="bg-white border-top p-4 d-flex justify-content-end">
-      <div class="summary-card" style="min-width: 280px;">
-        <div v-if="prepayEnabled && prepayAmount > 0" class="d-flex justify-content-between align-items-center mb-2 text-muted">
-          <span class="small">Передоплата</span>
-          <span class="fw-medium text-success">- {{ prepayAmount }} {{ currency }}</span>
-        </div>
-        
-        <div class="d-flex justify-content-between align-items-end pt-3 border-top border-light-subtle">
-          <div class="text-secondary small me-4">До сплати</div>
-          <div class="d-flex flex-column align-items-end lh-1">
-            <span class="fs-4 fw-bolder text-dark tracking-tight">{{ netTotal }} <small class="fs-6 text-muted fw-normal">{{ currency }}</small></span>
+    <div class="bg-white border-top p-4">
+      <div class="d-flex justify-content-end">
+        <div class="w-100" style="max-width: 320px;">
+          <div v-if="prepayEnabled && prepayAmount > 0" class="d-flex justify-content-between align-items-center mb-2 px-2">
+            <span class="text-muted small">Передоплата</span>
+            <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-2">
+              - {{ prepayAmount }} {{ currency }}
+            </span>
+          </div>
+          
+          <div class="p-3 bg-light bg-opacity-50 rounded-3 border d-flex justify-content-between align-items-end">
+            <div>
+              <div class="text-secondary x-small text-uppercase fw-bold mb-1">До сплати</div>
+              <div class="text-muted small">Всього: {{ total }} {{ currency }}</div>
+            </div>
+            <div class="text-end lh-1">
+              <span class="fs-3 fw-bolder text-primary tracking-tight">{{ netTotal }}</span>
+              <span class="fs-6 text-muted fw-medium ms-1">{{ currency }}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -132,90 +159,92 @@
       <div v-if="pickerOpen">
         <div class="offcanvas-backdrop fade show glass-backdrop" @click="closePicker"></div>
         
-        <div class="offcanvas offcanvas-end show shadow-lg d-flex flex-column border-0" tabindex="-1" style="width: 650px; z-index: 1055;">
+        <div class="offcanvas offcanvas-end show shadow-2xl border-0 d-flex flex-column" tabindex="-1" style="width: 600px; z-index: 1055;">
           
-          <div class="offcanvas-header border-bottom px-4 py-3 bg-white">
+          <div class="px-4 py-3 bg-white border-bottom d-flex align-items-center justify-content-between">
             <div>
-              <h5 class="offcanvas-title fw-bold text-dark">Додати товар</h5>
-              <p class="mb-0 text-muted small">Оберіть товари зі списку</p>
+              <h5 class="fw-bold mb-1">Додати товар</h5>
+              <div class="d-flex align-items-center gap-2 text-muted small">
+                <i class="bi bi-search"></i>
+                <span>Пошук по каталогу</span>
+              </div>
             </div>
-            <button type="button" class="btn-close" @click="closePicker"></button>
+            <button type="button" class="btn btn-icon btn-light rounded-circle text-secondary" @click="closePicker">
+              <i class="bi bi-x-lg"></i>
+            </button>
           </div>
 
-          <div class="p-3 bg-light border-bottom sticky-top">
+          <div class="p-3 bg-light border-bottom">
             <div class="d-flex gap-2">
               <div class="position-relative flex-grow-1">
-                <i class="bi bi-search position-absolute top-50 start-0 translate-middle-y ms-3 text-secondary"></i>
+                <i class="bi bi-search position-absolute top-50 start-0 translate-middle-y ms-3 text-secondary opacity-50"></i>
                 <input
-                  class="form-control ps-5 rounded-3 border-0 shadow-sm py-2"
+                  class="form-control ps-5 rounded-3 border-0 shadow-sm"
+                  style="height: 42px;"
                   v-model="searchTerm"
-                  placeholder="Пошук..."
+                  placeholder="Введіть назву або артикул..."
                   autofocus
                 />
               </div>
-              <div class="category-select-wrapper" style="min-width: 180px;">
-                <select
-                  v-model="selectedCategory"
-                  class="form-select rounded-3 border-0 shadow-sm py-2 text-truncate"
-                >
-                  <option value="">Всі категорії</option>
-                  <option v-for="c in categories" :key="c" :value="c">{{ c }}</option>
-                </select>
-              </div>
+              <select
+                v-model="selectedCategory"
+                class="form-select rounded-3 border-0 shadow-sm"
+                style="width: 180px; height: 42px;"
+              >
+                <option value="">Всі</option>
+                <option v-for="c in categories" :key="c" :value="c">{{ c }}</option>
+              </select>
             </div>
           </div>
 
           <div ref="pickerBody" class="offcanvas-body p-0 custom-scroll bg-white" @scroll="handleScroll">
-            
-            <div v-if="loadingProducts && !filteredProducts.length" class="d-flex flex-column align-items-center justify-content-center h-50 pt-5">
-              <div class="spinner-border text-primary mb-3" role="status"></div>
-              <span class="text-muted small">Завантаження каталогу...</span>
+            <div v-if="loadingProducts && !products.length" class="h-100 d-flex align-items-center justify-content-center text-muted">
+               <div class="spinner-border text-primary spinner-border-sm me-2"></div> Завантаження...
             </div>
 
-            <div v-else-if="!filteredProducts.length" class="d-flex flex-column align-items-center justify-content-center h-50 pt-5 text-muted">
-              <i class="bi bi-search fs-1 opacity-25 mb-3"></i>
-              <p>Товарів не знайдено</p>
+            <div v-else-if="!filteredProducts.length" class="h-100 d-flex flex-column align-items-center justify-content-center text-muted opacity-50">
+               <i class="bi bi-inbox fs-1 mb-2"></i>
+               <span>Нічого не знайдено</span>
             </div>
 
-            <div v-else class="d-flex flex-column">
-              <div 
+            <div v-else class="list-group list-group-flush">
+              <button
                 v-for="p in filteredProducts"
                 :key="p.id"
-                class="product-item-card px-4 py-3 border-bottom d-flex align-items-center gap-3 cursor-pointer position-relative overflow-hidden"
+                type="button"
+                class="list-group-item list-group-item-action p-3 border-bottom-dashed d-flex align-items-center gap-3 product-item"
                 @click="addProductFromModal(p)"
               >
-                <div class="hover-bg position-absolute top-0 start-0 w-100 h-100 bg-primary opacity-0 transition-opacity"></div>
-                
-                <div class="position-relative z-1 d-flex align-items-center gap-3 w-100">
-                  <div class="product-thumb-lg bg-light rounded-3 border flex-shrink-0 d-flex align-items-center justify-content-center overflow-hidden" style="width: 56px; height: 56px;">
-                    <img v-if="p.imageUrl" :src="p.imageUrl" class="w-100 h-100 object-fit-cover" />
-                    <i v-else class="bi bi-image text-muted fs-5"></i>
-                  </div>
+                <div class="position-relative">
+                   <div class="product-thumb-md border rounded-3 overflow-hidden bg-light d-flex align-items-center justify-content-center">
+                     <img v-if="p.imageUrl" :src="p.imageUrl" class="w-100 h-100 object-fit-cover" />
+                     <i v-else class="bi bi-image text-muted fs-5"></i>
+                   </div>
+                   <span class="position-absolute bottom-0 end-0 p-1 rounded-circle border border-white" 
+                         :class="p.stock > 0 ? 'bg-success' : 'bg-danger'"></span>
+                </div>
 
-                  <div class="flex-grow-1 overflow-hidden">
-                    <div class="d-flex align-items-center gap-2 mb-1">
-                      <span class="badge bg-white border text-secondary font-monospace rounded-pill px-2" style="font-size: 10px;">{{ p.sku || 'N/A' }}</span>
-                      <span v-if="p.stock !== undefined" class="badge rounded-pill px-2" :class="p.stock > 0 ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger'">
-                        {{ p.stock > 0 ? `${p.stock} в наявності` : 'Немає' }}
-                      </span>
-                    </div>
-                    <div class="fw-bold text-dark text-truncate">{{ p.title }}</div>
-                    <div v-if="p.size" class="small text-muted">Розмір: {{ p.size }}</div>
+                <div class="flex-grow-1 overflow-hidden text-start">
+                  <div class="d-flex align-items-center gap-2 mb-1">
+                    <span class="badge bg-light text-secondary border font-monospace fw-normal" style="font-size: 10px;">{{ p.sku || 'SKU?' }}</span>
+                    <span v-if="p.stock !== undefined" class="small" :class="p.stock > 0 ? 'text-success' : 'text-danger'">
+                      {{ p.stock > 0 ? `${p.stock} шт.` : 'Немає' }}
+                    </span>
                   </div>
+                  <div class="fw-bold text-dark text-truncate">{{ p.title }}</div>
+                </div>
 
-                  <div class="text-end ps-3">
-                    <div class="fw-bold text-primary fs-5 mb-1">{{ p.price }} <small class="fs-6 text-muted">{{ currency }}</small></div>
-                    <button class="btn btn-sm btn-light text-primary rounded-pill fw-bold border-0 px-3 add-btn-hover shadow-sm">
-                      <i class="bi bi-plus-lg"></i>
-                    </button>
+                <div class="text-end ps-2">
+                  <div class="fw-bold text-primary fs-5">{{ p.price }} <small class="text-muted fs-6 font-weight-normal">{{ currency }}</small></div>
+                  <div class="btn btn-xs btn-light text-primary rounded-pill px-3 fw-bold mt-1 shadow-sm add-btn">
+                    + Додати
                   </div>
                 </div>
-              </div>
+              </button>
             </div>
-
-            <div v-if="loadingMore" class="py-3 text-center text-muted small border-top">
+            
+             <div v-if="loadingMore" class="py-3 text-center text-muted small border-top">
               <div class="spinner-border spinner-border-sm text-primary me-2"></div>
-              Завантажуємо ще...
             </div>
           </div>
         </div>
@@ -237,7 +266,6 @@ const props = defineProps({
   prepayEnabled: { type: Boolean, default: false },
 });
 
-// -- Логіка залишається майже без змін, лише додамо перевірки --
 const pickerOpen = ref(false);
 const searchTerm = ref('');
 const loadingProducts = ref(false);
@@ -260,9 +288,7 @@ const netTotal = computed(() =>
 );
 
 const filteredProducts = computed(() => {
-  // Фільтрація вже йде з бекенду, але для плавності UI при очищенні
-  const q = searchTerm.value.trim().toLowerCase();
-  return products.value; 
+  return products.value;
 });
 
 function openPicker() {
@@ -284,22 +310,21 @@ function addProductFromModal(p) {
     product_id: p.id || null,
     sku: p.sku || '',
     title: p.title || '',
-    size: p.size,
+    // size видалено з об'єкта, якщо він не потрібен для бекенду. 
+    // Якщо потрібен приховано - розкоментуйте:
+    // size: p.size, 
     qty: 1,
     price: p.price || 0,
     imageUrl: p.imageUrl || '',
     main_photo_path: p.main_photo_path || '',
   });
-  // Опціонально: візуальний фідбек про додавання (toast)
 }
 
 async function fetchProducts(reset = false) {
   if (loadingProducts.value || loadingMore.value) return;
-  if (reset) {
-    loadingProducts.value = true;
-  } else {
-    loadingMore.value = true;
-  }
+  if (reset) loadingProducts.value = true;
+  else loadingMore.value = true;
+  
   try {
     const targetPage = reset ? 1 : page.value + 1;
     const { data } = await searchProducts({
@@ -308,22 +333,19 @@ async function fetchProducts(reset = false) {
       page: targetPage,
       per_page: perPage,
     });
+    
+    // ... logic remains same ...
     const payload = data || {};
-    const list = Array.isArray(payload?.data)
-      ? payload.data
-      : Array.isArray(payload)
-        ? payload
-        : [];
+    const list = Array.isArray(payload?.data) ? payload.data : (Array.isArray(payload) ? payload : []);
     
     const mapped = list.map((p) => ({
       id: p.id,
       sku: p.sku || '',
       title: p.title || '',
-      size: p.length_cm ? `${p.length_cm}` : p.size || '',
+      // size тут можемо не мапити, якщо не використовуємо
       price: p.sale_price || p.price || 0,
       stock: p.stock_qty,
       imageUrl: buildImageUrl(p),
-      main_photo_path: p.main_photo_path || '',
     }));
 
     if (reset) {
@@ -362,139 +384,105 @@ function buildImageUrl(p) {
   return clean.startsWith('storage/') ? `/${clean}` : `/storage/${clean}`;
 }
 
-watch(
-  () => searchTerm.value,
-  () => {
+watch(() => searchTerm.value, () => {
     if (!pickerOpen.value) return;
     if (searchTimer) clearTimeout(searchTimer);
     searchTimer = setTimeout(() => {
       page.value = 0;
       hasMore.value = true;
       fetchProducts(true);
-    }, 400); // Трохи збільшив затримку для кращої продуктивності
-  }
-);
+    }, 400);
+});
 
-watch(
-  () => selectedCategory.value,
-  () => {
+watch(() => selectedCategory.value, () => {
     if (!pickerOpen.value) return;
     page.value = 0;
     hasMore.value = true;
     fetchProducts(true);
-  }
-);
+});
 
 const loadCategories = async () => {
-  if (categories.value.length > 0) return; // Кешуємо категорії
+  if (categories.value.length) return;
   if (isLoadingCategories.value) return;
   isLoadingCategories.value = true;
   try {
-    const { data } = await http.get('/products/categories', {
-      headers: { Accept: 'application/json' },
-    });
+    const { data } = await http.get('/products/categories');
     categories.value = Array.isArray(data) ? data : [];
-  } catch (e) {
-    console.error('Не вдалося завантажити категорії', e);
-  } finally {
-    isLoadingCategories.value = false;
-  }
+  } catch (e) { console.error(e); } 
+  finally { isLoadingCategories.value = false; }
 };
 
 const handleScroll = () => {
   const el = pickerBody.value;
   if (!el || loadingProducts.value || loadingMore.value || !hasMore.value) return;
-  const threshold = 200;
-  if (el.scrollTop + el.clientHeight >= el.scrollHeight - threshold) {
+  if (el.scrollTop + el.clientHeight >= el.scrollHeight - 200) {
     fetchProducts(false);
   }
 };
 </script>
 
 <style scoped>
-/* Utility Tweaks */
-.x-small { font-size: 0.7rem; letter-spacing: 0.05em; }
-.tracking-tight { letter-spacing: -0.02em; }
+/* GENERAL UTILS */
+.x-small { font-size: 0.7rem; }
+.ls-1 { letter-spacing: 0.5px; }
 .cursor-pointer { cursor: pointer; }
+.z-index-10 { z-index: 10; }
 
-/* Icon Square */
-.icon-square {
-  width: 38px; height: 38px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 1.1rem;
-}
-
-/* Modern Table Styles */
-.modern-table th {
-  background-color: #ffffff;
-  border-bottom: 1px solid #edf2f7;
-}
-.modern-table td {
-  border-bottom: 1px solid #f8f9fa;
-  padding-top: 0.75rem;
-  padding-bottom: 0.75rem;
-}
-.item-row { transition: background-color 0.2s; }
-.item-row:hover { background-color: #fcfcfc; }
-
-/* Item Thumb */
-.item-thumb {
+/* HEADER ICON */
+.icon-box {
   width: 42px; height: 42px;
-  border: 1px solid #e9ecef;
+  display: flex; align-items: center; justify-content: center;
 }
-.item-thumb .transition-transform { transition: transform 0.2s; }
-.item-row:hover .item-thumb .transition-transform { transform: scale(1.1); }
 
-/* Form Controls "Flush" (Seamless editing) */
+/* TABLE STYLING */
+.item-thumb {
+  width: 48px; height: 48px;
+  border: 1px solid #edf2f7;
+  background: #fff;
+}
+.zoom-effect { transition: transform 0.3s ease; }
+.item-thumb:hover .zoom-effect { transform: scale(1.1); }
+.border-bottom-dashed { border-bottom: 1px dashed #e2e8f0; }
+
+/* INPUTS */
 .form-control-flush {
-  border: 1px solid transparent;
-  background: transparent;
-  padding: 4px 6px;
-  border-radius: 4px;
+  background: transparent; border: 1px solid transparent;
   transition: all 0.2s;
 }
-.form-control-flush:hover {
-  background: #f8f9fa;
-}
+.form-control-flush:hover { background: #f8fafc; }
 .form-control-flush:focus {
-  background: #fff;
-  border-color: #86b7fe;
-  box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.15);
+  background: #fff; border-color: #cbd5e1; box-shadow: none;
 }
 
-/* Buttons */
-.btn-icon {
-  width: 32px; height: 32px;
-  display: flex; align-items: center; justify-content: center;
-  border: none;
+/* STEPPER */
+.btn-icon-xs {
+  width: 24px; height: 24px; padding: 0; display: flex; align-items: center; justify-content: center; border: none;
 }
-.hover-danger:hover {
-  background-color: #fee2e2;
-  color: #dc3545 !important;
-}
+.btn-white { background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+.stepper-shadow { box-shadow: inset 0 1px 2px rgba(0,0,0,0.03); }
+.hover-dark:hover { background: #1e293b; color: #fff !important; }
+.hover-primary:hover { background: var(--bs-primary); color: #fff !important; }
 
-/* Offcanvas & Picker */
-.glass-backdrop {
-  backdrop-filter: blur(2px);
-  background-color: rgba(0, 0, 0, 0.3);
-}
+/* REMOVE BUTTON */
+.btn-icon-sm { width: 32px; height: 32px; padding: 0; border: none; background: transparent; }
+.hover-danger:hover { color: #dc3545 !important; background: #fff0f0; opacity: 1 !important; transform: scale(1.1); }
+.transition-all { transition: all 0.2s; }
 
-.product-item-card { transition: all 0.2s; }
-.product-item-card:hover .hover-bg { opacity: 0.04; }
-.product-item-card:hover .add-btn-hover {
-  background-color: var(--bs-primary);
-  color: white !important;
-}
+/* EMPTY STATE */
+.icon-circle-lg { width: 80px; height: 80px; }
 
-/* Scrollbar */
-.custom-scroll::-webkit-scrollbar { width: 5px; height: 5px; }
+/* MODAL / PICKER */
+.glass-backdrop { backdrop-filter: blur(4px); background-color: rgba(30, 41, 59, 0.4); }
+.product-thumb-md { width: 48px; height: 48px; }
+.product-item { transition: background 0.15s; }
+.product-item:hover { background: #f8fafc; }
+.product-item:hover .add-btn { background: var(--bs-primary); color: #fff !important; }
+
+/* SCROLLBAR */
+.custom-scroll::-webkit-scrollbar { width: 5px; }
 .custom-scroll::-webkit-scrollbar-track { background: transparent; }
 .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-.custom-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
-/* Removing number arrows */
-input[type=number]::-webkit-inner-spin-button, 
-input[type=number]::-webkit-outer-spin-button { 
-  -webkit-appearance: none; margin: 0; 
-}
+/* REMOVE SPINNERS */
+input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 </style>
