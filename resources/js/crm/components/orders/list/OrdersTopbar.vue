@@ -4,7 +4,7 @@
     <div class="toolbar-header px-4 py-3">
       <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
         
-        <!-- ЛІВА ЧАСТИНА (Можна додати заголовок або хлібні крихти, якщо треба) -->
+        <!-- ЛІВА ЧАСТИНА -->
         <div class="d-none d-md-block"></div>
 
         <div class="d-flex align-items-center gap-2 w-100 w-md-auto">
@@ -55,28 +55,58 @@
           </button>
         </div>
 
-        <!-- СПЕЦІАЛЬНИЙ ФІЛЬТР "НЕЗАБОРИ" (ПРАВА ЧАСТИНА) -->
+        <!-- СПЕЦІАЛЬНИЙ ФІЛЬТР "КОНТРОЛЬ ЗБЕРІГАННЯ" (ПРАВА ЧАСТИНА) -->
         <div v-if="holdFilterEnabled" class="special-filter-zone">
           <div class="divider-vertical"></div>
           
-          <button 
-            class="alert-toggle-btn"
-            :class="{ 'is-active': holdFilterActive }"
-            @click="$emit('toggle-hold')"
-            title="Показати замовлення, що довго лежать на пошті"
-          >
-            <div class="toggle-icon-box">
-              <transition name="icon-swap" mode="out-in">
-                <i v-if="holdFilterActive" class="bi bi-fire"></i>
-                <i v-else class="bi bi-hourglass-split"></i>
-              </transition>
-            </div>
-            <div class="toggle-content">
-              <span class="toggle-label">Контроль незаборів</span>
-              <span class="toggle-sub">Лежать > {{ holdFilterDays }} дн.</span>
-            </div>
-            <div class="toggle-switch-ui"></div>
-          </button>
+          <div class="alert-toggle-wrapper" v-click-outside="closeDaysDropdown">
+            <button 
+              class="alert-toggle-btn"
+              :class="{ 'is-active': holdFilterActive }"
+              @click="$emit('toggle-hold')"
+              title="Фільтр замовлень, що довго лежать на пошті"
+            >
+              <div class="toggle-icon-box">
+                <transition name="icon-swap" mode="out-in">
+                  <i v-if="holdFilterActive" class="bi bi-fire"></i>
+                  <i v-else class="bi bi-hourglass-split"></i>
+                </transition>
+              </div>
+              
+              <div class="toggle-content">
+                <span class="toggle-label">Контроль зберігання</span>
+                
+                <!-- Випадаючий список днів (клік сюди не перемикає фільтр, а відкриває меню) -->
+                <div 
+                  class="toggle-sub-interactive" 
+                  @click.stop="toggleDaysDropdown"
+                >
+                  <span>Понад {{ holdFilterDays }} дн.</span>
+                  <i class="bi bi-caret-down-fill ms-1" :class="{ 'rotate-180': showDaysDropdown }"></i>
+                </div>
+              </div>
+
+              <div class="toggle-switch-ui"></div>
+            </button>
+
+            <!-- ВИПАДАЮЧИЙ СПИСОК ДНІВ -->
+            <transition name="dropdown-fade">
+              <div v-if="showDaysDropdown" class="days-dropdown-menu">
+                <div class="dropdown-header">Термін зберігання</div>
+                <div class="days-grid">
+                  <button 
+                    v-for="day in [3, 4, 5, 6, 7, 10]" 
+                    :key="day"
+                    class="day-option"
+                    :class="{ selected: holdFilterDays === day }"
+                    @click="selectDay(day)"
+                  >
+                    {{ day }} дні
+                  </button>
+                </div>
+              </div>
+            </transition>
+          </div>
         </div>
 
       </div>
@@ -85,6 +115,8 @@
 </template>
 
 <script setup>
+import { ref } from 'vue';
+
 const props = defineProps({
   search: { type: String, default: '' },
   statusChips: { type: Array, default: () => [] },
@@ -94,13 +126,47 @@ const props = defineProps({
   holdFilterDays: { type: Number, default: 4 },
 });
 
-const emit = defineEmits(['update:search', 'search', 'toggle-status', 'toggle-hold']);
+const emit = defineEmits(['update:search', 'search', 'toggle-status', 'toggle-hold', 'update:holdFilterDays']);
+
+const showDaysDropdown = ref(false);
 
 function onSearch(event) {
   const value = event.target.value;
   emit('update:search', value);
   emit('search', value);
 }
+
+function toggleDaysDropdown() {
+  showDaysDropdown.value = !showDaysDropdown.value;
+}
+
+function closeDaysDropdown() {
+  showDaysDropdown.value = false;
+}
+
+function selectDay(day) {
+  emit('update:holdFilterDays', day);
+  showDaysDropdown.value = false;
+  // Якщо фільтр був вимкнений - вмикаємо його автоматично при виборі днів
+  if (!props.holdFilterActive) {
+    emit('toggle-hold');
+  }
+}
+
+// Проста директива click-outside для локального використання
+const vClickOutside = {
+  mounted(el, binding) {
+    el.clickOutsideEvent = function(event) {
+      if (!(el === event.target || el.contains(event.target))) {
+        binding.value(event);
+      }
+    };
+    document.body.addEventListener('click', el.clickOutsideEvent);
+  },
+  unmounted(el) {
+    document.body.removeEventListener('click', el.clickOutsideEvent);
+  },
+};
 </script>
 
 <style scoped>
@@ -127,18 +193,22 @@ function onSearch(event) {
 .filter-chip:hover { background: #f8fafc; border-color: #cbd5e1; color: #334155; }
 .filter-chip.active { border-color: transparent; transform: translateY(-1px); }
 
-/* --- ALERT TOGGLE BUTTON (НОВИЙ ДИЗАЙН) --- */
+/* --- ALERT TOGGLE BUTTON --- */
 .special-filter-zone {
   display: flex;
   align-items: center;
   gap: 16px;
-  margin-left: auto; /* Притискає вправо */
+  margin-left: auto;
 }
 
 .divider-vertical {
   width: 1px;
   height: 24px;
   background: #e2e8f0;
+}
+
+.alert-toggle-wrapper {
+  position: relative;
 }
 
 .alert-toggle-btn {
@@ -151,7 +221,7 @@ function onSearch(event) {
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  min-width: 200px;
+  min-width: 210px;
   position: relative;
   overflow: hidden;
 }
@@ -176,7 +246,7 @@ function onSearch(event) {
   flex-direction: column;
   align-items: flex-start;
   text-align: left;
-  line-height: 1.1;
+  line-height: 1.2;
   flex: 1;
 }
 
@@ -186,11 +256,26 @@ function onSearch(event) {
   color: #334155;
 }
 
-.toggle-sub {
-  font-size: 10px;
-  color: #94a3b8;
+/* Інтерактивний підзаголовок */
+.toggle-sub-interactive {
+  font-size: 11px;
+  color: #6366f1;
   font-weight: 600;
+  display: flex;
+  align-items: center;
+  padding: 1px 6px;
+  margin-left: -6px;
+  border-radius: 4px;
+  transition: background 0.2s;
 }
+.toggle-sub-interactive:hover {
+  background: rgba(99, 102, 241, 0.1);
+}
+.toggle-sub-interactive i {
+  font-size: 8px;
+  transition: transform 0.2s;
+}
+.rotate-180 { transform: rotate(180deg); }
 
 /* Слайдер справа */
 .toggle-switch-ui {
@@ -235,8 +320,11 @@ function onSearch(event) {
   color: #9a3412;
 }
 
-.alert-toggle-btn.is-active .toggle-sub {
+.alert-toggle-btn.is-active .toggle-sub-interactive {
   color: #c2410c;
+}
+.alert-toggle-btn.is-active .toggle-sub-interactive:hover {
+  background: rgba(234, 88, 12, 0.1);
 }
 
 .alert-toggle-btn.is-active .toggle-switch-ui {
@@ -247,7 +335,73 @@ function onSearch(event) {
   left: 18px; /* Зсув кружечка вправо */
 }
 
-/* Анімація іконки */
+/* --- DAYS DROPDOWN MENU --- */
+.days-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 240px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  box-shadow: 0 10px 30px -5px rgba(0,0,0,0.15);
+  padding: 12px;
+  z-index: 100;
+  transform-origin: top right;
+}
+
+.dropdown-header {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #94a3b8;
+  font-weight: 700;
+  margin-bottom: 8px;
+  padding-left: 4px;
+}
+
+.days-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.day-option {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.day-option:hover {
+  background: #fff;
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  color: #3b82f6;
+}
+
+.day-option.selected {
+  background: #ea580c;
+  border-color: #ea580c;
+  color: white;
+  box-shadow: 0 4px 8px rgba(234, 88, 12, 0.3);
+}
+
+/* Animations */
+.dropdown-fade-enter-active,
+.dropdown-fade-leave-active {
+  transition: all 0.2s ease;
+}
+.dropdown-fade-enter-from,
+.dropdown-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-10px) scale(0.95);
+}
+
 .icon-swap-enter-active,
 .icon-swap-leave-active {
   transition: all 0.2s;
@@ -258,17 +412,35 @@ function onSearch(event) {
   transform: scale(0.5);
 }
 
-/* --- SCROLLBAR --- */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
 /* MOBILE */
 @media (max-width: 768px) {
   .special-filter-zone {
-    margin-left: 0; /* На мобільному не притискаємо вправо */
+    margin-left: 0;
     border-left: 1px solid #e2e8f0;
     padding-left: 12px;
   }
   .divider-vertical { display: none; }
+  
+  /* Адаптація дропдауна для мобільного */
+  .days-dropdown-menu {
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    border-radius: 20px 20px 0 0;
+    box-shadow: 0 -10px 40px rgba(0,0,0,0.2);
+    padding: 20px;
+    animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  
+  @keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
 }
 </style>
