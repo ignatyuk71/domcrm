@@ -194,7 +194,7 @@ class NovaPoshtaService
             ],
 
             'AdditionalInformation' => $itemsSummary ?: ('Замовлення №' . $order->id),
-            'InfoRegClientBarcodes' => $itemsSummary ?: ('Замовлення №' . $order->id),
+            'InfoRegClientBarcodes' => 'Замовлення №' . $order->id,
         ];
     
         if ($afterpayment > 0) {
@@ -213,7 +213,7 @@ class NovaPoshtaService
                 continue;
             }
             $qty = (int) ($item->qty ?: 1);
-            $parts[] = $desc . ' ' . ($qty > 1 ? "{$qty} пари" : '1 пара');
+            $parts[] = $desc . ' ' . ($qty > 1 ? "- {$qty} пари" : '- 1 пара');
         }
 
         $summary = trim(preg_replace('/\s+/', ' ', implode('; ', $parts)));
