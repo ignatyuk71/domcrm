@@ -29,10 +29,11 @@
 
     <!-- НИЖНІЙ РЯДОК: ФІЛЬТРИ -->
     <div class="toolbar-filters px-4 pb-3">
-      <div class="d-flex align-items-center justify-content-between gap-3 overflow-auto no-scrollbar">
+      <!-- ВИПРАВЛЕНО: Прибрано overflow-auto з батька -->
+      <div class="filters-container d-flex align-items-center justify-content-between gap-3">
         
-        <!-- СТАТУСИ (ЛІВА ЧАСТИНА) -->
-        <div class="d-flex gap-2">
+        <!-- СТАТУСИ (ЛІВА ЧАСТИНА - скролиться окремо) -->
+        <div class="d-flex gap-2 overflow-auto no-scrollbar status-scroll-area">
           <button
             v-for="opt in statusChips"
             :key="opt.value"
@@ -76,7 +77,7 @@
               <div class="toggle-content">
                 <span class="toggle-label">Контроль зберігання</span>
                 
-                <!-- Випадаючий список днів (клік сюди не перемикає фільтр, а відкриває меню) -->
+                <!-- Випадаючий список днів -->
                 <div 
                   class="toggle-sub-interactive" 
                   @click.stop="toggleDaysDropdown"
@@ -89,7 +90,7 @@
               <div class="toggle-switch-ui"></div>
             </button>
 
-            <!-- ВИПАДАЮЧИЙ СПИСОК ДНІВ -->
+            <!-- ВИПАДАЮЧИЙ СПИСОК ДНІВ (Збільшений z-index) -->
             <transition name="dropdown-fade">
               <div v-if="showDaysDropdown" class="days-dropdown-menu">
                 <div class="dropdown-header">Термін зберігання</div>
@@ -99,7 +100,7 @@
                     :key="day"
                     class="day-option"
                     :class="{ selected: holdFilterDays === day }"
-                    @click="selectDay(day)"
+                    @click.stop="selectDay(day)"
                   >
                     {{ day }} дні
                   </button>
@@ -147,13 +148,13 @@ function closeDaysDropdown() {
 function selectDay(day) {
   emit('update:holdFilterDays', day);
   showDaysDropdown.value = false;
-  // Якщо фільтр був вимкнений - вмикаємо його автоматично при виборі днів
+  // Автоматично вмикаємо фільтр, якщо він був вимкнений
   if (!props.holdFilterActive) {
     emit('toggle-hold');
   }
 }
 
-// Проста директива click-outside для локального використання
+// Директива кліку зовні
 const vClickOutside = {
   mounted(el, binding) {
     el.clickOutsideEvent = function(event) {
@@ -188,8 +189,19 @@ const vClickOutside = {
 .btn-create { height: 40px; display: flex; align-items: center; padding: 0 20px; border-radius: 12px; background: linear-gradient(135deg, #6366f1, #4f46e5); border: none; color: #fff; font-weight: 600; font-size: 0.9rem; transition: all 0.2s; white-space: nowrap; }
 .btn-create:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35); color: #fff; }
 
-/* STATUS CHIPS */
-.filter-chip { height: 36px; padding: 0 16px; border-radius: 10px; border: 1px solid #e2e8f0; background: #fff; color: #64748b; font-size: 0.85rem; font-weight: 600; white-space: nowrap; transition: all 0.2s; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+/* --- FILTERS CONTAINER (FIXED OVERFLOW) --- */
+.filters-container {
+  position: relative;
+}
+
+/* STATUS CHIPS SCROLL AREA */
+.status-scroll-area {
+  flex: 1; /* Займає вільне місце */
+  min-width: 0; /* Дозволяє стискатися */
+  padding-bottom: 4px; /* Місце для тіні при ховері */
+}
+
+.filter-chip { height: 36px; padding: 0 16px; border-radius: 10px; border: 1px solid #e2e8f0; background: #fff; color: #64748b; font-size: 0.85rem; font-weight: 600; white-space: nowrap; transition: all 0.2s; display: flex; align-items: center; gap: 8px; cursor: pointer; flex-shrink: 0; }
 .filter-chip:hover { background: #f8fafc; border-color: #cbd5e1; color: #334155; }
 .filter-chip.active { border-color: transparent; transform: translateY(-1px); }
 
@@ -198,7 +210,7 @@ const vClickOutside = {
   display: flex;
   align-items: center;
   gap: 16px;
-  margin-left: auto;
+  flex-shrink: 0; /* Не стискається */
 }
 
 .divider-vertical {
@@ -223,7 +235,7 @@ const vClickOutside = {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   min-width: 210px;
   position: relative;
-  overflow: hidden;
+  overflow: visible; /* Дозволяємо випадання */
 }
 
 /* Іконка зліва */
@@ -267,6 +279,7 @@ const vClickOutside = {
   margin-left: -6px;
   border-radius: 4px;
   transition: background 0.2s;
+  cursor: pointer; /* Явно вказуємо курсор */
 }
 .toggle-sub-interactive:hover {
   background: rgba(99, 102, 241, 0.1);
@@ -344,9 +357,9 @@ const vClickOutside = {
   background: #fff;
   border: 1px solid #e2e8f0;
   border-radius: 16px;
-  box-shadow: 0 10px 30px -5px rgba(0,0,0,0.15);
+  box-shadow: 0 10px 30px -5px rgba(0,0,0,0.15); /* Більша тінь */
   padding: 12px;
-  z-index: 100;
+  z-index: 1050; /* Високий z-index */
   transform-origin: top right;
 }
 
