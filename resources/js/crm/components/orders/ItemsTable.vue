@@ -91,18 +91,31 @@
           </div>
 
           <div class="p-3 bg-light border-bottom">
-            <div class="position-relative">
-              <i class="bi bi-search position-absolute top-50 start-0 translate-middle-y ms-3 text-muted"></i>
-              <input
-                class="form-control ps-5 py-2 rounded-3 border-0 shadow-sm"
-                v-model="searchTerm"
-                placeholder="Пошук за назвою, артикулом..."
-                autofocus
-              />
+            <div class="d-flex gap-2 flex-wrap">
+              <div class="position-relative flex-grow-1" style="min-width: 220px;">
+                <i class="bi bi-search position-absolute top-50 start-0 translate-middle-y ms-3 text-muted"></i>
+                <input
+                  class="form-control form-control-sm ps-5 rounded-3 border-0 shadow-sm"
+                  v-model="searchTerm"
+                  placeholder="Пошук за назвою, артикулом..."
+                  autofocus
+                />
+              </div>
+              <div class="category-filter" style="min-width: 200px;">
+                <select
+                  v-model="selectedCategory"
+                  class="form-select form-select-sm rounded-3 border-0 shadow-sm"
+                >
+                  <option value="">Всі категорії</option>
+                  <option v-for="c in categories" :key="c" :value="c">
+                    {{ c }}
+                  </option>
+                </select>
+              </div>
             </div>
           </div>
 
-          <div class="offcanvas-body p-0 bg-white custom-scroll">
+          <div ref="pickerBody" class="offcanvas-body p-0 bg-white custom-scroll" @scroll="handleScroll">
             <div v-if="loadingProducts" class="p-5 text-center text-muted">
               <div class="spinner-border text-primary mb-2"></div>
               <div>Шукаємо товари...</div>
@@ -118,7 +131,7 @@
                 v-for="p in filteredProducts"
                 :key="p.id"
                 type="button"
-                class="list-group-item list-group-item-action d-flex align-items-center gap-3 py-3 px-4 border-bottom product-item"
+                class="list-group-item list-group-item-action d-flex align-items-center gap-3 py-2 px-3 border-bottom product-item"
                 @click="addProductFromModal(p)"
               >
                 <div class="product-thumb-lg border bg-light rounded-3 flex-shrink-0">
@@ -131,14 +144,14 @@
                     <span class="badge bg-light text-dark border font-monospace">{{ p.sku || 'NO-SKU' }}</span>
                     <span v-if="p.size" class="badge bg-light text-secondary border">Розмір: {{ p.size }}</span>
                   </div>
-                  <div class="fw-bold text-dark text-truncate fs-6">{{ p.title }}</div>
+                  <div class="fw-bold text-dark text-truncate">{{ p.title }}</div>
                   <div class="small text-muted text-truncate" v-if="p.stock !== undefined">
                     В наявності: {{ p.stock }} шт.
                   </div>
                 </div>
 
                 <div class="text-end">
-                  <div class="fs-5 fw-bold text-primary mb-1">
+                  <div class="fw-bold text-primary mb-1">
                     {{ p.price }} <small class="fs-6 text-muted">{{ currency }}</small>
                   </div>
                   <div class="btn btn-sm btn-light text-primary rounded-pill px-3 fw-bold">
@@ -146,6 +159,11 @@
                   </div>
                 </div>
               </button>
+            </div>
+
+            <div v-if="loadingMore" class="p-3 text-center text-muted small">
+              <div class="spinner-border spinner-border-sm text-primary me-2"></div>
+              Завантажуємо ще товари...
             </div>
           </div>
         </div>
@@ -156,7 +174,8 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
+import http from '@/crm/api/http';
 import { searchProducts } from '@/crm/api/products';
 
 const model = defineModel({ type: Array, default: () => [] });
@@ -169,8 +188,16 @@ const props = defineProps({
 const pickerOpen = ref(false);
 const searchTerm = ref('');
 const loadingProducts = ref(false);
+const loadingMore = ref(false);
 const products = ref([]);
 const productsError = ref('');
+const categories = ref([]);
+const selectedCategory = ref('');
+const isLoadingCategories = ref(false);
+const pickerBody = ref(null);
+const page = ref(0);
+const perPage = 50;
+const hasMore = ref(true);
 let searchTimer = null;
 
 const total = computed(() =>
@@ -189,8 +216,13 @@ const filteredProducts = computed(() => {
 
 function openPicker() {
   searchTerm.value = '';
+  selectedCategory.value = '';
+  page.value = 0;
+  hasMore.value = true;
+  products.value = [];
   pickerOpen.value = true;
-  fetchProducts();
+  fetchProducts(true);
+  loadCategories();
 }
 function closePicker() {
   pickerOpen.value = false;
@@ -212,29 +244,59 @@ function addProductFromModal(p) {
   // closePicker(); 
 }
 
-async function fetchProducts() {
+async function fetchProducts(reset = false) {
+  if (loadingProducts.value || loadingMore.value) return;
   productsError.value = '';
-  loadingProducts.value = true;
+  if (reset) {
+    loadingProducts.value = true;
+  } else {
+    loadingMore.value = true;
+  }
   try {
-    const { data } = await searchProducts(searchTerm.value || '');
-    const list = data?.data?.data ?? data?.data ?? data ?? [];
-    products.value = Array.isArray(list)
-      ? list.map((p) => ({
-          id: p.id,
-          sku: p.sku || '',
-          title: p.title || '',
-          size: p.length_cm ? `${p.length_cm}` : p.size || '',
-          price: p.sale_price || p.price || 0,
-          stock: p.stock_qty, // Якщо бекенд віддає залишки
-          imageUrl: buildImageUrl(p),
-          main_photo_path: p.main_photo_path || '',
-        }))
-      : [];
+    const targetPage = reset ? 1 : page.value + 1;
+    const { data } = await searchProducts({
+      q: searchTerm.value || undefined,
+      category: selectedCategory.value || undefined,
+      page: targetPage,
+      per_page: perPage,
+    });
+    const payload = data || {};
+    const list = Array.isArray(payload?.data)
+      ? payload.data
+      : Array.isArray(payload)
+        ? payload
+        : [];
+    const mapped = list.map((p) => ({
+      id: p.id,
+      sku: p.sku || '',
+      title: p.title || '',
+      size: p.length_cm ? `${p.length_cm}` : p.size || '',
+      price: p.sale_price || p.price || 0,
+      stock: p.stock_qty,
+      imageUrl: buildImageUrl(p),
+      main_photo_path: p.main_photo_path || '',
+    }));
+
+    if (reset) {
+      products.value = mapped;
+    } else {
+      const existing = new Set(products.value.map((p) => p.id));
+      products.value = products.value.concat(mapped.filter((p) => !existing.has(p.id)));
+    }
+
+    if (payload?.current_page) {
+      page.value = payload.current_page;
+      hasMore.value = payload.current_page < payload.last_page;
+    } else {
+      page.value = targetPage;
+      hasMore.value = false;
+    }
   } catch (e) {
     console.error(e);
     products.value = [];
   } finally {
     loadingProducts.value = false;
+    loadingMore.value = false;
   }
 }
 
@@ -256,9 +318,48 @@ watch(
   () => {
     if (!pickerOpen.value) return;
     if (searchTimer) clearTimeout(searchTimer);
-    searchTimer = setTimeout(fetchProducts, 300);
+    searchTimer = setTimeout(() => {
+      page.value = 0;
+      hasMore.value = true;
+      fetchProducts(true);
+    }, 300);
   }
 );
+
+watch(
+  () => selectedCategory.value,
+  () => {
+    if (!pickerOpen.value) return;
+    page.value = 0;
+    hasMore.value = true;
+    fetchProducts(true);
+  }
+);
+
+const loadCategories = async () => {
+  if (isLoadingCategories.value) return;
+  isLoadingCategories.value = true;
+  try {
+    const { data } = await http.get('/products/categories', {
+      headers: { Accept: 'application/json' },
+    });
+    categories.value = Array.isArray(data) ? data : [];
+  } catch (e) {
+    console.error('Не вдалося завантажити категорії', e);
+    categories.value = [];
+  } finally {
+    isLoadingCategories.value = false;
+  }
+};
+
+const handleScroll = () => {
+  const el = pickerBody.value;
+  if (!el || loadingProducts.value || loadingMore.value || !hasMore.value) return;
+  const threshold = 180;
+  if (el.scrollTop + el.clientHeight >= el.scrollHeight - threshold) {
+    fetchProducts(false);
+  }
+};
 </script>
 
 <style scoped>
@@ -274,11 +375,11 @@ watch(
 }
 .clean-table td { padding: 8px; border-bottom: 1px solid #f8fafc; }
 .item-thumb {
-  width: 42px; height: 42px; border-radius: 8px; background: #f8fafc;
+  width: 36px; height: 36px; border-radius: 8px; background: #f8fafc;
   border: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: center; overflow: hidden;
 }
 .item-thumb img { width: 100%; height: 100%; object-fit: cover; }
-.form-control-sm { font-size: 0.9rem; padding: 4px 6px; }
+.form-control-sm { font-size: 0.85rem; padding: 3px 6px; }
 .form-control:focus { box-shadow: none; border-color: #6366f1; background: #fff; }
 .btn-white { background: #fff; color: #475569; }
 .btn-white:hover { background: #f8fafc; color: #1e293b; }
@@ -287,9 +388,9 @@ watch(
 
 /* Offcanvas Styles */
 .product-thumb-lg {
-  width: 64px; height: 64px; display: flex; align-items: center; justify-content: center;
+  width: 52px; height: 52px; display: flex; align-items: center; justify-content: center;
 }
-.product-item { transition: background 0.2s; }
+.product-item { transition: background 0.2s; font-size: 0.9rem; }
 .product-item:hover { background: #f8fafc; }
 .custom-scroll::-webkit-scrollbar { width: 6px; }
 .custom-scroll::-webkit-scrollbar-track { background: #f1f5f9; }
