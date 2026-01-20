@@ -1,9 +1,11 @@
 <template>
   <header class="topbar sticky-top">
+    <!-- ВЕРХНІЙ РЯДОК: ПОШУК ТА СТВОРЕННЯ -->
     <div class="toolbar-header px-4 py-3">
       <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
         
-       
+        <!-- ЛІВА ЧАСТИНА (Можна додати заголовок або хлібні крихти, якщо треба) -->
+        <div class="d-none d-md-block"></div>
 
         <div class="d-flex align-items-center gap-2 w-100 w-md-auto">
           <div class="search-wrapper w-100 w-md-auto">
@@ -13,7 +15,7 @@
               @input="onSearch"
               type="text"
               class="form-control search-input"
-              placeholder="Пошук клієнта, телефону..."
+              placeholder="Пошук (ПІБ, телефон, ТТН)..."
             />
           </div>
 
@@ -25,46 +27,58 @@
       </div>
     </div>
 
-    <div class="toolbar-filters px-4 pb-0">
-      <div class="d-flex gap-2 overflow-auto no-scrollbar pb-3">
-        <button
-          v-for="opt in statusChips"
-          :key="opt.value"
-          class="filter-chip"
-          :class="{ active: isStatusActive(opt.value) }"
-          :style="isStatusActive(opt.value) && opt.color ? {
-            backgroundColor: opt.color,
-            borderColor: opt.color,
-            color: '#fff',
-            boxShadow: `0 4px 12px ${opt.color}40`
-          } : {}"
-          @click="$emit('toggle-status', opt.value)"
-        >
-          <i 
-            v-if="opt.icon" 
-            :class="`bi ${opt.icon}`"
-            :style="!isStatusActive(opt.value) && opt.color ? { color: opt.color } : {}"
-          ></i>
-          <span>{{ opt.label }}</span>
-        </button>
-
-        <div v-if="holdFilterEnabled && holdFilterActive" class="hold-days-select">
-          <i class="bi bi-calendar3"></i>
-          <select :value="holdFilterDays" @change="$emit('update:hold-days', Number($event.target.value))">
-            <option v-for="day in holdFilterOptions" :key="day" :value="day">{{ day }} дні</option>
-          </select>
+    <!-- НИЖНІЙ РЯДОК: ФІЛЬТРИ -->
+    <div class="toolbar-filters px-4 pb-3">
+      <div class="d-flex align-items-center justify-content-between gap-3 overflow-auto no-scrollbar">
+        
+        <!-- СТАТУСИ (ЛІВА ЧАСТИНА) -->
+        <div class="d-flex gap-2">
+          <button
+            v-for="opt in statusChips"
+            :key="opt.value"
+            class="filter-chip"
+            :class="{ active: isStatusActive(opt.value) }"
+            :style="isStatusActive(opt.value) && opt.color ? {
+              backgroundColor: opt.color,
+              borderColor: opt.color,
+              color: '#fff',
+              boxShadow: `0 4px 12px ${opt.color}40`
+            } : {}"
+            @click="$emit('toggle-status', opt.value)"
+          >
+            <i 
+              v-if="opt.icon" 
+              :class="`bi ${opt.icon}`"
+              :style="!isStatusActive(opt.value) && opt.color ? { color: opt.color } : {}"
+            ></i>
+            <span>{{ opt.label }}</span>
+          </button>
         </div>
 
-        <button
-          v-if="holdFilterEnabled"
-          class="hold-toggle"
-          :class="{ active: holdFilterActive }"
-          @click="$emit('toggle-hold')"
-        >
-          <span class="hold-dot"></span>
-          <span>Контроль зберігання</span>
-          <i class="bi bi-hourglass-split"></i>
-        </button>
+        <!-- СПЕЦІАЛЬНИЙ ФІЛЬТР "НЕЗАБОРИ" (ПРАВА ЧАСТИНА) -->
+        <div v-if="holdFilterEnabled" class="special-filter-zone">
+          <div class="divider-vertical"></div>
+          
+          <button 
+            class="alert-toggle-btn"
+            :class="{ 'is-active': holdFilterActive }"
+            @click="$emit('toggle-hold')"
+            title="Показати замовлення, що довго лежать на пошті"
+          >
+            <div class="toggle-icon-box">
+              <transition name="icon-swap" mode="out-in">
+                <i v-if="holdFilterActive" class="bi bi-fire"></i>
+                <i v-else class="bi bi-hourglass-split"></i>
+              </transition>
+            </div>
+            <div class="toggle-content">
+              <span class="toggle-label">Контроль незаборів</span>
+              <span class="toggle-sub">Лежать > {{ holdFilterDays }} дн.</span>
+            </div>
+            <div class="toggle-switch-ui"></div>
+          </button>
+        </div>
+
       </div>
     </div>
   </header>
@@ -78,10 +92,9 @@ const props = defineProps({
   holdFilterEnabled: { type: Boolean, default: false },
   holdFilterActive: { type: Boolean, default: false },
   holdFilterDays: { type: Number, default: 4 },
-  holdFilterOptions: { type: Array, default: () => [3, 4, 5] },
 });
 
-const emit = defineEmits(['update:search', 'search', 'toggle-status', 'toggle-hold', 'update:hold-days']);
+const emit = defineEmits(['update:search', 'search', 'toggle-status', 'toggle-hold']);
 
 function onSearch(event) {
   const value = event.target.value;
@@ -91,169 +104,171 @@ function onSearch(event) {
 </script>
 
 <style scoped>
-/* --- Main Container --- */
+/* MAIN CONTAINER */
 .topbar {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(16px);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-  z-index: 50;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid #e2e8f0;
+  z-index: 40;
 }
 
-/* --- Search Input --- */
-.search-wrapper {
+/* SEARCH */
+.search-wrapper { position: relative; min-width: 280px; }
+.search-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #94a3b8; font-size: 0.9rem; pointer-events: none; }
+.search-input { padding-left: 38px; padding-right: 16px; height: 40px; border-radius: 12px; border: 1px solid #e2e8f0; background: #f8fafc; font-size: 0.9rem; font-weight: 500; transition: all 0.2s ease; }
+.search-input:focus { background: #fff; border-color: #6366f1; box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1); color: #1e293b; }
+
+/* CREATE BUTTON */
+.btn-create { height: 40px; display: flex; align-items: center; padding: 0 20px; border-radius: 12px; background: linear-gradient(135deg, #6366f1, #4f46e5); border: none; color: #fff; font-weight: 600; font-size: 0.9rem; transition: all 0.2s; white-space: nowrap; }
+.btn-create:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35); color: #fff; }
+
+/* STATUS CHIPS */
+.filter-chip { height: 36px; padding: 0 16px; border-radius: 10px; border: 1px solid #e2e8f0; background: #fff; color: #64748b; font-size: 0.85rem; font-weight: 600; white-space: nowrap; transition: all 0.2s; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.filter-chip:hover { background: #f8fafc; border-color: #cbd5e1; color: #334155; }
+.filter-chip.active { border-color: transparent; transform: translateY(-1px); }
+
+/* --- ALERT TOGGLE BUTTON (НОВИЙ ДИЗАЙН) --- */
+.special-filter-zone {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-left: auto; /* Притискає вправо */
+}
+
+.divider-vertical {
+  width: 1px;
+  height: 24px;
+  background: #e2e8f0;
+}
+
+.alert-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 8px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  min-width: 200px;
   position: relative;
-  min-width: 280px;
-}
-.search-icon {
-  position: absolute;
-  left: 14px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #94a3b8;
-  font-size: 0.9rem;
-  pointer-events: none;
-}
-.search-input {
-  padding-left: 38px;
-  padding-right: 16px;
-  height: 40px;
-  border-radius: 10px;
-  border: 1px solid #e2e8f0;
-  background: #f8fafc;
-  font-size: 0.9rem;
-  font-weight: 500;
-  transition: all 0.2s ease;
-}
-.search-input:focus {
-  background: #fff;
-  border-color: #6366f1;
-  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
-  color: #1e293b;
+  overflow: hidden;
 }
 
-/* --- Create Button --- */
-.btn-create {
-  height: 40px;
+/* Іконка зліва */
+.toggle-icon-box {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #f1f5f9;
+  color: #64748b;
   display: flex;
   align-items: center;
-  padding: 0 20px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #6366f1, #4f46e5);
-  border: none;
-  color: #fff;
-  font-weight: 600;
-  font-size: 0.9rem;
-  transition: all 0.2s;
-  white-space: nowrap;
-}
-.btn-create:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);
-  color: #fff;
+  justify-content: center;
+  font-size: 16px;
+  transition: all 0.3s ease;
 }
 
-/* --- Filter Chips --- */
-.filter-chip {
-  height: 34px;
-  padding: 0 14px;
-  border-radius: 20px; /* Fully rounded */
-  border: 1px solid #e2e8f0;
-  background: #fff;
-  color: #64748b;
-  font-size: 0.85rem;
-  font-weight: 600;
-  white-space: nowrap;
-  transition: all 0.2s;
+/* Текст */
+.toggle-content {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  line-height: 1.1;
+  flex: 1;
 }
 
-.filter-chip:hover {
-  background: #f8fafc;
-  border-color: #cbd5e1;
-  color: #334155;
-}
-
-/* Active State Styles */
-.filter-chip.active {
-  /* Colors handled by inline style in template for dynamic coloring */
-  border-color: transparent;
-  transform: translateY(-1px);
-}
-
-.filter-chip i {
-  font-size: 0.9rem;
-}
-
-.hold-days-select {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 10px;
-  border-radius: 20px;
-  border: 1px solid #e2e8f0;
-  background: #fff;
-  height: 34px;
-  color: #64748b;
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-.hold-days-select i {
-  font-size: 0.85rem;
-}
-.hold-days-select select {
-  border: none;
-  background: transparent;
-  font-weight: 600;
-  color: #334155;
-  outline: none;
-  cursor: pointer;
-}
-
-.hold-toggle {
-  height: 34px;
-  padding: 0 14px;
-  border-radius: 20px;
-  border: 1px solid #e2e8f0;
-  background: #fff;
-  color: #64748b;
-  font-size: 0.85rem;
+.toggle-label {
+  font-size: 12px;
   font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-.hold-toggle .hold-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #94a3b8;
-  box-shadow: 0 0 0 4px rgba(148, 163, 184, 0.15);
-}
-.hold-toggle.active {
-  background: #fff7ed;
-  border-color: #fdba74;
-  color: #9a3412;
-  box-shadow: 0 4px 12px rgba(251, 146, 60, 0.25);
-}
-.hold-toggle.active .hold-dot {
-  background: #f97316;
-  box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.2);
-}
-.hold-toggle:hover {
-  border-color: #cbd5e1;
+  color: #334155;
 }
 
-/* --- Utilities --- */
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
+.toggle-sub {
+  font-size: 10px;
+  color: #94a3b8;
+  font-weight: 600;
 }
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+
+/* Слайдер справа */
+.toggle-switch-ui {
+  width: 36px;
+  height: 20px;
+  background: #e2e8f0;
+  border-radius: 20px;
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.toggle-switch-ui::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* --- ACTIVE STATE (УВІМКНЕНО) --- */
+.alert-toggle-btn:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+}
+
+.alert-toggle-btn.is-active {
+  background: #fff7ed; /* Світло-помаранчевий фон */
+  border-color: #fdba74;
+}
+
+.alert-toggle-btn.is-active .toggle-icon-box {
+  background: #ffedd5;
+  color: #ea580c;
+}
+
+.alert-toggle-btn.is-active .toggle-label {
+  color: #9a3412;
+}
+
+.alert-toggle-btn.is-active .toggle-sub {
+  color: #c2410c;
+}
+
+.alert-toggle-btn.is-active .toggle-switch-ui {
+  background: #f97316; /* Помаранчевий */
+}
+
+.alert-toggle-btn.is-active .toggle-switch-ui::after {
+  left: 18px; /* Зсув кружечка вправо */
+}
+
+/* Анімація іконки */
+.icon-swap-enter-active,
+.icon-swap-leave-active {
+  transition: all 0.2s;
+}
+.icon-swap-enter-from,
+.icon-swap-leave-to {
+  opacity: 0;
+  transform: scale(0.5);
+}
+
+/* --- SCROLLBAR --- */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* MOBILE */
+@media (max-width: 768px) {
+  .special-filter-zone {
+    margin-left: 0; /* На мобільному не притискаємо вправо */
+    border-left: 1px solid #e2e8f0;
+    padding-left: 12px;
+  }
+  .divider-vertical { display: none; }
 }
 </style>
