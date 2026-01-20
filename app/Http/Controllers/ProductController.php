@@ -12,6 +12,7 @@ class ProductController extends Controller
     {
         if ($request->expectsJson()) {
             $q = $request->get('q');
+            $perPage = min((int) $request->get('per_page', 15), 100);
             $products = Product::query()
                 ->when($q, function ($query) use ($q) {
                     $query->where(function ($sub) use ($q) {
@@ -20,8 +21,7 @@ class ProductController extends Controller
                     });
                 })
                 ->orderByDesc('id')
-                ->limit(50)
-                ->get();
+                ->paginate($perPage);
             return response()->json($products);
         }
 
