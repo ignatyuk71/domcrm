@@ -193,8 +193,8 @@ class NovaPoshtaService
                 ]
             ],
 
-            'AdditionalInformation' => $itemsSummary ?: ('Замовлення №' . $order->id),
-            'InfoRegClientBarcodes' => 'Замовлення №' . $order->id,
+            'AdditionalInformation' => $itemsSummary ?: ('Зам. №' . $order->id),
+            'InfoRegClientBarcodes' => 'Зам. №' . $order->id,
         ];
     
         if ($afterpayment > 0) {
