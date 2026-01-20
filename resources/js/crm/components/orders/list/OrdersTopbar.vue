@@ -127,7 +127,7 @@ const props = defineProps({
   holdFilterDays: { type: Number, default: 4 },
 });
 
-const emit = defineEmits(['update:search', 'search', 'toggle-status', 'toggle-hold', 'update:holdFilterDays']);
+const emit = defineEmits(['update:search', 'search', 'toggle-status', 'toggle-hold', 'update:hold-days']);
 
 const showDaysDropdown = ref(false);
 
@@ -146,12 +146,8 @@ function closeDaysDropdown() {
 }
 
 function selectDay(day) {
-  emit('update:holdFilterDays', day);
+  emit('update:hold-days', day);
   showDaysDropdown.value = false;
-  // Автоматично вмикаємо фільтр, якщо він був вимкнений
-  if (!props.holdFilterActive) {
-    emit('toggle-hold');
-  }
 }
 
 // Директива кліку зовні
