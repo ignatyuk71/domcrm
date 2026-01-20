@@ -31,10 +31,9 @@
             <th class="py-3 text-secondary x-small text-uppercase fw-bold text-end bg-white border-bottom pe-4" style="width: 60px;"></th>
           </tr>
         </thead>
-        
         <tbody v-if="model.length" class="bg-white">
           <tr v-for="(item, idx) in model" :key="item.sku + '-' + idx" class="item-row">
-            <td class="ps-4 py-3 border-bottom-dashed">
+             <td class="ps-4 py-3 border-bottom-dashed">
               <div class="d-flex align-items-center gap-3">
                 <div class="item-thumb rounded-3 shadow-sm flex-shrink-0 position-relative overflow-hidden">
                   <img v-if="item.imageUrl" :src="item.imageUrl" class="w-100 h-100 object-fit-cover zoom-effect" alt="img" />
@@ -108,10 +107,9 @@
             </td>
           </tr>
         </tbody>
-        
         <tbody v-else>
           <tr>
-            <td colspan="4" class="py-5">
+             <td colspan="4" class="py-5">
               <div class="text-center py-5">
                 <div class="mb-3 position-relative d-inline-block">
                   <div class="icon-circle-lg bg-light text-secondary opacity-50 rounded-circle d-flex align-items-center justify-content-center mx-auto">
@@ -121,16 +119,13 @@
                 </div>
                 <h6 class="fw-bold text-dark">Список порожній</h6>
                 <p class="text-muted small mb-4">Почніть додавати товари до замовлення</p>
-                <button class="btn btn-sm btn-outline-primary rounded-pill px-4 fw-medium" @click="openPicker">
-                  Відкрити каталог
-                </button>
               </div>
             </td>
           </tr>
         </tbody>
       </table>
     </div>
-
+    
     <div class="bg-white border-top p-4">
       <div class="d-flex justify-content-end">
         <div class="w-100" style="max-width: 320px;">
@@ -140,7 +135,6 @@
               - {{ prepayAmount }} {{ currency }}
             </span>
           </div>
-          
           <div class="p-3 bg-light bg-opacity-50 rounded-3 border d-flex justify-content-between align-items-end">
             <div>
               <div class="text-secondary x-small text-uppercase fw-bold mb-1">До сплати</div>
@@ -155,21 +149,21 @@
       </div>
     </div>
 
+
     <Teleport to="body">
       <div v-if="pickerOpen">
         <div class="offcanvas-backdrop fade show glass-backdrop" @click="closePicker"></div>
         
         <div class="offcanvas offcanvas-end show shadow-2xl border-0 d-flex flex-column" tabindex="-1" style="width: 600px; z-index: 1055;">
           
-          <div class="px-4 py-3 bg-white border-bottom d-flex align-items-center justify-content-between">
+          <div class="px-4 py-3 bg-white border-bottom d-flex align-items-center justify-content-between sticky-top z-index-10">
             <div>
-              <h5 class="fw-bold mb-1">Додати товар</h5>
-              <div class="d-flex align-items-center gap-2 text-muted small">
-                <i class="bi bi-search"></i>
-                <span>Пошук по каталогу</span>
+              <h5 class="fw-bold mb-1 font-heading">Каталог товарів</h5>
+              <div class="d-flex align-items-center gap-2 text-muted x-small text-uppercase ls-1">
+                <span>Оберіть позиції</span>
               </div>
             </div>
-            <button type="button" class="btn btn-icon btn-light rounded-circle text-secondary" @click="closePicker">
+            <button type="button" class="btn btn-icon btn-light rounded-circle text-secondary hover-dark" @click="closePicker">
               <i class="bi bi-x-lg"></i>
             </button>
           </div>
@@ -182,22 +176,23 @@
                   class="form-control ps-5 rounded-3 border-0 shadow-sm"
                   style="height: 42px;"
                   v-model="searchTerm"
-                  placeholder="Введіть назву або артикул..."
+                  placeholder="Пошук (назва, SKU)..."
                   autofocus
                 />
               </div>
               <select
                 v-model="selectedCategory"
                 class="form-select rounded-3 border-0 shadow-sm"
-                style="width: 180px; height: 42px;"
+                style="width: 160px; height: 42px;"
               >
-                <option value="">Всі</option>
+                <option value="">Всі категорії</option>
                 <option v-for="c in categories" :key="c" :value="c">{{ c }}</option>
               </select>
             </div>
           </div>
 
-          <div ref="pickerBody" class="offcanvas-body p-0 custom-scroll bg-white" @scroll="handleScroll">
+          <div ref="pickerBody" class="offcanvas-body p-0 bg-secondary bg-opacity-10 custom-scroll" @scroll="handleScroll">
+            
             <div v-if="loadingProducts && !products.length" class="h-100 d-flex align-items-center justify-content-center text-muted">
                <div class="spinner-border text-primary spinner-border-sm me-2"></div> Завантаження...
             </div>
@@ -207,55 +202,60 @@
                <span>Нічого не знайдено</span>
             </div>
 
-            <div v-else class="list-group list-group-flush">
-              <button
+            <div v-else class="d-flex flex-column gap-2 p-3">
+              <div
                 v-for="p in filteredProducts"
                 :key="p.id"
-                type="button"
-                class="list-group-item list-group-item-action p-3 border-bottom-dashed d-flex align-items-start gap-3 product-item"
+                class="product-card bg-white p-2 rounded-3 shadow-sm d-flex align-items-start gap-3 cursor-pointer"
                 @click="addProductFromModal(p)"
               >
-                <div class="position-relative flex-shrink-0 mt-1">
-                   <div class="product-thumb-md border rounded-3 overflow-hidden bg-light d-flex align-items-center justify-content-center">
-                     <img v-if="p.imageUrl" :src="p.imageUrl" class="w-100 h-100 object-fit-cover" />
-                     <i v-else class="bi bi-image text-muted fs-5"></i>
-                   </div>
-                   <span class="position-absolute bottom-0 end-0 p-1 rounded-circle border border-white" 
-                         :class="p.stock > 0 ? 'bg-success' : 'bg-danger'"></span>
+                <div class="product-thumb-fixed border rounded-3 overflow-hidden bg-light flex-shrink-0 d-flex align-items-center justify-content-center position-relative">
+                   <img v-if="p.imageUrl" :src="p.imageUrl" class="w-100 h-100 object-fit-cover" />
+                   <i v-else class="bi bi-image text-muted small"></i>
+                   <span class="stock-dot border border-white" :class="p.stock > 0 ? 'bg-success' : 'bg-danger'"></span>
                 </div>
 
-                <div class="flex-grow-1 overflow-hidden text-start">
-                  <div class="d-flex align-items-center gap-2 mb-1">
-                    <span class="badge bg-light text-secondary border font-monospace fw-normal" style="font-size: 10px;">{{ p.sku || 'SKU?' }}</span>
-                    <span v-if="p.stock !== undefined" class="small" :class="p.stock > 0 ? 'text-success' : 'text-danger'">
-                      {{ p.stock > 0 ? `${p.stock} шт.` : 'Немає' }}
-                    </span>
+                <div class="flex-grow-1 min-w-0 d-flex justify-content-between gap-3">
+                  
+                  <div class="d-flex flex-column justify-content-center pt-1 pb-1">
+                     <div class="fw-bold text-dark lh-sm product-title mb-1">{{ p.title }}</div>
+                     <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <span class="badge bg-light text-secondary border fw-normal font-monospace px-1 py-0 rounded-1" style="font-size: 0.65rem;">
+                          {{ p.sku || '---' }}
+                        </span>
+                        <span class="x-small" :class="p.stock > 0 ? 'text-success' : 'text-danger'">
+                          {{ p.stock > 0 ? `${p.stock} шт.` : 'Немає' }}
+                        </span>
+                     </div>
                   </div>
-                  <div class="fw-bold text-dark lh-sm product-title">{{ p.title }}</div>
-                </div>
 
-                <div class="text-end ps-2 flex-shrink-0 mt-1">
-                  <div class="fw-bold text-primary fs-5">{{ p.price }} <small class="text-muted fs-6 font-weight-normal">{{ currency }}</small></div>
-                  <div class="btn btn-xs btn-light text-primary rounded-pill px-3 fw-bold mt-1 shadow-sm add-btn">
-                    + Додати
+                  <div class="d-flex flex-column align-items-end justify-content-between flex-shrink-0 gap-2 pt-1">
+                    <div class="fw-bold text-primary" style="font-size: 0.95rem;">
+                      {{ p.price }} <span class="text-muted fw-normal" style="font-size: 0.75rem;">{{ currency }}</span>
+                    </div>
+                    
+                    <button type="button" class="btn btn-sm btn-light text-primary fw-bold rounded-pill px-3 py-0 shadow-sm d-flex align-items-center gap-1 add-btn-compact">
+                      <i class="bi bi-plus-lg"></i>
+                      <span>Дод.</span>
+                    </button>
                   </div>
+
                 </div>
-              </button>
+              </div>
             </div>
             
-             <div v-if="loadingMore" class="py-3 text-center text-muted small border-top">
+             <div v-if="loadingMore" class="py-3 text-center text-muted small">
               <div class="spinner-border spinner-border-sm text-primary me-2"></div>
             </div>
           </div>
         </div>
       </div>
     </Teleport>
-
   </div>
 </template>
 
 <script setup>
-// Script section same as before
+// ... (ВЕСЬ SCRIPT ЗАЛИШАЄТЬСЯ БЕЗ ЗМІН) ...
 import { computed, ref, watch } from 'vue';
 import http from '@/crm/api/http';
 import { searchProducts } from '@/crm/api/products';
@@ -288,9 +288,7 @@ const netTotal = computed(() =>
   Math.max(0, Math.round((total.value - props.prepayAmount) * 100) / 100)
 );
 
-const filteredProducts = computed(() => {
-  return products.value;
-});
+const filteredProducts = computed(() => products.value);
 
 function openPicker() {
   searchTerm.value = '';
@@ -423,43 +421,30 @@ const handleScroll = () => {
 .ls-1 { letter-spacing: 0.5px; }
 .cursor-pointer { cursor: pointer; }
 .z-index-10 { z-index: 10; }
+.font-heading { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
 
 /* HEADER ICON */
-.icon-box {
-  width: 42px; height: 42px;
-  display: flex; align-items: center; justify-content: center;
-}
+.icon-box { width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; }
 
-/* TABLE STYLING */
-.item-thumb {
-  width: 48px; height: 48px;
-  border: 1px solid #edf2f7;
-  background: #fff;
-}
+/* TABLE & MAIN LIST */
+.item-thumb { width: 48px; height: 48px; border: 1px solid #edf2f7; background: #fff; }
 .zoom-effect { transition: transform 0.3s ease; }
 .item-thumb:hover .zoom-effect { transform: scale(1.1); }
 .border-bottom-dashed { border-bottom: 1px dashed #e2e8f0; }
 
 /* INPUTS */
-.form-control-flush {
-  background: transparent; border: 1px solid transparent;
-  transition: all 0.2s;
-}
+.form-control-flush { background: transparent; border: 1px solid transparent; transition: all 0.2s; }
 .form-control-flush:hover { background: #f8fafc; }
-.form-control-flush:focus {
-  background: #fff; border-color: #cbd5e1; box-shadow: none;
-}
+.form-control-flush:focus { background: #fff; border-color: #cbd5e1; box-shadow: none; }
 
 /* STEPPER */
-.btn-icon-xs {
-  width: 24px; height: 24px; padding: 0; display: flex; align-items: center; justify-content: center; border: none;
-}
+.btn-icon-xs { width: 24px; height: 24px; padding: 0; display: flex; align-items: center; justify-content: center; border: none; }
 .btn-white { background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
 .stepper-shadow { box-shadow: inset 0 1px 2px rgba(0,0,0,0.03); }
 .hover-dark:hover { background: #1e293b; color: #fff !important; }
 .hover-primary:hover { background: var(--bs-primary); color: #fff !important; }
 
-/* REMOVE BUTTON */
+/* BUTTONS */
 .btn-icon-sm { width: 32px; height: 32px; padding: 0; border: none; background: transparent; }
 .hover-danger:hover { color: #dc3545 !important; background: #fff0f0; opacity: 1 !important; transform: scale(1.1); }
 .transition-all { transition: all 0.2s; }
@@ -467,25 +452,54 @@ const handleScroll = () => {
 /* EMPTY STATE */
 .icon-circle-lg { width: 80px; height: 80px; }
 
-/* MODAL / PICKER */
+/* MODAL STYLES (NEW) */
 .glass-backdrop { backdrop-filter: blur(4px); background-color: rgba(30, 41, 59, 0.4); }
-.product-thumb-md { width: 48px; height: 48px; }
-.product-item { transition: background 0.15s; }
-.product-item:hover { background: #f8fafc; }
-.product-item:hover .add-btn { background: var(--bs-primary); color: #fff !important; }
 
-/* Product Title in Picker (NEW) */
+/* Product Card in List */
+.product-card {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  border: 1px solid transparent;
+}
+.product-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08) !important;
+  border-color: #e2e8f0;
+  z-index: 1;
+}
+.product-card:active { transform: translateY(0); }
+
+/* Fixed Icon Size 45x45 */
+.product-thumb-fixed {
+  width: 45px; height: 45px;
+  min-width: 45px; 
+}
+.stock-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  position: absolute; bottom: 2px; right: 2px;
+}
+
+/* Titles */
 .product-title {
-  font-size: 0.85rem; 
+  font-size: 0.85rem;
+  line-height: 1.35;
   white-space: normal;
   word-wrap: break-word;
+}
+
+/* Optimized Add Button */
+.add-btn-compact {
+  height: 24px;
+  font-size: 0.75rem;
+  transition: all 0.2s;
+}
+.product-card:hover .add-btn-compact {
+  background-color: var(--bs-primary);
+  color: white !important;
 }
 
 /* SCROLLBAR */
 .custom-scroll::-webkit-scrollbar { width: 5px; }
 .custom-scroll::-webkit-scrollbar-track { background: transparent; }
 .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-
-/* REMOVE SPINNERS */
 input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 </style>
