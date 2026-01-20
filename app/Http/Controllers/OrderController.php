@@ -64,18 +64,20 @@ class OrderController extends Controller
                 $status = $request->get('status');
                 if (is_array($status)) {
                     $values = array_filter($status, fn ($v) => $v !== null && $v !== '');
-                    if ($values) {
-                        return $q->whereIn('status', $values);
-                    }
+                } else {
+                    $statusString = (string) $status;
+                    $values = str_contains($statusString, ',')
+                        ? array_filter(array_map('trim', explode(',', $statusString)))
+                        : array_filter([$statusString]);
                 }
-                $statusString = (string) $status;
-                if (str_contains($statusString, ',')) {
-                    $parts = array_filter(array_map('trim', explode(',', $statusString)));
-                    if ($parts) {
-                        return $q->whereIn('status', $parts);
-                    }
+
+                if (!$values) {
+                    return $q;
                 }
-                return $q->where('status', $statusString);
+
+                return $q->whereHas('statusRef', function ($sq) use ($values) {
+                    $sq->whereIn('code', $values);
+                });
             })
             ->when($request->filled('payment_status'), fn ($q) => $q->where('payment_status', $request->string('payment_status')))
             ->when($request->filled('delivery_hold_days'), function ($q) use ($request) {
