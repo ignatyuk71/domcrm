@@ -62,6 +62,7 @@ class NovaPoshtaService
         $delivery = $order->delivery;
         $customer = $order->customer;
         $payment  = $order->payment;
+        $itemsSummary = $this->buildItemsSummary($order);
     
         // --- 1. РОЗРАХУНОК ВАГИ ТА ОБ'ЄМУ ---
         $totalWeightKg = 0;
@@ -191,9 +192,9 @@ class NovaPoshtaService
                     'weight'           => (string)$totalWeightKg,
                 ]
             ],
-    
-            'AdditionalInformation' => (string)$order->id, 
-            'InfoRegClientBarcodes' => 'Замовлення №' . $order->id,
+
+            'AdditionalInformation' => $itemsSummary ?: ('Замовлення №' . $order->id),
+            'InfoRegClientBarcodes' => $itemsSummary ?: ('Замовлення №' . $order->id),
         ];
     
         if ($afterpayment > 0) {
@@ -201,6 +202,36 @@ class NovaPoshtaService
         }
     
         return $this->makeRequest('InternetDocument', 'save', $params);
+    }
+
+    private function buildItemsSummary(\App\Models\Order $order): string
+    {
+        $parts = [];
+        foreach ($order->items as $item) {
+            $desc = trim((string) ($item->product?->description ?? ''));
+            if ($desc === '') {
+                continue;
+            }
+            $qty = (int) ($item->qty ?: 1);
+            $parts[] = $desc . ' ' . ($qty > 1 ? "{$qty} пари" : '1 пара');
+        }
+
+        $summary = trim(preg_replace('/\s+/', ' ', implode('; ', $parts)));
+        if ($summary === '') {
+            return '';
+        }
+
+        $limit = 100;
+        $length = function_exists('mb_strlen') ? mb_strlen($summary) : strlen($summary);
+        if ($length > $limit) {
+            $cut = $limit - 3;
+            $summary = function_exists('mb_substr')
+                ? mb_substr($summary, 0, $cut)
+                : substr($summary, 0, $cut);
+            $summary .= '...';
+        }
+
+        return $summary;
     }
 
     /**
