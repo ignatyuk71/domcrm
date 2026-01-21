@@ -1,32 +1,43 @@
 <template>
-  <div class="templates-popover">
-    <div class="templates-header">
-      <h4 class="title">Збережені відповіді</h4>
-      <a href="/templates/create" target="_blank" class="add-link">+ Додати</a>
-    </div>
+  <teleport to="body">
+    <transition name="templates-fade">
+      <div class="templates-overlay" @click.self="$emit('close')">
+        <div class="templates-modal">
+          <div class="templates-header">
+            <h4 class="title">Збережені відповіді</h4>
+            <div class="header-actions">
+              <a href="/templates/create" target="_blank" class="add-link">+ Додати</a>
+              <button type="button" class="close-btn" @click="$emit('close')">
+                <i class="bi bi-x-lg"></i>
+              </button>
+            </div>
+          </div>
 
-    <div class="templates-list custom-scrollbar">
-      <div v-if="isLoading" class="state-msg"><div class="spinner"></div></div>
-      
-      <div v-else-if="templates.length === 0" class="state-msg text-gray-400">
-        Шаблонів немає
-      </div>
+          <div class="templates-list custom-scrollbar">
+            <div v-if="isLoading" class="state-msg"><div class="spinner"></div></div>
+            
+            <div v-else-if="templates.length === 0" class="state-msg text-gray-400">
+              Шаблонів немає
+            </div>
 
-      <div 
-        v-else
-        v-for="tpl in templates" 
-        :key="tpl.id" 
-        class="template-item"
-        @click="$emit('select', tpl.content)"
-      >
-        <div class="template-icon"><i class="bi bi-card-text"></i></div>
-        <div class="template-info">
-          <div class="template-title">{{ tpl.title }}</div>
-          <div class="template-preview">{{ tpl.content }}</div>
+            <div 
+              v-else
+              v-for="tpl in templates" 
+              :key="tpl.id" 
+              class="template-item"
+              @click="$emit('select', tpl.content)"
+            >
+              <div class="template-icon"><i class="bi bi-card-text"></i></div>
+              <div class="template-info">
+                <div class="template-title">{{ tpl.title }}</div>
+                <div class="template-preview">{{ tpl.content }}</div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
-  </div>
+    </transition>
+  </teleport>
 </template>
 
 <script setup>
@@ -50,24 +61,26 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.templates-popover {
-  position: absolute;
-  /* 👇 ВИПРАВЛЕНО ПОЗИЦІОНУВАННЯ */
-  bottom: 100%;        /* Прив'язка до верху батьківського елемента (кнопки) */
-  margin-bottom: 12px; /* Відступ від кнопки */
-  right: -60px;        /* Зміщення, щоб центрувати відносно іконки (підлаштуй за потребою) */
-  left: auto;          /* Скасовуємо left: 0 */
-  
-  width: 320px;
-  max-height: 400px;
+.templates-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(6px);
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.templates-modal {
+  width: 420px;
+  max-width: 96vw;
+  max-height: 80vh;
   background: #fff;
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  
-  /* Тінь і порядок шарів */
-  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
-  z-index: 100;        /* Вище за інші елементи */
-  
+  border-radius: 16px;
+  box-shadow: 0 20px 45px rgba(0,0,0,0.18);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -88,6 +101,12 @@ onMounted(async () => {
   background: #fff;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .title {
   font-size: 0.95rem; 
   font-weight: 700; 
@@ -101,10 +120,23 @@ onMounted(async () => {
   font-weight: 600;
 }
 
+.close-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: none;
+  background: #f8fafc;
+  color: #64748b;
+  cursor: pointer;
+}
+
 .templates-list {
   flex: 1;
   overflow-y: auto;
-  max-height: 300px;
+  max-height: 320px;
 }
 
 .template-item {
@@ -167,6 +199,33 @@ onMounted(async () => {
 
 @keyframes spin { 
   to { transform: rotate(360deg); } 
+}
+
+.templates-fade-enter-active,
+.templates-fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.templates-fade-enter-from,
+.templates-fade-leave-to {
+  opacity: 0;
+}
+
+@media (max-width: 768px) {
+  .templates-overlay {
+    padding: 0;
+  }
+
+  .templates-modal {
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: 0;
+  }
+
+  .templates-list {
+    max-height: none;
+  }
 }
 
 /* Скролбар */

@@ -80,6 +80,7 @@
           <ChatTemplates 
             v-if="showTemplates" 
             @select="handleTemplateSelect"
+            @close="showTemplates = false"
             v-click-outside="() => showTemplates = false"
           />
           <button
