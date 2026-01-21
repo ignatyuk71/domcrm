@@ -308,8 +308,8 @@ const handleDelete = async () => {
     console.error('Не вдалося видалити товар', e)
     alert('Не вдалося видалити товар')
   } finally {
-    closeDeleteModal()
     deleteLoading.value = false
+    closeDeleteModal()
   }
 }
 
