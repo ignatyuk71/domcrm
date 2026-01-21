@@ -94,7 +94,7 @@ onMounted(load);
 </script>
 
 <style scoped>
-  /* --- ДЕСКТОП (НЕ ЗМІНЮВАВ, ЯК БУЛО В ОРИГІНАЛІ) --- */
+  /* --- DESKTOP (Як у тебе було) --- */
   .gallery-overlay {
     position: fixed;
     inset: 0;
@@ -171,9 +171,10 @@ onMounted(load);
     cursor: pointer;
   }
   
+  /* ОСЬ ЦЕЙ ШМАТОК ДЛЯ ДЕСКТОПА, ЯКИЙ ТИ СКИНУВ */
   .grid-container {
     display: grid;
-    /* Десктоп залишив як було - адаптив */
+    /* Тут minmax(160px) працює добре, бо екран широкий */
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
     gap: 16px;
     padding: 16px;
@@ -292,11 +293,10 @@ onMounted(load);
     opacity: 0;
   }
   
-  /* --- МОБІЛЬНА ВЕРСІЯ --- */
+  /* --- MOBILE FIX --- */
   @media (max-width: 768px) {
     .gallery-overlay {
       padding: 0;
-      align-items: flex-end; /* Модалка виїжджає знизу або просто на весь екран */
     }
   
     .gallery-modal {
@@ -307,29 +307,19 @@ onMounted(load);
       border-radius: 0;
     }
   
+    /* ТУТ МИ ПЕРЕБИВАЄМО ТОЙ ПРОБЛЕМНИЙ КОД */
     .grid-container {
-      /* 1. СТРОГО 2 стовпці */
+      /* repeat(2, 1fr) змушує браузер ділити ширину навпіл, ігноруючи 160px */
       grid-template-columns: repeat(2, 1fr) !important;
-      
-      /* 2. Відступи, щоб картинки не злипались */
       gap: 10px !important;
       padding: 10px;
-      
-      /* 3. Запобігаємо накладанню */
-      align-items: start;
       max-height: none;
       flex: 1;
     }
     
     .grid-item {
-        /* Трішки вищий формат для мобільного, щоб довгі скріни влізали краще */
-        aspect-ratio: 9 / 16;
-        background: #f8fafc; /* Легкий фон, щоб бачити межі */
-    }
-    
-    .grid-item img {
-       /* Показувати все зображення, не обрізати */
-       object-fit: contain !important;
+        /* aspect-ratio допомагає тримати форму */
+        aspect-ratio: 2 / 3;
     }
   }
   
