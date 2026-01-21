@@ -128,7 +128,7 @@
                   <div class="d-flex align-items-center gap-2 mb-1">
                     <button
                       type="button"
-                      class="client-name text-truncate btn btn-link p-0 text-start"
+                      class="client-name btn btn-link p-0 text-start"
                       :title="order.client"
                       @click.stop="$emit('open-customer', order)"
                     >
@@ -506,7 +506,7 @@
 .delivery-empty:hover { background: #f1f5f9; border-color: #3b82f6; color: #3b82f6 !important; }
 .delivery-empty .text-muted { transition: color 0.2s; font-size: 0.8rem; font-weight: 600; }
 .delivery-empty:hover .text-muted { color: #3b82f6 !important; }
-.client-name { font-weight: 700; font-size: 0.95rem; color: #1e293b; cursor: pointer; transition: color 0.2s; max-width: 150px; }
+.client-name { font-weight: 700; font-size: 0.85rem; color: #1e293b; cursor: pointer; transition: color 0.2s; max-width: 200px; white-space: normal; word-break: break-word; line-height: 1.25; }
 .client-name:hover { color: #3b82f6; }
 .loyalty-pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; line-height: 1; letter-spacing: 0.02em; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); cursor: help; transition: transform 0.2s; }
 .loyalty-pill:hover { transform: translateY(-1px); }
