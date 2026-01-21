@@ -1,4 +1,5 @@
 <script setup>
+  import { ref } from 'vue';
   import OrderDetails from '@/crm/components/orders/list/OrderDetails.vue';
   import {
     formatCurrency,
@@ -16,7 +17,7 @@
     holdFilterDays: { type: Number, default: 3 },
   });
   
-  defineEmits({
+  const emit = defineEmits({
     'toggle-row': null,
     delete: null,
     'open-tags': null,
@@ -29,6 +30,9 @@
     'open-customer': null,
     'quick-fiscalize': null,
   });
+
+  const ttnConfirmOpen = ref(false);
+  const ttnConfirmOrder = ref(null);
   
   const getSourceStyle = (colorHex) => {
     const color = colorHex || '#64748b';
@@ -36,6 +40,22 @@
       color: color,
       borderColor: color + '40',
     };
+  };
+
+  const openTtnConfirm = (order) => {
+    ttnConfirmOrder.value = order;
+    ttnConfirmOpen.value = true;
+  };
+
+  const closeTtnConfirm = () => {
+    ttnConfirmOpen.value = false;
+    ttnConfirmOrder.value = null;
+  };
+
+  const confirmGenerateTtn = () => {
+    if (!ttnConfirmOrder.value) return;
+    emit('generate-ttn', ttnConfirmOrder.value);
+    closeTtnConfirm();
   };
 
   // Хелпери для нового дизайну блоку зберігання
@@ -339,7 +359,7 @@
                   v-else
                   class="delivery-widget delivery-empty"
                   role="button"
-                  @click.stop="$emit('generate-ttn', order)"
+                  @click.stop="openTtnConfirm(order)"
                   title="Створити ТТН"
                 >
                   <div class="d-flex align-items-center justify-content-center gap-2 text-muted">
@@ -427,6 +447,24 @@
       </table>
     </div>
   </div>
+
+  <div v-if="ttnConfirmOpen" class="modal-backdrop-custom" @click.self="closeTtnConfirm">
+    <div class="modal-card">
+      <h5 class="fw-bold mb-2">Створити ТТН?</h5>
+      <p class="text-muted small mb-3">
+        Ви точно хочете створити ТТН для цього замовлення?
+      </p>
+      <div class="small fw-semibold mb-3">
+        Замовлення: №{{ ttnConfirmOrder?.order_number || ttnConfirmOrder?.id || '—' }}
+      </div>
+      <div class="d-flex justify-content-end gap-2">
+        <button class="btn btn-light" type="button" @click="closeTtnConfirm">Скасувати</button>
+        <button class="btn btn-primary" type="button" @click="confirmGenerateTtn">
+          Так, створити
+        </button>
+      </div>
+    </div>
+  </div>
 </template>
 
 <style scoped>
@@ -512,6 +550,24 @@
 @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
 .empty-state { background: #fff; border-radius: 16px; border: 2px dashed #e2e8f0; }
 .empty-icon { width: 64px; height: 64px; background: #f8fafc; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 1.8rem; color: #94a3b8; }
+.modal-backdrop-custom {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+  padding: 16px;
+}
+.modal-card {
+  width: 100%;
+  max-width: 420px;
+  background: #fff;
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.2);
+}
 
 /* =========================================
    НОВІ СТИЛІ ДЛЯ ІНДИКАТОРА ЗБЕРІГАННЯ
