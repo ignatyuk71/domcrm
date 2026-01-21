@@ -297,9 +297,11 @@ const handleDelete = async () => {
   if (!deleteTarget.value || deleteLoading.value) return
   deleteLoading.value = true
   try {
-    await http.delete(`/products/${deleteTarget.value.id}`, {
-      headers: { Accept: 'application/json' },
-    })
+    await http.post(
+      `/products/${deleteTarget.value.id}`,
+      { _method: 'DELETE' },
+      { headers: { Accept: 'application/json' } }
+    )
     products.value = products.value.filter((p) => p.id !== deleteTarget.value.id)
     pagination.total = Math.max(0, (pagination.total || 1) - 1)
     closeDeleteModal()
