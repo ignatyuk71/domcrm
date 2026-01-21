@@ -315,10 +315,6 @@ onMounted(load);
       flex: 1;
     }
     
-    .grid-item {
-        /* aspect-ratio допомагає тримати форму */
-        aspect-ratio: 2 / 3;
-    }
   }
   
   .custom-scrollbar::-webkit-scrollbar { width: 5px; }
