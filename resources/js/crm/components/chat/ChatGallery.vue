@@ -94,7 +94,7 @@ onMounted(load);
 </script>
 
 <style scoped>
-  /* --- ЦЕ ТВОЇ ОРИГІНАЛЬНІ СТИЛІ ДЛЯ DEKSTOP (НЕ ЧІПАВ) --- */
+  /* --- ДЕСКТОП (ТВІЙ ОРИГІНАЛ) --- */
   .gallery-overlay {
     position: fixed;
     inset: 0;
@@ -173,6 +173,7 @@ onMounted(load);
   
   .grid-container {
     display: grid;
+    /* Десктоп лишив як було */
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
     gap: 16px;
     padding: 16px;
@@ -291,7 +292,7 @@ onMounted(load);
     opacity: 0;
   }
   
-  /* --- ВИПРАВЛЕНА МОБІЛЬНА ВЕРСІЯ --- */
+  /* --- МОБІЛЬНА ВЕРСІЯ --- */
   @media (max-width: 768px) {
     .gallery-overlay {
       padding: 0;
@@ -306,22 +307,28 @@ onMounted(load);
     }
   
     .grid-container {
-      /* Примусово 2 колонки однакової ширини */
-      grid-template-columns: 1fr 1fr;
-      /* Достатній відступ між колонками та рядками, щоб не накладались */
-      gap: 15px; 
+      /* 1. Жорстко 2 колонки */
+      grid-template-columns: repeat(2, 1fr) !important;
+      
+      /* 2. Великий відступ, щоб картинки не злипались */
+      gap: 15px !important;
       padding: 15px;
-      /* Дозволяє контейнеру займати весь доступний простір для скролу */
+      
       max-height: none;
       flex: 1;
-      overflow-y: scroll;
+      
+      /* Захист від накладання */
+      align-items: start;
     }
     
     .grid-item {
-      /* Гарантуємо, що елемент не вилізе за межі своєї клітинки */
-      width: 100%;
-      /* Вимикаємо абсолютні позиціювання якщо вони раптом впливали */
-      position: relative;
+        /* Прибираємо будь-які фіксовані розміри, якщо такі були */
+        height: auto;
+    }
+    
+    .grid-item img {
+       /* Картинка завжди повністю в блоці */
+       object-fit: contain !important;
     }
   }
   
