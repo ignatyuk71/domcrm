@@ -257,9 +257,14 @@
               </div>
   
               <div class="address-block">
-                <button class="btn-copy-icon" type="button" @click="copyAddress" title="Копіювати адресу">
+                <div class="copy-anchor">
+                  <button class="btn-copy-icon" type="button" @click="copyAddress" title="Копіювати адресу">
                   <i class="bi bi-clipboard"></i>
-                </button>
+                  </button>
+                  <transition name="fade-pop">
+                    <span v-if="isAddressCopied" class="copy-toast-bubble">Скопійовано</span>
+                  </transition>
+                </div>
                 <div class="address-row">
                   <i class="bi bi-geo-alt-fill text-muted"></i>
                   <span class="text-dark fw-medium">
@@ -278,7 +283,6 @@
                     {{ order.delivery_payer || '—' }}
                   </span>
                 </div>
-                <span v-if="isAddressCopied" class="copy-toast">Скопійовано</span>
               </div>
   
               <div class="ttn-section mt-3">
@@ -565,6 +569,11 @@
   /* ADDRESS */
 .address-block { position: relative; display: flex; flex-direction: column; gap: 6px; padding-right: 36px; }
 .address-row { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; }
+.copy-anchor {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
 .btn-copy-icon {
   position: absolute;
   top: 0;
@@ -585,10 +594,27 @@
   border-color: #cbd5e1;
   color: #1f2937;
 }
-.copy-toast {
+.copy-toast-bubble {
+  position: absolute;
+  top: -36px;
+  right: 0;
+  background: #111827;
+  color: #fff;
   font-size: 0.7rem;
   font-weight: 600;
-  color: #16a34a;
+  padding: 4px 8px;
+  border-radius: 8px;
+  white-space: nowrap;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.2);
+}
+.fade-pop-enter-active,
+.fade-pop-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.fade-pop-enter-from,
+.fade-pop-leave-to {
+  opacity: 0;
+  transform: translateY(4px);
 }
   
   /* TTN */
