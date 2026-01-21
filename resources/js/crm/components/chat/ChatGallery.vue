@@ -188,17 +188,16 @@ onMounted(load);
     overflow: hidden;
     cursor: pointer;
     border: 2px solid transparent;
+    aspect-ratio: 4 / 5;
+    background: #f8fafc;
   }
   
   .grid-item img,
   .video-placeholder {
     width: 100%;
-    
-    /* 👇 ЗБІЛЬШИЛИ ВИСОТУ ФОТО (було 90px) */
-    height: 160px; 
-    
-    object-fit: cover;
-    background: #e2e8f0;
+    height: 100%;
+    object-fit: contain;
+    background: #f8fafc;
   }
   
   .video-placeholder {
