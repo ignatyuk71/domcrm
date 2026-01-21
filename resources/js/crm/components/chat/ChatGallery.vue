@@ -94,7 +94,7 @@ onMounted(load);
 </script>
 
 <style scoped>
-  /* --- ЗАГАЛЬНІ ТА ДЕСКТОП СТИЛІ --- */
+  /* --- ЦЕ ТВОЇ ОРИГІНАЛЬНІ СТИЛІ ДЛЯ DEKSTOP (НЕ ЧІПАВ) --- */
   .gallery-overlay {
     position: fixed;
     inset: 0;
@@ -132,7 +132,6 @@ onMounted(load);
     justify-content: space-between;
     padding: 12px 16px;
     border-bottom: 1px solid #f1f5f9;
-    flex-shrink: 0;
   }
   
   .header-actions {
@@ -147,7 +146,7 @@ onMounted(load);
     font-weight: 700;
   }
   
-  .upload-btn, .close-btn {
+  .upload-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -157,17 +156,28 @@ onMounted(load);
     background: #f1f5f9;
     color: #64748b;
     cursor: pointer;
+  }
+  
+  .close-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
     border: none;
+    background: #f8fafc;
+    color: #64748b;
+    cursor: pointer;
   }
   
   .grid-container {
     display: grid;
-    /* Десктоп: авто-заповнення */
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
     gap: 16px;
     padding: 16px;
+    max-height: calc(85vh - 140px);
     overflow-y: auto;
-    flex: 1; 
   }
   
   .grid-item {
@@ -179,10 +189,6 @@ onMounted(load);
     aspect-ratio: 2 / 3;
     background: transparent; 
     transition: transform 0.1s ease-in-out, border-color 0.1s;
-    /* Важливо для запобігання вилізання контенту */
-    display: flex;
-    align-items: center;
-    justify-content: center;
   }
   
   .grid-item:hover {
@@ -193,9 +199,8 @@ onMounted(load);
   .video-placeholder {
     width: 100%;
     height: 100%;
-    object-fit: contain; 
+    object-fit: contain;
     background: transparent;
-    display: block;
   }
   
   .video-placeholder {
@@ -219,16 +224,15 @@ onMounted(load);
     width: 24px;
     height: 24px;
     border-radius: 50%;
-    background: #3b82f6;
+    background: rgba(59, 130, 246, 1);
     color: #fff;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 0.9rem;
     opacity: 0;
-    transition: all 0.2s;
+    transition: opacity 0.2s, transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     transform: scale(0.8);
-    z-index: 2;
   }
   
   .grid-item.selected .check-overlay {
@@ -239,8 +243,6 @@ onMounted(load);
   .footer {
     padding: 12px 16px;
     border-top: 1px solid #f1f5f9;
-    flex-shrink: 0;
-    background: #fff;
   }
   
   .confirm-btn {
@@ -252,8 +254,13 @@ onMounted(load);
     padding: 10px;
     font-weight: 600;
     cursor: pointer;
+    transition: background-color 0.2s;
   }
-
+  
+  .confirm-btn:hover {
+    background: #2563eb;
+  }
+  
   .state-msg {
     grid-column: 1 / -1;
     padding: 20px;
@@ -271,63 +278,54 @@ onMounted(load);
     margin: 0 auto;
   }
   
-  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
   
-  .gallery-fade-enter-active, .gallery-fade-leave-active { transition: opacity 0.2s ease; }
-  .gallery-fade-enter-from, .gallery-fade-leave-to { opacity: 0; }
+  .gallery-fade-enter-active,
+  .gallery-fade-leave-active {
+    transition: opacity 0.2s ease;
+  }
+  .gallery-fade-enter-from,
+  .gallery-fade-leave-to {
+    opacity: 0;
+  }
   
-  /* --- МОБІЛЬНА ВЕРСІЯ (ВИПРАВЛЕНА) --- */
+  /* --- ВИПРАВЛЕНА МОБІЛЬНА ВЕРСІЯ --- */
   @media (max-width: 768px) {
     .gallery-overlay {
       padding: 0;
-      background: rgba(0,0,0,0.6); 
-      backdrop-filter: none;
     }
   
     .gallery-modal {
       width: 100%;
-      height: 100%; /* Розтягуємо на весь екран */
+      height: 100%;
       max-width: 100%;
-      max-height: 100dvh; /* Використовуємо dvh для правильного скролу в Safari/Chrome */
+      max-height: 100%;
       border-radius: 0;
-      border: none;
     }
   
     .grid-container {
-      /* 1. СТРОГО 2 стовпці */
-      grid-template-columns: repeat(2, 1fr);
-      
-      /* 2. Збільшений відступ, щоб картинки не злипались */
-      gap: 12px;
-      padding: 12px;
-      
-      /* 3. Забороняємо накладання рядків */
-      align-content: start;
-      grid-auto-rows: auto; 
+      /* Примусово 2 колонки однакової ширини */
+      grid-template-columns: 1fr 1fr;
+      /* Достатній відступ між колонками та рядками, щоб не накладались */
+      gap: 15px; 
+      padding: 15px;
+      /* Дозволяє контейнеру займати весь доступний простір для скролу */
+      max-height: none;
+      flex: 1;
+      overflow-y: scroll;
     }
-
+    
     .grid-item {
-      /* Вимикаємо hover ефекти */
-      transform: none !important;
-      
-      /* Додаємо фон, щоб видно було межі картки, якщо картинка вузька */
-      background: #f8fafc;
-      
-      /* Тінь, щоб відокремити картки одна від одної */
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-      
-      /* Трішки міняємо пропорції для мобільного, щоб було видно довгі картинки */
-      aspect-ratio: 2 / 3; 
-    }
-
-    .grid-item img {
-      /* ГАРАНТІЯ, що картинка влізе повністю і не обріжеться */
-      object-fit: contain;
+      /* Гарантуємо, що елемент не вилізе за межі своєї клітинки */
       width: 100%;
-      height: 100%;
+      /* Вимикаємо абсолютні позиціювання якщо вони раптом впливали */
+      position: relative;
     }
   }
   
   .custom-scrollbar::-webkit-scrollbar { width: 5px; }
   .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+  .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 </style>
