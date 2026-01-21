@@ -92,7 +92,9 @@ const confirmSelection = () => {
 
 onMounted(load);
 </script>
+
 <style scoped>
+  /* --- DESKTOP STYLES (UNCHANGED) --- */
   .gallery-overlay {
     position: fixed;
     inset: 0;
@@ -130,6 +132,7 @@ onMounted(load);
     justify-content: space-between;
     padding: 12px 16px;
     border-bottom: 1px solid #f1f5f9;
+    flex-shrink: 0; /* Header won't shrink */
   }
   
   .header-actions {
@@ -171,33 +174,26 @@ onMounted(load);
   
   .grid-container {
     display: grid;
-    /* --- ЗМІНА 1: Адаптивні стовпці --- */
-    /* Створює стільки стовпців, скільки влізе, але не вужче 160px */
+    /* Desktop: auto-fill min 160px */
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    
-    gap: 16px; /* Збільшений відступ для кращого вигляду */
+    gap: 16px;
     padding: 16px;
-    max-height: calc(85vh - 140px);
     overflow-y: auto;
+    /* Important for flex layout inside modal */
+    flex: 1; 
   }
   
   .grid-item {
     position: relative;
-    border-radius: 12px; /* Більш м'які кути */
+    border-radius: 12px;
     overflow: hidden;
     cursor: pointer;
     border: 2px solid transparent;
-    
-    /* --- ЗМІНА 2: Нове співвідношення сторін --- */
-    /* 2 / 3 - це стандартний портретний формат, який добре підходить для 4:5 та 9:16 */
     aspect-ratio: 2 / 3;
-    
-    /* --- ЗМІНА 3: Прибираємо сірий фон --- */
     background: transparent; 
     transition: transform 0.1s ease-in-out, border-color 0.1s;
   }
   
-  /* Додаємо легкий ефект при наведенні */
   .grid-item:hover {
     transform: translateY(-2px);
   }
@@ -206,10 +202,10 @@ onMounted(load);
   .video-placeholder {
     width: 100%;
     height: 100%;
-    /* object-fit: contain гарантує, що все зображення видно */
-    object-fit: contain;
-    /* Прибираємо фон і тут */
+    /* object-fit: contain ensures FULL visibility without cropping */
+    object-fit: contain; 
     background: transparent;
+    display: block;
   }
   
   .video-placeholder {
@@ -217,13 +213,12 @@ onMounted(load);
     align-items: center;
     justify-content: center;
     color: #64748b;
-    background: #f1f5f9; /* Для відео заглушки фон можна залишити */
+    background: #f1f5f9;
     font-size: 2rem;
   }
   
   .grid-item.selected {
     border-color: #3b82f6;
-    /* Легка тінь для вибраного елементу */
     box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
   }
   
@@ -234,7 +229,7 @@ onMounted(load);
     width: 24px;
     height: 24px;
     border-radius: 50%;
-    background: rgba(59, 130, 246, 1); /* Більш яскравий колір */
+    background: rgba(59, 130, 246, 1);
     color: #fff;
     display: flex;
     align-items: center;
@@ -253,6 +248,8 @@ onMounted(load);
   .footer {
     padding: 12px 16px;
     border-top: 1px solid #f1f5f9;
+    flex-shrink: 0; /* Footer won't shrink */
+    background: #fff;
   }
   
   .confirm-btn {
@@ -301,40 +298,44 @@ onMounted(load);
     opacity: 0;
   }
   
+  /* --- MOBILE OPTIMIZATIONS --- */
   @media (max-width: 768px) {
     .gallery-overlay {
       padding: 0;
+      /* Remove blur on mobile for better performance */
+      backdrop-filter: none; 
+      background: rgba(0,0,0,0.5); 
     }
   
     .gallery-modal {
       width: 100%;
       height: 100%;
       max-width: 100%;
-      max-height: 100%;
+      max-height: 100vh;
       border-radius: 0;
+      border: none;
     }
   
     .grid-container {
-      /* На мобільних можна залишити 2 стовпці, або теж використати auto-fill */
+      /* MOBILE: Strictly 2 columns per row */
       grid-template-columns: repeat(2, 1fr);
-      max-height: none;
-      flex: 1;
-      gap: 10px;
+      /* Reduce gap to make images larger */
+      gap: 8px;
       padding: 10px;
+      /* Ensure it takes remaining height */
+      height: auto; 
     }
-  
-    /* --- ЗМІНА 4: Видалено жорстку висоту --- */
-    /*
-    .grid-item img,
-    .video-placeholder {
-      height: 140px; <--- ЦЕ БУЛО ВИДАЛЕНО
+
+    .grid-item:hover {
+      /* Disable hover effect on touch screens */
+      transform: none;
     }
-    */
-    /* Тепер висота визначається aspect-ratio батьківського .grid-item */
+    
+    /* Optional: If you want square images on mobile for even more visibility, 
+       change aspect-ratio to 1 / 1 here. keeping 2/3 as per desktop request. */
   }
   
-  /* Скролбар */
   .custom-scrollbar::-webkit-scrollbar { width: 5px; }
   .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
   .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-  </style>
+</style>
