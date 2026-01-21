@@ -184,11 +184,10 @@ onMounted(load);
   
   .grid-item {
     position: relative;
-    border-radius: 12px;
+    border-radius: 8px;
     overflow: hidden;
     cursor: pointer;
     border: 2px solid transparent;
-    aspect-ratio: 2 / 3;
     background: transparent; 
     transition: transform 0.1s ease-in-out, border-color 0.1s;
   }
