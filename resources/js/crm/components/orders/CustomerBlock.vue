@@ -106,14 +106,23 @@
             <div class="invalid-feedback d-block" v-else-if="phoneError">{{ phoneError }}</div>
           </div>
 
-          <div class="col-sm-6">
-            <label class="form-label-custom">Імʼя</label>
-            <input type="text" autocomplete="given-name" class="form-control custom-input" :class="{ 'is-invalid': errors.first_name }" v-model="local.first_name" placeholder="Іван" />
-          </div>
-
-          <div class="col-sm-6">
-            <label class="form-label-custom">Прізвище</label>
-            <input type="text" autocomplete="family-name" class="form-control custom-input" :class="{ 'is-invalid': errors.last_name }" v-model="local.last_name" placeholder="Іванов" />
+          <div class="col-12">
+            <label class="form-label-custom">Імʼя та прізвище</label>
+            <input
+              type="text"
+              autocomplete="name"
+              class="form-control custom-input"
+              :class="{ 'is-invalid': errors.first_name || errors.last_name || nameError }"
+              v-model="fullName"
+              placeholder="Іван Іванов"
+              @input="handleNameInput"
+            />
+            <div class="invalid-feedback d-block" v-if="errors.first_name || errors.last_name">
+              {{ errors.first_name || errors.last_name }}
+            </div>
+            <div class="invalid-feedback d-block" v-else-if="nameError">
+              {{ nameError }}
+            </div>
           </div>
 
           <div class="col-12">
@@ -157,6 +166,7 @@ const searchLoading = ref(false);
 const searchError = ref('');
 const suggestions = ref([]);
 const showSuggestions = ref(false);
+const fullName = ref('');
 let searchTimer = null;
 
 // --- Computed ---
@@ -205,12 +215,31 @@ const phoneError = computed(() => {
   return '';
 });
 
+const nameError = computed(() => {
+  const value = fullName.value.trim();
+  if (!value) return '';
+  const words = value.split(/\s+/).filter(Boolean);
+  if (words.length < 2) {
+    return 'Вкажіть імʼя та прізвище';
+  }
+  if (words.length > 2) {
+    return 'Потрібно лише імʼя та прізвище';
+  }
+  return '';
+});
 function reset() {
   Object.assign(local, {
     id: null, first_name: '', last_name: '', phone: '', email: ''
   });
+  fullName.value = '';
   suggestions.value = [];
   searchError.value = '';
+}
+
+function handleNameInput() {
+  const words = fullName.value.trim().split(/\s+/).filter(Boolean);
+  local.first_name = words[0] || '';
+  local.last_name = words[1] || '';
 }
 
 function handlePhoneInput() {
@@ -273,6 +302,7 @@ function applyCustomer(customer) {
   local.last_name = customer.last_name || '';
   local.email = customer.email || '';
   local.phone = normalizePhoneInput(customer.phone || local.phone);
+  fullName.value = `${local.first_name} ${local.last_name}`.trim();
 }
 
 function selectSuggestion(customer) {
@@ -310,6 +340,7 @@ watch(() => ({ ...local }), (newVal) => {
 watch(() => model.value, (newVal) => { 
   if (newVal && JSON.stringify(newVal) !== JSON.stringify(local)) {
     Object.assign(local, newVal);
+    fullName.value = `${local.first_name || ''} ${local.last_name || ''}`.trim();
   }
 }, { deep: true, immediate: true });
 
