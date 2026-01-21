@@ -56,9 +56,9 @@
           <thead>
             <tr>
               <th class="ps-4" style="width: 80px;">Фото</th>
-              <th style="min-width: 200px;">Назва товару</th>
-              <th style="min-width: 120px;">SKU (Артикул)</th>
-              <th style="min-width: 120px;">Категорія</th>
+              <th style="min-width: 280px;">Назва товару</th>
+              <th style="min-width: 110px;">SKU (Артикул)</th>
+              <th style="min-width: 110px;">Категорія</th>
               <th class="text-center" style="min-width: 100px;">Запас</th>
               <th class="text-end" style="min-width: 120px;">Ціна</th>
               <th class="text-end pe-4" style="width: 100px;">Дії</th>
@@ -74,10 +74,10 @@
               </td>
               
               <td>
-                <div class="fw-bold text-dark text-truncate" style="max-width: 300px;" :title="p.title">
+                <div class="fw-bold text-dark product-title-wrap" :title="p.title">
                   {{ p.title }}
                 </div>
-                <div class="small text-muted text-truncate" style="max-width: 250px;" v-if="p.description">
+                <div class="small text-muted product-desc-wrap" v-if="p.description">
                   {{ p.description }}
                 </div>
               </td>
@@ -118,6 +118,14 @@
                 >
                   <i class="bi bi-pencil"></i>
                 </a>
+                <button
+                  class="btn-icon-action btn-icon-danger ms-1"
+                  type="button"
+                  title="Видалити"
+                  @click="confirmDelete(p)"
+                >
+                  <i class="bi bi-trash"></i>
+                </button>
               </td>
             </tr>
 
@@ -164,6 +172,25 @@
         </nav>
       </div>
     </div>
+
+    <div v-if="deleteModalOpen" class="modal-backdrop-custom" @click.self="closeDeleteModal">
+      <div class="modal-card">
+        <h5 class="fw-bold mb-2">Видалити товар?</h5>
+        <p class="text-muted small mb-3">
+          Ви точно хочете видалити цей товар? Цю дію неможливо буде скасувати.
+        </p>
+        <div class="small fw-semibold mb-3">
+          Товар: "{{ deleteTarget?.title || '—' }}"
+        </div>
+        <div class="d-flex justify-content-end gap-2">
+          <button class="btn btn-light" type="button" @click="closeDeleteModal">Скасувати</button>
+          <button class="btn btn-danger" type="button" :disabled="deleteLoading" @click="handleDelete">
+            <span v-if="!deleteLoading">Так, видалити</span>
+            <span v-else class="spinner-border spinner-border-sm"></span>
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -183,6 +210,9 @@ const pagination = reactive({
   total: 0,
   per_page: 150
 })
+const deleteModalOpen = ref(false)
+const deleteTarget = ref(null)
+const deleteLoading = ref(false)
 let timer = null
 
 const loadProducts = async (page = 1) => {
@@ -250,6 +280,35 @@ const debouncedLoad = () => {
 const formatPrice = (price, currency = 'UAH') => {
   if (price === null || price === undefined) return '—'
   return new Intl.NumberFormat('uk-UA', { style: 'currency', currency }).format(price)
+}
+
+const confirmDelete = (product) => {
+  deleteTarget.value = product
+  deleteModalOpen.value = true
+}
+
+const closeDeleteModal = () => {
+  if (deleteLoading.value) return
+  deleteModalOpen.value = false
+  deleteTarget.value = null
+}
+
+const handleDelete = async () => {
+  if (!deleteTarget.value || deleteLoading.value) return
+  deleteLoading.value = true
+  try {
+    await http.delete(`/products/${deleteTarget.value.id}`, {
+      headers: { Accept: 'application/json' },
+    })
+    products.value = products.value.filter((p) => p.id !== deleteTarget.value.id)
+    pagination.total = Math.max(0, (pagination.total || 1) - 1)
+    closeDeleteModal()
+  } catch (e) {
+    console.error('Не вдалося видалити товар', e)
+    alert('Не вдалося видалити товар')
+  } finally {
+    deleteLoading.value = false
+  }
 }
 
 onMounted(loadProducts)
@@ -410,6 +469,41 @@ onUnmounted(() => {
   background: #f1f5f9;
   color: #3b82f6;
   border-color: #e2e8f0;
+}
+.btn-icon-danger:hover {
+  color: #b91c1c;
+  border-color: #fecaca;
+  background: #fee2e2;
+}
+.product-title-wrap,
+.product-desc-wrap {
+  white-space: normal;
+  word-break: break-word;
+}
+.product-title-wrap {
+  line-height: 1.25;
+}
+.product-desc-wrap {
+  line-height: 1.3;
+}
+
+.modal-backdrop-custom {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1050;
+  padding: 16px;
+}
+.modal-card {
+  width: 100%;
+  max-width: 420px;
+  background: #fff;
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.2);
 }
 
 /* --- Empty State --- */

@@ -74,6 +74,17 @@ class ProductController extends Controller
         return response()->json(['data' => $product]);
     }
 
+    public function destroy(Product $product, Request $request)
+    {
+        $product->delete();
+
+        if ($request->expectsJson()) {
+            return response()->json(['success' => true]);
+        }
+
+        return redirect('/products')->with('success', 'Товар видалено');
+    }
+
     protected function validateData(Request $request): array
     {
         return $request->validate([

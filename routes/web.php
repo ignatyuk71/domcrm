@@ -188,6 +188,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/', 'store')->name('store');
         Route::get('/{product}/edit', 'edit')->name('edit');
         Route::put('/{product}', 'update')->name('update');
+        Route::delete('/{product}', 'destroy')->name('destroy');
     });
 
     // --- ДОВІДНИКИ ---
