@@ -309,7 +309,7 @@ onMounted(load);
   
     /* ТУТ МИ ПЕРЕБИВАЄМО ТОЙ ПРОБЛЕМНИЙ КОД */
     .grid-container {
-      grid-template-columns: 1fr !important;
+      grid-template-columns: repeat(2, 1fr) !important;
       gap: 5px !important;
       padding: 10px;
       max-height: none;
