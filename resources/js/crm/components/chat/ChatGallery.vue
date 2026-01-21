@@ -309,9 +309,8 @@ onMounted(load);
   
     /* ТУТ МИ ПЕРЕБИВАЄМО ТОЙ ПРОБЛЕМНИЙ КОД */
     .grid-container {
-      /* repeat(2, 1fr) змушує браузер ділити ширину навпіл, ігноруючи 160px */
-      grid-template-columns: repeat(2, 1fr) !important;
-      gap: 10px !important;
+      grid-template-columns: 1fr !important;
+      gap: 5px !important;
       padding: 10px;
       max-height: none;
       flex: 1;
