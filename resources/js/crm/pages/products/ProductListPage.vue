@@ -304,11 +304,11 @@ const handleDelete = async () => {
     )
     products.value = products.value.filter((p) => p.id !== deleteTarget.value.id)
     pagination.total = Math.max(0, (pagination.total || 1) - 1)
-    closeDeleteModal()
   } catch (e) {
     console.error('Не вдалося видалити товар', e)
     alert('Не вдалося видалити товар')
   } finally {
+    closeDeleteModal()
     deleteLoading.value = false
   }
 }

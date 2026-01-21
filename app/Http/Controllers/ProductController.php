@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\File;
 
 class ProductController extends Controller
 {
@@ -76,7 +77,17 @@ class ProductController extends Controller
 
     public function destroy(Product $product, Request $request)
     {
+        $photoPath = $product->main_photo_path;
         $product->delete();
+        if ($photoPath) {
+            $clean = ltrim($photoPath, '/');
+            $fullPath = str_starts_with($clean, 'storage/')
+                ? public_path($clean)
+                : public_path('storage/' . $clean);
+            if (File::exists($fullPath)) {
+                File::delete($fullPath);
+            }
+        }
 
         if ($request->expectsJson()) {
             return response()->json(['success' => true]);
