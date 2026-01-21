@@ -178,7 +178,6 @@ onMounted(load);
     gap: 16px;
     padding: 16px;
     max-height: calc(85vh - 140px);
-    overflow-y: auto;
   }
   
   .grid-item {
