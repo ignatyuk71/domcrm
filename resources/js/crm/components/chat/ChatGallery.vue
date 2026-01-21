@@ -105,7 +105,7 @@ onMounted(load);
     justify-content: center;
     padding: 20px;
   }
-
+  
   .gallery-modal {
     width: 720px;
     max-width: 96vw;
@@ -132,7 +132,7 @@ onMounted(load);
     padding: 12px 16px;
     border-bottom: 1px solid #f1f5f9;
   }
-
+  
   .header-actions {
     display: flex;
     align-items: center;
@@ -156,7 +156,7 @@ onMounted(load);
     color: #64748b;
     cursor: pointer;
   }
-
+  
   .close-btn {
     display: inline-flex;
     align-items: center;
@@ -172,32 +172,45 @@ onMounted(load);
   
   .grid-container {
     display: grid;
+    /* --- ЗМІНА 1: Адаптивні стовпці --- */
+    /* Створює стільки стовпців, скільки влізе, але не вужче 160px */
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
     
-    /* 👇 ЗМІНИЛИ НА 2 СТОВПЦІ (було 3) */
-    grid-template-columns: repeat(2, 1fr); 
-    
-    gap: 12px; /* Трохи більший відступ між фото */
-    padding: 12px;
+    gap: 16px; /* Збільшений відступ для кращого вигляду */
+    padding: 16px;
     max-height: calc(85vh - 140px);
     overflow-y: auto;
   }
   
   .grid-item {
     position: relative;
-    border-radius: 8px;
+    border-radius: 12px; /* Більш м'які кути */
     overflow: hidden;
     cursor: pointer;
     border: 2px solid transparent;
-    aspect-ratio: 4 / 5;
-    background: #f8fafc;
+    
+    /* --- ЗМІНА 2: Нове співвідношення сторін --- */
+    /* 2 / 3 - це стандартний портретний формат, який добре підходить для 4:5 та 9:16 */
+    aspect-ratio: 2 / 3;
+    
+    /* --- ЗМІНА 3: Прибираємо сірий фон --- */
+    background: transparent; 
+    transition: transform 0.1s ease-in-out, border-color 0.1s;
+  }
+  
+  /* Додаємо легкий ефект при наведенні */
+  .grid-item:hover {
+    transform: translateY(-2px);
   }
   
   .grid-item img,
   .video-placeholder {
     width: 100%;
     height: 100%;
+    /* object-fit: contain гарантує, що все зображення видно */
     object-fit: contain;
-    background: #f8fafc;
+    /* Прибираємо фон і тут */
+    background: transparent;
   }
   
   .video-placeholder {
@@ -205,14 +218,16 @@ onMounted(load);
     align-items: center;
     justify-content: center;
     color: #64748b;
-    font-size: 1.5rem;
+    background: #f1f5f9; /* Для відео заглушки фон можна залишити */
+    font-size: 2rem;
   }
   
   .grid-item.selected {
     border-color: #3b82f6;
+    /* Легка тінь для вибраного елементу */
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
   }
   
-  /* Галочка теж трохи більша і помітніша */
   .check-overlay {
     position: absolute;
     top: 8px;
@@ -220,22 +235,24 @@ onMounted(load);
     width: 24px;
     height: 24px;
     border-radius: 50%;
-    background: rgba(59, 130, 246, 0.9);
+    background: rgba(59, 130, 246, 1); /* Більш яскравий колір */
     color: #fff;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 0.9rem;
     opacity: 0;
-    transition: opacity 0.2s;
+    transition: opacity 0.2s, transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    transform: scale(0.8);
   }
   
   .grid-item.selected .check-overlay {
     opacity: 1;
+    transform: scale(1);
   }
   
   .footer {
-    padding: 10px 16px;
+    padding: 12px 16px;
     border-top: 1px solid #f1f5f9;
   }
   
@@ -248,6 +265,11 @@ onMounted(load);
     padding: 10px;
     font-weight: 600;
     cursor: pointer;
+    transition: background-color 0.2s;
+  }
+  
+  .confirm-btn:hover {
+    background: #2563eb;
   }
   
   .state-msg {
@@ -258,9 +280,9 @@ onMounted(load);
   }
   
   .spinner {
-    width: 20px;
-    height: 20px;
-    border: 2px solid #e2e8f0;
+    width: 24px;
+    height: 24px;
+    border: 3px solid #e2e8f0;
     border-top-color: #3b82f6;
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
@@ -270,7 +292,7 @@ onMounted(load);
   @keyframes spin {
     to { transform: rotate(360deg); }
   }
-
+  
   .gallery-fade-enter-active,
   .gallery-fade-leave-active {
     transition: opacity 0.2s ease;
@@ -279,12 +301,12 @@ onMounted(load);
   .gallery-fade-leave-to {
     opacity: 0;
   }
-
+  
   @media (max-width: 768px) {
     .gallery-overlay {
       padding: 0;
     }
-
+  
     .gallery-modal {
       width: 100%;
       height: 100%;
@@ -292,17 +314,24 @@ onMounted(load);
       max-height: 100%;
       border-radius: 0;
     }
-
+  
     .grid-container {
+      /* На мобільних можна залишити 2 стовпці, або теж використати auto-fill */
       grid-template-columns: repeat(2, 1fr);
       max-height: none;
       flex: 1;
+      gap: 10px;
+      padding: 10px;
     }
-
+  
+    /* --- ЗМІНА 4: Видалено жорстку висоту --- */
+    /*
     .grid-item img,
     .video-placeholder {
-      height: 140px;
+      height: 140px; <--- ЦЕ БУЛО ВИДАЛЕНО
     }
+    */
+    /* Тепер висота визначається aspect-ratio батьківського .grid-item */
   }
   
   /* Скролбар */
