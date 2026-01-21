@@ -1,46 +1,57 @@
 <template>
-  <div class="gallery-popover">
-    <div class="header">
-      <h4>Галерея</h4>
-      <label class="upload-btn">
-        <i class="bi bi-plus-lg"></i>
-        <input type="file" hidden @change="handleUpload" accept="image/*,video/*" />
-      </label>
-    </div>
+  <teleport to="body">
+    <transition name="gallery-fade">
+      <div class="gallery-overlay" @click.self="emit('close')">
+        <div class="gallery-modal">
+          <div class="header">
+            <h4>Галерея</h4>
+            <div class="header-actions">
+              <label class="upload-btn">
+                <i class="bi bi-plus-lg"></i>
+                <input type="file" hidden @change="handleUpload" accept="image/*,video/*" />
+              </label>
+              <button type="button" class="close-btn" @click="emit('close')">
+                <i class="bi bi-x-lg"></i>
+              </button>
+            </div>
+          </div>
 
-    <div class="grid-container custom-scrollbar">
-      <div v-if="isLoading" class="state-msg"><div class="spinner"></div></div>
-      <div v-else-if="files.length === 0" class="state-msg text-gray-400">Нічого не знайдено</div>
+          <div class="grid-container custom-scrollbar">
+            <div v-if="isLoading" class="state-msg"><div class="spinner"></div></div>
+            <div v-else-if="files.length === 0" class="state-msg text-gray-400">Нічого не знайдено</div>
 
-      <div
-        v-else
-        v-for="file in files"
-        :key="file.id"
-        class="grid-item"
-        :class="{ selected: selectedIds.includes(file.id) }"
-        @click="toggleSelect(file)"
-      >
-        <img v-if="file.type === 'image'" :src="file.url" loading="lazy" />
-        <div v-else class="video-placeholder">
-          <i class="bi bi-play-circle-fill"></i>
+            <div
+              v-else
+              v-for="file in files"
+              :key="file.id"
+              class="grid-item"
+              :class="{ selected: selectedIds.includes(file.id) }"
+              @click="toggleSelect(file)"
+            >
+              <img v-if="file.type === 'image'" :src="file.url" loading="lazy" />
+              <div v-else class="video-placeholder">
+                <i class="bi bi-play-circle-fill"></i>
+              </div>
+              <div class="check-overlay"><i class="bi bi-check-lg"></i></div>
+            </div>
+          </div>
+
+          <div class="footer" v-if="selectedIds.length > 0">
+            <button class="confirm-btn" @click="confirmSelection">
+              Додати ({{ selectedIds.length }})
+            </button>
+          </div>
         </div>
-        <div class="check-overlay"><i class="bi bi-check-lg"></i></div>
       </div>
-    </div>
-
-    <div class="footer" v-if="selectedIds.length > 0">
-      <button class="confirm-btn" @click="confirmSelection">
-        Додати ({{ selectedIds.length }})
-      </button>
-    </div>
-  </div>
+    </transition>
+  </teleport>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue';
 import { getSavedFiles, uploadSavedFile } from '@/crm/services/chatApi';
 
-const emit = defineEmits(['confirm']);
+const emit = defineEmits(['confirm', 'close']);
 const files = ref([]);
 const selectedIds = ref([]);
 const isLoading = ref(false);
@@ -76,32 +87,36 @@ const confirmSelection = () => {
   const selectedFiles = files.value.filter((f) => selectedIds.value.includes(f.id));
   emit('confirm', selectedFiles);
   selectedIds.value = [];
+  emit('close');
 };
 
 onMounted(load);
 </script>
 
 <style scoped>
-  .gallery-popover {
-    position: absolute;
-    bottom: 100%;
-    left: auto;
-    right: -60px; /* Залишаємо позиціонування справа */
-    margin-bottom: 12px;
-    
-    /* 👇 ЗБІЛЬШИЛИ ШИРИНУ ВІКНА */
-    width: 400px; 
-    
+  .gallery-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    backdrop-filter: blur(6px);
+    z-index: 1100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+
+  .gallery-modal {
+    width: 720px;
+    max-width: 96vw;
+    max-height: 85vh;
     background: #fff;
     border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.15);
-    z-index: 100;
+    border-radius: 18px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.2);
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    
-    transform-origin: bottom right;
     animation: popUp 0.2s ease-out;
   }
   
@@ -116,6 +131,12 @@ onMounted(load);
     justify-content: space-between;
     padding: 12px 16px;
     border-bottom: 1px solid #f1f5f9;
+  }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
   
   .header h4 {
@@ -135,6 +156,19 @@ onMounted(load);
     color: #64748b;
     cursor: pointer;
   }
+
+  .close-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    border: none;
+    background: #f8fafc;
+    color: #64748b;
+    cursor: pointer;
+  }
   
   .grid-container {
     display: grid;
@@ -144,7 +178,7 @@ onMounted(load);
     
     gap: 12px; /* Трохи більший відступ між фото */
     padding: 12px;
-    max-height: 350px; /* Збільшили висоту списку */
+    max-height: calc(85vh - 140px);
     overflow-y: auto;
   }
   
@@ -236,6 +270,40 @@ onMounted(load);
   
   @keyframes spin {
     to { transform: rotate(360deg); }
+  }
+
+  .gallery-fade-enter-active,
+  .gallery-fade-leave-active {
+    transition: opacity 0.2s ease;
+  }
+  .gallery-fade-enter-from,
+  .gallery-fade-leave-to {
+    opacity: 0;
+  }
+
+  @media (max-width: 768px) {
+    .gallery-overlay {
+      padding: 0;
+    }
+
+    .gallery-modal {
+      width: 100%;
+      height: 100%;
+      max-width: 100%;
+      max-height: 100%;
+      border-radius: 0;
+    }
+
+    .grid-container {
+      grid-template-columns: repeat(2, 1fr);
+      max-height: none;
+      flex: 1;
+    }
+
+    .grid-item img,
+    .video-placeholder {
+      height: 140px;
+    }
   }
   
   /* Скролбар */

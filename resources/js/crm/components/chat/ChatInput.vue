@@ -45,6 +45,7 @@
           <ChatGallery
             v-if="showGallery"
             @confirm="handleGallerySelect"
+            @close="showGallery = false"
           />
           <button
             type="button"
