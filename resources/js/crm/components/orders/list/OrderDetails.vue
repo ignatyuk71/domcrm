@@ -37,6 +37,7 @@
   
   // --- LOGIC FOR PHONE COPY & SOCIALS ---
   const isPhoneCopied = ref(false);
+  const isAddressCopied = ref(false);
   
   // Очищаємо номер від зайвих символів (+, дужки, пробіли) для посилань
   const cleanPhone = computed(() => {
@@ -54,6 +55,22 @@
       }, 2000); // Повідомлення зникне через 2 сек
     } catch (err) {
       console.error('Failed to copy', err);
+    }
+  };
+
+  const copyAddress = async () => {
+    const city = props.order.city_name || '';
+    const address = props.order.address || '';
+    const text = [city, address].filter(Boolean).join('\n').trim();
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      isAddressCopied.value = true;
+      setTimeout(() => {
+        isAddressCopied.value = false;
+      }, 2000);
+    } catch (err) {
+      console.error('Failed to copy address', err);
     }
   };
   </script>
@@ -257,6 +274,13 @@
                   <span class="text-dark small fw-bold">
                     {{ order.delivery_payer || '—' }}
                   </span>
+                </div>
+                <div class="address-actions">
+                  <button class="btn-copy-address" type="button" @click="copyAddress">
+                    <i class="bi bi-clipboard me-1"></i>
+                    Копіювати адресу
+                  </button>
+                  <span v-if="isAddressCopied" class="copy-toast">Скопійовано</span>
                 </div>
               </div>
   
@@ -542,8 +566,32 @@
   @keyframes spin { 100% { transform: rotate(360deg); } }
   
   /* ADDRESS */
-  .address-block { display: flex; flex-direction: column; gap: 6px; }
-  .address-row { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; }
+.address-block { display: flex; flex-direction: column; gap: 6px; }
+.address-row { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; }
+.address-actions { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.btn-copy-address {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #475569;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+.btn-copy-address:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #1f2937;
+}
+.copy-toast {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #16a34a;
+}
   
   /* TTN */
   .ttn-display { background: #ffffff; border-radius: 8px; border: 1px solid #e2e8f0; padding: 4px; display: flex; align-items: center; margin-bottom: 8px; }
