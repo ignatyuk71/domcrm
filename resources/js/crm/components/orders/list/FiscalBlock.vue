@@ -1,5 +1,5 @@
 <script setup>
-  import { computed, onBeforeUnmount, onMounted, reactive, watch } from 'vue';
+  import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
   import { fiscalize, refund, fetchFiscalStatus } from '@/crm/api/fiscal';
   import { formatDate } from '@/crm/utils/orderDisplay';
   
@@ -113,6 +113,16 @@
     if (isFullyPaid.value) return 'status-success';
     return `status-${status.value}`;
   });
+
+  const confirmOpen = ref(false);
+  const confirmType = ref('sell');
+  const confirmLoading = computed(() => actionDisabled.value);
+  const confirmTitle = computed(() =>
+    confirmType.value === 'prepay' ? 'Фіскалізувати аванс?' : 'Фіскалізувати повний чек?'
+  );
+  const confirmAmount = computed(() =>
+    confirmType.value === 'prepay' ? prepayAmountNumber.value : remainingAmount.value
+  );
   
   // --- METHODS ---
   function formatMoney(val) {
@@ -143,6 +153,21 @@
     } finally {
       state.loading = false;
     }
+  }
+
+  function openConfirm(type) {
+    confirmType.value = type;
+    confirmOpen.value = true;
+  }
+
+  function closeConfirm() {
+    if (confirmLoading.value) return;
+    confirmOpen.value = false;
+  }
+
+  async function confirmFiscalize() {
+    await runFiscalize(confirmType.value);
+    confirmOpen.value = false;
   }
   
   async function pollStatus() {
@@ -258,7 +283,7 @@
             v-if="showPrepayButton"
             class="btn-modern btn-prepay"
             :disabled="actionDisabled"
-            @click="runFiscalize('prepay')"
+            @click="openConfirm('prepay')"
           >
             <div class="d-flex align-items-center gap-2">
                 <i class="bi bi-wallet2"></i>
@@ -273,7 +298,7 @@
             v-if="showMainButton"
             class="btn-modern btn-main"
             :disabled="actionDisabled"
-            @click="runFiscalize('sell')"
+            @click="openConfirm('sell')"
           >
              <div class="d-flex align-items-center gap-2">
                  <i class="bi bi-printer"></i>
@@ -290,7 +315,7 @@
                 v-if="canRefund"
                 class="btn-modern btn-refund flex-grow-1"
                 :disabled="actionDisabled"
-                @click="runFiscalize('return')"
+                @click="openConfirm('return')"
               >
                 <i class="bi bi-arrow-counterclockwise"></i>
                 <span>Повернення</span>
@@ -308,6 +333,28 @@
         </div>
       </div>
     </div>
+
+    <Teleport to="body">
+      <div v-if="confirmOpen" class="fiscal-confirm-overlay" @click.self="closeConfirm">
+        <div class="fiscal-confirm-card">
+          <h5 class="fw-bold mb-2">{{ confirmTitle }}</h5>
+          <p class="text-muted small mb-3">
+            Підтвердьте дію. Скасувати після фіскалізації буде неможливо.
+          </p>
+          <div class="confirm-amount">
+            <span class="label-muted">Сума:</span>
+            <span class="amount-large">{{ formatMoney(confirmAmount) }} <small>грн</small></span>
+          </div>
+          <div class="d-flex justify-content-end gap-2 mt-3">
+            <button class="btn btn-light" type="button" @click="closeConfirm">Скасувати</button>
+            <button class="btn btn-danger" type="button" :disabled="confirmLoading" @click="confirmFiscalize">
+              <span v-if="!confirmLoading">Так, фіскалізувати</span>
+              <span v-else class="spinner-border spinner-border-sm"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </template>
   
   <style scoped>
@@ -596,4 +643,33 @@
   @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
   .fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
   .fade-enter-from, .fade-leave-to { opacity: 0; }
+
+  .fiscal-confirm-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1100;
+    padding: 16px;
+  }
+  .fiscal-confirm-card {
+    width: 100%;
+    max-width: 420px;
+    background: #fff;
+    border-radius: 14px;
+    padding: 20px;
+    box-shadow: 0 20px 40px rgba(15, 23, 42, 0.2);
+  }
+  .confirm-amount {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
   </style>
