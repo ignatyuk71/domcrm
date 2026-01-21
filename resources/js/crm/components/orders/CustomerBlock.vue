@@ -62,7 +62,7 @@
                 autocomplete="off"
                 name="crm_customer_phone"
                 class="form-control custom-input"
-                :class="{ 'is-invalid': errors.phone }"
+                :class="{ 'is-invalid': errors.phone || phoneError }"
                 v-model="local.phone"
                 placeholder="380..."
                 @input="handlePhoneInput"
@@ -103,6 +103,7 @@
             
             <div class="text-danger small mt-2" v-if="searchError">{{ searchError }}</div>
             <div class="invalid-feedback d-block" v-if="errors.phone">{{ errors.phone }}</div>
+            <div class="invalid-feedback d-block" v-else-if="phoneError">{{ phoneError }}</div>
           </div>
 
           <div class="col-sm-6">
@@ -171,7 +172,7 @@ const formattedPhone = computed(() => {
   // Просте форматування для відображення
   if (!local.phone) return '';
   // Якщо номер схожий на 380XX...
-  const cleaned = local.phone.replace(/\D/g, '');
+  const cleaned = normalizePhone(local.phone);
   if (cleaned.length === 12) {
     return `+${cleaned.substring(0, 2)} (${cleaned.substring(2, 5)}) ${cleaned.substring(5, 8)}-${cleaned.substring(8, 10)}-${cleaned.substring(10, 12)}`;
   }
@@ -181,6 +182,28 @@ const formattedPhone = computed(() => {
 // --- Methods ---
 
 const normalizePhone = (value) => (value || '').replace(/\D+/g, '');
+const normalizePhoneInput = (value) => {
+  let digits = normalizePhone(value);
+  if (!digits) return '';
+  if (digits.startsWith('0')) {
+    digits = '38' + digits;
+  } else if (digits.startsWith('38') && !digits.startsWith('380')) {
+    digits = '380' + digits.slice(2);
+  }
+  if (digits.startsWith('3800')) {
+    digits = '380' + digits.slice(4);
+  }
+  return digits.slice(0, 12);
+};
+
+const phoneError = computed(() => {
+  if (!local.phone) return '';
+  const digits = normalizePhone(local.phone);
+  if (!/^380\d{9}$/.test(digits)) {
+    return 'Невірний номер (формат 380XXXXXXXXX)';
+  }
+  return '';
+});
 
 function reset() {
   Object.assign(local, {
@@ -195,7 +218,11 @@ function handlePhoneInput() {
   searchError.value = '';
   local.id = null; // Скидаємо ID, бо номер змінився
 
-  const phone = (local.phone || '').trim();
+  const normalized = normalizePhoneInput(local.phone || '');
+  if (normalized !== local.phone) {
+    local.phone = normalized;
+  }
+  const phone = normalized;
   
   // Якщо стерли номер - ховаємо все
   if (!phone) {
@@ -245,7 +272,7 @@ function applyCustomer(customer) {
   local.first_name = customer.first_name || '';
   local.last_name = customer.last_name || '';
   local.email = customer.email || '';
-  local.phone = customer.phone || local.phone; // Беремо телефон з бази, бо там може бути кращий формат
+  local.phone = normalizePhoneInput(customer.phone || local.phone);
 }
 
 function selectSuggestion(customer) {

@@ -347,7 +347,14 @@ const isProfileComplete = computed(() => isNameValid.value && isPhoneValid.value
 watch(() => form.phone, (newVal) => {
   if (!newVal) return;
   let cleaned = newVal.replace(/\D/g, '');
-  if (cleaned.length > 0 && !cleaned.startsWith('38')) cleaned = '380' + cleaned;
+  if (cleaned.startsWith('0')) {
+    cleaned = '38' + cleaned;
+  } else if (cleaned.startsWith('38') && !cleaned.startsWith('380')) {
+    cleaned = '380' + cleaned.slice(2);
+  }
+  if (cleaned.startsWith('3800')) {
+    cleaned = '380' + cleaned.slice(4);
+  }
   form.phone = cleaned.substring(0, 12);
 });
 
