@@ -94,11 +94,12 @@ onMounted(load);
 </script>
 
 <style scoped>
+  /* --- ОСНОВНИЙ КОНТЕЙНЕР --- */
   .gallery-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(15, 23, 42, 0.45);
-    backdrop-filter: blur(6px);
+    background: rgba(15, 23, 42, 0.6); /* Трохи темніший фон */
+    backdrop-filter: blur(4px);
     z-index: 1100;
     display: flex;
     align-items: center;
@@ -111,139 +112,133 @@ onMounted(load);
     max-width: 96vw;
     max-height: 85vh;
     background: #fff;
-    border: 1px solid #e2e8f0;
-    border-radius: 18px;
-    box-shadow: 0 20px 50px rgba(0,0,0,0.2);
+    border-radius: 16px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    animation: popUp 0.2s ease-out;
+    /* Анімація появи */
+    animation: modalPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   }
   
-  @keyframes popUp {
-    from { opacity: 0; transform: translateY(10px) scale(0.95); }
-    to { opacity: 1; transform: translateY(0) scale(1); }
+  @keyframes modalPop {
+    from { opacity: 0; transform: scale(0.96); }
+    to { opacity: 1; transform: scale(1); }
   }
   
+  /* --- ШАПКА --- */
   .header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 16px;
-    border-bottom: 1px solid #f1f5f9;
-  }
-  
-  .header-actions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    padding: 16px;
+    border-bottom: 1px solid #e2e8f0;
+    background: #fff;
   }
   
   .header h4 {
     margin: 0;
-    font-size: 0.95rem;
-    font-weight: 700;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #0f172a;
   }
   
-  .upload-btn {
+  .header-actions {
+    display: flex;
+    gap: 10px;
+  }
+  
+  .upload-btn, .close-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 30px;
-    height: 30px;
+    width: 36px;
+    height: 36px;
     border-radius: 8px;
     background: #f1f5f9;
     color: #64748b;
     cursor: pointer;
-  }
-  
-  .close-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 30px;
-    height: 30px;
-    border-radius: 8px;
     border: none;
-    background: #f8fafc;
-    color: #64748b;
-    cursor: pointer;
+    transition: all 0.2s;
   }
   
+  .upload-btn:hover, .close-btn:hover {
+    background: #e2e8f0;
+    color: #334155;
+  }
+  
+  /* --- СІТКА (GRID) --- */
   .grid-container {
     display: grid;
-    /* --- ЗМІНА 1: Адаптивні стовпці --- */
-    /* Створює стільки стовпців, скільки влізе, але не вужче 160px */
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    
-    gap: 16px; /* Збільшений відступ для кращого вигляду */
+    /* Адаптивні колонки: мінімум 150px, інакше розтягуються */
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
     padding: 16px;
-    max-height: calc(85vh - 140px);
     overflow-y: auto;
+    /* Висота для десктопу, щоб залишалось місце для хедера/футера */
+    flex: 1; 
+    min-height: 0; 
   }
   
   .grid-item {
     position: relative;
-    border-radius: 12px; /* Більш м'які кути */
+    background: #f8fafc; /* Світлий фон під картинкою */
+    border-radius: 12px;
     overflow: hidden;
     cursor: pointer;
     border: 2px solid transparent;
     
-    /* --- ЗМІНА 2: Нове співвідношення сторін --- */
-    /* 2 / 3 - це стандартний портретний формат, який добре підходить для 4:5 та 9:16 */
+    /* ВАЖЛИВО: Пропорція 2:3 (вертикальна), ідеально для 4:5 та 9:16 */
     aspect-ratio: 2 / 3;
     
-    /* --- ЗМІНА 3: Прибираємо сірий фон --- */
-    background: transparent; 
-    transition: transform 0.1s ease-in-out, border-color 0.1s;
+    transition: transform 0.2s, box-shadow 0.2s;
   }
   
-  /* Додаємо легкий ефект при наведенні */
   .grid-item:hover {
     transform: translateY(-2px);
+  }
+  
+  .grid-item.selected {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
   }
   
   .grid-item img,
   .video-placeholder {
     width: 100%;
     height: 100%;
-    /* object-fit: contain гарантує, що все зображення видно */
-    object-fit: contain;
-    /* Прибираємо фон і тут */
-    background: transparent;
+    display: block;
+    /* contain покаже картинку цілком, не обрізаючи краї */
+    object-fit: contain; 
   }
   
   .video-placeholder {
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #64748b;
-    background: #f1f5f9; /* Для відео заглушки фон можна залишити */
     font-size: 2rem;
+    color: #94a3b8;
+    background: #f1f5f9;
   }
   
-  .grid-item.selected {
-    border-color: #3b82f6;
-    /* Легка тінь для вибраного елементу */
-    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
-  }
-  
+  /* --- ГАЛОЧКА --- */
   .check-overlay {
     position: absolute;
     top: 8px;
     right: 8px;
     width: 24px;
     height: 24px;
+    background: #3b82f6;
+    color: white;
     border-radius: 50%;
-    background: rgba(59, 130, 246, 1); /* Більш яскравий колір */
-    color: #fff;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.9rem;
+    font-size: 14px;
+    
     opacity: 0;
-    transition: opacity 0.2s, transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    transform: scale(0.8);
+    transform: scale(0.5);
+    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
   
   .grid-item.selected .check-overlay {
@@ -251,31 +246,37 @@ onMounted(load);
     transform: scale(1);
   }
   
+  /* --- ФУТЕР --- */
   .footer {
-    padding: 12px 16px;
-    border-top: 1px solid #f1f5f9;
+    padding: 16px;
+    border-top: 1px solid #e2e8f0;
+    background: #fff;
   }
   
   .confirm-btn {
     width: 100%;
+    padding: 12px;
     background: #3b82f6;
-    color: #fff;
+    color: white;
     border: none;
-    border-radius: 8px;
-    padding: 10px;
+    border-radius: 10px;
     font-weight: 600;
+    font-size: 1rem;
     cursor: pointer;
-    transition: background-color 0.2s;
+    transition: background 0.2s;
   }
   
   .confirm-btn:hover {
     background: #2563eb;
   }
   
+  /* --- СПІНЕР ТА ПОВІДОМЛЕННЯ --- */
   .state-msg {
     grid-column: 1 / -1;
-    padding: 20px;
-    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
     color: #94a3b8;
   }
   
@@ -285,57 +286,46 @@ onMounted(load);
     border: 3px solid #e2e8f0;
     border-top-color: #3b82f6;
     border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-    margin: 0 auto;
+    animation: spin 1s linear infinite;
   }
   
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
+  @keyframes spin { to { transform: rotate(360deg); } }
   
-  .gallery-fade-enter-active,
-  .gallery-fade-leave-active {
-    transition: opacity 0.2s ease;
-  }
-  .gallery-fade-enter-from,
-  .gallery-fade-leave-to {
-    opacity: 0;
-  }
-  
+  /* --- МОБІЛЬНА ВЕРСІЯ (ВИПРАВЛЕНО) --- */
   @media (max-width: 768px) {
     .gallery-overlay {
       padding: 0;
+      align-items: flex-end; /* Модалка виїжджає знизу або на весь екран */
     }
   
     .gallery-modal {
       width: 100%;
-      height: 100%;
+      height: 100%; /* На весь екран */
       max-width: 100%;
       max-height: 100%;
       border-radius: 0;
+      border: none;
+    }
+  
+    .header {
+      padding: 12px 16px; /* Трохи компактніше */
     }
   
     .grid-container {
-      /* На мобільних можна залишити 2 стовпці, або теж використати auto-fill */
+      /* Примусово 2 колонки на мобільному */
       grid-template-columns: repeat(2, 1fr);
-      max-height: none;
-      flex: 1;
-      gap: 10px;
+      gap: 8px;
       padding: 10px;
     }
-  
-    /* --- ЗМІНА 4: Видалено жорстку висоту --- */
-    /*
-    .grid-item img,
-    .video-placeholder {
-      height: 140px; <--- ЦЕ БУЛО ВИДАЛЕНО
-    }
+    
+    /* ТУТ БУВ FIX:
+       Ми не задаємо height для img.
+       Висота сама підтягнеться через aspect-ratio: 2/3 у .grid-item
     */
-    /* Тепер висота визначається aspect-ratio батьківського .grid-item */
   }
   
   /* Скролбар */
-  .custom-scrollbar::-webkit-scrollbar { width: 5px; }
-  .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+  .custom-scrollbar::-webkit-scrollbar { width: 6px; }
   .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+  .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
   </style>
