@@ -94,7 +94,7 @@ onMounted(load);
 </script>
 
 <style scoped>
-  /* --- ДЕСКТОП (ТВІЙ ОРИГІНАЛ) --- */
+  /* --- ДЕСКТОП (НЕ ЗМІНЮВАВ, ЯК БУЛО В ОРИГІНАЛІ) --- */
   .gallery-overlay {
     position: fixed;
     inset: 0;
@@ -173,11 +173,12 @@ onMounted(load);
   
   .grid-container {
     display: grid;
-    /* Десктоп лишив як було */
+    /* Десктоп залишив як було - адаптив */
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
     gap: 16px;
     padding: 16px;
     max-height: calc(85vh - 140px);
+    overflow-y: auto;
   }
   
   .grid-item {
@@ -295,6 +296,7 @@ onMounted(load);
   @media (max-width: 768px) {
     .gallery-overlay {
       padding: 0;
+      align-items: flex-end; /* Модалка виїжджає знизу або просто на весь екран */
     }
   
     .gallery-modal {
@@ -306,27 +308,27 @@ onMounted(load);
     }
   
     .grid-container {
-      /* 1. Жорстко 2 колонки */
+      /* 1. СТРОГО 2 стовпці */
       grid-template-columns: repeat(2, 1fr) !important;
       
-      /* 2. Великий відступ, щоб картинки не злипались */
-      gap: 15px !important;
-      padding: 15px;
+      /* 2. Відступи, щоб картинки не злипались */
+      gap: 10px !important;
+      padding: 10px;
       
+      /* 3. Запобігаємо накладанню */
+      align-items: start;
       max-height: none;
       flex: 1;
-      
-      /* Захист від накладання */
-      align-items: start;
     }
     
     .grid-item {
-        /* Прибираємо будь-які фіксовані розміри, якщо такі були */
-        height: auto;
+        /* Трішки вищий формат для мобільного, щоб довгі скріни влізали краще */
+        aspect-ratio: 9 / 16;
+        background: #f8fafc; /* Легкий фон, щоб бачити межі */
     }
     
     .grid-item img {
-       /* Картинка завжди повністю в блоці */
+       /* Показувати все зображення, не обрізати */
        object-fit: contain !important;
     }
   }
