@@ -252,8 +252,19 @@ let searchTimer = null;
 const fetchProducts = async (query = '') => {
   productsLoading.value = true;
   try {
-    const { data } = await axios.get('/products', { params: query ? { q: query } : {} });
-    products.value = Array.isArray(data) ? data : [];
+    const { data } = await axios.get('/products', {
+      params: {
+        q: query || undefined,
+        per_page: 200,
+      },
+    });
+    const payload = data || {};
+    const list = Array.isArray(payload?.data)
+      ? payload.data
+      : Array.isArray(payload)
+        ? payload
+        : [];
+    products.value = list;
   } catch (e) {
     console.error('Product fetch failed', e);
     products.value = [];
