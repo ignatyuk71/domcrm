@@ -169,26 +169,14 @@
           </div>
 
           <div class="p-3 bg-light border-bottom">
-            <div class="d-flex gap-2">
-              <div class="position-relative flex-grow-1">
-                <i class="bi bi-search position-absolute top-50 start-0 translate-middle-y ms-3 text-secondary opacity-50"></i>
-                <input
-                  class="form-control ps-5 rounded-3 border-0 shadow-sm"
-                  style="height: 42px;"
-                  v-model="searchTerm"
-                  placeholder="Пошук (назва, SKU)..."
-                  autofocus
-                />
-              </div>
-              <select
-                v-model="selectedCategory"
-                class="form-select rounded-3 border-0 shadow-sm"
-                style="width: 160px; height: 42px;"
-              >
-                <option value="">Всі категорії</option>
-                <option v-for="c in categories" :key="c" :value="c">{{ c }}</option>
-              </select>
-            </div>
+            <select
+              v-model="selectedCategory"
+              class="form-select rounded-3 border-0 shadow-sm"
+              style="width: 200px; height: 42px;"
+            >
+              <option value="">Всі категорії</option>
+              <option v-for="c in categories" :key="c" :value="c">{{ c }}</option>
+            </select>
           </div>
 
           <div ref="pickerBody" class="offcanvas-body p-0 bg-secondary bg-opacity-10 custom-scroll" @scroll="handleScroll">
@@ -268,7 +256,6 @@ const props = defineProps({
 });
 
 const pickerOpen = ref(false);
-const searchTerm = ref('');
 const loadingProducts = ref(false);
 const loadingMore = ref(false);
 const products = ref([]);
@@ -279,7 +266,6 @@ const pickerBody = ref(null);
 const page = ref(0);
 const perPage = 50;
 const hasMore = ref(true);
-let searchTimer = null;
 
 const total = computed(() =>
   Math.round(model.value.reduce((sum, i) => sum + (Number(i.qty) || 0) * (Number(i.price) || 0), 0) * 100) / 100
@@ -291,7 +277,6 @@ const netTotal = computed(() =>
 const filteredProducts = computed(() => products.value);
 
 function openPicker() {
-  searchTerm.value = '';
   selectedCategory.value = '';
   page.value = 0;
   hasMore.value = true;
@@ -324,7 +309,6 @@ async function fetchProducts(reset = false) {
   try {
     const targetPage = reset ? 1 : page.value + 1;
     const { data } = await searchProducts({
-      q: searchTerm.value || undefined,
       category: selectedCategory.value || undefined,
       page: targetPage,
       per_page: perPage,
@@ -377,16 +361,6 @@ function buildImageUrl(p) {
   if (clean.startsWith('public/')) clean = clean.replace(/^public\//, '');
   return clean.startsWith('storage/') ? `/${clean}` : `/storage/${clean}`;
 }
-
-watch(() => searchTerm.value, () => {
-    if (!pickerOpen.value) return;
-    if (searchTimer) clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => {
-      page.value = 0;
-      hasMore.value = true;
-      fetchProducts(true);
-    }, 400);
-});
 
 watch(() => selectedCategory.value, () => {
     if (!pickerOpen.value) return;

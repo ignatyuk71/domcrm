@@ -161,12 +161,10 @@
                 <h4>Каталог продукції</h4>
              </div>
              <div class="picker-search">
-               <i class="bi bi-search"></i>
-               <input
-                 v-model="productSearch"
-                 type="text"
-                 placeholder="Пошук за назвою або артикулом..."
-               />
+               <select v-model="selectedCategory">
+                 <option value="">Всі категорії</option>
+                 <option v-for="c in categories" :key="c" :value="c">{{ c }}</option>
+               </select>
              </div>
              <button class="close-picker-btn" @click="productPickerOpen = false"><i class="bi bi-x-lg"></i></button>
           </div>
@@ -243,18 +241,19 @@ const productPickerOpen = ref(false);
 const selectedProductIds = ref([]);
 const deliveryModalOpen = ref(false);
 const paymentModalOpen = ref(false);
-const productSearch = ref('');
+const categories = ref([]);
+const selectedCategory = ref('');
 const products = ref([]);
 const productsLoading = ref(false);
 const placeholderImage = 'https://via.placeholder.com/96x96?text=%20';
-let searchTimer = null;
+const categoriesLoading = ref(false);
 
-const fetchProducts = async (query = '') => {
+const fetchProducts = async () => {
   productsLoading.value = true;
   try {
     const { data } = await axios.get('/products', {
       params: {
-        q: query || undefined,
+        category: selectedCategory.value || undefined,
         per_page: 200,
       },
     });
@@ -273,11 +272,23 @@ const fetchProducts = async (query = '') => {
   }
 };
 
-watch(productSearch, (val) => {
-  if (searchTimer) clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => {
-    fetchProducts(val.trim());
-  }, 400);
+const fetchCategories = async () => {
+  if (categoriesLoading.value) return;
+  categoriesLoading.value = true;
+  try {
+    const { data } = await axios.get('/products/categories');
+    categories.value = Array.isArray(data) ? data : [];
+  } catch (e) {
+    console.error('Categories fetch failed', e);
+    categories.value = [];
+  } finally {
+    categoriesLoading.value = false;
+  }
+};
+
+watch(selectedCategory, () => {
+  if (!productPickerOpen.value) return;
+  fetchProducts();
 });
 
 const hasDraft = computed(() => props.orderDraft.items?.length > 0);
@@ -315,8 +326,10 @@ const formatCourierAddress = (d) => [d.street_name, d.building && `буд. ${d.b
 
 const openPicker = () => { 
   selectedProductIds.value = props.orderDraft.items.map(item => item.id); 
+  selectedCategory.value = '';
   productPickerOpen.value = true; 
-  if (!products.value.length) fetchProducts('');
+  if (!products.value.length) fetchProducts();
+  if (!categories.value.length) fetchCategories();
 };
 
 const toggleProductSelection = (p) => { 
