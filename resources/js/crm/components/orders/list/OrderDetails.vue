@@ -257,6 +257,9 @@
               </div>
   
               <div class="address-block">
+                <button class="btn-copy-icon" type="button" @click="copyAddress" title="Копіювати адресу">
+                  <i class="bi bi-clipboard"></i>
+                </button>
                 <div class="address-row">
                   <i class="bi bi-geo-alt-fill text-muted"></i>
                   <span class="text-dark fw-medium">
@@ -275,13 +278,7 @@
                     {{ order.delivery_payer || '—' }}
                   </span>
                 </div>
-                <div class="address-actions">
-                  <button class="btn-copy-address" type="button" @click="copyAddress">
-                    <i class="bi bi-clipboard me-1"></i>
-                    Копіювати адресу
-                  </button>
-                  <span v-if="isAddressCopied" class="copy-toast">Скопійовано</span>
-                </div>
+                <span v-if="isAddressCopied" class="copy-toast">Скопійовано</span>
               </div>
   
               <div class="ttn-section mt-3">
@@ -566,23 +563,24 @@
   @keyframes spin { 100% { transform: rotate(360deg); } }
   
   /* ADDRESS */
-.address-block { display: flex; flex-direction: column; gap: 6px; }
+.address-block { position: relative; display: flex; flex-direction: column; gap: 6px; padding-right: 36px; }
 .address-row { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; }
-.address-actions { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
-.btn-copy-address {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+.btn-copy-icon {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
   border: 1px solid #e2e8f0;
   background: #ffffff;
-  color: #475569;
-  border-radius: 8px;
-  padding: 6px 10px;
-  font-size: 0.75rem;
-  font-weight: 600;
+  color: #64748b;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   transition: all 0.2s;
 }
-.btn-copy-address:hover {
+.btn-copy-icon:hover {
   background: #f8fafc;
   border-color: #cbd5e1;
   color: #1f2937;
