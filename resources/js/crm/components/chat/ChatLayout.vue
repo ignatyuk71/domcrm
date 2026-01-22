@@ -32,16 +32,16 @@ defineProps({
 /* Обгортка для всього чату, щоб він займав доступну висоту */
 .chat-wrapper {
   height: calc(100vh - 100px); /* Висота мінус хедер CRM */
-  padding: 16px;
+
   background-color: #f1f5f9; /* Світло-сірий фон сторінки */
 }
 
 .chat-container {
   display: grid;
   /* Три колонки: Список (320px), Чат (гнучкий), Профіль (300px) */
-  grid-template-columns: 320px 1fr 300px;
+  grid-template-columns: 320px 1fr 400px;
   height: 100%;
-  gap: 16px;
+  gap: 10px;
   max-width: 1600px;
   margin: 0 auto;
 }
@@ -51,8 +51,8 @@ defineProps({
 .chat-thread,
 .chat-profile {
   background: #fff;
-  border-radius: 16px;
-  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  border: 1px solid #818cf8;
   overflow: hidden; /* Щоб внутрішні скроли працювали правильно */
   display: flex;
   flex-direction: column;
