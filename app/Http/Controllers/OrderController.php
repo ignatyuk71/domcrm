@@ -75,8 +75,10 @@ class OrderController extends Controller
                     return $q;
                 }
 
-                return $q->whereHas('statusRef', function ($sq) use ($values) {
-                    $sq->whereIn('code', $values);
+                return $q->where(function ($sq) use ($values) {
+                    $sq->whereHas('statusRef', function ($statusQuery) use ($values) {
+                        $statusQuery->whereIn('code', $values);
+                    })->orWhereIn('status', $values);
                 });
             })
             ->when($request->filled('payment_status'), fn ($q) => $q->where('payment_status', $request->string('payment_status')))
