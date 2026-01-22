@@ -197,7 +197,7 @@ const vClickOutside = {
   padding-bottom: 4px; /* Місце для тіні при ховері */
 }
 
-.filter-chip { height: 36px; padding: 0 16px; border-radius: 10px; border: 1px solid #e2e8f0; background: #fff; color: #64748b; font-size: 0.85rem; font-weight: 600; white-space: nowrap; transition: all 0.2s; display: flex; align-items: center; gap: 8px; cursor: pointer; flex-shrink: 0; }
+.filter-chip { height: 36px; padding: 0 5px; border-radius: 7px; border: 1px solid #e2e8f0; background: #fff; color: #64748b; font-size: 0.85rem; font-weight: 500; white-space: nowrap; transition: all 0.2s; display: flex; align-items: center; gap: 8px; cursor: pointer; flex-shrink: 0; }
 .filter-chip:hover { background: #f8fafc; border-color: #cbd5e1; color: #334155; }
 .filter-chip.active { border-color: transparent; transform: translateY(-1px); }
 
