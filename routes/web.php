@@ -30,6 +30,7 @@ Route::get('/', function () {
 });
 
 Route::view('/privacy-policy', 'privacy')->name('privacy');
+Route::view('/terms-of-use', 'terms-of-use')->name('terms-of-use');
 
 
 Route::get('/dashboard', function () {
