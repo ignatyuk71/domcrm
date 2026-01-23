@@ -9,7 +9,7 @@
     <meta property="og:description" content="Умови доступу та користування сервісом DomCRM.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="{{ route('terms-of-use') }}">
-    <meta property="og:image" content="{{ asset('og-image.png') }}">
+    <meta property="og:image" content="{{ asset('favicon.svg') }}">
     <meta property="og:image:alt" content="DomCRM">
     <meta property="fb:app_id" content="891346010058329">
     <style>
