@@ -29,6 +29,8 @@ Route::get('/', function () {
     return view('welcome');
 });
 
+Route::view('/privacy-policy', 'privacy')->name('privacy');
+
 
 Route::get('/dashboard', function () {
     $today = Carbon::today();
@@ -238,8 +240,6 @@ Route::middleware('auth')->group(function () {
         return response('ok');
     });
 
-
-    Route::view('/privacy', 'privacy');
 
     Route::get('/check-logs', function () {
         $path = storage_path('logs/laravel.log');
