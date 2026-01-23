@@ -4,6 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Політика конфіденційності | DomCRM</title>
+    <meta name="description" content="Політика конфіденційності DomCRM. Як ми обробляємо, зберігаємо та захищаємо персональні дані користувачів сервісу.">
+    <meta property="og:title" content="Політика конфіденційності | DomCRM">
+    <meta property="og:description" content="Політика конфіденційності DomCRM. Як ми обробляємо, зберігаємо та захищаємо персональні дані користувачів сервісу.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="{{ route('privacy') }}">
+    <meta property="og:image" content="{{ asset('favicon.svg') }}">
+    <meta property="og:image:alt" content="DomCRM">
     <style>
         body { font-family: sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; }
         h1 { color: #2c3e50; border-bottom: 2px solid #eee; padding-bottom: 10px; }
