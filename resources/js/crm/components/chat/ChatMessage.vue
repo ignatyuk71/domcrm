@@ -27,10 +27,17 @@
         <template v-for="(att, index) in normalizedAttachments" :key="index">
           
           <div v-if="att.type === 'image'" class="attachment-img-wrapper">
+            <div v-if="isAttachmentLoading(index)" class="attachment-spinner"></div>
+            <div v-else-if="isAttachmentError(index)" class="attachment-error">
+              <i class="bi bi-image"></i>
+            </div>
             <img 
               :src="att.url" 
               alt="attachment" 
               loading="lazy" 
+              :class="{ 'is-loading': isAttachmentLoading(index) }"
+              @load="markAttachmentLoaded(index)"
+              @error="markAttachmentError(index)"
               @click="$emit('image-click', att.url)"
             />
           </div>
@@ -57,7 +64,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 const props = defineProps({
   message: { type: Object, required: true },
@@ -101,6 +108,30 @@ const normalizedAttachments = computed(() => {
     return { type, url };
   });
 });
+
+const attachmentState = ref([]);
+
+watch(
+  normalizedAttachments,
+  (next) => {
+    attachmentState.value = next.map(() => ({ loading: true, error: false }));
+  },
+  { immediate: true }
+);
+
+const isAttachmentLoading = (index) => attachmentState.value[index]?.loading !== false;
+const isAttachmentError = (index) => attachmentState.value[index]?.error === true;
+
+const markAttachmentLoaded = (index) => {
+  if (!attachmentState.value[index]) return;
+  attachmentState.value[index].loading = false;
+};
+
+const markAttachmentError = (index) => {
+  if (!attachmentState.value[index]) return;
+  attachmentState.value[index].loading = false;
+  attachmentState.value[index].error = true;
+};
 
 const hasReplyAttachment = computed(() => {
   return props.message.reply_to?.attachments?.length > 0;
@@ -264,6 +295,37 @@ const statusIcon = computed(() => {
 }
 
 /* Картинки */
+.attachment-img-wrapper {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f1f5f9;
+}
+
+.attachment-spinner,
+.attachment-error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.attachment-spinner::after {
+  content: '';
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 3px solid rgba(148, 163, 184, 0.35);
+  border-top-color: rgba(51, 65, 85, 0.7);
+  animation: attachment-spin 0.8s linear infinite;
+}
+
+.attachment-error {
+  color: #94a3b8;
+  font-size: 1.2rem;
+}
+
 .attachment-img-wrapper img {
   display: block;
   max-width: 100%;
@@ -274,8 +336,16 @@ const statusIcon = computed(() => {
   transition: opacity 0.2s;
 }
 
+.attachment-img-wrapper img.is-loading {
+  opacity: 0;
+}
+
 .attachment-img-wrapper img:hover {
   opacity: 0.9;
+}
+
+@keyframes attachment-spin {
+  to { transform: rotate(360deg); }
 }
 
 /* Файли */
