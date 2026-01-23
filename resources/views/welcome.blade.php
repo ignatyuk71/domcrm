@@ -356,6 +356,8 @@
                         <li><a href="#" class="text-reset text-decoration-none">Про нас</a></li>
                         <li><a href="#" class="text-reset text-decoration-none">Контакти</a></li>
                         <li><a href="#" class="text-reset text-decoration-none">Блог</a></li>
+                        <li><a href="{{ route('privacy') }}" class="text-reset text-decoration-none">Політика конфіденційності</a></li>
+                        <li><a href="{{ route('terms-of-use') }}" class="text-reset text-decoration-none">Умови користування</a></li>
                     </ul>
                 </div>
                  <div class="col-lg-3">
