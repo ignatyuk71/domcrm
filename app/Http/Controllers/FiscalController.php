@@ -104,8 +104,7 @@ class FiscalController extends Controller
             'fiscal_code' => $latest->fiscal_code,
             'check_link' => $latest->check_link,
             'total_amount' => $latest->total_amount, // сума останньої спроби
-            '
-            already_paid_cents' => $successSum, // сума всіх успішних
+            'already_paid_cents' => $successSum, // сума всіх успішних
             'total_order_cents' => $totalOrderCents,
             'receipt_id' => $latest->id,
             'uuid' => $latest->uuid,

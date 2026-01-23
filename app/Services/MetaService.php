@@ -135,14 +135,16 @@ class MetaService
             // Обробляємо вкладення так само, як у вебхуку, щоб зберегти їх локально
             $rawAttachments = $msgData['attachments']['data'] ?? [];
             $processedAttachments = [];
+            $shouldRefreshAttachments = !empty($rawAttachments)
+                && (!$existing || empty($existing->attachments) || $this->attachmentsNeedRefresh($existing->attachments));
 
-            if (!empty($rawAttachments) && (!$existing || empty($existing->attachments))) {
+            if ($shouldRefreshAttachments) {
                 foreach ($rawAttachments as $att) {
                     // Використовуємо наш метод завантаження
                     $processedAttachments[] = $this->processAttachment($att);
                 }
             }
-            $storedAttachments = $existing && !empty($existing->attachments)
+            $storedAttachments = ($existing && !empty($existing->attachments) && !$shouldRefreshAttachments)
                 ? $existing->attachments
                 : (!empty($processedAttachments) ? $processedAttachments : null);
             $hasAttachments = !empty($storedAttachments);
@@ -251,12 +253,18 @@ class MetaService
      */
     public function processAttachment(array $attachment): array
     {
-        $type = $attachment['type'] ?? 'file';
-        $payload = $attachment['payload'] ?? [];
-        $remoteUrl = $payload['url'] ?? ($attachment['url'] ?? null);
+        $type = $this->resolveAttachmentType($attachment);
+        $remoteUrl = $this->extractAttachmentUrl($attachment);
 
-        if (!$remoteUrl || !str_starts_with($remoteUrl, 'http')) {
+        if (!$remoteUrl) {
             return $attachment;
+        }
+
+        if (!str_starts_with($remoteUrl, 'http')) {
+            return [
+                'type' => $type,
+                'url' => $remoteUrl,
+            ];
         }
 
         $appUrl = rtrim((string) config('app.url'), '/');
@@ -274,16 +282,22 @@ class MetaService
         try {
             $response = Http::timeout(10)->get($remoteUrl);
             if ($response->failed()) {
-                throw new \RuntimeException('Failed to download file');
+                Log::warning('Attachment download failed', [
+                    'url' => $remoteUrl,
+                    'status' => $response->status(),
+                    'body' => Str::limit($response->body(), 200),
+                ]);
+                return [
+                    'type' => $type,
+                    'url' => $remoteUrl,
+                ];
             }
 
             $fileContent = $response->body();
 
-            $extension = 'jpg';
-            $pathInfo = pathinfo(parse_url($remoteUrl, PHP_URL_PATH));
-            if (!empty($pathInfo['extension'])) {
-                $extension = $pathInfo['extension'];
-            }
+            $mimeType = data_get($attachment, 'mime_type')
+                ?? data_get($attachment, 'payload.mime_type');
+            $extension = $this->guessExtension($remoteUrl, $mimeType);
 
             $fileName = time().'_'.bin2hex(random_bytes(4)).'.'.strtolower($extension);
             $relativePath = 'attachments/' . date('Y/m/d') . '/' . $fileName;
@@ -298,12 +312,123 @@ class MetaService
             ];
 
         } catch (\Throwable $e) {
-            Log::warning('Attachment download failed: ' . $e->getMessage());
+            Log::warning('Attachment download failed', [
+                'url' => $remoteUrl,
+                'error' => $e->getMessage(),
+            ]);
             return [
                 'type' => $type,
                 'url' => $remoteUrl,
             ];
         }
+    }
+
+    private function extractAttachmentUrl(array $attachment): ?string
+    {
+        $candidates = [
+            data_get($attachment, 'payload.url'),
+            data_get($attachment, 'payload.image_data.url'),
+            data_get($attachment, 'payload.video_data.url'),
+            data_get($attachment, 'payload.file_url'),
+            data_get($attachment, 'image_data.url'),
+            data_get($attachment, 'video_data.url'),
+            data_get($attachment, 'file_url'),
+            data_get($attachment, 'url'),
+        ];
+
+        foreach ($candidates as $url) {
+            if (is_string($url) && $url !== '') {
+                return $url;
+            }
+        }
+
+        return null;
+    }
+
+    private function resolveAttachmentType(array $attachment): string
+    {
+        $type = data_get($attachment, 'type');
+        if (is_string($type) && $type !== '') {
+            return $type;
+        }
+
+        $mimeType = data_get($attachment, 'mime_type')
+            ?? data_get($attachment, 'payload.mime_type');
+
+        if (is_string($mimeType)) {
+            if (str_starts_with($mimeType, 'image/')) {
+                return 'image';
+            }
+            if (str_starts_with($mimeType, 'video/')) {
+                return 'video';
+            }
+        }
+
+        return 'file';
+    }
+
+    private function guessExtension(?string $remoteUrl, ?string $mimeType): string
+    {
+        $extension = '';
+        if ($remoteUrl) {
+            $path = parse_url($remoteUrl, PHP_URL_PATH);
+            if ($path) {
+                $pathInfo = pathinfo($path);
+                if (!empty($pathInfo['extension'])) {
+                    $extension = $pathInfo['extension'];
+                }
+            }
+        }
+
+        if ($extension === '' && is_string($mimeType)) {
+            $map = [
+                'image/jpeg' => 'jpg',
+                'image/png' => 'png',
+                'image/webp' => 'webp',
+                'image/gif' => 'gif',
+                'video/mp4' => 'mp4',
+                'video/quicktime' => 'mov',
+                'video/webm' => 'webm',
+                'application/pdf' => 'pdf',
+            ];
+            $extension = $map[$mimeType] ?? '';
+        }
+
+        return $extension !== '' ? $extension : 'jpg';
+    }
+
+    private function attachmentsNeedRefresh($attachments): bool
+    {
+        if (!is_array($attachments) || $attachments === []) {
+            return true;
+        }
+
+        foreach ($attachments as $attachment) {
+            if (!is_array($attachment)) {
+                return true;
+            }
+            $url = $attachment['url'] ?? $this->extractAttachmentUrl($attachment);
+            if (!$url || !$this->isLocalAttachmentUrl($url)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function isLocalAttachmentUrl(string $url): bool
+    {
+        $trimmed = ltrim($url, '/');
+        if (str_starts_with($trimmed, 'chat/')) {
+            return true;
+        }
+
+        $appUrl = rtrim((string) config('app.url'), '/');
+        if ($appUrl !== '' && str_starts_with($url, $appUrl . '/chat/')) {
+            return true;
+        }
+
+        return false;
     }
 
     public function touchConversation(
