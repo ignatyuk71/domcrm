@@ -43,8 +43,8 @@ class OrderController extends Controller
                 'delivery',
                 'payment:id,order_id,prepay_amount,currency,method',
                 'items' => fn ($q) => $q
-                    ->select('id', 'order_id', 'product_id', 'product_title', 'sku', 'size', 'price', 'qty', 'total')
-                    ->with('product:id,main_photo_path'),
+                    ->select('id', 'order_id', 'product_id', 'product_variant_id', 'product_title', 'sku', 'size', 'price', 'qty', 'total')
+                    ->with(['product:id,main_photo_path,color_id', 'product.color:id,name']),
                 'latestFiscalReceipt' => fn ($q) => $q->select(
                     'fiscal_receipts.id',
                     'fiscal_receipts.order_id',
@@ -169,6 +169,7 @@ class OrderController extends Controller
             'items.*.qty' => ['required', 'integer', 'min:1'],
             'items.*.price' => ['required', 'numeric', 'min:0'],
             'items.*.product_id' => ['nullable', 'integer', 'exists:products,id'],
+            'items.*.product_variant_id' => ['nullable', 'integer', 'exists:product_variants,id'],
 
             'payment.method' => ['required', 'string', 'max:32'],
             'payment.prepay_amount' => ['nullable', 'numeric', 'min:0'],
@@ -250,6 +251,7 @@ class OrderController extends Controller
                 OrderItem::create([
                     'order_id' => $order->id,
                     'product_id' => $item['product_id'] ?? null,
+                    'product_variant_id' => $item['product_variant_id'] ?? null,
                     'product_title' => $item['title'] ?? null,
                     'sku' => $item['sku'] ?? null,
                     'size' => $item['size'] ?? null,
@@ -324,6 +326,7 @@ class OrderController extends Controller
             'items.*.qty' => ['required', 'integer', 'min:1'],
             'items.*.price' => ['required', 'numeric', 'min:0'],
             'items.*.product_id' => ['nullable', 'integer', 'exists:products,id'],
+            'items.*.product_variant_id' => ['nullable', 'integer', 'exists:product_variants,id'],
 
             'payment.method' => ['required', 'string', 'max:32'],
             'payment.prepay_amount' => ['nullable', 'numeric', 'min:0'],
@@ -383,6 +386,7 @@ class OrderController extends Controller
             foreach ($data['items'] as $item) {
                 $order->items()->create([
                     'product_id' => $item['product_id'] ?? null,
+                    'product_variant_id' => $item['product_variant_id'] ?? null,
                     'product_title' => $item['title'] ?? null,
                     'sku' => $item['sku'] ?? null,
                     'size' => $item['size'] ?? null,

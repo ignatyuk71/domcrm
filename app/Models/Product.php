@@ -19,7 +19,8 @@ class Product extends Model
      */
     protected $fillable = [
         'title',
-        'category',
+        'category_id',
+        'color_id',
         'sku',
 
         'weight_g',
@@ -53,6 +54,21 @@ class Product extends Model
 
         'is_active'  => 'boolean',
     ];
+
+    public function category()
+    {
+        return $this->belongsTo(Category::class);
+    }
+
+    public function color()
+    {
+        return $this->belongsTo(Color::class);
+    }
+
+    public function variants()
+    {
+        return $this->hasMany(ProductVariant::class);
+    }
 
     /**
      * Повний URL до головного фото (для фронту).

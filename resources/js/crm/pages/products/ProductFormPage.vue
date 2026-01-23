@@ -52,19 +52,25 @@
               </div>
 
               <div class="row g-3 mb-4">
-                 <div class="col-md-6">
+                 <div class="col-md-4">
                     <label class="form-label-custom">Категорія</label>
                     <div class="position-relative">
-                      <select v-model="form.category" class="form-select form-select-modern">
+                      <select v-model="form.category_id" class="form-select form-select-modern">
                         <option disabled value="">Оберіть категорію...</option>
-                        <option>Пухнасті тапки</option>
-                        <option>Тапки дитячі</option>
-                        <option>Капці (непухнасті)</option>
-                        <option>Аксесуари</option>
+                        <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
                       </select>
                     </div>
                  </div>
-                 <div class="col-md-6">
+                 <div class="col-md-4">
+                    <label class="form-label-custom">Колір</label>
+                    <div class="position-relative">
+                      <select v-model="form.color_id" class="form-select form-select-modern">
+                        <option disabled value="">Оберіть колір...</option>
+                        <option v-for="c in colors" :key="c.id" :value="c.id">{{ c.name }}</option>
+                      </select>
+                    </div>
+                 </div>
+                 <div class="col-md-4">
                     <label class="form-label-custom">SKU (Артикул)</label>
                     <input
                       v-model.trim="form.sku"
@@ -138,6 +144,7 @@
                     v-model.number="form.stock_qty"
                     type="number" min="0" step="1"
                     class="form-control form-control-modern"
+                    :readonly="form.variants.length > 0"
                     placeholder="0"
                   >
                 </div>
@@ -150,6 +157,56 @@
                     placeholder="0"
                   >
                 </div>
+              </div>
+            </div>
+
+            <div class="clean-card mb-4">
+              <div class="card-title-section">
+                <i class="bi bi-ui-checks-grid text-primary me-2"></i>Варіанти (Розміри)
+              </div>
+
+              <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                  <thead>
+                    <tr class="text-muted text-uppercase small">
+                      <th style="width: 25%;">Розмір</th>
+                      <th style="width: 35%;">SKU</th>
+                      <th style="width: 20%;">Залишок</th>
+                      <th style="width: 10%;">Активний</th>
+                      <th style="width: 10%;"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(v, idx) in form.variants" :key="v.local_id">
+                      <td>
+                        <input v-model.trim="v.size" type="text" class="form-control form-control-modern form-control-sm" placeholder="38-39">
+                      </td>
+                      <td>
+                        <input v-model.trim="v.sku" type="text" class="form-control form-control-modern form-control-sm" placeholder="SKU-38-39">
+                      </td>
+                      <td>
+                        <input v-model.number="v.stock_qty" type="number" min="0" step="1" class="form-control form-control-modern form-control-sm" placeholder="0">
+                      </td>
+                      <td class="text-center">
+                        <input v-model="v.is_active" type="checkbox" class="form-check-input" />
+                      </td>
+                      <td class="text-end">
+                        <button type="button" class="btn btn-light btn-sm" @click="removeVariant(idx)">
+                          <i class="bi bi-trash"></i>
+                        </button>
+                      </td>
+                    </tr>
+                    <tr v-if="!form.variants.length">
+                      <td colspan="5" class="text-center text-muted small py-3">Додайте розміри для моделі</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="mt-3">
+                <button type="button" class="btn btn-outline-primary btn-sm" @click="addVariant">
+                  <i class="bi bi-plus-lg me-1"></i>Додати розмір
+                </button>
               </div>
             </div>
           </div>
@@ -289,7 +346,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import http from '@/crm/api/http'
 
 const props = defineProps({
@@ -299,6 +356,10 @@ const props = defineProps({
 const loading = ref(false)
 const fileInput = ref(null)
 const imageFile = ref(null)
+const categories = ref([])
+const colors = ref([])
+const isLoadingCategories = ref(false)
+const isLoadingColors = ref(false)
 const previewUrl = ref(
   props.initialProduct?.main_photo_path ? `/storage/${props.initialProduct.main_photo_path}` : ''
 )
@@ -308,7 +369,8 @@ const showPreview = ref(false)
 const form = reactive({
   id: props.initialProduct?.id ?? null,
   title: props.initialProduct?.title ?? '',
-  category: props.initialProduct?.category ?? '',
+  category_id: props.initialProduct?.category_id ?? '',
+  color_id: props.initialProduct?.color_id ?? '',
   weight_g: props.initialProduct?.weight_g ?? null,
   length_cm: props.initialProduct?.length_cm ?? null,
   width_cm: props.initialProduct?.width_cm ?? null,
@@ -321,6 +383,16 @@ const form = reactive({
   min_stock: props.initialProduct?.min_stock ?? null,
   description: props.initialProduct?.description ?? '',
   main_photo_path: props.initialProduct?.main_photo_path ?? '',
+  variants: Array.isArray(props.initialProduct?.variants)
+    ? props.initialProduct.variants.map((v) => ({
+      local_id: `v-${v.id}`,
+      id: v.id,
+      size: v.size || '',
+      sku: v.sku || '',
+      stock_qty: Number(v.stock_qty || 0),
+      is_active: v.is_active !== false,
+    }))
+    : [],
 })
 
 const errors = reactive({ title: '' })
@@ -337,7 +409,8 @@ const currencyShort = computed(() => form.currency || 'UAH')
 
 const pv = computed(() => {
   const title = form.title?.trim() || 'Без назви'
-  const category = form.category?.trim() || 'Без категорії'
+  const categoryName = categories.value.find((c) => c.id === form.category_id)?.name
+  const category = categoryName || 'Без категорії'
   const description = form.description?.trim() || 'Опис відсутній'
   const price =
     form.sale_price !== null && form.sale_price !== undefined && form.sale_price !== ''
@@ -350,6 +423,62 @@ const pv = computed(() => {
       : '0'
   return { title, category, description, price, sku, stock }
 })
+
+const syncStockFromVariants = () => {
+  if (!form.variants.length) return;
+  form.stock_qty = form.variants.reduce((sum, v) => sum + Number(v.stock_qty || 0), 0);
+};
+
+const addVariant = () => {
+  form.variants.push({
+    local_id: `v-new-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    size: '',
+    sku: '',
+    stock_qty: 0,
+    is_active: true,
+  });
+};
+
+const removeVariant = (idx) => {
+  form.variants.splice(idx, 1);
+  syncStockFromVariants();
+};
+
+const loadCategories = async () => {
+  if (isLoadingCategories.value) return;
+  isLoadingCategories.value = true;
+  try {
+    const { data } = await http.get('/products/categories', { headers: { Accept: 'application/json' } });
+    categories.value = Array.isArray(data) ? data : [];
+  } catch (e) {
+    console.error('Не вдалося завантажити категорії', e);
+    categories.value = [];
+  } finally {
+    isLoadingCategories.value = false;
+  }
+};
+
+const loadColors = async () => {
+  if (isLoadingColors.value) return;
+  isLoadingColors.value = true;
+  try {
+    const { data } = await http.get('/products/colors', { headers: { Accept: 'application/json' } });
+    colors.value = Array.isArray(data) ? data : [];
+  } catch (e) {
+    console.error('Не вдалося завантажити кольори', e);
+    colors.value = [];
+  } finally {
+    isLoadingColors.value = false;
+  }
+};
+
+watch(
+  () => form.variants.map((v) => [v.size, v.sku, v.stock_qty, v.is_active]),
+  () => {
+    syncStockFromVariants();
+  },
+  { deep: true }
+);
 
 function pickFile() {
   fileInput.value?.click()
@@ -403,11 +532,22 @@ async function performSave() {
     const fd = new FormData()
     Object.entries(form).forEach(([key, val]) => {
       if (key === 'main_photo_path') return
+      if (key === 'variants') return
       if (val === null || val === undefined) return
       if (typeof val === 'string' && val.trim() === '' && key !== 'title') return
       fd.append(key, val)
     })
     if (imageFile.value) fd.append('main_photo', imageFile.value)
+    fd.append('variants', JSON.stringify(form.variants.map((v) => ({
+      size: v.size,
+      sku: v.sku,
+      stock_qty: v.stock_qty,
+      is_active: v.is_active,
+    }))))
+    if (form.variants.length) {
+      syncStockFromVariants();
+      fd.set('stock_qty', form.stock_qty || 0);
+    }
 
     if (isEdit.value) {
       fd.append('_method', 'PUT')
@@ -424,6 +564,9 @@ async function performSave() {
     loading.value = false
   }
 }
+
+loadCategories();
+loadColors();
 </script>
 
 <style scoped>

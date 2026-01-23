@@ -272,6 +272,8 @@ function mapOrder(order) {
     items: (order.items || []).map((item) => ({
       ...item,
       title: item.product_title || item.title || 'Товар',
+      size: item.size || '',
+      color_name: item.color_name || item.product?.color?.name || '',
       photo: buildPhotoUrl(
         item.product?.main_photo_url ||
           item.product?.main_photo_path ||

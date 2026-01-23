@@ -57,7 +57,7 @@ class NovaPoshtaService
      */
     public function createWaybill(\App\Models\Order $order)
     {
-        $order->load(['delivery', 'customer', 'items.product', 'payment']);
+        $order->load(['delivery', 'customer', 'items.product.category', 'items.product.color', 'payment']);
         
         $delivery = $order->delivery;
         $customer = $order->customer;
@@ -208,15 +208,20 @@ class NovaPoshtaService
     {
         $parts = [];
         foreach ($order->items as $item) {
-            $desc = trim((string) ($item->product?->description ?? ''));
-            if ($desc === '') {
+            $category = trim((string) ($item->product?->category?->name ?? ''));
+            $color = trim((string) ($item->product?->color?->name ?? ''));
+            $size = trim((string) ($item->size ?? ''));
+
+            $labelParts = array_values(array_filter([$category, $color, $size]));
+            if (!$labelParts) {
                 continue;
             }
+
             $qty = (int) ($item->qty ?: 1);
-            $parts[] = $desc . ' ' . ($qty > 1 ? "- {$qty} пари" : '- 1 пара');
+            $parts[] = implode('/', $labelParts) . ' - ' . max($qty, 1).'пар.';
         }
 
-        $summary = trim(preg_replace('/\s+/', ' ', implode('; ', $parts)));
+        $summary = trim(implode('; ', $parts));
         if ($summary === '') {
             return '';
         }

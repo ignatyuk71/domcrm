@@ -540,6 +540,7 @@ const createOrderFromDraft = async () => {
     },
     items: orderDraft.items.map((item) => ({
       product_id: item.product_id || item.id || null,
+      product_variant_id: item.product_variant_id || null,
       title: item.title || '',
       sku: item.sku || '',
       qty: Number(item.qty || 1),

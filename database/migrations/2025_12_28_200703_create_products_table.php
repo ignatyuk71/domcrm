@@ -16,7 +16,6 @@ return new class extends Migration
 
             // Основне
             $table->string('title');                 // Назва товару
-            $table->string('category')->nullable();  // Категорія (поки рядком)
             $table->string('sku')->nullable();       // Артикул
 
             // Розміри за замовчуванням

@@ -262,6 +262,7 @@ async function loadOrder() {
     form.items = (order.items || []).map((i) => ({
       id: i.id,
       product_id: i.product_id,
+      product_variant_id: i.product_variant_id || null,
       sku: i.sku,
       title: i.product_title || i.title,
       size: i.size,

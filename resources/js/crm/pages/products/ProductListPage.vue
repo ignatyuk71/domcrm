@@ -36,8 +36,8 @@
                   @change="loadProducts(1)"
                 >
                   <option value="">Всі категорії</option>
-                  <option v-for="c in categories" :key="c" :value="c">
-                    {{ c }}
+                  <option v-for="c in categories" :key="c.id" :value="c.id">
+                    {{ c.name }}
                   </option>
                 </select>
               </div>
@@ -59,6 +59,7 @@
               <th style="min-width: 280px;">Назва товару</th>
               <th style="min-width: 110px;">SKU (Артикул)</th>
               <th style="min-width: 110px;">Категорія</th>
+              <th style="min-width: 120px;">Колір</th>
               <th class="text-center" style="min-width: 100px;">Запас</th>
               <th class="text-end" style="min-width: 120px;">Ціна</th>
               <th class="text-end pe-4" style="width: 100px;">Дії</th>
@@ -90,7 +91,13 @@
 
               <td>
                 <span class="text-dark small fw-medium">
-                  {{ p.category || '—' }}
+                  {{ p.category_name || '—' }}
+                </span>
+              </td>
+
+              <td>
+                <span class="text-dark small fw-medium">
+                  {{ p.color_name || '—' }}
                 </span>
               </td>
 
@@ -130,7 +137,7 @@
             </tr>
 
             <tr v-if="products.length === 0 && !isLoading">
-              <td colspan="7" class="text-center py-5">
+              <td colspan="8" class="text-center py-5">
                 <div class="empty-state">
                   <div class="empty-icon mb-3">
                     <i class="bi bi-box-seam"></i>
@@ -236,6 +243,11 @@ const loadProducts = async (page = 1) => {
     products.value = arr.map((p) => ({
       ...p,
       imageUrl: p?.main_photo_path ? `/storage/${p.main_photo_path}` : '',
+      category_name: p?.category?.name || p.category || '',
+      color_name: p?.color?.name || '',
+      stock_qty: Array.isArray(p.variants)
+        ? p.variants.reduce((sum, v) => sum + Number(v.stock_qty || 0), 0)
+        : p.stock_qty,
     }))
 
     if (payload?.current_page) {

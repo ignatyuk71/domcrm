@@ -161,9 +161,9 @@
                 <h4>Каталог продукції</h4>
              </div>
              <div class="picker-search">
-               <select v-model="selectedCategory">
-                 <option value="">Всі категорії</option>
-                 <option v-for="c in categories" :key="c" :value="c">{{ c }}</option>
+                 <select v-model="selectedCategory">
+                  <option value="">Всі категорії</option>
+                  <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
                </select>
              </div>
              <button class="close-picker-btn" @click="productPickerOpen = false"><i class="bi bi-x-lg"></i></button>
@@ -176,25 +176,50 @@
              <div v-else-if="!products.length" class="picker-empty">
                Нічого не знайдено
              </div>
-             <div v-else v-for="p in products" :key="p.id" 
-                  class="picker-row-modern" 
-                  :class="{ active: selectedProductIds.includes(p.id) }"
-                  @click="toggleProductSelection(p)">
-                <div class="cb-modern" :class="{ checked: selectedProductIds.includes(p.id) }">
-                   <i class="bi bi-check-lg" v-if="selectedProductIds.includes(p.id)"></i>
+             <div v-else v-for="group in groupedProducts" :key="group.product_id" class="picker-group">
+                <div class="picker-group-head" @click="toggleGroup(group.product_id)">
+                  <img :src="group.main_photo_url || placeholderImage" class="p-img-refined" />
+                  <div class="p-data">
+                    <div class="p-row">
+                      <span class="p-name">{{ group.title }}</span>
+                      <span class="p-price">{{ formatMoney(group.sale_price) }} ₴</span>
+                    </div>
+                    <div class="p-meta">
+                      <span class="p-sku">{{ group.sku || '—' }}</span>
+                      <span class="p-stock" :class="{ 'low-stock': group.total_stock <= 0 }">
+                        Всього {{ group.total_stock }} шт.
+                      </span>
+                    </div>
+                  </div>
+                  <button type="button" class="picker-group-toggle" @click.stop="toggleGroup(group.product_id)">
+                    <i class="bi" :class="isGroupOpen(group.product_id) ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+                  </button>
                 </div>
-                <img :src="p.main_photo_url || placeholderImage" class="p-img-refined" />
-                <div class="p-data">
-                   <div class="p-row">
-                      <span class="p-name">{{ p.title }}</span>
-                      <span class="p-price">{{ formatMoney(p.sale_price) }} ₴</span>
-                   </div>
-                   <div class="p-meta">
-                     <span class="p-sku">{{ p.sku || '—' }}</span>
-                     <span class="p-stock" :class="{ 'low-stock': isLowStock(p) }">
-                       {{ p.stock_qty ?? 0 }} шт.
-                     </span>
-                   </div>
+
+                <div v-if="isGroupOpen(group.product_id)" class="picker-group-variants">
+                  <div
+                    v-for="p in group.variants"
+                    :key="p.id"
+                    class="picker-row-modern"
+                    :class="{ active: selectedProductIds.includes(p.id) }"
+                    @click="toggleProductSelection(p)"
+                  >
+                    <div class="cb-modern" :class="{ checked: selectedProductIds.includes(p.id) }">
+                      <i class="bi bi-check-lg" v-if="selectedProductIds.includes(p.id)"></i>
+                    </div>
+                    <div class="p-data">
+                      <div class="p-row">
+                        <span class="p-name">{{ p.size || 'Без розміру' }}</span>
+                        <span class="p-price">{{ formatMoney(p.sale_price) }} ₴</span>
+                      </div>
+                      <div class="p-meta">
+                        <span class="p-sku">{{ p.sku || '—' }}</span>
+                        <span class="p-stock" :class="{ 'low-stock': isLowStock(p) }">
+                          {{ p.stock_qty ?? 0 }} шт.
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
              </div>
           </div>
@@ -239,6 +264,7 @@ const emit = defineEmits(['close', 'submit', 'minimize', 'close-success']);
 
 const productPickerOpen = ref(false);
 const selectedProductIds = ref([]);
+const expandedGroups = ref(new Set());
 const deliveryModalOpen = ref(false);
 const paymentModalOpen = ref(false);
 const categories = ref([]);
@@ -254,6 +280,7 @@ const fetchProducts = async () => {
     const { data } = await axios.get('/products', {
       params: {
         category: selectedCategory.value || undefined,
+        with_variants: true,
         per_page: 200,
       },
     });
@@ -263,7 +290,7 @@ const fetchProducts = async () => {
       : Array.isArray(payload)
         ? payload
         : [];
-    products.value = list;
+    products.value = flattenProducts(list);
   } catch (e) {
     console.error('Product fetch failed', e);
     products.value = [];
@@ -325,8 +352,9 @@ const paymentDetail = computed(() => {
 const formatCourierAddress = (d) => [d.street_name, d.building && `буд. ${d.building}`, d.apartment && `кв. ${d.apartment}`].filter(Boolean).join(', ');
 
 const openPicker = () => { 
-  selectedProductIds.value = props.orderDraft.items.map(item => item.id); 
+  selectedProductIds.value = props.orderDraft.items.map(item => item.product_variant_id || item.id); 
   selectedCategory.value = '';
+  expandedGroups.value = new Set();
   productPickerOpen.value = true; 
   if (!products.value.length) fetchProducts();
   if (!categories.value.length) fetchCategories();
@@ -338,15 +366,29 @@ const toggleProductSelection = (p) => {
   else selectedProductIds.value.push(p.id); 
 };
 
+const toggleGroup = (productId) => {
+  const next = new Set(expandedGroups.value);
+  if (next.has(productId)) {
+    next.delete(productId);
+  } else {
+    next.add(productId);
+  }
+  expandedGroups.value = next;
+};
+
+const isGroupOpen = (productId) => expandedGroups.value.has(productId);
+
 const handleAddProducts = () => {
   const newItems = products.value.filter(p => selectedProductIds.value.includes(p.id)).map(p => {
-    const existing = props.orderDraft.items.find(item => item.id === p.id);
+    const existing = props.orderDraft.items.find(item => (item.product_variant_id || item.id) === p.id);
     const price = Number(p.sale_price || 0);
     return {
       id: p.id,
-      product_id: p.id,
+      product_id: p.product_id || p.id,
+      product_variant_id: p.product_variant_id || null,
       title: p.title,
       sku: p.sku,
+      size: p.size || '',
       price,
       qty: existing ? existing.qty : 1,
       total: price * (existing ? existing.qty : 1),
@@ -377,6 +419,60 @@ const isLowStock = (p) => {
   if (min > 0 && stock <= min) return true;
   return false;
 };
+
+const flattenProducts = (list) => list.flatMap((p) => {
+  const base = {
+    product_id: p.id,
+    sale_price: p.sale_price || 0,
+    main_photo_url: p.main_photo_url || '',
+    min_stock: p.min_stock ?? 0,
+    base_title: p.title || '',
+    base_sku: p.sku || '',
+  };
+
+  if (Array.isArray(p.variants) && p.variants.length) {
+    return p.variants.map((v) => ({
+      id: v.id,
+      product_id: p.id,
+      product_variant_id: v.id,
+      title: `${p.title}${v.size ? ` (${v.size})` : ''}`,
+      sku: v.sku || p.sku || '',
+      size: v.size || '',
+      stock_qty: Number(v.stock_qty || 0),
+      ...base,
+    }));
+  }
+
+  return [{
+    id: p.id,
+    product_id: p.id,
+    product_variant_id: null,
+    title: p.title || '',
+    sku: p.sku || '',
+    size: '',
+    stock_qty: Number(p.stock_qty || 0),
+    ...base,
+  }];
+});
+
+const groupedProducts = computed(() => {
+  const map = new Map();
+  products.value.forEach((p) => {
+    const group = map.get(p.product_id) || {
+      product_id: p.product_id,
+      title: p.base_title || p.title || '',
+      sku: p.base_sku || '',
+      sale_price: p.sale_price || 0,
+      main_photo_url: p.main_photo_url || '',
+      total_stock: 0,
+      variants: [],
+    };
+    group.variants.push(p);
+    group.total_stock += Number(p.stock_qty || 0);
+    map.set(p.product_id, group);
+  });
+  return Array.from(map.values());
+});
 </script>
 
 <style scoped>
@@ -482,6 +578,12 @@ const isLowStock = (p) => {
 .cb-modern { width: 20px; height: 20px; border: 2px solid #cbd5e1; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #fff; }
 .picker-row-modern.active .cb-modern { background: #a78bfb; border-color: #a78bfb; }
 .p-img-refined { width: 48px; height: 48px; border-radius: 10px; object-fit: cover; }
+.picker-group { border-bottom: 1px solid #f8fafc; }
+.picker-group-head { display: flex; align-items: center; gap: 16px; padding: 14px 24px; cursor: pointer; }
+.picker-group-head:hover { background: #f8fafc; }
+.picker-group-toggle { margin-left: auto; border: none; background: transparent; color: #94a3b8; font-size: 16px; cursor: pointer; }
+.picker-group-variants { padding-left: 24px; padding-right: 12px; }
+.picker-group-variants .picker-row-modern { padding: 10px 0; border-bottom: 1px dashed #eef2f7; }
 .p-data { flex: 1; min-width: 0; }
 .p-row { display: flex; justify-content: space-between; align-items: center; }
 .p-name { font-size: 14px; font-weight: 700; color: #1e293b; }

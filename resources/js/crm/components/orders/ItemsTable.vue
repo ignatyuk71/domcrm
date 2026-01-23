@@ -175,7 +175,7 @@
               style="width: 200px; height: 42px;"
             >
               <option value="">Всі категорії</option>
-              <option v-for="c in categories" :key="c" :value="c">{{ c }}</option>
+              <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
             </select>
           </div>
 
@@ -191,43 +191,70 @@
             </div>
 
             <div v-else class="d-flex flex-column gap-2 p-3">
-              <div
-                v-for="p in filteredProducts"
-                :key="p.id"
-                class="product-card bg-white p-2 rounded-3 shadow-sm d-flex align-items-start gap-3 cursor-pointer"
-                @click="addProductFromModal(p)"
-              >
-                <div class="product-thumb-fixed border rounded-3 overflow-hidden bg-light flex-shrink-0 d-flex align-items-center justify-content-center position-relative">
-                   <img v-if="p.imageUrl" :src="p.imageUrl" class="w-100 h-100 object-fit-cover" />
-                   <i v-else class="bi bi-image text-muted small"></i>
-                   <span class="stock-dot border border-white" :class="p.stock > 0 ? 'bg-success' : 'bg-danger'"></span>
+              <div v-for="group in groupedProducts" :key="group.product_id" class="product-group-card">
+                <div class="product-group-head" @click="toggleGroup(group.product_id)">
+                  <div class="product-thumb-fixed border rounded-3 overflow-hidden bg-light flex-shrink-0 d-flex align-items-center justify-content-center position-relative">
+                    <img v-if="group.imageUrl" :src="group.imageUrl" class="w-100 h-100 object-fit-cover" />
+                    <i v-else class="bi bi-image text-muted small"></i>
+                    <span class="stock-dot border border-white" :class="group.total_stock > 0 ? 'bg-success' : 'bg-danger'"></span>
+                  </div>
+
+                  <div class="flex-grow-1 min-w-0 d-flex justify-content-between gap-3">
+                    <div class="d-flex flex-column justify-content-center pt-1 pb-1">
+                      <div class="fw-bold text-dark lh-sm product-title mb-1">{{ group.title }}</div>
+                      <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <span class="badge bg-light text-secondary border fw-normal font-monospace px-1 py-0 rounded-1" style="font-size: 0.65rem;">
+                          {{ group.sku || '---' }}
+                        </span>
+                        <span class="x-small" :class="group.total_stock > 0 ? 'text-success' : 'text-danger'">
+                          {{ group.total_stock > 0 ? `Всього ${group.total_stock} шт.` : 'Немає' }}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div class="d-flex flex-column align-items-end justify-content-between flex-shrink-0 gap-2 pt-1">
+                      <div class="fw-bold text-primary" style="font-size: 0.95rem;">
+                        {{ group.price }} <span class="text-muted fw-normal" style="font-size: 0.75rem;">{{ currency }}</span>
+                      </div>
+                      <button type="button" class="btn btn-sm btn-light text-primary fw-bold rounded-pill px-3 py-0 shadow-sm d-flex align-items-center gap-1 add-btn-compact">
+                        <i class="bi" :class="isGroupOpen(group.product_id) ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+                        <span>Розміри</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
-                <div class="flex-grow-1 min-w-0 d-flex justify-content-between gap-3">
-                  
-                  <div class="d-flex flex-column justify-content-center pt-1 pb-1">
-                     <div class="fw-bold text-dark lh-sm product-title mb-1">{{ p.title }}</div>
-                     <div class="d-flex align-items-center gap-2 flex-wrap">
-                        <span class="badge bg-light text-secondary border fw-normal font-monospace px-1 py-0 rounded-1" style="font-size: 0.65rem;">
-                          {{ p.sku || '---' }}
-                        </span>
-                        <span class="x-small" :class="p.stock > 0 ? 'text-success' : 'text-danger'">
-                          {{ p.stock > 0 ? `${p.stock} шт.` : 'Немає' }}
-                        </span>
-                     </div>
-                  </div>
+                <div v-if="isGroupOpen(group.product_id)" class="product-group-variants">
+                  <div
+                    v-for="p in group.variants"
+                    :key="p.id"
+                    class="product-card bg-white p-2 rounded-3 shadow-sm d-flex align-items-start gap-3 cursor-pointer"
+                    @click="addProductFromModal(p)"
+                  >
+                    <div class="flex-grow-1 min-w-0 d-flex justify-content-between gap-3">
+                      <div class="d-flex flex-column justify-content-center pt-1 pb-1">
+                        <div class="fw-bold text-dark lh-sm product-title mb-1">{{ p.size || 'Без розміру' }}</div>
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                          <span class="badge bg-light text-secondary border fw-normal font-monospace px-1 py-0 rounded-1" style="font-size: 0.65rem;">
+                            {{ p.sku || '---' }}
+                          </span>
+                          <span class="x-small" :class="p.stock > 0 ? 'text-success' : 'text-danger'">
+                            {{ p.stock > 0 ? `${p.stock} шт.` : 'Немає' }}
+                          </span>
+                        </div>
+                      </div>
 
-                  <div class="d-flex flex-column align-items-end justify-content-between flex-shrink-0 gap-2 pt-1">
-                    <div class="fw-bold text-primary" style="font-size: 0.95rem;">
-                      {{ p.price }} <span class="text-muted fw-normal" style="font-size: 0.75rem;">{{ currency }}</span>
+                      <div class="d-flex flex-column align-items-end justify-content-between flex-shrink-0 gap-2 pt-1">
+                        <div class="fw-bold text-primary" style="font-size: 0.95rem;">
+                          {{ p.price }} <span class="text-muted fw-normal" style="font-size: 0.75rem;">{{ currency }}</span>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-light text-primary fw-bold rounded-pill px-3 py-0 shadow-sm d-flex align-items-center gap-1 add-btn-compact">
+                          <i class="bi bi-plus-lg"></i>
+                          <span>Дод.</span>
+                        </button>
+                      </div>
                     </div>
-                    
-                    <button type="button" class="btn btn-sm btn-light text-primary fw-bold rounded-pill px-3 py-0 shadow-sm d-flex align-items-center gap-1 add-btn-compact">
-                      <i class="bi bi-plus-lg"></i>
-                      <span>Дод.</span>
-                    </button>
                   </div>
-
                 </div>
               </div>
             </div>
@@ -266,6 +293,7 @@ const pickerBody = ref(null);
 const page = ref(0);
 const perPage = 50;
 const hasMore = ref(true);
+const expandedGroups = ref(new Set());
 
 const total = computed(() =>
   Math.round(model.value.reduce((sum, i) => sum + (Number(i.qty) || 0) * (Number(i.price) || 0), 0) * 100) / 100
@@ -276,11 +304,31 @@ const netTotal = computed(() =>
 
 const filteredProducts = computed(() => products.value);
 
+const groupedProducts = computed(() => {
+  const map = new Map();
+  filteredProducts.value.forEach((p) => {
+    const group = map.get(p.product_id) || {
+      product_id: p.product_id,
+      title: p.base_title || p.title || '',
+      sku: p.parent_sku || '',
+      imageUrl: p.imageUrl || '',
+      price: p.price || 0,
+      total_stock: 0,
+      variants: [],
+    };
+    group.variants.push(p);
+    group.total_stock += Number(p.stock || 0);
+    map.set(p.product_id, group);
+  });
+  return Array.from(map.values());
+});
+
 function openPicker() {
   selectedCategory.value = '';
   page.value = 0;
   hasMore.value = true;
   products.value = [];
+  expandedGroups.value = new Set();
   pickerOpen.value = true;
   fetchProducts(true);
   loadCategories();
@@ -291,14 +339,30 @@ function closePicker() {
 
 function addProductFromModal(p) {
   model.value.push({
-    product_id: p.id || null,
+    product_id: p.product_id || p.id || null,
+    product_variant_id: p.product_variant_id || null,
     sku: p.sku || '',
     title: p.title || '',
+    size: p.size || '',
     qty: 1,
     price: p.price || 0,
     imageUrl: p.imageUrl || '',
     main_photo_path: p.main_photo_path || '',
   });
+}
+
+function toggleGroup(productId) {
+  const next = new Set(expandedGroups.value);
+  if (next.has(productId)) {
+    next.delete(productId);
+  } else {
+    next.add(productId);
+  }
+  expandedGroups.value = next;
+}
+
+function isGroupOpen(productId) {
+  return expandedGroups.value.has(productId);
 }
 
 async function fetchProducts(reset = false) {
@@ -312,19 +376,13 @@ async function fetchProducts(reset = false) {
       category: selectedCategory.value || undefined,
       page: targetPage,
       per_page: perPage,
+      with_variants: true,
     });
     
     const payload = data || {};
     const list = Array.isArray(payload?.data) ? payload.data : (Array.isArray(payload) ? payload : []);
     
-    const mapped = list.map((p) => ({
-      id: p.id,
-      sku: p.sku || '',
-      title: p.title || '',
-      price: p.sale_price || p.price || 0,
-      stock: p.stock_qty,
-      imageUrl: buildImageUrl(p),
-    }));
+    const mapped = flattenProducts(list);
 
     if (reset) {
       products.value = mapped;
@@ -360,6 +418,43 @@ function buildImageUrl(p) {
   let clean = raw.replace(/^\//, '');
   if (clean.startsWith('public/')) clean = clean.replace(/^public\//, '');
   return clean.startsWith('storage/') ? `/${clean}` : `/storage/${clean}`;
+}
+
+function flattenProducts(list) {
+  return list.flatMap((p) => {
+    const base = {
+      product_id: p.id,
+      price: p.sale_price || p.price || 0,
+      imageUrl: buildImageUrl(p),
+      main_photo_path: p.main_photo_path || '',
+      parent_sku: p.sku || '',
+      base_title: p.title || '',
+    };
+
+    if (Array.isArray(p.variants) && p.variants.length) {
+      return p.variants.map((v) => ({
+        id: v.id,
+        product_id: p.id,
+        product_variant_id: v.id,
+        sku: v.sku || p.sku || '',
+        title: `${p.title}${v.size ? ` (${v.size})` : ''}`,
+        size: v.size || '',
+        stock: Number(v.stock_qty || 0),
+        ...base,
+      }));
+    }
+
+    return [{
+      id: p.id,
+      product_id: p.id,
+      product_variant_id: null,
+      sku: p.sku || '',
+      title: p.title || '',
+      size: '',
+      stock: Number(p.stock_qty || 0),
+      ...base,
+    }];
+  });
 }
 
 watch(() => selectedCategory.value, () => {
@@ -469,6 +564,31 @@ const handleScroll = () => {
 .product-card:hover .add-btn-compact {
   background-color: var(--bs-primary);
   color: white !important;
+}
+
+.product-group-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 6px;
+}
+.product-group-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  border-radius: 10px;
+  background: #ffffff;
+  cursor: pointer;
+}
+.product-group-head:hover {
+  background: #f1f5f9;
+}
+.product-group-variants {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 /* SCROLLBAR */
