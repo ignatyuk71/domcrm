@@ -11,6 +11,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class FiscalizeOrderJob implements ShouldQueue, ShouldBeUnique
@@ -38,39 +39,52 @@ class FiscalizeOrderJob implements ShouldQueue, ShouldBeUnique
 
     public function handle(CheckboxService $checkbox): void
     {
-        // 1. Вантажимо товари
-        $this->order->loadMissing(['items.product.color', 'items.variant', 'fiscalReceipts']);
-
-        // 2. Рахуємо суму вручну з items (щоб уникнути помилок, якщо в order->total 0)
-        $calculatedTotal = $this->order->items->sum('total');
-        
-        // Fallback: якщо сума items 0, пробуємо взяти з order->total
-        if ($calculatedTotal <= 0) {
-            $calculatedTotal = $this->order->total ?? 0;
-        }
-
-        $totalOrderCents = (int) round($calculatedTotal * 100);
-        $targetAmount = $this->amountCents ?? $totalOrderCents;
-
-        if (!$this->shouldFiscalize($totalOrderCents, $targetAmount)) {
+        $lock = Cache::lock("fiscal:order:{$this->order->id}:{$this->type}", 60);
+        if (!$lock->get()) {
+            Log::warning("Fiscal Job Skipped: lock busy for Order #{$this->order->id}");
             return;
         }
 
-        $receipt = $this->createPendingReceipt($targetAmount);
-
         try {
+            // 1. Вантажимо товари
+            $this->order->loadMissing(['items.product.color', 'items.variant', 'fiscalReceipts']);
+
+            // 2. Рахуємо суму вручну з items (щоб уникнути помилок, якщо в order->total 0)
+            $calculatedTotal = $this->order->items->sum('total');
+            
+            // Fallback: якщо сума items 0, пробуємо взяти з order->total
+            if ($calculatedTotal <= 0) {
+                $calculatedTotal = $this->order->total ?? 0;
+            }
+
+            $totalOrderCents = (int) round($calculatedTotal * 100);
+            $targetAmount = $this->amountCents ?? $totalOrderCents;
+
             // 3. Формуємо товари (передаємо розраховану загальну суму)
             $goods = $this->prepareGoods($this->order, $targetAmount / 100, $calculatedTotal);
+            $effectiveAmount = $this->calculateGoodsTotalCents($goods);
+
+            if ($effectiveAmount <= 0) {
+                Log::warning("Fiscal Job Skipped: empty goods sum for Order #{$this->order->id}");
+                return;
+            }
+
+            if (!$this->shouldFiscalize($totalOrderCents, $effectiveAmount)) {
+                return;
+            }
+
+            $receipt = $this->createPendingReceipt($effectiveAmount);
 
             // Логуємо для контролю
             Log::info("Fiscalizing Order #{$this->order->id}", [
                 'target_amount_cents' => $targetAmount,
+                'effective_amount_cents' => $effectiveAmount,
                 'calculated_total' => $calculatedTotal,
                 'goods_count' => count($goods)
             ]);
 
             // 4. Відправляємо в сервіс
-            $response = $checkbox->createReceipt($this->order, $this->type, $targetAmount, $goods);
+            $response = $checkbox->createReceipt($this->order, $this->type, $effectiveAmount, $goods);
 
             if (!$response) {
                 throw new \Exception('Empty response from Checkbox Service');
@@ -80,8 +94,12 @@ class FiscalizeOrderJob implements ShouldQueue, ShouldBeUnique
             $this->updateOrderStatusIfNeeded($totalOrderCents);
 
         } catch (\Throwable $e) {
-            $this->failReceipt($receipt, $e->getMessage());
+            if (isset($receipt)) {
+                $this->failReceipt($receipt, $e->getMessage());
+            }
             throw $e;
+        } finally {
+            $lock->release();
         }
     }
 
@@ -164,16 +182,23 @@ class FiscalizeOrderJob implements ShouldQueue, ShouldBeUnique
         return $goods;
     }
 
+    private function calculateGoodsTotalCents(array $goods): int
+    {
+        $total = 0;
+        foreach ($goods as $good) {
+            $price = (int) ($good['price'] ?? 0);
+            $qty = (int) ($good['qty'] ?? 0);
+            $total += (int) round(($price * $qty) / 1000);
+        }
+
+        return $total;
+    }
+
     // --- Стандартні методи ---
 
     private function shouldFiscalize(int $totalOrder, int $targetAmount): bool
     {
         $alreadyPaid = $this->getAlreadyPaidAmount();
-
-        if ($alreadyPaid >= $totalOrder && $totalOrder > 0) {
-            Log::info("Fiscal Job Skipped: Order #{$this->order->id} fully paid.");
-            return false;
-        }
 
         $hasPending = $this->order->fiscalReceipts()
             ->where('type', $this->type)
@@ -181,6 +206,30 @@ class FiscalizeOrderJob implements ShouldQueue, ShouldBeUnique
             ->exists();
 
         if ($hasPending) return false;
+
+        if ($this->type === FiscalReceipt::TYPE_RETURN) {
+            if ($alreadyPaid <= 0) {
+                Log::info("Fiscal Job Skipped: Order #{$this->order->id} has no paid receipts.");
+                return false;
+            }
+
+            if ($targetAmount <= 0) {
+                Log::error("Fiscal Job: Return amount is zero or negative.");
+                return false;
+            }
+
+            if ($targetAmount > ($alreadyPaid + 10)) {
+                Log::error("Fiscal Job: Return amount exceeds paid sum.");
+                return false;
+            }
+
+            return true;
+        }
+
+        if ($alreadyPaid >= $totalOrder && $totalOrder > 0) {
+            Log::info("Fiscal Job Skipped: Order #{$this->order->id} fully paid.");
+            return false;
+        }
 
         if (($alreadyPaid + $targetAmount) > ($totalOrder + 10)) {
             Log::error("Fiscal Job: Amount mismatch.");

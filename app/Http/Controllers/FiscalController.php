@@ -19,16 +19,21 @@ class FiscalController extends Controller
     {
         $type = $request->input('type', FiscalReceipt::TYPE_SELL);
         $customAmountCents = null;
+        $totalOrderCents = $this->getOrderTotalCents($order);
 
         // --- ЛОГІКА 1: ПЕРЕДОПЛАТА ---
         if ($type === 'prepay') {
             $payment = $order->payment;
             // Беремо суму передоплати з платежу
-            $prepayVal = $payment->prepay_amount ?? $payment->prepayment ?? 0;
+            $prepayVal = $payment?->prepay_amount ?? $payment?->prepayment ?? 0;
             $customAmountCents = (int) round((float) $prepayVal * 100);
 
             if ($customAmountCents <= 0) {
                 return response()->json(['message' => 'Сума передоплати не вказана або дорівнює нулю'], 422);
+            }
+
+            if ($totalOrderCents > 0 && $customAmountCents > $totalOrderCents) {
+                return response()->json(['message' => 'Сума передоплати перевищує суму замовлення'], 422);
             }
 
             // Для Checkbox це технічно все одно "SELL", просто на іншу суму
@@ -37,7 +42,6 @@ class FiscalController extends Controller
         // --- ЛОГІКА 2: ПОВНА ОПЛАТА АБО ЗАЛИШОК ---
         elseif ($type === FiscalReceipt::TYPE_SELL) {
             $alreadyPaidCents = $this->getAlreadyPaidCents($order);
-            $totalOrderCents = (int) round($order->items->sum('total') * 100);
 
             // Якщо вже сплачено все (або більше) -> просто повертаємо статус
             if ($alreadyPaidCents >= $totalOrderCents) {
@@ -154,5 +158,16 @@ class FiscalController extends Controller
             ->where('status', FiscalReceipt::STATUS_SUCCESS)
             ->where('type', FiscalReceipt::TYPE_SELL)
             ->sum('total_amount');
+    }
+
+    private function getOrderTotalCents(Order $order): int
+    {
+        $order->loadMissing(['items']);
+        $total = $order->items->sum('total');
+        if ($total <= 0) {
+            $total = $order->total ?? 0;
+        }
+
+        return (int) round((float) $total * 100);
     }
 }
