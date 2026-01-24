@@ -14,7 +14,7 @@
       </div>
     </div>
 
-    <nav class="pagination-nav">
+    <nav v-if="showNav" class="pagination-nav">
       <ul class="pagination mb-0 gap-1">
         
         <li class="page-item" :class="{ disabled: meta.current_page === 1 }">
@@ -98,6 +98,8 @@ const pages = computed(() => {
 
   return result;
 });
+
+const showNav = computed(() => Number(props.meta.last_page || 1) > 1);
 
 function changePage(page) {
   if (page === props.meta.current_page) return;

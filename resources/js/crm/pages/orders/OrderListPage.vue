@@ -34,7 +34,6 @@
       />
 
       <OrdersPagination
-        v-if="meta.last_page > 1"
         :meta="meta"
         :per-page="filters.per_page"
         :per-page-options="perPageOptions"
