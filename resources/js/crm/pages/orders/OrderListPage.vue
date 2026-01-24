@@ -2,6 +2,8 @@
   <section class="workspace">
     <OrdersTopbar
       v-model:search="filters.search"
+      :per-page="filters.per_page"
+      :per-page-options="perPageOptions"
       :status-chips="statusChips"
       :is-status-active="isStatusActive"
       :hold-filter-enabled="true"
@@ -12,6 +14,7 @@
       @toggle-status="toggleStatus"
       @toggle-hold="toggleHoldFilter"
       @update:hold-days="updateHoldDays"
+      @update:per-page="updatePerPage"
     />
 
     <div class="card border-0 shadow-sm overflow-hidden">
@@ -105,7 +108,8 @@ const meta = ref({ current_page: 1, last_page: 1, total: 0 });
 const holdFilterOptions = [3, 4, 5, 6];
 const holdFilterDays = ref(3);
 const holdFilterActive = ref(false);
-const filters = reactive({ search: '', statuses: [], payment_status: '', delivery_hold_days: null, page: 1, per_page: 20 });
+const filters = reactive({ search: '', statuses: [], payment_status: '', delivery_hold_days: null, page: 1, per_page: 30 });
+const perPageOptions = [15, 30, 60];
 let searchTimer;
 
 const statusChips = ref([{ value: '', label: 'Всі', icon: 'bi-grid', color: null }]);
@@ -223,11 +227,13 @@ async function fetchData() {
     const payload = data.data || data?.data?.data || [];
     orders.value = payload.map(mapOrder);
 
-    const metaPayload = data.meta || data?.data?.meta || {};
+    const metaPayload = data.meta || data?.data?.meta || data || {};
     meta.value = {
       current_page: metaPayload.current_page ?? 1,
       last_page: metaPayload.last_page ?? 1,
       total: metaPayload.total ?? orders.value.length,
+      from: metaPayload.from ?? 0,
+      to: metaPayload.to ?? 0,
     };
   } catch (error) {
     console.error(error);
@@ -330,6 +336,12 @@ function updateHoldDays(value) {
     filters.page = 1;
     fetchData();
   }
+}
+
+function updatePerPage(value) {
+  filters.per_page = value;
+  filters.page = 1;
+  fetchData();
 }
 
 function toggleHoldFilter() {

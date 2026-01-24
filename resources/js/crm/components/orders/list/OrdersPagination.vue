@@ -20,10 +20,21 @@
           </button>
         </li>
 
-        <li class="page-item active">
-          <span class="page-btn active-page">
-            {{ meta.current_page }}
-          </span>
+        <li
+          v-for="(page, idx) in pages"
+          :key="`${page}-${idx}`"
+          class="page-item"
+          :class="{ active: page === meta.current_page, disabled: page === '...' }"
+        >
+          <button
+            v-if="page !== '...'"
+            class="page-btn"
+            :class="{ 'is-active': page === meta.current_page }"
+            @click="changePage(page)"
+          >
+            {{ page }}
+          </button>
+          <span v-else class="page-btn page-ellipsis">…</span>
         </li>
 
         <li class="page-item" :class="{ disabled: meta.current_page === meta.last_page }">
@@ -42,14 +53,41 @@
 </template>
 
 <script setup>
-defineProps({
+import { computed } from 'vue';
+
+const props = defineProps({
   meta: {
     type: Object,
     required: true,
   },
 });
 
-defineEmits(['change-page']);
+const emit = defineEmits(['change-page']);
+
+const pages = computed(() => {
+  const current = Number(props.meta.current_page || 1);
+  const last = Number(props.meta.last_page || 1);
+  if (last <= 1) return [1];
+  if (last <= 7) return Array.from({ length: last }, (_, i) => i + 1);
+
+  const result = [1];
+  const start = Math.max(2, current - 1);
+  const end = Math.min(last - 1, current + 1);
+
+  if (start > 2) result.push('...');
+  for (let page = start; page <= end; page += 1) {
+    result.push(page);
+  }
+  if (end < last - 1) result.push('...');
+  result.push(last);
+
+  return result;
+});
+
+function changePage(page) {
+  if (page === props.meta.current_page) return;
+  emit('change-page', page);
+}
 </script>
 
 <style scoped>
@@ -90,12 +128,19 @@ defineEmits(['change-page']);
   background: #f8fafc;
 }
 
-.active-page {
+.page-btn.is-active {
   background: #eff6ff;
   color: #3b82f6;
   border-color: #3b82f6;
   font-weight: 600;
   pointer-events: none;
+}
+
+.page-ellipsis {
+  border-color: transparent;
+  background: transparent;
+  color: #94a3b8;
+  cursor: default;
 }
 
 /* На мобільному ставимо стовпчиком */

@@ -19,6 +19,13 @@
             />
           </div>
 
+          <div class="per-page-select">
+            <span class="per-page-label d-none d-lg-inline">На сторінці</span>
+            <select class="form-select per-page-input" :value="perPage" @change="onPerPageChange">
+              <option v-for="opt in perPageOptions" :key="opt" :value="opt">{{ opt }}</option>
+            </select>
+          </div>
+
           <a href="/orders/create" class="btn btn-create shadow-sm">
             <i class="bi bi-plus-lg"></i>
             <span class="d-none d-sm-inline ms-1">Створити</span>
@@ -125,9 +132,11 @@ const props = defineProps({
   holdFilterEnabled: { type: Boolean, default: false },
   holdFilterActive: { type: Boolean, default: false },
   holdFilterDays: { type: Number, default: 4 },
+  perPage: { type: Number, default: 30 },
+  perPageOptions: { type: Array, default: () => [15, 30, 60] },
 });
 
-const emit = defineEmits(['update:search', 'search', 'toggle-status', 'toggle-hold', 'update:hold-days']);
+const emit = defineEmits(['update:search', 'search', 'toggle-status', 'toggle-hold', 'update:hold-days', 'update:per-page']);
 
 const showDaysDropdown = ref(false);
 
@@ -135,6 +144,11 @@ function onSearch(event) {
   const value = event.target.value;
   emit('update:search', value);
   emit('search', value);
+}
+
+function onPerPageChange(event) {
+  const value = Number(event.target.value) || 30;
+  emit('update:per-page', value);
 }
 
 function toggleDaysDropdown() {
@@ -180,6 +194,12 @@ const vClickOutside = {
 .search-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #94a3b8; font-size: 0.9rem; pointer-events: none; }
 .search-input { padding-left: 38px; padding-right: 16px; height: 40px; border-radius: 12px; border: 1px solid #e2e8f0; background: #f8fafc; font-size: 0.9rem; font-weight: 500; transition: all 0.2s ease; }
 .search-input:focus { background: #fff; border-color: #6366f1; box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1); color: #1e293b; }
+
+/* PER PAGE */
+.per-page-select { display: flex; align-items: center; gap: 8px; }
+.per-page-label { font-size: 0.8rem; font-weight: 600; color: #64748b; }
+.per-page-input { height: 40px; border-radius: 12px; border: 1px solid #e2e8f0; background: #f8fafc; font-size: 0.85rem; font-weight: 600; padding: 0 10px; width: 90px; }
+.per-page-input:focus { background: #fff; border-color: #6366f1; box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1); color: #1e293b; }
 
 /* CREATE BUTTON */
 .btn-create { height: 40px; display: flex; align-items: center; padding: 0 20px; border-radius: 12px; background: linear-gradient(135deg, #6366f1, #4f46e5); border: none; color: #fff; font-weight: 600; font-size: 0.9rem; transition: all 0.2s; white-space: nowrap; }
