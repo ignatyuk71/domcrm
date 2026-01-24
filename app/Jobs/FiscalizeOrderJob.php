@@ -132,12 +132,24 @@ class FiscalizeOrderJob implements ShouldQueue, ShouldBeUnique
             // 4. Рахуємо ціну за ОДИНИЦЮ = Загальна сума рядка / Кількість
             $unitPrice = $newItemLineTotal / $qty;
 
-            // 5. Формуємо назву (використовуємо product_title з твоєї моделі)
+            // 5. Формуємо назву: заголовок - колір - розмір - sku
             $name = $item->product_title ?? $item->title ?? 'Товар';
+            $size = trim((string) ($item->size ?? ''));
+            $color = trim((string) ($item->color ?? ''));
+            $sku = trim((string) ($item->sku ?? ''));
 
-            if (!empty($item->size)) $name .= " / " . $item->size;
-            if (!empty($item->color)) $name .= " / " . $item->color;
-            if (!empty($item->sku))  $name .= " (арт. {$item->sku})";
+            if ($size !== '') {
+                $sizeSuffix = " ({$size})";
+                if (str_ends_with($name, $sizeSuffix)) {
+                    $name = substr($name, 0, -strlen($sizeSuffix));
+                }
+            }
+
+            $parts = [trim($name)];
+            if ($color !== '') $parts[] = $color;
+            if ($size !== '') $parts[] = $size;
+            if ($sku !== '') $parts[] = $sku;
+            $name = implode(' - ', array_filter($parts, static fn ($part) => $part !== ''));
 
             $goods[] = [
                 'code' => $item->sku ?? ('item-' . $item->id),
