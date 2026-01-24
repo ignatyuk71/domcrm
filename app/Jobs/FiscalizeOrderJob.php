@@ -39,7 +39,7 @@ class FiscalizeOrderJob implements ShouldQueue, ShouldBeUnique
     public function handle(CheckboxService $checkbox): void
     {
         // 1. Вантажимо товари
-        $this->order->loadMissing(['items', 'fiscalReceipts']);
+        $this->order->loadMissing(['items.product.color', 'items.variant', 'fiscalReceipts']);
 
         // 2. Рахуємо суму вручну з items (щоб уникнути помилок, якщо в order->total 0)
         $calculatedTotal = $this->order->items->sum('total');
@@ -133,26 +133,28 @@ class FiscalizeOrderJob implements ShouldQueue, ShouldBeUnique
             $unitPrice = $newItemLineTotal / $qty;
 
             // 5. Формуємо назву: заголовок - колір - розмір - sku
-            $name = $item->product_title ?? $item->title ?? 'Товар';
-            $size = trim((string) ($item->size ?? ''));
-            $color = trim((string) ($item->color ?? ''));
-            $sku = trim((string) ($item->sku ?? ''));
+            $product = $item->product;
+            $variant = $item->variant;
+            $baseTitle = $product?->title ?? 'Товар';
+            $size = trim((string) ($variant?->size ?? ''));
+            $color = trim((string) ($product?->color?->name ?? ''));
+            $sku = trim((string) ($variant?->sku ?? $product?->sku ?? ''));
 
             if ($size !== '') {
                 $sizeSuffix = " ({$size})";
-                if (str_ends_with($name, $sizeSuffix)) {
-                    $name = substr($name, 0, -strlen($sizeSuffix));
+                if (str_ends_with($baseTitle, $sizeSuffix)) {
+                    $baseTitle = substr($baseTitle, 0, -strlen($sizeSuffix));
                 }
             }
 
-            $parts = [trim($name)];
+            $parts = [trim($baseTitle)];
             if ($color !== '') $parts[] = $color;
             if ($size !== '') $parts[] = $size;
             if ($sku !== '') $parts[] = $sku;
             $name = implode(' - ', array_filter($parts, static fn ($part) => $part !== ''));
 
             $goods[] = [
-                'code' => $item->sku ?? ('item-' . $item->id),
+                'code' => $sku !== '' ? $sku : ('item-' . $item->id),
                 'name' => $name,
                 'price' => (int) round($unitPrice * 100), // Ціна за ОДИНИЦЮ в копійках
                 'qty' => (int) ($qty * 1000),             // Кількість * 1000
