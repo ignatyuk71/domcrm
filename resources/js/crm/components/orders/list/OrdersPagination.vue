@@ -1,13 +1,20 @@
 <template>
   <div class="pagination-wrapper">
-    
-    <div class="text-muted small fw-medium">
-      Показано від <span class="fw-bold text-dark">{{ meta.from || 0 }}</span> 
-      до <span class="fw-bold text-dark">{{ meta.to || 0 }}</span> 
-      з <span class="fw-bold text-dark">{{ meta.total || 0 }}</span> записів
+    <div class="pagination-info">
+      <div class="text-muted small fw-medium">
+        Показано від <span class="fw-bold text-dark">{{ meta.from || 0 }}</span> 
+        до <span class="fw-bold text-dark">{{ meta.to || 0 }}</span> 
+        з <span class="fw-bold text-dark">{{ meta.total || 0 }}</span> записів
+      </div>
+      <div class="per-page-select">
+        <span class="per-page-label d-none d-lg-inline">На сторінці</span>
+        <select class="form-select per-page-input" :value="perPage" @change="onPerPageChange">
+          <option v-for="opt in perPageOptions" :key="opt" :value="opt">{{ opt }}</option>
+        </select>
+      </div>
     </div>
 
-    <nav>
+    <nav class="pagination-nav">
       <ul class="pagination mb-0 gap-1">
         
         <li class="page-item" :class="{ disabled: meta.current_page === 1 }">
@@ -60,9 +67,17 @@ const props = defineProps({
     type: Object,
     required: true,
   },
+  perPage: {
+    type: Number,
+    default: 30,
+  },
+  perPageOptions: {
+    type: Array,
+    default: () => [15, 30, 60],
+  },
 });
 
-const emit = defineEmits(['change-page']);
+const emit = defineEmits(['change-page', 'update:per-page']);
 
 const pages = computed(() => {
   const current = Number(props.meta.current_page || 1);
@@ -88,6 +103,11 @@ function changePage(page) {
   if (page === props.meta.current_page) return;
   emit('change-page', page);
 }
+
+function onPerPageChange(event) {
+  const value = Number(event.target.value) || 30;
+  emit('update:per-page', value);
+}
 </script>
 
 <style scoped>
@@ -100,7 +120,24 @@ function changePage(page) {
   border-top: 1px solid #e2e8f0;
   border-bottom-left-radius: 16px;
   border-bottom-right-radius: 16px;
+  gap: 16px;
 }
+
+.pagination-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.pagination-nav {
+  flex-shrink: 0;
+}
+
+.per-page-select { display: flex; align-items: center; gap: 8px; }
+.per-page-label { font-size: 0.8rem; font-weight: 600; color: #64748b; }
+.per-page-input { height: 36px; border-radius: 10px; border: 1px solid #e2e8f0; background: #f8fafc; font-size: 0.8rem; font-weight: 600; padding: 0 8px; width: 86px; }
+.per-page-input:focus { background: #fff; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12); color: #1e293b; }
 
 .page-btn {
   width: 36px;

@@ -2,8 +2,6 @@
   <section class="workspace">
     <OrdersTopbar
       v-model:search="filters.search"
-      :per-page="filters.per_page"
-      :per-page-options="perPageOptions"
       :status-chips="statusChips"
       :is-status-active="isStatusActive"
       :hold-filter-enabled="true"
@@ -14,7 +12,6 @@
       @toggle-status="toggleStatus"
       @toggle-hold="toggleHoldFilter"
       @update:hold-days="updateHoldDays"
-      @update:per-page="updatePerPage"
     />
 
     <div class="card border-0 shadow-sm overflow-hidden">
@@ -36,7 +33,14 @@
         @open-customer="openCustomer"
       />
 
-      <OrdersPagination v-if="meta.last_page > 1" :meta="meta" @change-page="changePage" />
+      <OrdersPagination
+        v-if="meta.last_page > 1"
+        :meta="meta"
+        :per-page="filters.per_page"
+        :per-page-options="perPageOptions"
+        @change-page="changePage"
+        @update:per-page="updatePerPage"
+      />
     </div>
 
     <OrderTagsModal
