@@ -7,6 +7,7 @@ import ProductListPage from './pages/products/ProductListPage.vue';
 import ProductFormPage from './pages/products/ProductFormPage.vue';
 import ChatPage from './pages/chat/ChatPage.vue';
 import GalleryPage from './pages/gallery/GalleryPage.vue';
+import CustomerListPage from './pages/customers/CustomerListPage.vue';
 import './styles/crm.css';
 import PackingListPage from '../Pages/Packing/PackingList.vue';
 import PackingWorkspacePage from '../Pages/Packing/PackingWorkspace.vue';
@@ -57,6 +58,15 @@ export function mountOrderList(selector = '#crm-order-list') {
     if (!el) return;
 
     const app = createApp(OrderListPage);
+    app.mount(el);
+    return app;
+}
+
+export function mountCustomerList(selector = '#crm-customer-list') {
+    const el = document.querySelector(selector);
+    if (!el) return;
+
+    const app = createApp(CustomerListPage);
     app.mount(el);
     return app;
 }
@@ -112,6 +122,7 @@ function autoMount() {
     mountOrderCreate();
     mountOrderEdit();
     mountOrderList();
+    mountCustomerList();
     mountProductList();
     mountProductForm();
     mountPackingList();

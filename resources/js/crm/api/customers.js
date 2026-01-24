@@ -4,6 +4,10 @@ export function searchCustomers(query) {
     return http.get('/customers', { params: { q: query } });
 }
 
+export function listCustomers(params = {}) {
+    return http.get('/customers', { params });
+}
+
 export function createCustomer(payload) {
     return http.post('/customers', payload);
 }

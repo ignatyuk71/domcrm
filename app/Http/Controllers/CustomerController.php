@@ -7,6 +7,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\DB;
 
 class CustomerController extends Controller
@@ -14,35 +15,48 @@ class CustomerController extends Controller
     /**
      * Пошук покупців за телефоном/імʼям/email для підказок у формі замовлення.
      */
-    public function index(Request $request): JsonResponse
+    public function index(Request $request): JsonResponse|View
     {
+        if (!$request->expectsJson() && !$request->ajax()) {
+            return view('customers.index');
+        }
+
         $query = trim((string) $request->get('q', ''));
 
+        if ($query !== '') {
+            $customers = Customer::query()
+                ->when($query, function ($q) use ($query) {
+                    $normalizedPhone = preg_replace('/\D+/', '', $query);
+                    $like = '%' . $query . '%';
+
+                    $q->where(function ($inner) use ($like, $normalizedPhone) {
+                        $inner->where('first_name', 'like', $like)
+                            ->orWhere('last_name', 'like', $like)
+                            ->orWhere('email', 'like', $like)
+                            ->orWhere('phone', 'like', $like);
+
+                        if ($normalizedPhone !== '') {
+                            // Спрощене нормалізоване порівняння номера без спеціальних символів
+                            $inner->orWhereRaw(
+                                'REPLACE(REPLACE(REPLACE(REPLACE(phone, "+", ""), "-", ""), " ", ""), "(", "") LIKE ?',
+                                ['%' . $normalizedPhone . '%']
+                            );
+                        }
+                    });
+                })
+                ->latest('id')
+                ->limit(10)
+                ->get(['id', 'first_name', 'last_name', 'phone', 'email']);
+
+            return response()->json(['data' => $customers]);
+        }
+
+        $perPage = min((int) $request->get('per_page', 30), 100);
         $customers = Customer::query()
-            ->when($query, function ($q) use ($query) {
-                $normalizedPhone = preg_replace('/\D+/', '', $query);
-                $like = '%' . $query . '%';
-
-                $q->where(function ($inner) use ($like, $normalizedPhone) {
-                    $inner->where('first_name', 'like', $like)
-                        ->orWhere('last_name', 'like', $like)
-                        ->orWhere('email', 'like', $like)
-                        ->orWhere('phone', 'like', $like);
-
-                    if ($normalizedPhone !== '') {
-                        // Спрощене нормалізоване порівняння номера без спеціальних символів
-                        $inner->orWhereRaw(
-                            'REPLACE(REPLACE(REPLACE(REPLACE(phone, "+", ""), "-", ""), " ", ""), "(", "") LIKE ?',
-                            ['%' . $normalizedPhone . '%']
-                        );
-                    }
-                });
-            })
             ->latest('id')
-            ->limit(10)
-            ->get(['id', 'first_name', 'last_name', 'phone', 'email']);
+            ->paginate($perPage, ['id', 'first_name', 'last_name', 'phone', 'email']);
 
-        return response()->json(['data' => $customers]);
+        return response()->json($customers);
     }
 
     /**
