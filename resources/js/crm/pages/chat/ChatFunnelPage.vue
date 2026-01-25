@@ -29,7 +29,11 @@
         v-for="column in columns"
         :key="column.key"
         class="funnel-column"
+        :class="{ 'is-drop-target': dragOverKey === column.key }"
         :style="{ '--stage-color': column.color, '--stage-bg': column.bg }"
+        @dragover.prevent="handleDragOver(column.key)"
+        @dragleave="handleDragLeave(column.key)"
+        @drop.prevent="handleDrop(column.key)"
       >
         <div class="column-header">
           <span>{{ column.label }}</span>
@@ -41,12 +45,18 @@
             Немає чатів
           </div>
 
-          <button
+          <div
             v-for="item in filteredGroups[column.key]"
             :key="item.conversation_id || item.customer_id"
-            type="button"
             class="funnel-card"
+            :class="{ dragging: draggingId === item.conversation_id }"
+            role="button"
+            tabindex="0"
+            draggable="true"
             @click="openChat(item)"
+            @keydown.enter="openChat(item)"
+            @dragstart="handleDragStart($event, item, column.key)"
+            @dragend="handleDragEnd"
           >
             <div class="card-top">
               <span class="card-name">{{ item.customer_name }}</span>
@@ -76,7 +86,7 @@
                 +{{ item.tags.length - 3 }}
               </span>
             </div>
-          </button>
+          </div>
         </div>
       </div>
     </div>
@@ -85,11 +95,15 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue';
-import { getChatFunnel } from '@/crm/services/chatApi';
+import { getChatFunnel, updateConversationStage } from '@/crm/services/chatApi';
 
 const searchQuery = ref('');
 const isLoading = ref(false);
 const groups = ref({});
+const draggingId = ref(null);
+const dragItem = ref(null);
+const dragFromStage = ref(null);
+const dragOverKey = ref(null);
 
 const columns = [
   { key: 'new', label: 'Новий', color: '#4f46e5', bg: '#eef2ff' },
@@ -129,6 +143,72 @@ const loadFunnel = async () => {
     console.error('Не вдалося завантажити воронку', e);
   } finally {
     isLoading.value = false;
+  }
+};
+
+const moveCard = (item, newStage) => {
+  const fromKeys = Object.keys(groups.value);
+  fromKeys.forEach((key) => {
+    const list = groups.value[key] || [];
+    const index = list.findIndex((entry) => entry.conversation_id === item.conversation_id);
+    if (index !== -1) {
+      list.splice(index, 1);
+    }
+  });
+
+  if (!groups.value[newStage]) {
+    groups.value[newStage] = [];
+  }
+  item.stage = newStage;
+  groups.value[newStage].unshift(item);
+};
+
+const handleDragStart = (event, item, stageKey) => {
+  if (!item.conversation_id) return;
+  draggingId.value = item.conversation_id;
+  dragItem.value = item;
+  dragFromStage.value = stageKey;
+  event.dataTransfer.effectAllowed = 'move';
+};
+
+const handleDragEnd = () => {
+  draggingId.value = null;
+  dragItem.value = null;
+  dragFromStage.value = null;
+  dragOverKey.value = null;
+};
+
+const handleDragOver = (stageKey) => {
+  dragOverKey.value = stageKey;
+};
+
+const handleDragLeave = (stageKey) => {
+  if (dragOverKey.value === stageKey) {
+    dragOverKey.value = null;
+  }
+};
+
+const handleDrop = async (stageKey) => {
+  if (!dragItem.value || !dragItem.value.conversation_id) {
+    handleDragEnd();
+    return;
+  }
+
+  const item = dragItem.value;
+  const fromStage = dragFromStage.value;
+  if (fromStage === stageKey) {
+    handleDragEnd();
+    return;
+  }
+
+  moveCard(item, stageKey);
+  handleDragEnd();
+
+  try {
+    await updateConversationStage(item.conversation_id, stageKey);
+  } catch (e) {
+    console.error('Не вдалося змінити етап', e);
+    moveCard(item, fromStage);
   }
 };
 
@@ -280,6 +360,10 @@ onMounted(() => {
   overflow: hidden;
 }
 
+.funnel-column.is-drop-target {
+  box-shadow: inset 0 0 0 2px var(--stage-color, #94a3b8);
+}
+
 .column-header {
   display: flex;
   align-items: center;
@@ -320,6 +404,11 @@ onMounted(() => {
   text-align: left;
   cursor: pointer;
   transition: all 0.15s ease;
+  position: relative;
+}
+
+.funnel-card.dragging {
+  opacity: 0.5;
 }
 
 .funnel-card:hover {
