@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ConversationMeta;
+use App\Models\ConversationTag;
 use App\Models\FacebookMessage;
 use App\Models\Conversation;
 use App\Models\Customer;
@@ -18,7 +20,7 @@ class ChatApiController extends Controller
     {
         try {
             $conversations = Conversation::query()
-                ->with('customer')
+                ->with(['customer', 'meta', 'tags'])
                 ->orderByDesc('last_message_at')
                 ->paginate(20);
 
@@ -46,6 +48,15 @@ class ChatApiController extends Controller
                     'unread_count' => $conversation->unread_count,
                     'platform' => $conversation->platform,
                     'status' => $conversation->status,
+                    'stage' => $conversation->meta?->stage,
+                    'tags' => $conversation->tags->map(function ($tag) {
+                        return [
+                            'id' => $tag->id,
+                            'name' => $tag->name,
+                            'color' => $tag->color,
+                            'icon' => $tag->icon,
+                        ];
+                    }),
                 ];
             });
 
@@ -110,6 +121,8 @@ class ChatApiController extends Controller
                     'unread_count' => 0,
                     'platform' => $message->platform,
                     'status' => 'open',
+                    'stage' => null,
+                    'tags' => [],
                 ];
             });
 
@@ -121,6 +134,45 @@ class ChatApiController extends Controller
             ]);
             return response()->json(['data' => []]);
         }
+    }
+
+    public function listConversationTags()
+    {
+        $tags = ConversationTag::query()
+            ->orderBy('name')
+            ->get(['id', 'code', 'name', 'color', 'icon']);
+
+        return response()->json(['data' => $tags]);
+    }
+
+    public function updateStage(Request $request, Conversation $conversation)
+    {
+        $validated = $request->validate([
+            'stage' => 'nullable|string|in:new,waiting_reply,order_confirmed,done,closed',
+        ]);
+
+        $meta = ConversationMeta::firstOrCreate(['conversation_id' => $conversation->id]);
+        $meta->stage = $validated['stage'] ?? null;
+        $meta->save();
+
+        return response()->json(['stage' => $meta->stage]);
+    }
+
+    public function updateTags(Request $request, Conversation $conversation)
+    {
+        $validated = $request->validate([
+            'tag_ids' => 'array',
+            'tag_ids.*' => 'integer|exists:conversation_tags,id',
+        ]);
+
+        $tagIds = $validated['tag_ids'] ?? [];
+        $conversation->tags()->sync($tagIds);
+
+        $tags = $conversation->tags()
+            ->orderBy('name')
+            ->get(['id', 'name', 'color', 'icon']);
+
+        return response()->json(['data' => $tags]);
     }
 
     public function messages($id, MetaService $metaService)

@@ -169,6 +169,11 @@ Route::middleware('auth')->group(function () {
     Route::post('/api/chat/{id}/sync', [ChatApiController::class, 'sync'])->name('chat.sync');
     Route::post('/api/chat/customers/{id}/refresh-profile', [ChatApiController::class, 'refreshProfile'])
         ->name('chat.refreshProfile');
+    Route::get('/api/chat/tags', [ChatApiController::class, 'listConversationTags'])->name('chat.tags');
+    Route::patch('/api/chat/conversations/{conversation}/stage', [ChatApiController::class, 'updateStage'])
+        ->name('chat.stage');
+    Route::patch('/api/chat/conversations/{conversation}/tags', [ChatApiController::class, 'updateTags'])
+        ->name('chat.updateTags');
 
     // --- ГАЛЕРЕЯ ---
     Route::view('/gallery', 'gallery.index')->name('gallery.index');

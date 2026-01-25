@@ -4,6 +4,18 @@ export function getConversations(page = 1) {
   return axios.get('/api/chat/list', { params: { page } });
 }
 
+export function getConversationTags() {
+  return axios.get('/api/chat/tags');
+}
+
+export function updateConversationStage(conversationId, stage) {
+  return axios.patch(`/api/chat/conversations/${conversationId}/stage`, { stage });
+}
+
+export function updateConversationTags(conversationId, tagIds) {
+  return axios.patch(`/api/chat/conversations/${conversationId}/tags`, { tag_ids: tagIds });
+}
+
 export function getMessages(customerId) {
   return axios.get(`/api/chat/${customerId}/messages`);
 }

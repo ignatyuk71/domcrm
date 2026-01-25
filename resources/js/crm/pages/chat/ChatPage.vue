@@ -30,6 +30,8 @@
       <ChatThread
         v-if="activeChat"
         :active-chat="activeChat"
+        :conversation-tags="conversationTags"
+        :tags-loading="isTagsLoading"
         :messages="messages"
         :is-sending="isSending"
         :is-syncing="isSyncing"
@@ -38,6 +40,8 @@
         @force-sync="handleForceSync"
         @open-list="openMobileList"
         @open-profile="openProfile"
+        @update-stage="handleUpdateStage"
+        @update-tags="handleUpdateTags"
       />
       <ChatEmpty v-else @open-list="openMobileList" />
     </template>
@@ -76,11 +80,16 @@ const {
   selectChat,
   sendMessage,
   forceSync,
-  stopPolling
+  stopPolling,
+  getConversationTags,
+  updateStage,
+  updateTags
 } = useChat();
 
 const searchQuery = ref('');
 const viewMode = ref('list');
+const conversationTags = ref([]);
+const isTagsLoading = ref(false);
 
 // Фільтрація списку чатів
 const filteredConversations = computed(() => {
@@ -125,9 +134,31 @@ const closeProfile = () => {
   viewMode.value = 'thread';
 };
 
+const handleUpdateStage = ({ conversationId, stage }) => {
+  updateStage(conversationId, stage);
+};
+
+const handleUpdateTags = ({ conversationId, tagIds }) => {
+  const optimisticTags = conversationTags.value.filter((tag) => tagIds.includes(tag.id));
+  updateTags(conversationId, tagIds, optimisticTags);
+};
+
+const loadConversationTags = async () => {
+  isTagsLoading.value = true;
+  try {
+    const { data } = await getConversationTags();
+    conversationTags.value = data?.data || data || [];
+  } catch (e) {
+    console.error('Не вдалося завантажити теги чатів', e);
+  } finally {
+    isTagsLoading.value = false;
+  }
+};
+
 // Lifecycle
 onMounted(() => {
   fetchConversations(1);
+  loadConversationTags();
 });
 
 onUnmounted(() => {

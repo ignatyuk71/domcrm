@@ -36,6 +36,30 @@
 
       <!-- ПРАВА ЧАСТИНА: Кнопки дій (Оновити + Профіль) -->
       <div class="chat-thread-actions">
+        <div class="stage-control">
+          <span class="stage-label">Етап</span>
+          <select
+            v-model="localStage"
+            class="stage-select"
+            :disabled="!activeChat?.conversation_id"
+            @change="commitStage"
+          >
+            <option v-for="option in stageOptions" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+        </div>
+
+        <button
+          type="button"
+          class="action-btn-pill"
+          :disabled="tagsLoading || !activeChat?.conversation_id"
+          @click="openTags"
+        >
+          Теги
+          <span v-if="activeChat?.tags?.length" class="tag-count">({{ activeChat.tags.length }})</span>
+        </button>
+
         <button
           type="button"
           class="action-btn-icon"
@@ -83,30 +107,144 @@
       :disabled="isSending || loading"
       @send="$emit('send', { ...$event, customer_id: activeChat?.customer_id })"
     />
+
+    <Teleport to="body">
+      <div v-if="isTagsOpen">
+        <div class="modal-backdrop fade show bg-dark bg-opacity-25"></div>
+        <div class="modal fade show d-block" tabindex="-1" @click.self="closeTags">
+          <div class="modal-dialog modal-dialog-centered modal-sm">
+            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+              <div class="modal-header border-bottom-0 pb-0 px-4 pt-4">
+                <h5 class="modal-title fw-bold text-dark fs-5">Теги чату</h5>
+                <button type="button" class="btn-close shadow-none" @click="closeTags"></button>
+              </div>
+
+              <div class="modal-body px-4 py-3">
+                <div v-if="tagsLoading" class="text-center py-4">
+                  <div class="spinner-border text-primary" role="status"></div>
+                </div>
+
+                <div v-else class="d-flex flex-column gap-2">
+                  <div
+                    v-for="tag in conversationTags"
+                    :key="tag.id"
+                    class="tag-option"
+                    :class="{ selected: tempTagIds.includes(tag.id) }"
+                    @click="toggleTag(tag.id)"
+                  >
+                    <span class="tag-chip" :style="getTagStyle(tag.color)">
+                      <i v-if="tag.icon" :class="['bi', tag.icon]"></i>
+                      {{ tag.name }}
+                    </span>
+                    <i v-if="tempTagIds.includes(tag.id)" class="bi bi-check-lg text-primary"></i>
+                  </div>
+
+                  <div v-if="!conversationTags.length" class="text-muted small fst-italic">
+                    Тегів ще немає
+                  </div>
+                </div>
+              </div>
+
+              <div class="modal-footer border-top-0 px-4 pb-4 pt-2">
+                <div class="d-grid gap-2 w-100">
+                  <button type="button" class="btn btn-primary fw-bold rounded-3" @click="saveTags">
+                    Зберегти
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup>
-import { nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import ChatMessage from './ChatMessage.vue';
 import ChatInput from './ChatInput.vue';
 
 const props = defineProps({
   activeChat: { type: Object, default: null },
+  conversationTags: { type: Array, default: () => [] },
+  tagsLoading: { type: Boolean, default: false },
   messages: { type: Array, default: () => [] },
   isSending: { type: Boolean, default: false },
   loading: { type: Boolean, default: false },
   isSyncing: { type: Boolean, default: false },
 });
 
-defineEmits(['send', 'force-sync', 'open-list', 'open-profile']);
+const emit = defineEmits(['send', 'force-sync', 'open-list', 'open-profile', 'update-stage', 'update-tags']);
 
 const threadBody = ref(null);
+const isTagsOpen = ref(false);
+const tempTagIds = ref([]);
+const localStage = ref('');
+
+// Узгоджені етапи для чату (UI + backend)
+const stageOptions = [
+  { value: '', label: 'Без етапу' },
+  { value: 'new', label: 'Новий' },
+  { value: 'waiting_reply', label: 'Чекаємо відповідь' },
+  { value: 'order_confirmed', label: 'Замовлення підтверджене' },
+  { value: 'done', label: 'Виконано' },
+  { value: 'closed', label: 'Закрито' },
+];
+
+const activeTagIds = computed(() => {
+  return (props.activeChat?.tags || []).map((tag) => tag.id);
+});
 
 function scrollToBottom() {
   if (!threadBody.value) return;
   threadBody.value.scrollTop = threadBody.value.scrollHeight;
 }
+
+const openTags = () => {
+  tempTagIds.value = [...activeTagIds.value];
+  isTagsOpen.value = true;
+};
+
+const closeTags = () => {
+  isTagsOpen.value = false;
+};
+
+const toggleTag = (id) => {
+  const idx = tempTagIds.value.indexOf(id);
+  if (idx === -1) tempTagIds.value.push(id);
+  else tempTagIds.value.splice(idx, 1);
+};
+
+const saveTags = () => {
+  emit('update-tags', {
+    conversationId: props.activeChat?.conversation_id,
+    tagIds: [...tempTagIds.value],
+  });
+  closeTags();
+};
+
+const commitStage = () => {
+  emit('update-stage', {
+    conversationId: props.activeChat?.conversation_id,
+    stage: localStage.value || null,
+  });
+};
+
+const getTagStyle = (color) => {
+  if (!color) return {};
+  const hex = color.startsWith('#') && color.length === 4
+    ? `#${color.slice(1).split('').map((c) => c + c).join('')}`
+    : color;
+  if (hex.startsWith('#') && hex.length === 7) {
+    return {
+      backgroundColor: `${hex}1a`,
+      color: hex,
+      borderColor: `${hex}33`,
+    };
+  }
+  return { color: hex, borderColor: hex };
+};
 
 onMounted(() => {
   scrollToBottom();
@@ -118,6 +256,14 @@ watch(
     await nextTick();
     scrollToBottom();
   }
+);
+
+watch(
+  () => props.activeChat?.stage,
+  (value) => {
+    localStage.value = value ?? '';
+  },
+  { immediate: true }
 );
 
 watch(
@@ -265,6 +411,53 @@ watch(
   margin-left: auto; /* Притискає праву частину вправо */
 }
 
+.stage-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.stage-label {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.stage-select {
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  color: #334155;
+  outline: none;
+  cursor: pointer;
+}
+
+.action-btn-pill {
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.action-btn-pill:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.tag-count {
+  margin-left: 4px;
+  font-weight: 600;
+  color: #64748b;
+}
+
 .action-btn-icon {
   width: 36px;
   height: 36px;
@@ -291,6 +484,39 @@ watch(
 
 .action-btn-icon.is-syncing i {
   animation: spin 1s linear infinite;
+}
+
+.tag-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tag-option:hover {
+  background: #f8fafc;
+}
+
+.tag-option.selected {
+  background: #f0f7ff;
+  border-color: #dbeafe;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #64748b;
 }
 
 /* --- BODY --- */
@@ -368,6 +594,14 @@ watch(
   .action-btn-icon {
     width: 32px;
     height: 32px;
+  }
+
+  .stage-label {
+    display: none;
+  }
+
+  .stage-select {
+    font-size: 11px;
   }
 
   /* Ховаємо час на дуже вузьких екранах */

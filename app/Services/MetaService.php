@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\FacebookMessage;
 use App\Models\Conversation;
+use App\Models\ConversationMeta;
 use App\Models\Customer;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -455,6 +456,22 @@ class MetaService
             // Якщо це вихідне повідомлення — скидаємо лічильник непрочитаних
             $conversation->update(['unread_count' => 0]);
         }
+
+        // Мінімальний мета-стан для діалогу (без втручання в основну логіку чату)
+        $meta = ConversationMeta::firstOrCreate(['conversation_id' => $conversation->id]);
+        $stamp = $sentAt ?? now();
+        if ($isInbound) {
+            $meta->last_inbound_at = $stamp;
+            if ($meta->stage === null || $meta->stage === 'waiting_reply') {
+                $meta->stage = 'new';
+            }
+        } else {
+            $meta->last_outbound_at = $stamp;
+            if ($meta->stage === null) {
+                $meta->stage = 'waiting_reply';
+            }
+        }
+        $meta->save();
     }
 
     private function getSettings()

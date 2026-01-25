@@ -24,7 +24,12 @@
     <div class="info-container">
       <div class="info-row-top">
         <h4 class="chat-name">{{ item.customer_name || 'Невідомий клієнт' }}</h4>
-        <span class="chat-time">{{ formattedTime }}</span>
+        <div class="meta-right">
+          <span v-if="stageLabel" class="stage-badge" :class="stageClass">
+            {{ stageLabel }}
+          </span>
+          <span class="chat-time">{{ formattedTime }}</span>
+        </div>
       </div>
 
       <div class="info-row-bottom">
@@ -34,6 +39,20 @@
         
         <span v-if="item.unread_count > 0" class="unread-count">
           {{ item.unread_count > 99 ? '99+' : item.unread_count }}
+        </span>
+      </div>
+
+      <div v-if="visibleTags.length" class="info-row-tags">
+        <span
+          v-for="tag in visibleTags"
+          :key="tag.id"
+          class="tag-chip"
+          :style="getTagStyle(tag.color)"
+        >
+          {{ tag.name }}
+        </span>
+        <span v-if="extraTagsCount" class="tag-chip tag-chip-more">
+          +{{ extraTagsCount }}
         </span>
       </div>
     </div>
@@ -60,6 +79,42 @@ const platformIconClass = computed(() => {
 const platformColorClass = computed(() => {
   return props.item.platform === 'instagram' ? 'bg-instagram' : 'bg-messenger';
 });
+
+const stageLabel = computed(() => {
+  const stage = props.item.stage || '';
+  const map = {
+    new: 'Новий',
+    waiting_reply: 'Чекаємо',
+    order_confirmed: 'Підтверджено',
+    done: 'Виконано',
+    closed: 'Закрито',
+  };
+  return map[stage] || '';
+});
+
+const stageClass = computed(() => {
+  const stage = props.item.stage || '';
+  return stage ? `stage-${stage}` : '';
+});
+
+const tagList = computed(() => props.item.tags || []);
+const visibleTags = computed(() => tagList.value.slice(0, 2));
+const extraTagsCount = computed(() => Math.max(0, tagList.value.length - 2));
+
+const getTagStyle = (color) => {
+  if (!color) return {};
+  const hex = color.startsWith('#') && color.length === 4
+    ? `#${color.slice(1).split('').map((c) => c + c).join('')}`
+    : color;
+  if (hex.startsWith('#') && hex.length === 7) {
+    return {
+      backgroundColor: `${hex}1a`,
+      color: hex,
+      borderColor: `${hex}33`,
+    };
+  }
+  return { color: hex, borderColor: hex };
+};
 
 // --- Розумне форматування часу ---
 // Замість "2026-01-16 15:09:04" покаже "15:09" або "16 січ"
@@ -165,6 +220,13 @@ const formattedTime = computed(() => {
   align-items: center;
 }
 
+.meta-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 .chat-name {
   margin: 0;
   font-size: 15px;
@@ -189,6 +251,42 @@ const formattedTime = computed(() => {
   align-items: center;
   height: 20px; /* Фіксуємо висоту рядка */
 }
+
+.info-row-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.tag-chip {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+}
+
+.tag-chip-more {
+  background: #f1f5f9;
+}
+
+.stage-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4f46e5;
+}
+
+.stage-new { background: #eef2ff; color: #4f46e5; }
+.stage-waiting_reply { background: #fef3c7; color: #92400e; }
+.stage-order_confirmed { background: #dbeafe; color: #1d4ed8; }
+.stage-done { background: #dcfce7; color: #166534; }
+.stage-closed { background: #f1f5f9; color: #475569; }
 
 .chat-preview {
   margin: 0;

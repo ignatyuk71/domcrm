@@ -3,9 +3,12 @@ import {
   fetchNewMessages,
   forceSync as apiForceSync,
   getConversations,
+  getConversationTags,
   getMessages,
   markRead as apiMarkRead,
   sendMessage as apiSendMessage,
+  updateConversationStage as apiUpdateConversationStage,
+  updateConversationTags as apiUpdateConversationTags,
 } from '@/crm/services/chatApi';
 
 export function useChat() {
@@ -294,6 +297,44 @@ export function useChat() {
     };
   }
 
+  async function updateStage(conversationId, stage) {
+    if (!conversationId) return;
+    try {
+      const { data } = await apiUpdateConversationStage(conversationId, stage);
+      conversations.value = conversations.value.map((chat) =>
+        chat.conversation_id === conversationId
+          ? { ...chat, stage: data?.stage ?? stage ?? null }
+          : chat
+      );
+    } catch (e) {
+      console.error('Не вдалося оновити етап чату', e);
+      error.value = 'Не вдалося оновити етап чату';
+    }
+  }
+
+  async function updateTags(conversationId, tagIds, optimisticTags = null) {
+    if (!conversationId) return;
+    if (optimisticTags) {
+      conversations.value = conversations.value.map((chat) =>
+        chat.conversation_id === conversationId
+          ? { ...chat, tags: optimisticTags }
+          : chat
+      );
+    }
+    try {
+      const { data } = await apiUpdateConversationTags(conversationId, tagIds);
+      const tags = data?.data || [];
+      conversations.value = conversations.value.map((chat) =>
+        chat.conversation_id === conversationId
+          ? { ...chat, tags }
+          : chat
+      );
+    } catch (e) {
+      console.error('Не вдалося оновити теги чату', e);
+      error.value = 'Не вдалося оновити теги чату';
+    }
+  }
+
   return {
     conversations,
     activeChatId,
@@ -313,5 +354,8 @@ export function useChat() {
     forceSync,
     startPolling,
     stopPolling,
+    getConversationTags,
+    updateStage,
+    updateTags,
   };
 }
