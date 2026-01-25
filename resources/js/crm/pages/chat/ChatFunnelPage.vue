@@ -19,6 +19,10 @@
       </div>
     </div>
 
+    <div v-if="toast.message" class="funnel-toast" :class="`toast-${toast.type}`">
+      {{ toast.message }}
+    </div>
+
     <div v-if="isLoading" class="funnel-loading">
       <div class="spinner"></div>
       <span>Завантаження...</span>
@@ -104,6 +108,8 @@ const draggingId = ref(null);
 const dragItem = ref(null);
 const dragFromStage = ref(null);
 const dragOverKey = ref(null);
+const toast = ref({ message: '', type: 'success' });
+let toastTimer = null;
 
 const columns = [
   { key: 'new', label: 'Новий', color: '#4f46e5', bg: '#eef2ff' },
@@ -206,9 +212,11 @@ const handleDrop = async (stageKey) => {
 
   try {
     await updateConversationStage(item.conversation_id, stageKey);
+    showToast('Етап оновлено', 'success');
   } catch (e) {
     console.error('Не вдалося змінити етап', e);
     moveCard(item, fromStage);
+    showToast('Помилка оновлення етапу', 'error');
   }
 };
 
@@ -255,6 +263,14 @@ const getTagStyle = (color) => {
     };
   }
   return { color: hex, borderColor: hex };
+};
+
+const showToast = (message, type = 'success') => {
+  toast.value = { message, type };
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    toast.value = { message: '', type: 'success' };
+  }, 2200);
 };
 
 onMounted(() => {
@@ -362,6 +378,7 @@ onMounted(() => {
 
 .funnel-column.is-drop-target {
   box-shadow: inset 0 0 0 2px var(--stage-color, #94a3b8);
+  background: linear-gradient(180deg, rgba(148, 163, 184, 0.08), transparent);
 }
 
 .column-header {
@@ -409,6 +426,7 @@ onMounted(() => {
 
 .funnel-card.dragging {
   opacity: 0.5;
+  cursor: grabbing;
 }
 
 .funnel-card:hover {
@@ -501,6 +519,28 @@ onMounted(() => {
 
 .tag-more {
   background: #f1f5f9;
+}
+
+.funnel-toast {
+  align-self: flex-start;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+}
+
+.toast-success {
+  background: #ecfdf3;
+  color: #166534;
+  border-color: #bbf7d0;
+}
+
+.toast-error {
+  background: #fef2f2;
+  color: #b91c1c;
+  border-color: #fecaca;
 }
 
 @keyframes spin {
