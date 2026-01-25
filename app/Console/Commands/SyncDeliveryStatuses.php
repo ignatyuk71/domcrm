@@ -51,7 +51,7 @@ class SyncDeliveryStatuses extends Command
                 $q->where('carrier', 'nova_poshta')
                     ->whereNotNull('ttn');
             })
-            ->with('delivery')
+            ->with(['delivery', 'customer'])
             ->orderBy('id');
 
         $total = (clone $query)->count();
@@ -70,7 +70,11 @@ class SyncDeliveryStatuses extends Command
                 if (!$delivery || !$delivery->ttn) {
                     continue;
                 }
-                $documents[] = ['DocumentNumber' => $delivery->ttn, 'Phone' => $delivery->recipient_phone];
+                $phone = $delivery->recipient_phone ?: ($order->customer?->phone ?? null);
+                $documents[] = [
+                    'DocumentNumber' => $delivery->ttn,
+                    'Phone' => $phone,
+                ];
                 $mapByTtn[$delivery->ttn] = [
                     'delivery' => $delivery,
                     'order' => $order,
