@@ -3,6 +3,7 @@ import {
   fetchNewMessages,
   forceSync as apiForceSync,
   getConversations,
+  getConversationByCustomer,
   getConversationTags,
   getMessages,
   markRead as apiMarkRead,
@@ -335,6 +336,27 @@ export function useChat() {
     }
   }
 
+  async function ensureConversation(customerId, platform = null) {
+    if (!customerId) return null;
+    const existing = conversations.value.find((chat) => {
+      if (chat.customer_id !== customerId) return false;
+      return platform ? chat.platform === platform : true;
+    });
+    if (existing) return existing;
+
+    try {
+      const { data } = await getConversationByCustomer(customerId, platform);
+      const conversation = data?.data || null;
+      if (conversation) {
+        conversations.value = [conversation, ...conversations.value];
+        return conversation;
+      }
+    } catch (e) {
+      console.error('Не вдалося отримати чат клієнта', e);
+    }
+    return null;
+  }
+
   return {
     conversations,
     activeChatId,
@@ -357,5 +379,6 @@ export function useChat() {
     getConversationTags,
     updateStage,
     updateTags,
+    ensureConversation,
   };
 }

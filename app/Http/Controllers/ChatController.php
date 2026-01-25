@@ -10,4 +10,9 @@ class ChatController extends Controller
     {
         return view('chat.index');
     }
+
+    public function funnel(): View
+    {
+        return view('chat.funnel');
+    }
 }

@@ -6,6 +6,7 @@ import OrderListPage from './pages/orders/OrderListPage.vue';
 import ProductListPage from './pages/products/ProductListPage.vue';
 import ProductFormPage from './pages/products/ProductFormPage.vue';
 import ChatPage from './pages/chat/ChatPage.vue';
+import ChatFunnelPage from './pages/chat/ChatFunnelPage.vue';
 import GalleryPage from './pages/gallery/GalleryPage.vue';
 import CustomerListPage from './pages/customers/CustomerListPage.vue';
 import './styles/crm.css';
@@ -108,6 +109,15 @@ export function mountChat(selector = '#crm-chat') {
     return app;
 }
 
+export function mountChatFunnel(selector = '#crm-chat-funnel') {
+    const el = document.querySelector(selector);
+    if (!el) return;
+
+    const app = createApp(ChatFunnelPage);
+    app.mount(el);
+    return app;
+}
+
 export function mountGallery(selector = '#crm-gallery') {
     const el = document.querySelector(selector);
     if (!el) return;
@@ -128,6 +138,7 @@ function autoMount() {
     mountPackingList();
     mountPackingWorkspace();
     mountChat();
+    mountChatFunnel();
     mountGallery();
 }
 

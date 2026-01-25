@@ -83,7 +83,8 @@ const {
   stopPolling,
   getConversationTags,
   updateStage,
-  updateTags
+  updateTags,
+  ensureConversation
 } = useChat();
 
 const searchQuery = ref('');
@@ -157,13 +158,28 @@ const loadConversationTags = async () => {
 
 // Lifecycle
 onMounted(() => {
-  fetchConversations(1);
-  loadConversationTags();
+  initChat();
 });
 
 onUnmounted(() => {
   stopPolling();
 });
+
+const initChat = async () => {
+  await fetchConversations(1);
+  loadConversationTags();
+
+  const params = new URLSearchParams(window.location.search);
+  const customerId = Number(params.get('customer_id'));
+  if (!customerId) return;
+
+  const platform = params.get('platform') || null;
+  const conversation = await ensureConversation(customerId, platform);
+  if (conversation) {
+    selectChat(customerId);
+    viewMode.value = 'thread';
+  }
+};
 </script>
 
 <style scoped>

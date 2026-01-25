@@ -160,7 +160,11 @@ Route::middleware('auth')->group(function () {
 
     // --- ЧАТ ---
     Route::get('/messenger', [ChatController::class, 'index'])->name('chat.index');
+    Route::get('/messenger/funnel', [ChatController::class, 'funnel'])->name('chat.funnel');
     Route::get('/api/chat/list', [ChatApiController::class, 'list'])->name('chat.list');
+    Route::get('/api/chat/funnel', [ChatApiController::class, 'funnel'])->name('chat.funnel.data');
+    Route::get('/api/chat/conversations/by-customer/{customerId}', [ChatApiController::class, 'showByCustomer'])
+        ->name('chat.conversation.byCustomer');
     Route::get('/api/chat/{id}/messages', [ChatApiController::class, 'messages'])->name('chat.messages.api');
     Route::get('/api/chat/threads/{id}/messages/updates', [ChatApiController::class, 'updates'])
         ->name('chat.messages.updates');

@@ -4,6 +4,16 @@ export function getConversations(page = 1) {
   return axios.get('/api/chat/list', { params: { page } });
 }
 
+export function getChatFunnel() {
+  return axios.get('/api/chat/funnel');
+}
+
+export function getConversationByCustomer(customerId, platform = null) {
+  return axios.get(`/api/chat/conversations/by-customer/${customerId}`, {
+    params: platform ? { platform } : {},
+  });
+}
+
 export function getConversationTags() {
   return axios.get('/api/chat/tags');
 }

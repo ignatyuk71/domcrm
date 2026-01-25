@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\Rule;
 
 class ChatApiController extends Controller
 {
@@ -28,37 +29,9 @@ class ChatApiController extends Controller
                 return $this->listFromMessages();
             }
 
-            $conversations->getCollection()->transform(function (Conversation $conversation) {
-                $customer = $conversation->customer;
-                $name = $customer
-                    ? trim(($customer->first_name ?? '').' '.($customer->last_name ?? ''))
-                    : '';
-
-                return [
-                    'conversation_id' => $conversation->id,
-                    'customer_id' => $conversation->customer_id,
-                    'customer_name' => $name !== '' ? $name : 'Невідомий клієнт',
-                    'customer_avatar' => $customer?->fb_profile_pic,
-                    'first_name' => $customer?->first_name,
-                    'last_name' => $customer?->last_name,
-                    'phone' => $customer?->phone,
-                    'email' => $customer?->email,
-                    'last_message' => $conversation->last_message_text,
-                    'last_message_time' => optional($conversation->last_message_at)->toDateTimeString(),
-                    'unread_count' => $conversation->unread_count,
-                    'platform' => $conversation->platform,
-                    'status' => $conversation->status,
-                    'stage' => $conversation->meta?->stage,
-                    'tags' => $conversation->tags->map(function ($tag) {
-                        return [
-                            'id' => $tag->id,
-                            'name' => $tag->name,
-                            'color' => $tag->color,
-                            'icon' => $tag->icon,
-                        ];
-                    }),
-                ];
-            });
+            $conversations->getCollection()->transform(
+                fn (Conversation $conversation) => $this->formatConversation($conversation)
+            );
 
             return response()->json($conversations);
 
@@ -136,6 +109,30 @@ class ChatApiController extends Controller
         }
     }
 
+    public function funnel()
+    {
+        $conversations = Conversation::query()
+            ->with(['customer', 'meta', 'tags'])
+            ->orderByDesc('last_message_at')
+            ->get();
+
+        $groups = ['none' => []];
+        foreach ($this->availableStages() as $stage) {
+            $groups[$stage] = [];
+        }
+
+        foreach ($conversations as $conversation) {
+            $data = $this->formatConversation($conversation);
+            $stage = $data['stage'] ?: 'none';
+            if (!array_key_exists($stage, $groups)) {
+                $groups[$stage] = [];
+            }
+            $groups[$stage][] = $data;
+        }
+
+        return response()->json(['data' => $groups]);
+    }
+
     public function listConversationTags()
     {
         $tags = ConversationTag::query()
@@ -148,7 +145,7 @@ class ChatApiController extends Controller
     public function updateStage(Request $request, Conversation $conversation)
     {
         $validated = $request->validate([
-            'stage' => 'nullable|string|in:new,waiting_reply,order_confirmed,done,closed',
+            'stage' => ['nullable', 'string', Rule::in($this->availableStages())],
         ]);
 
         $meta = ConversationMeta::firstOrCreate(['conversation_id' => $conversation->id]);
@@ -173,6 +170,76 @@ class ChatApiController extends Controller
             ->get(['id', 'name', 'color', 'icon']);
 
         return response()->json(['data' => $tags]);
+    }
+
+    public function showByCustomer(Request $request, int $customerId)
+    {
+        $platform = $request->query('platform');
+
+        $query = Conversation::query()
+            ->with(['customer', 'meta', 'tags'])
+            ->where('customer_id', $customerId);
+
+        if ($platform) {
+            $query->where('platform', $platform);
+        }
+
+        $conversation = $query->orderByDesc('last_message_at')->first();
+
+        if (!$conversation) {
+            return response()->json(['error' => 'Conversation not found'], 404);
+        }
+
+        return response()->json(['data' => $this->formatConversation($conversation)]);
+    }
+
+    private function availableStages(): array
+    {
+        return [
+            'new',
+            'waiting_reply',
+            'order_confirmed',
+            'done',
+            'closed',
+        ];
+    }
+
+    private function formatConversation(Conversation $conversation): array
+    {
+        $customer = $conversation->customer;
+        $name = $customer
+            ? trim(($customer->first_name ?? '').' '.($customer->last_name ?? ''))
+            : '';
+
+        $stage = $conversation->meta?->stage;
+        if ($stage && !in_array($stage, $this->availableStages(), true)) {
+            $stage = null;
+        }
+
+        return [
+            'conversation_id' => $conversation->id,
+            'customer_id' => $conversation->customer_id,
+            'customer_name' => $name !== '' ? $name : 'Невідомий клієнт',
+            'customer_avatar' => $customer?->fb_profile_pic,
+            'first_name' => $customer?->first_name,
+            'last_name' => $customer?->last_name,
+            'phone' => $customer?->phone,
+            'email' => $customer?->email,
+            'last_message' => $conversation->last_message_text,
+            'last_message_time' => optional($conversation->last_message_at)->toDateTimeString(),
+            'unread_count' => $conversation->unread_count,
+            'platform' => $conversation->platform,
+            'status' => $conversation->status,
+            'stage' => $stage,
+            'tags' => $conversation->tags->map(function ($tag) {
+                return [
+                    'id' => $tag->id,
+                    'name' => $tag->name,
+                    'color' => $tag->color,
+                    'icon' => $tag->icon,
+                ];
+            }),
+        ];
     }
 
     public function messages($id, MetaService $metaService)
