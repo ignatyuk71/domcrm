@@ -25,7 +25,12 @@
     </div>
 
     <div v-else class="funnel-board">
-      <div v-for="column in columns" :key="column.key" class="funnel-column">
+      <div
+        v-for="column in columns"
+        :key="column.key"
+        class="funnel-column"
+        :style="{ '--stage-color': column.color, '--stage-bg': column.bg }"
+      >
         <div class="column-header">
           <span>{{ column.label }}</span>
           <span class="column-count">{{ filteredGroups[column.key].length }}</span>
@@ -87,11 +92,11 @@ const isLoading = ref(false);
 const groups = ref({});
 
 const columns = [
-  { key: 'new', label: 'Новий' },
-  { key: 'waiting_reply', label: 'Чекаємо відповідь' },
-  { key: 'order_confirmed', label: 'Замовлення підтверджене' },
-  { key: 'done', label: 'Виконано' },
-  { key: 'closed', label: 'Закрито' },
+  { key: 'new', label: 'Новий', color: '#4f46e5', bg: '#eef2ff' },
+  { key: 'waiting_reply', label: 'Чекаємо відповідь', color: '#92400e', bg: '#fef3c7' },
+  { key: 'order_confirmed', label: 'Замовлення підтверджене', color: '#1d4ed8', bg: '#dbeafe' },
+  { key: 'done', label: 'Виконано', color: '#166534', bg: '#dcfce7' },
+  { key: 'closed', label: 'Закрито', color: '#475569', bg: '#f1f5f9' },
 ];
 
 const filteredGroups = computed(() => {
@@ -267,6 +272,7 @@ onMounted(() => {
 .funnel-column {
   background: #fff;
   border: 1px solid #e2e8f0;
+  border-top: 3px solid var(--stage-color, #e2e8f0);
   border-radius: 12px;
   display: flex;
   flex-direction: column;
@@ -279,16 +285,16 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 10px 12px;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid #e2e8f0;
   font-weight: 700;
   color: #1e293b;
-  background: #f8fafc;
+  background: var(--stage-bg, #f8fafc);
 }
 
 .column-count {
   font-size: 12px;
   font-weight: 600;
-  color: #64748b;
+  color: var(--stage-color, #64748b);
 }
 
 .column-body {
