@@ -87,7 +87,6 @@ const isLoading = ref(false);
 const groups = ref({});
 
 const columns = [
-  { key: 'none', label: 'Без етапу' },
   { key: 'new', label: 'Новий' },
   { key: 'waiting_reply', label: 'Чекаємо відповідь' },
   { key: 'order_confirmed', label: 'Замовлення підтверджене' },
