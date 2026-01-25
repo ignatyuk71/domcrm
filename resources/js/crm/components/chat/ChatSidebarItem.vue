@@ -331,5 +331,14 @@ const formattedTime = computed(() => {
     width: 52px;
     height: 52px;
   }
+
+  .info-row-tags {
+    display: none;
+  }
+
+  .stage-badge {
+    font-size: 9px;
+    padding: 2px 4px;
+  }
 }
 </style>

@@ -419,7 +419,7 @@ onMounted(() => {
   padding: 10px 12px;
   background: #fff;
   text-align: left;
-  cursor: pointer;
+  cursor: grab;
   transition: all 0.15s ease;
   position: relative;
 }
@@ -546,6 +546,37 @@ onMounted(() => {
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 1024px) {
+  .funnel-board {
+    display: flex;
+    overflow-x: auto;
+    padding-bottom: 6px;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .funnel-column {
+    flex: 0 0 85vw;
+    scroll-snap-align: start;
+  }
+}
+
+@media (max-width: 640px) {
+  .funnel-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .funnel-actions {
+    width: 100%;
+  }
+
+  .funnel-search {
+    flex: 1;
+    width: 100%;
   }
 }
 </style>

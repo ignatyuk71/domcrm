@@ -407,6 +407,8 @@ watch(
   display: flex;
   align-items: center;
   gap: 8px; /* Відступ між кнопками */
+  flex-wrap: wrap;
+  row-gap: 6px;
   flex-shrink: 0;
   margin-left: auto; /* Притискає праву частину вправо */
 }
@@ -563,7 +565,7 @@ watch(
 @media (max-width: 768px) {
   .chat-thread-header {
     padding: 8px 12px; /* Зменшені відступи по краях */
-    height: 56px;      /* Трохи менша висота шапки */
+    height: auto;
     gap: 8px;
   }
 
@@ -594,6 +596,15 @@ watch(
   .action-btn-icon {
     width: 32px;
     height: 32px;
+  }
+
+  .action-btn-pill {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
+  .stage-control {
+    padding: 2px 6px;
   }
 
   .stage-label {
