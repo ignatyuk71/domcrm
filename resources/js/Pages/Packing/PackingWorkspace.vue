@@ -90,7 +90,7 @@
                   <div class="prod-content flex-grow-1">
                     <div class="d-flex justify-content-between align-items-start mb-2">
                        <h3 class="prod-title">{{ prod.name }}</h3>
-                       <span class="sku-badge">{{ prod.id }}</span>
+                       <span class="sku-badge">{{ prod.sku }}</span>
                     </div>
                     
                     <div class="specs-grid">
@@ -444,24 +444,18 @@ const buildProducts = (src) => {
 
   items.forEach((item) => {
     const qty = Number(item?.qty || 1);
-    const baseName = item?.product_title || item?.product?.title || 'Товар';
+    const baseName = item?.product?.title || 'Товар';
     const name = qty > 1 ? `${baseName} (x${qty})` : baseName;
-    const image = normalizeImageUrl(
-      item?.product?.main_photo_url ||
-      item?.product?.main_photo_path ||
-      item?.photo_url ||
-      item?.image_path ||
-      item?.photo ||
-      null
-    );
+    const image = normalizeImageUrl(item?.product?.main_photo_url || null);
 
     result.push({
-      id: item?.sku || item?.product?.sku || item?.id || `${baseName}-${result.length}`,
+      id: item?.id || `${baseName}-${result.length}`,
+      sku: item?.product?.sku || '—',
       name,
-      color: item?.color || '—',
-      size: item?.size || '—',
+      color: item?.product?.color?.name || '—',
+      size: item?.variant?.size || '—',
       checked: false,
-      colorClass: colorClassFor(item?.color),
+      colorClass: colorClassFor(item?.product?.color?.name),
       image
     });
   });
