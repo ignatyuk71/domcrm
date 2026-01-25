@@ -10,9 +10,11 @@ class PackingSession extends Model
     protected $fillable = [
         'order_id',
         'packer_id',
+        'closed_by',
         'started_at',
         'finished_at',
         'duration_seconds',
+        'close_reason',
     ];
 
     protected $casts = [

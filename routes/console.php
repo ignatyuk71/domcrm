@@ -24,3 +24,9 @@ Schedule::command('fiscal:delivered')
     ->withoutOverlapping()
     ->onOneServer()
     ->description('Автофіскалізація доставлених замовлень кожні 5 хвилин');
+
+Schedule::command('packing:auto-release')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->description('Автоматичне розблокування завислих пакувань');

@@ -221,6 +221,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/{order}/finish', 'finish')->name('finish');
         Route::post('/{order}/pause', 'pause')->name('pause');
         Route::post('/{order}/problem', 'problem')->name('problem');
+        Route::post('/{order}/release', 'release')->name('release');
     });
 
     Route::get('/api/packing/list', [PackingController::class, 'list'])->name('packing.api.list');

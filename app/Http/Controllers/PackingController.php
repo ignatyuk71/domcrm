@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Order;
 use App\Models\PackingSession;
+use App\Services\PackingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -61,7 +62,7 @@ class PackingController extends Controller
         }
 
         // Завантажуємо дані для фронтенду (товари, фото, доставка)
-        $order->refresh()->load(['items.product', 'delivery', 'customer']);
+        $order->refresh()->load(['items.product.color', 'items.variant', 'delivery', 'customer']);
 
         return view('packing.app', ['order' => $order]);
     }
@@ -69,16 +70,30 @@ class PackingController extends Controller
     /**
      * API: Отримати список замовлень для черги.
      */
-    public function list(): JsonResponse
+    public function list(PackingService $packing): JsonResponse
     {
+        $packing->releaseStaleOrders();
+
         // Беремо ID статусів з конфігу (наприклад, 4 - Упакування)
         $queueStatusIds = config('packing.status_ids.queue', [4]);
 
+        $userId = Auth::id();
         $orders = Order::whereIn('status_id', $queueStatusIds)
             ->orderBy('is_priority', 'desc') // Спочатку пріоритетні
             ->orderBy('created_at', 'asc')   // Потім старіші
-            ->with(['items.product', 'delivery'])
+            ->with([
+                'items.product.color',
+                'items.variant',
+                'delivery',
+                'customer',
+                'packer:id,name',
+                'activePackingSession:id,order_id,started_at',
+            ])
             ->get();
+
+        $orders->each(function ($order) use ($packing, $userId) {
+            $order->setAttribute('can_release', $packing->canRelease($order, $userId));
+        });
 
         return response()->json($orders);
     }
@@ -86,8 +101,10 @@ class PackingController extends Controller
     /**
      * API: Отримати історію запакованих за сьогодні.
      */
-    public function history(): JsonResponse
+    public function history(PackingService $packing): JsonResponse
     {
+        $packing->releaseStaleOrders();
+
         // Статуси, які вже поїхали (щоб не показувати їх у списку)
         $shippedStatusIds = config('packing.status_ids.shipped', []);
         if (!is_array($shippedStatusIds)) {
@@ -102,6 +119,7 @@ class PackingController extends Controller
             ->whereDate('finished_at', now()) // Тільки за сьогодні
             ->groupBy('order_id');
 
+        $userId = Auth::id();
         $history = Order::query()
             ->where('packing_status', 'packed') // Тільки запаковані
             ->when($shippedStatusIds, function ($q) use ($shippedStatusIds) {
@@ -111,12 +129,23 @@ class PackingController extends Controller
             ->joinSub($subQuery, 'packing_sessions', function ($join) {
                 $join->on('orders.id', '=', 'packing_sessions.order_id');
             })
-            ->with(['items.product', 'delivery'])
+            ->with([
+                'items.product.color',
+                'items.variant',
+                'delivery',
+                'customer',
+                'packer:id,name',
+                'activePackingSession:id,order_id,started_at',
+            ])
             ->orderByDesc('packing_sessions.packed_at')
             ->get([
                 'orders.*',
                 'packing_sessions.packed_at',
             ]);
+
+        $history->each(function ($order) use ($packing, $userId) {
+            $order->setAttribute('can_release', $packing->canRelease($order, $userId));
+        });
 
         return response()->json($history);
     }
@@ -124,9 +153,11 @@ class PackingController extends Controller
     /**
      * API: Почати пакування (натискання кнопки "Пакувати").
      */
-    public function start(Order $order): JsonResponse
+    public function start(Order $order, PackingService $packing): JsonResponse
     {
         $userId = Auth::id();
+
+        $packing->releaseIfStale($order);
 
         return DB::transaction(function () use ($order, $userId) {
             $locked = Order::whereKey($order->id)->lockForUpdate()->first();
@@ -154,26 +185,17 @@ class PackingController extends Controller
     /**
      * API: Завершити пакування (Кнопка "Запаковано").
      */
-    public function finish(Order $order): JsonResponse
+    public function finish(Order $order, PackingService $packing): JsonResponse
     {
         $userId = Auth::id();
 
-        return DB::transaction(function () use ($order, $userId) {
+        return DB::transaction(function () use ($order, $userId, $packing) {
             $locked = Order::whereKey($order->id)->lockForUpdate()->first();
 
             if (!$locked) return response()->json(['error' => 'Замовлення не знайдено'], 404);
             if ($locked->packer_id !== $userId) return response()->json(['error' => 'Немає доступу'], 403);
 
-            // Закриваємо сесію
-            $session = $locked->activePackingSession()->first();
-            if ($session) {
-                $now = now();
-                $duration = $session->started_at ? $now->diffInSeconds($session->started_at) : null;
-                $session->update([
-                    'finished_at' => $now,
-                    'duration_seconds' => $duration,
-                ]);
-            }
+            $packing->closeSession($locked, $userId, 'finished');
 
             // Оновлюємо статус на "Запаковано" (ID 12)
             $packedStatusId = config('packing.status_ids.packed', 12);
@@ -190,18 +212,17 @@ class PackingController extends Controller
     /**
      * API: Поставити на паузу (повернути в чергу).
      */
-    public function pause(Order $order): JsonResponse
+    public function pause(Order $order, PackingService $packing): JsonResponse
     {
         $userId = Auth::id();
         $queueStatusIds = config('packing.status_ids.queue', []);
         $queueStatusId = is_array($queueStatusIds) ? ($queueStatusIds[0] ?? 4) : $queueStatusIds;
 
-        return DB::transaction(function () use ($order, $userId, $queueStatusId) {
+        return DB::transaction(function () use ($order, $userId, $queueStatusId, $packing) {
             $locked = Order::whereKey($order->id)->lockForUpdate()->first();
             if (!$locked) return response()->json(['error' => 'Замовлення не знайдено'], 404);
 
-            // Видаляємо поточну сесію, бо робота не зроблена
-            $locked->activePackingSession()->delete();
+            $packing->closeSession($locked, $userId, 'paused');
 
             $locked->update([
                 'packer_id' => null,
@@ -216,7 +237,7 @@ class PackingController extends Controller
     /**
      * API: Проблема (Нема товару / Брак).
      */
-    public function problem(Order $order): JsonResponse
+    public function problem(Order $order, PackingService $packing): JsonResponse
     {
         $userId = Auth::id();
         // ID статусу "Проблема" (наприклад, 2 - В обробці)
@@ -226,17 +247,11 @@ class PackingController extends Controller
             return response()->json(['error' => 'Не налаштовано статус проблеми.'], 422);
         }
 
-        return DB::transaction(function () use ($order, $userId, $problemStatusId) {
+        return DB::transaction(function () use ($order, $userId, $problemStatusId, $packing) {
             $locked = Order::whereKey($order->id)->lockForUpdate()->first();
             if (!$locked) return response()->json(['error' => 'Замовлення не знайдено'], 404);
 
-            // Закриваємо сесію (час витрачено)
-            $session = $locked->activePackingSession()->first();
-            if ($session) {
-                $now = now();
-                $duration = $session->started_at ? $now->diffInSeconds($session->started_at) : null;
-                $session->update(['finished_at' => $now, 'duration_seconds' => $duration]);
-            }
+            $packing->closeSession($locked, $userId, 'problem');
 
             // Скидаємо пакувальника і ставимо проблемний статус
             $locked->update([
@@ -247,5 +262,23 @@ class PackingController extends Controller
 
             return response()->json(['success' => true, 'message' => 'Замовлення позначено як проблемне.']);
         });
+    }
+
+    /**
+     * API: Примусово зняти пакувальника та повернути замовлення у чергу.
+     */
+    public function release(Order $order, PackingService $packing): JsonResponse
+    {
+        $userId = Auth::id();
+        if (!$packing->canRelease($order, $userId)) {
+            return response()->json(['error' => 'Немає доступу'], 403);
+        }
+
+        $released = $packing->releaseOrder($order, $userId, 'manual_release');
+        if (!$released) {
+            return response()->json(['error' => 'Замовлення не в роботі'], 409);
+        }
+
+        return response()->json(['success' => true]);
     }
 }
