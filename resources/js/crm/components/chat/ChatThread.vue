@@ -567,6 +567,8 @@ watch(
     padding: 8px 12px; /* Зменшені відступи по краях */
     height: auto;
     gap: 8px;
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .chat-thread-list-btn {
@@ -577,6 +579,7 @@ watch(
   
   .header-left-group {
     gap: 8px;
+    width: 100%;
   }
 
   .chat-thread-user {
@@ -605,6 +608,11 @@ watch(
 
   .stage-control {
     padding: 2px 6px;
+  }
+
+  .chat-thread-actions {
+    width: 100%;
+    justify-content: space-between;
   }
 
   .stage-label {
