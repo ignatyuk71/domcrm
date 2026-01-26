@@ -140,7 +140,16 @@ class CheckboxService
         if (!$token) return null;
 
         $response = $this->client($token)->get($this->url('cashier/shift'));
-        return $response->successful() ? $response->json() : null;
+        if ($response->successful()) {
+            return $response->json();
+        }
+
+        if (in_array($response->status(), [400, 404], true)) {
+            return ['status' => 'CLOSED'];
+        }
+
+        Log::error('Checkbox Shift Status Error', ['body' => $response->body()]);
+        return null;
     }
 
     /**
