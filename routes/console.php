@@ -25,6 +25,12 @@ Schedule::command('fiscal:delivered')
     ->onOneServer()
     ->description('Автофіскалізація доставлених замовлень кожні 5 хвилин');
 
+Schedule::command('fiscal:shift-manager')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->description('Автоуправління зміною Checkbox та запуск черги фіскалізації');
+
 Schedule::command('packing:auto-release')
     ->everyFiveMinutes()
     ->withoutOverlapping()

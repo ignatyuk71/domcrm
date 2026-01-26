@@ -280,10 +280,20 @@
 
     <!-- Футер -->
     <div class="sidebar-footer mt-auto">
-        <a href="{{ route('profile.edit') }}" class="sidebar-link">
+        <div class="sidebar-link">
             <span class="icon-frame"><i class="bi bi-gear-wide-connected"></i></span>
             <span class="item-text">Налаштування</span>
-        </a>
+        </div>
+        <div class="sidebar-submenu">
+            <a href="{{ route('profile.edit') }}" class="sidebar-link sidebar-link-sub {{ request()->is('profile*') ? 'active' : '' }}">
+                <span class="icon-frame"><i class="bi bi-person-circle"></i></span>
+                <span class="item-text">Профіль</span>
+            </a>
+            <a href="{{ route('finance.index') }}" class="sidebar-link sidebar-link-sub {{ request()->is('finance*') ? 'active' : '' }}">
+                <span class="icon-frame"><i class="bi bi-cash-coin"></i></span>
+                <span class="item-text">Фінанси</span>
+            </a>
+        </div>
     </div>
 </aside>
 
@@ -342,5 +352,19 @@
         .pro-sidebar:hover .chat-badge-collapsed {
             display: none;
         }
+    }
+
+    .sidebar-submenu {
+        margin: 0.35rem 0 0.75rem 0.75rem;
+        border-left: 1px solid rgba(148, 163, 184, 0.25);
+        padding-left: 0.75rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+    }
+
+    .sidebar-link-sub {
+        padding: 0.45rem 0.75rem;
+        font-size: 0.9rem;
     }
 </style>

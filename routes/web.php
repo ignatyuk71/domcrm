@@ -9,6 +9,7 @@ use App\Http\Controllers\ProductController;
 use App\Http\Controllers\NovaPoshtaController;
 use App\Http\Controllers\OrderSourceController;
 use App\Http\Controllers\FiscalController;
+use App\Http\Controllers\FinanceController;
 use App\Http\Controllers\PackingController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\MessageTemplateController;
@@ -181,6 +182,15 @@ Route::middleware('auth')->group(function () {
 
     // --- ГАЛЕРЕЯ ---
     Route::view('/gallery', 'gallery.index')->name('gallery.index');
+
+    // --- ФІНАНСИ / КАСА (Checkbox) ---
+    Route::get('/finance', [FinanceController::class, 'index'])->name('finance.index');
+    Route::get('/api/finance/checkbox', [FinanceController::class, 'data'])->name('finance.checkbox.data');
+    Route::post('/finance/checkbox', [FinanceController::class, 'save'])->name('finance.checkbox.save');
+    Route::post('/finance/checkbox/test', [FinanceController::class, 'test'])->name('finance.checkbox.test');
+    Route::post('/finance/checkbox/shift/open', [FinanceController::class, 'openShift'])->name('finance.checkbox.openShift');
+    Route::post('/finance/checkbox/shift/close', [FinanceController::class, 'closeShift'])->name('finance.checkbox.closeShift');
+    Route::post('/finance/checkbox/queue/process', [FinanceController::class, 'processQueue'])->name('finance.checkbox.processQueue');
 
     // --- НОВА ПОШТА (Nova Poshta довідники) ---
     Route::controller(NovaPoshtaController::class)->prefix('nova-poshta')->name('novaPoshta.')->group(function () {

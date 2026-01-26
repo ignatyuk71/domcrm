@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\FiscalLog;
 use App\Models\FiscalReceipt;
 use App\Models\Order;
+use App\Models\CheckboxSetting;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -25,10 +26,12 @@ class CheckboxService
 
     public function __construct()
     {
-        $this->apiUrl = rtrim(config('services.checkbox.api_url', 'https://api.checkbox.in.ua/api/v1'), '/');
-        $this->licenseKey = config('services.checkbox.license_key');
-        $this->login = config('services.checkbox.login');
-        $this->password = config('services.checkbox.password');
+        $settings = CheckboxSetting::resolveCheckboxConnection();
+
+        $this->apiUrl = rtrim($settings['api_url'] ?? 'https://api.checkbox.in.ua/api/v1', '/');
+        $this->licenseKey = $settings['license_key'] ?? null;
+        $this->login = $settings['login'] ?? null;
+        $this->password = $settings['password'] ?? null;
     }
 
     /**
@@ -86,6 +89,49 @@ class CheckboxService
 
         Log::error('Checkbox Shift Error', ['body' => $response->body()]);
         return false;
+    }
+
+    public function openShift(): bool
+    {
+        return $this->ensureShift();
+    }
+
+    public function closeShift(): bool
+    {
+        $token = $this->auth();
+        if (!$token) {
+            Log::error('Checkbox Shift Close Failed: auth error');
+            return false;
+        }
+
+        $response = $this->client($token)->post($this->url('shifts/close'));
+        if ($response->successful()) {
+            return true;
+        }
+
+        if ($response->status() === 400 && str_contains($response->body(), 'Зміна вже закрита')) {
+            return true;
+        }
+
+        Log::error('Checkbox Shift Close Error', ['body' => $response->body()]);
+        return false;
+    }
+
+    public function testConnection(): array
+    {
+        $token = $this->auth();
+        if (!$token) {
+            return ['ok' => false, 'message' => 'Auth failed'];
+        }
+
+        $shift = $this->getCurrentShift($token);
+        $status = strtoupper($shift['status'] ?? '');
+
+        return [
+            'ok' => true,
+            'message' => $status ? "Shift: {$status}" : 'Shift status unknown',
+            'shift' => $shift,
+        ];
     }
 
     public function getCurrentShift(?string $token = null): ?array
@@ -322,7 +368,7 @@ class CheckboxService
         return $this->apiUrl . '/' . ltrim($path, '/');
     }
 
-    public function closeShift(): ?array
+    public function createZReport(): ?array
     {
         $token = $this->auth();
         if (!$token) return null;

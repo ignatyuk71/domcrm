@@ -3,8 +3,11 @@
 namespace App\Console\Commands;
 
 use App\Jobs\FiscalizeOrderJob;
+use App\Models\CheckboxSetting;
 use App\Models\FiscalReceipt;
 use App\Models\Order;
+use App\Services\FiscalQueueService;
+use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
@@ -17,6 +20,14 @@ class FiscalizeDeliveredOrders extends Command
     public function handle(): int
     {
         $cronLog = Log::channel('cron_fiscal');
+        $settings = CheckboxSetting::current();
+        $now = Carbon::now(config('app.timezone', 'Europe/Kyiv'));
+        $queueEnabled = $settings?->queue_enabled ?? false;
+        $withinWindow = $settings ? $settings->isWithinWindow($now) : true;
+        if ($settings && !$settings->enabled) {
+            $this->info('Fiscal integration is disabled.');
+            return self::SUCCESS;
+        }
         $statusIds = config('fiscal.status_ids', []);
         
         // Нам потрібен ТІЛЬКИ фінальний статус (ID 11), який означає "Забрав/Успішно"
@@ -34,7 +45,8 @@ class FiscalizeDeliveredOrders extends Command
                     ->orWhereNull('payment_status');
             })
             // Обробляємо шматками по 50, щоб не грузити пам'ять
-            ->chunk(50, function ($orders) use ($fiscalizedId) {
+            ->chunk(50, function ($orders) use ($fiscalizedId, $queueEnabled, $withinWindow, $cronLog) {
+                $queueService = app(FiscalQueueService::class);
                 
                 foreach ($orders as $order) {
                     $totalOrderCents = (int) round($order->items->sum('total') * 100);
@@ -60,6 +72,12 @@ class FiscalizeDeliveredOrders extends Command
                     
                     // Якщо борг 0 або менше — пропускаємо
                     if ($remaining <= 0) {
+                        continue;
+                    }
+
+                    if ($queueEnabled && !$withinWindow) {
+                        $queueService->enqueue($order, $remaining, FiscalReceipt::TYPE_SELL);
+                        $cronLog->info("Fiscal queued Order #{$order->id}: " . ($remaining / 100) . " грн");
                         continue;
                     }
 

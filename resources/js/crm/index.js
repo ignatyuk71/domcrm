@@ -9,6 +9,7 @@ import ChatPage from './pages/chat/ChatPage.vue';
 import ChatFunnelPage from './pages/chat/ChatFunnelPage.vue';
 import GalleryPage from './pages/gallery/GalleryPage.vue';
 import CustomerListPage from './pages/customers/CustomerListPage.vue';
+import FinancePage from './pages/finance/FinancePage.vue';
 import './styles/crm.css';
 import PackingListPage from '../Pages/Packing/PackingList.vue';
 import PackingWorkspacePage from '../Pages/Packing/PackingWorkspace.vue';
@@ -127,6 +128,15 @@ export function mountGallery(selector = '#crm-gallery') {
     return app;
 }
 
+export function mountFinance(selector = '#crm-finance') {
+    const el = document.querySelector(selector);
+    if (!el) return;
+
+    const app = createApp(FinancePage);
+    app.mount(el);
+    return app;
+}
+
 // Auto-mount if element exists
 function autoMount() {
     mountOrderCreate();
@@ -140,6 +150,7 @@ function autoMount() {
     mountChat();
     mountChatFunnel();
     mountGallery();
+    mountFinance();
 }
 
 if (document.readyState !== 'loading') {
