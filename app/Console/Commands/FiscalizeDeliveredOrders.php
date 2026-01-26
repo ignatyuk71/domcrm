@@ -16,6 +16,7 @@ class FiscalizeDeliveredOrders extends Command
 
     public function handle(): int
     {
+        $cronLog = Log::channel('cron_fiscal');
         $statusIds = config('fiscal.status_ids', []);
         
         // Нам потрібен ТІЛЬКИ фінальний статус (ID 11), який означає "Забрав/Успішно"
@@ -69,7 +70,7 @@ class FiscalizeDeliveredOrders extends Command
                         FiscalizeOrderJob::dispatchSync($order, FiscalReceipt::TYPE_SELL, $remaining);
                         
                     } catch (\Throwable $e) {
-                        Log::error("CRON Fiscal Error Order #{$order->id}: " . $e->getMessage());
+                        $cronLog->error("CRON Fiscal Error Order #{$order->id}: " . $e->getMessage());
                         $this->error("Помилка для #{$order->id}: " . $e->getMessage());
                     }
                 }

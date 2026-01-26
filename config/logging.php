@@ -65,6 +65,13 @@ return [
             'replace_placeholders' => true,
         ],
 
+        'cron_fiscal' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/cron_fiscal.log'),
+            'level' => env('CRON_FISCAL_LOG_LEVEL', 'info'),
+            'replace_placeholders' => true,
+        ],
+
         'daily' => [
             'driver' => 'daily',
             'path' => storage_path('logs/laravel.log'),

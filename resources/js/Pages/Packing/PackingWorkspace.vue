@@ -443,19 +443,21 @@ const buildProducts = (src) => {
   const result = [];
 
   items.forEach((item) => {
+    const product = item?.product;
+    const variant = item?.variant;
     const qty = Number(item?.qty || 1);
-    const baseName = item?.product?.title || 'Товар';
+    const baseName = product?.title || 'Товар';
     const name = qty > 1 ? `${baseName} (x${qty})` : baseName;
-    const image = normalizeImageUrl(item?.product?.main_photo_url || null);
+    const image = normalizeImageUrl(product?.main_photo_url || null);
 
     result.push({
-      id: item?.id || `${baseName}-${result.length}`,
-      sku: item?.product?.sku || '—',
+      id: item?.id,
+      sku: variant?.sku || '—',
       name,
-      color: item?.product?.color?.name || '—',
-      size: item?.variant?.size || '—',
+      color: product?.color?.name || '—',
+      size: variant?.size || '—',
       checked: false,
-      colorClass: colorClassFor(item?.product?.color?.name),
+      colorClass: colorClassFor(product?.color?.name),
       image
     });
   });
