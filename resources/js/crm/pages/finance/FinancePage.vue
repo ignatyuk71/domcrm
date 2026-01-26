@@ -30,8 +30,11 @@
     <div class="row g-4">
       <div class="col-lg-8">
         <div class="card modern-card h-100">
-          <div class="card-header-clean p-4 border-bottom border-light">
+          <div class="card-header-clean p-4 border-bottom border-light d-flex justify-content-between align-items-center">
             <h5 class="mb-0 fw-bold text-dark">Налаштування підключення</h5>
+            <button class="btn btn-icon-round" type="button" @click="openAuthModal" aria-label="Редагувати авторизацію">
+              <i class="bi bi-gear-fill"></i>
+            </button>
           </div>
           <div class="card-body p-4">
             
@@ -46,30 +49,26 @@
                 </div>
 
                 <div class="col-12">
-                  <label class="form-label fw-semibold text-secondary small text-uppercase ls-1">Ліцензійний ключ</label>
-                  <div class="input-group-modern" :class="{'is-valid': hasLicenseKey}">
-                    <span class="input-icon"><i class="bi bi-key"></i></span>
-                    <input v-model="form.license_key" type="password" class="form-control" 
-                           :placeholder="hasLicenseKey ? '•••••••• (встановлено)' : 'Введіть ключ ліцензії'">
-                    <span v-if="hasLicenseKey" class="valid-icon"><i class="bi bi-check-circle-fill text-success"></i></span>
-                  </div>
-                </div>
-
-                <div class="col-md-6">
-                  <label class="form-label fw-semibold text-secondary small text-uppercase ls-1">Логін касира</label>
-                  <div class="input-group-modern">
-                    <span class="input-icon"><i class="bi bi-person"></i></span>
-                    <input v-model="form.login" type="text" class="form-control" placeholder="login">
-                  </div>
-                </div>
-
-                <div class="col-md-6">
-                  <label class="form-label fw-semibold text-secondary small text-uppercase ls-1">Пароль касира</label>
-                  <div class="input-group-modern" :class="{'is-valid': hasPassword}">
-                    <span class="input-icon"><i class="bi bi-shield-lock"></i></span>
-                    <input v-model="form.password" type="password" class="form-control" 
-                           :placeholder="hasPassword ? '•••••••• (встановлено)' : 'Введіть пароль'">
-                     <span v-if="hasPassword" class="valid-icon"><i class="bi bi-check-circle-fill text-success"></i></span>
+                  <div class="auth-summary p-3 rounded-3 border border-light-subtle bg-body-secondary bg-opacity-25">
+                    <div class="d-flex align-items-center justify-content-between">
+                      <div>
+                        <div class="text-uppercase small text-muted fw-semibold">Авторизація</div>
+                        <div class="fw-semibold text-dark">
+                          {{ hasLicenseKey && hasPassword && form.login ? 'Встановлено' : 'Не налаштовано' }}
+                        </div>
+                      </div>
+                      <div class="d-flex align-items-center gap-2">
+                        <span class="badge" :class="hasLicenseKey ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary'">
+                          Ключ
+                        </span>
+                        <span class="badge" :class="form.login ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary'">
+                          Логін
+                        </span>
+                        <span class="badge" :class="hasPassword ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary'">
+                          Пароль
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -207,6 +206,57 @@
 
       </div>
     </div>
+
+    <transition name="fade">
+      <div v-if="showAuthModal" class="modal-backdrop" @click.self="closeAuthModal">
+        <div class="modal-card">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0 fw-bold text-dark">Авторизація Checkbox</h5>
+            <button type="button" class="btn btn-link text-muted" @click="closeAuthModal">
+              <i class="bi bi-x-lg"></i>
+            </button>
+          </div>
+
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label fw-semibold text-secondary small text-uppercase ls-1">Ліцензійний ключ</label>
+              <div class="input-group-modern" :class="{'is-valid': hasLicenseKey}">
+                <span class="input-icon"><i class="bi bi-key"></i></span>
+                <input v-model="form.license_key" type="password" class="form-control"
+                       :placeholder="hasLicenseKey ? '•••••••• (встановлено)' : 'Введіть ключ ліцензії'">
+                <span v-if="hasLicenseKey" class="valid-icon"><i class="bi bi-check-circle-fill text-success"></i></span>
+              </div>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label fw-semibold text-secondary small text-uppercase ls-1">Логін касира</label>
+              <div class="input-group-modern">
+                <span class="input-icon"><i class="bi bi-person"></i></span>
+                <input v-model="form.login" type="text" class="form-control" placeholder="login">
+              </div>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label fw-semibold text-secondary small text-uppercase ls-1">Пароль касира</label>
+              <div class="input-group-modern" :class="{'is-valid': hasPassword}">
+                <span class="input-icon"><i class="bi bi-shield-lock"></i></span>
+                <input v-model="form.password" type="password" class="form-control"
+                       :placeholder="hasPassword ? '•••••••• (встановлено)' : 'Введіть пароль'">
+                <span v-if="hasPassword" class="valid-icon"><i class="bi bi-check-circle-fill text-success"></i></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="d-flex justify-content-end gap-2 mt-4">
+            <button type="button" class="btn btn-light" @click="closeAuthModal">Скасувати</button>
+            <button type="button" class="btn btn-primary" @click="saveSettings" :disabled="loading.save">
+              <span v-if="loading.save" class="spinner-border spinner-border-sm me-2"></span>
+              Зберегти
+            </button>
+          </div>
+        </div>
+      </div>
+    </transition>
   </div>
 </template>
 
@@ -233,6 +283,7 @@ const notice = reactive({ type: '', message: '' });
 const shiftStatus = ref('unknown'); // 'opened', 'closed', 'error', 'unknown'
 const shiftMessage = ref('Статус невідомий');
 const queueCount = ref(0);
+const showAuthModal = ref(false);
 
 const hasLicenseKey = ref(false);
 const hasPassword = ref(false);
@@ -328,6 +379,16 @@ const saveSettings = async () => {
   } finally {
     loading.save = false;
   }
+};
+
+const openAuthModal = () => {
+  showAuthModal.value = true;
+};
+
+const closeAuthModal = () => {
+  showAuthModal.value = false;
+  form.license_key = '';
+  form.password = '';
 };
 
 const testConnection = async () => {
@@ -549,6 +610,56 @@ onMounted(() => {
     background: rgba(255,255,255,0.1);
     color: rgba(255,255,255,0.5);
     border-color: transparent;
+}
+
+.btn-icon-round {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid #e9ecef;
+  background: #fff;
+  color: #4b5563;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+.btn-icon-round:hover {
+  background: #f8f9fa;
+  color: #0d6efd;
+  box-shadow: 0 4px 10px rgba(13, 110, 253, 0.15);
+}
+
+.auth-summary .badge {
+  font-weight: 600;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  z-index: 1055;
+}
+
+.modal-card {
+  width: 100%;
+  max-width: 640px;
+  background: #fff;
+  border-radius: 20px;
+  padding: 2rem;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.2);
+}
+
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
 }
 
 /* Pulse Animation */
