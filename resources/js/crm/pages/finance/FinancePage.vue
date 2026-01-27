@@ -331,6 +331,39 @@ const statusIcon = computed(() => {
 
 // --- Actions (Логіка збережена з вашого прикладу) ---
 
+const normalizeShiftStatus = (rawStatus) => {
+  if (!rawStatus) return 'unknown';
+  const value = String(rawStatus).toLowerCase();
+
+  if (value === 'opened' || value === 'open' || value.includes('opened') || value.includes('відкрит')) return 'opened';
+  if (value === 'closed' || value === 'close' || value.includes('closed') || value.includes('закрит')) return 'closed';
+  if (value === 'error' || value === 'failed' || value.includes('error') || value.includes('помил')) return 'error';
+
+  return 'unknown';
+};
+
+const setShiftFromStatus = (rawStatus) => {
+  const normalized = normalizeShiftStatus(rawStatus);
+  shiftStatus.value = normalized;
+
+  if (normalized === 'opened') {
+    shiftMessage.value = 'Зміна відкрита';
+    return;
+  }
+
+  if (normalized === 'closed') {
+    shiftMessage.value = 'Зміна закрита';
+    return;
+  }
+
+  if (normalized === 'error') {
+    shiftMessage.value = 'Помилка';
+    return;
+  }
+
+  shiftMessage.value = 'Статус невідомий';
+};
+
 const showNotice = (type, msg) => {
   notice.type = type;
   notice.message = msg;
@@ -357,7 +390,7 @@ const loadSettings = async () => {
     
     // Оновлення статусу при завантаженні (якщо API повертає)
     if (data.shift_status) {
-        shiftStatus.value = data.shift_status; 
+        setShiftFromStatus(data.shift_status);
     }
   } catch (e) {
     console.error(e);
@@ -395,8 +428,14 @@ const testConnection = async () => {
   loading.test = true;
   try {
     const res = await testFinanceConnection();
-    shiftStatus.value = res.shift?.status === 'OPENED' ? 'opened' : (res.shift?.status === 'CLOSED' ? 'closed' : 'unknown');
-    shiftMessage.value = res.message || 'Зв\'язок встановлено';
+    const statusSource = res.shift?.status || res.message;
+    const normalized = normalizeShiftStatus(statusSource);
+    if (normalized !== 'unknown') {
+      setShiftFromStatus(statusSource);
+    } else {
+      shiftStatus.value = 'unknown';
+      shiftMessage.value = res.message || 'Зв\'язок встановлено';
+    }
     showNotice('success', 'Зв\'язок перевірено успішно');
   } catch (e) {
     shiftStatus.value = 'error';

@@ -25,7 +25,7 @@ class FinanceController extends Controller
         ]);
     }
 
-    public function data()
+    public function data(CheckboxService $checkbox)
     {
         $this->authorizeAccess();
 
@@ -33,6 +33,17 @@ class FinanceController extends Controller
         $queueCount = FiscalQueue::query()
             ->where('status', FiscalQueue::STATUS_WAITING)
             ->count();
+
+        $shiftStatus = null;
+        $connection = CheckboxSetting::resolveCheckboxConnection();
+        $hasCredentials = !empty($connection['license_key'])
+            && !empty($connection['login'])
+            && !empty($connection['password']);
+
+        if (($settings?->enabled ?? true) && $hasCredentials) {
+            $shift = $checkbox->getCurrentShift();
+            $shiftStatus = $shift['status'] ?? null;
+        }
 
         return response()->json([
             'settings' => [
@@ -46,6 +57,7 @@ class FinanceController extends Controller
                 'has_license_key' => !empty($settings?->license_key),
                 'has_password' => !empty($settings?->password),
             ],
+            'shift_status' => $shiftStatus,
             'queue' => [
                 'waiting' => $queueCount,
             ],

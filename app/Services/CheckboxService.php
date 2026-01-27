@@ -125,7 +125,10 @@ class CheckboxService
         }
 
         $shift = $this->getCurrentShift($token);
-        $status = strtoupper($shift['status'] ?? '');
+        $status = $this->extractShiftStatus($shift);
+        if ($status && is_array($shift) && empty($shift['status'])) {
+            $shift['status'] = $status;
+        }
 
         return [
             'ok' => true,
@@ -141,7 +144,16 @@ class CheckboxService
 
         $response = $this->client($token)->get($this->url('cashier/shift'));
         if ($response->successful()) {
-            return $response->json();
+            $body = $response->json();
+            $status = $this->extractShiftStatus($body);
+            if ($status) {
+                if (is_array($body)) {
+                    $body['status'] = $status;
+                    return $body;
+                }
+                return ['status' => $status];
+            }
+            return is_array($body) ? $body : null;
         }
 
         if (in_array($response->status(), [400, 404], true)) {
@@ -149,6 +161,35 @@ class CheckboxService
         }
 
         Log::error('Checkbox Shift Status Error', ['body' => $response->body()]);
+        return null;
+    }
+
+    private function extractShiftStatus($payload): ?string
+    {
+        if (!is_array($payload)) {
+            return null;
+        }
+
+        if (!empty($payload['status'])) {
+            return strtoupper((string) $payload['status']);
+        }
+
+        if (!empty($payload['shift']['status'])) {
+            return strtoupper((string) $payload['shift']['status']);
+        }
+
+        if (!empty($payload['data']['status'])) {
+            return strtoupper((string) $payload['data']['status']);
+        }
+
+        if (!empty($payload['results'][0]['status'])) {
+            return strtoupper((string) $payload['results'][0]['status']);
+        }
+
+        if (!empty($payload[0]['status'])) {
+            return strtoupper((string) $payload[0]['status']);
+        }
+
         return null;
     }
 
