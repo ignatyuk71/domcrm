@@ -1,20 +1,34 @@
 <style>
     /* --- ШРИФТИ --- */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
-    /* --- БАЗОВІ СТИЛІ (Темна тема) --- */
+    /* --- ЗМІННІ --- */
+    :root {
+        /* Суцільний темний колір без прозорості */
+        --sidebar-bg: #0f172a; 
+        --sidebar-bg-hover: #1e293b;
+        --accent-color: #6366f1;
+        --text-muted: #94a3b8;
+        --text-light: #f8fafc;
+        --border-color: rgba(255, 255, 255, 0.08);
+        --transition-speed: 0.3s;
+    }
+
+    /* --- БАЗА --- */
     .pro-sidebar {
-        font-family: 'Inter', sans-serif;
-        background: #0f172a;
-        color: #94a3b8;
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        /* Важливо: Суцільний колір фону */
+        background-color: var(--sidebar-bg) !important; 
+        color: var(--text-muted);
         display: flex;
         flex-direction: column;
         height: 100vh;
-        transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        transition: width var(--transition-speed) cubic-bezier(0.4, 0, 0.2, 1);
         z-index: 1045;
-        border-right: 1px solid rgba(255,255,255,0.05);
-        /* Дозволяємо випадаючому меню виходити за межі на ПК */
+        border-right: 1px solid var(--border-color);
         overflow: visible !important; 
+        /* Тінь, щоб відділити від світлого контенту */
+        box-shadow: 4px 0 24px rgba(0,0,0,0.4); 
     }
 
     /* --- ЛОГОТИП --- */
@@ -23,17 +37,16 @@
         min-height: 80px;
         display: flex;
         align-items: center;
-        padding: 0 20px;
-        border-bottom: 1px solid rgba(255,255,255,0.08);
-        background: rgba(0,0,0,0.2);
-        flex-shrink: 0;
+        padding: 0 24px;
+        border-bottom: 1px solid var(--border-color);
+        background: var(--sidebar-bg); /* Суцільний фон */
         overflow: hidden;
     }
 
     .logo-box {
         min-width: 40px;
         height: 40px;
-        background: linear-gradient(135deg, #6366f1, #8b5cf6);
+        background: linear-gradient(135deg, #4f46e5, #8b5cf6);
         border-radius: 10px;
         display: flex;
         align-items: center;
@@ -41,43 +54,58 @@
         color: white;
         font-size: 1.4rem;
         box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+        position: relative;
+        z-index: 10;
     }
 
     .logo-text {
-        margin-left: 15px;
+        margin-left: 16px;
         display: flex;
         flex-direction: column;
         white-space: nowrap;
         opacity: 0;
-        transition: opacity 0.2s;
+        transition: opacity 0.2s ease;
     }
 
-    .company { color: #fff; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.5px; }
-    .version { color: #64748b; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
+    .company { color: var(--text-light); font-weight: 800; font-size: 1.1rem; }
+    .version { 
+        color: var(--accent-color); 
+        font-size: 0.7rem; 
+        font-weight: 700; 
+        text-transform: uppercase; 
+        background: rgba(99, 102, 241, 0.1);
+        padding: 2px 6px;
+        border-radius: 4px;
+        width: fit-content;
+        margin-top: 2px;
+    }
 
-    /* --- НАВІГАЦІЯ (СЕРЕДИНА) --- */
+    /* --- НАВІГАЦІЯ --- */
     .sidebar-nav {
         flex: 1;
-        padding: 20px 12px;
+        padding: 24px 12px;
         display: flex;
         flex-direction: column;
-        gap: 8px;
-        /* Скрол тільки тут на ПК */
+        gap: 4px;
         overflow-y: auto; 
         overflow-x: hidden;
-        scrollbar-width: none; 
-        -ms-overflow-style: none;
+        /* Стилізація скролу */
+        scrollbar-width: thin;
+        scrollbar-color: #334155 var(--sidebar-bg);
     }
-    .sidebar-nav::-webkit-scrollbar { display: none; }
+    
+    .sidebar-nav::-webkit-scrollbar { width: 4px; }
+    .sidebar-nav::-webkit-scrollbar-track { background: var(--sidebar-bg); }
+    .sidebar-nav::-webkit-scrollbar-thumb { background-color: #334155; border-radius: 10px; }
 
     .sidebar-link {
         display: flex;
         align-items: center;
-        height: 52px;
-        padding: 0 12px;
-        border-radius: 12px;
+        height: 50px;
+        padding: 0 14px;
+        border-radius: 10px;
         text-decoration: none;
-        color: #94a3b8;
+        color: var(--text-muted);
         transition: all 0.2s ease;
         position: relative;
         white-space: nowrap;
@@ -86,40 +114,54 @@
     }
 
     .icon-frame {
-        min-width: 30px;
+        min-width: 28px;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 1.35rem;
+        font-size: 1.25rem;
         margin-right: 14px;
         color: #64748b;
-        transition: color 0.2s;
+        transition: transform 0.2s, color 0.2s;
     }
 
     .item-text {
         font-weight: 600;
-        font-size: 0.95rem;
+        font-size: 0.92rem;
         opacity: 0;
         transition: opacity 0.2s;
     }
 
+    /* Hover */
     .sidebar-link:hover {
-        background: rgba(255,255,255,0.08);
-        color: #f1f5f9;
+        background: var(--sidebar-bg-hover);
+        color: var(--text-light);
     }
-    .sidebar-link:hover .icon-frame { color: #f1f5f9; }
+    .sidebar-link:hover .icon-frame { 
+        color: var(--text-light); 
+        transform: scale(1.1);
+    }
 
+    /* Active State */
     .sidebar-link.active {
-        background: linear-gradient(90deg, rgba(99, 102, 241, 0.15), transparent);
+        background: rgba(99, 102, 241, 0.1);
         color: #818cf8;
-        border-left: 3px solid #6366f1;
     }
     .sidebar-link.active .icon-frame { color: #818cf8; }
+    
+    /* Active indicator stripe */
+    .sidebar-link.active::before {
+        content: '';
+        position: absolute;
+        left: 0; top: 50%; transform: translateY(-50%);
+        height: 20px; width: 3px;
+        background: var(--accent-color);
+        border-radius: 0 4px 4px 0;
+    }
 
     .nav-divider {
         margin: 20px 0 10px 16px;
         text-transform: uppercase;
-        font-size: 0.7rem;
+        font-size: 0.65rem;
         color: #475569;
         font-weight: 700;
         letter-spacing: 1px;
@@ -128,104 +170,88 @@
         white-space: nowrap;
     }
 
-    /* --- ФУТЕР (НАЛАШТУВАННЯ) --- */
+    /* --- ФУТЕР --- */
     .sidebar-footer {
-        padding: 20px;
-        border-top: 1px solid rgba(255,255,255,0.05);
+        padding: 16px;
+        border-top: 1px solid var(--border-color);
         flex-shrink: 0; 
         position: relative; 
         z-index: 1200; 
+        background: var(--sidebar-bg); /* Суцільний фон */
     }
 
     /* =================================================================
-       ЛОГІКА ПК (DESKTOP) - Тільки для екранів ширше 992px
+       ПК (DESKTOP)
        ================================================================= */
     @media (min-width: 992px) {
         .pro-sidebar {
-            width: 80px;
+            width: 80px; 
             position: fixed;
-            top: 0;
-            left: 0;
-            background-color: #0f172a !important;
+            top: 0; left: 0;
         }
 
-        /* Розширюємо сайдбар при наведенні, АЛЕ НЕ ЯКЩО ми на футері */
+        /* Розширення */
         .pro-sidebar:hover:not(:has(.sidebar-footer:hover)) {
             width: 280px;
-            box-shadow: 10px 0 30px rgba(0,0,0,0.3);
         }
 
         .pro-sidebar:hover:not(:has(.sidebar-footer:hover)) .logo-text,
         .pro-sidebar:hover:not(:has(.sidebar-footer:hover)) .item-text,
         .pro-sidebar:hover:not(:has(.sidebar-footer:hover)) .nav-divider {
             opacity: 1;
-            transition-delay: 0.1s;
+            transition-delay: 0.05s;
         }
 
-        /* Кнопка налаштувань на ПК - тільки іконка */
+        .mobile-arrow { display: none; }
         .sidebar-footer > .sidebar-link > .item-text { display: none !important; }
 
+        /* Кнопка налаштувань */
         .sidebar-footer > .sidebar-link {
             justify-content: center;
-            width: 46px;
-            height: 46px;
+            width: 48px; height: 48px;
             margin: 0 auto;
-            border-radius: 12px;
-            padding: 0;
-            background: transparent;
-            position: relative; 
+            border-radius: 50%; 
+            background: rgba(255,255,255,0.05);
+            transition: all 0.3s;
         }
-        .sidebar-footer > .sidebar-link .icon-frame { margin-right: 0; }
+        
+        .sidebar-footer > .sidebar-link .icon-frame { margin-right: 0; font-size: 1.4rem; }
 
         .sidebar-footer:hover > .sidebar-link {
-            background: #1e293b;
+            background: var(--accent-color);
             color: #fff;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            transform: scale(1.1);
+            box-shadow: 0 0 15px rgba(99, 102, 241, 0.4);
         }
+        
+        .sidebar-footer:hover > .sidebar-link .bi-gear-wide-connected {
+            animation: spin 3s linear infinite;
+        }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
 
-        /* --- ВИПАДАЮЧЕ МЕНЮ (Pop-out) ДЛЯ ПК --- */
+        /* --- POPUP MENU --- */
         .sidebar-footer .sidebar-submenu {
             position: absolute;
-            left: 70px; 
-            bottom: 15px;
-            width: 270px; 
+            left: 74px; 
+            bottom: 20px;
+            width: 260px; 
+            
+            /* Тут залишаємо трохи скла, бо це випадайка */
             background: #1e293b;
-            border: 1px solid rgba(255,255,255,0.1);
+            border: 1px solid var(--border-color);
             border-radius: 12px;
-            padding: 10px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            padding: 8px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
             
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-            
-            opacity: 0;
-            visibility: hidden;
-            transform: translateX(-10px);
-            transition: all 0.2s ease;
+            display: flex; flex-direction: column; gap: 4px;
+            opacity: 0; visibility: hidden;
+            transform: translateX(-15px);
+            transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
             z-index: 1500; 
         }
 
-        .sidebar-footer .sidebar-submenu::before {
-            content: '';
-            position: absolute;
-            left: -6px; bottom: 24px;
-            width: 12px; height: 12px;
-            background: #1e293b;
-            border-left: 1px solid rgba(255,255,255,0.1);
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-            transform: rotate(45deg);
-        }
-
-        .sidebar-footer .sidebar-submenu::after {
-            content: '';
-            position: absolute;
-            top: 0; bottom: 0; left: -25px; width: 25px;
-        }
-
         .sidebar-footer:hover .sidebar-submenu {
-            opacity: 1;
-            visibility: visible;
+            opacity: 1; visibility: visible;
             transform: translateX(0);
         }
 
@@ -234,114 +260,92 @@
             font-size: 0.9rem;
             border-radius: 8px;
             color: #cbd5e1;
-            display: flex;
-            align-items: center;
-            text-decoration: none;
-            white-space: nowrap; 
+            display: flex; align-items: center; text-decoration: none;
+            transition: all 0.2s;
         }
+        
         .sidebar-footer .sidebar-link-sub:hover {
             background: rgba(255, 255, 255, 0.05);
             color: #fff;
+            transform: translateX(4px);
         }
-        .sidebar-footer .sidebar-link-sub .icon-frame {
-            font-size: 1.1rem; margin-right: 12px; min-width: 24px; color: #94a3b8;
-        }
-        .sidebar-footer .sidebar-link-sub:hover .icon-frame { color: #818cf8; }
         
-        .submenu-divider { height: 1px; background: rgba(255,255,255,0.1); margin: 6px 4px; }
+        .sidebar-footer .sidebar-link-sub .icon-frame {
+            font-size: 1.1rem; margin-right: 12px; min-width: 24px; color: #94a3b8; 
+        }
+        .sidebar-footer .sidebar-link-sub:hover .icon-frame { color: var(--accent-color); }
+
+        /* Трикутник */
+        .sidebar-footer .sidebar-submenu::before {
+            content: ''; position: absolute; left: -6px; bottom: 30px; width: 12px; height: 12px;
+            background: #1e293b;
+            border-left: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color);
+            transform: rotate(45deg);
+        }
+        /* Міст */
+        .sidebar-footer .sidebar-submenu::after {
+            content: ''; position: absolute; top: 0; bottom: 0; left: -30px; width: 30px;
+        }
+
+        .submenu-divider { height: 1px; background: rgba(255,255,255,0.1); margin: 6px 0; }
         
         body { padding-left: 80px; transition: padding-left 0.3s; }
     }
 
     /* =================================================================
-       ЛОГІКА МОБІЛЬНА (MOBILE) - Простий список
+       МОБІЛЬНА (MOBILE)
        ================================================================= */
     @media (max-width: 991px) {
-        .pro-sidebar { 
-            width: 280px !important; 
-            overflow-y: auto !important; /* На мобільному скролимо все разом */
-        }
-        
-        /* Робимо всі тексти видимими */
+        .pro-sidebar { width: 280px !important; overflow-y: auto !important; box-shadow: none; border-right: none;}
         .logo-text, .item-text, .nav-divider { opacity: 1 !important; }
-        
-        .mobile-header { display: flex; align-items: center; justify-content: space-between; padding: 15px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); background: #0f172a; }
-        .btn-close-white { filter: invert(1); opacity: 0.8; }
+        .mobile-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; border-bottom: 1px solid var(--border-color); background: var(--sidebar-bg); }
+        .btn-close-white { filter: invert(1); opacity: 0.7; }
         body { padding-left: 0 !important; }
 
-        /* --- СКИДАННЯ СТИЛІВ ФУТЕРА ДЛЯ МОБІЛЬНОГО --- */
-        .sidebar-footer {
-            height: auto;
-            border-top: 1px solid rgba(255,255,255,0.05);
-            padding: 10px 12px 30px 12px; /* Трохи відступу знизу */
-        }
+        .sidebar-footer { padding: 10px 16px 40px 16px; background: transparent; border-top: 1px solid var(--border-color); }
 
-        /* Заголовок "Налаштування" як звичайний пункт меню */
+        /* Кнопка відкриття */
         .sidebar-footer > .sidebar-link {
-            width: 100%;
-            justify-content: flex-start;
-            height: 52px;
-            margin-bottom: 5px;
-            padding: 0 12px;
-            background: transparent;
-            pointer-events: none; /* Щоб не клікалось, бо це просто заголовок групи */
+            width: 100%; justify-content: flex-start; height: 52px; padding: 0 16px;
+            background: rgba(255,255,255,0.03); border-radius: 10px;
+            cursor: pointer; border: 1px solid transparent;
         }
         
-        /* Повертаємо текст "Налаштування" */
-        .sidebar-footer > .sidebar-link .item-text { 
-            display: block !important; 
-            color: #fff; 
+        .sidebar-footer.mobile-active > .sidebar-link {
+            background: rgba(99, 102, 241, 0.1);
+            border-color: rgba(99, 102, 241, 0.2);
+            color: #fff;
         }
 
-        /* Стиль списку підменю (акордеон) */
+        .sidebar-footer > .sidebar-link .item-text { display: block !important; color: inherit; }
+        
+        .mobile-arrow { display: block; font-size: 0.8rem; transition: transform 0.3s ease; }
+        .sidebar-footer.mobile-active .mobile-arrow { transform: rotate(180deg); color: var(--accent-color); }
+
+        /* Акордеон */
         .sidebar-footer .sidebar-submenu {
-            position: static; /* Відміняємо позиціонування */
-            display: flex;
-            flex-direction: column;
-            background: transparent;
-            box-shadow: none;
-            border: none;
-            padding: 0 0 0 10px; /* Відступ зліва для ієрархії */
-            width: 100%;
-            opacity: 1;
-            visibility: visible;
-            transform: none;
-            gap: 2px;
+            display: none; flex-direction: column; 
+            margin-top: 8px; padding-left: 12px; gap: 4px;
         }
 
-        /* Пункти підменю */
+        .sidebar-footer.mobile-active .sidebar-submenu { display: flex; animation: slideDown 0.3s ease; }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+
         .sidebar-footer .sidebar-link-sub {
-            padding: 10px 12px;
-            font-size: 0.9rem;
-            color: #94a3b8;
-            text-decoration: none;
-            display: flex;
-            align-items: center;
-            border-left: 1px solid rgba(255,255,255,0.1); /* Лінія зліва для краси */
-            border-radius: 0 8px 8px 0;
-            margin-left: 14px; /* Вирівнювання під іконку шестерні */
+            padding: 12px 16px; font-size: 0.95rem; color: #94a3b8; text-decoration: none;
+            display: flex; align-items: center; border-radius: 10px;
         }
+        .sidebar-footer .sidebar-link-sub:hover { background: rgba(255,255,255,0.05); color: #fff; }
         
-        .sidebar-footer .sidebar-link-sub .icon-frame {
-            font-size: 1.1rem; 
-            margin-right: 12px; 
-            min-width: 24px; 
-            color: #64748b;
-        }
-
-        /* Ховаємо декоративні елементи ПК версії */
-        .sidebar-footer .sidebar-submenu::before, 
-        .sidebar-footer .sidebar-submenu::after, 
-        .submenu-divider { 
-            display: none; 
-        }
+        .sidebar-footer .sidebar-link-sub .icon-frame { font-size: 1.1rem; margin-right: 14px; min-width: 24px; color: #64748b; }
+        .sidebar-footer .sidebar-submenu::before, .sidebar-footer .sidebar-submenu::after, .submenu-divider { display: none; }
     }
 </style>
 
 <aside class="pro-sidebar offcanvas-lg offcanvas-start" tabindex="-1" id="mobileSidebar" aria-labelledby="sidebarLabel">
     
     <div class="mobile-header d-lg-none">
-        <span class="fw-bold text-white fs-5">Меню</span>
+        <span class="fw-bold text-white fs-5" style="letter-spacing: -0.5px;">Меню</span>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" data-bs-target="#mobileSidebar" aria-label="Close"></button>
     </div>
 
@@ -367,7 +371,7 @@
         </a>
 
         <a href="{{ url('/orders/create') }}" class="sidebar-link">
-            <span class="icon-frame"><i class="bi bi-plus-square-fill"></i></span>
+            <span class="icon-frame"><i class="bi bi-plus-circle-fill"></i></span>
             <span class="item-text">Створити Замовлення</span>
         </a>
 
@@ -382,7 +386,7 @@
             <span class="item-text">Пакування</span>
             
             @if($packingCount > 0)
-                <span class="badge bg-primary rounded-pill ms-auto me-3" style="font-size: 0.7rem;">{{ $packingCount }}</span>
+                <span class="badge rounded-pill ms-auto me-2 shadow-sm" style="background: var(--accent-color); font-size: 0.75rem; padding: 5px 10px;">{{ $packingCount }}</span>
             @endif
         </a>
 
@@ -391,26 +395,28 @@
             <span class="item-text">Товари</span>
         </a>
 
-        <div class="nav-divider">Клієнти та Чати</div>
+        <div class="nav-divider">Комунікація</div>
 
         <a href="{{ url('/customers') }}" class="sidebar-link {{ request()->is('customers*') ? 'active' : '' }}">
             <span class="icon-frame"><i class="bi bi-people-fill"></i></span>
-            <span class="item-text">База клієнтів</span>
+            <span class="item-text">Клієнти</span>
         </a>
 
         <a href="{{ url('/messenger') }}" class="sidebar-link {{ request()->is('messenger*') ? 'active' : '' }}">
-            <span class="icon-frame">
+            <span class="icon-frame position-relative">
                 <i class="bi bi-chat-dots-fill"></i>
                 <span id="chat-unread-dot" class="chat-badge-collapsed d-none"></span>
             </span>
-            <span class="item-text">Чати</span>
-            <span id="chat-unread-badge" class="badge bg-danger rounded-pill ms-auto me-3 chat-badge-expanded d-none" style="font-size: 0.7rem;"></span>
+            <span class="item-text">Месенджер</span>
+            <span id="chat-unread-badge" class="badge bg-danger rounded-pill ms-auto me-2 chat-badge-expanded d-none" style="font-size: 0.7rem; box-shadow: 0 0 10px rgba(220,38,38,0.5);"></span>
         </a>
 
         <a href="{{ url('/messenger/funnel') }}" class="sidebar-link {{ request()->is('messenger/funnel') ? 'active' : '' }}">
             <span class="icon-frame"><i class="bi bi-kanban-fill"></i></span>
-            <span class="item-text">Воронка чатів</span>
+            <span class="item-text">Воронка продажів</span>
         </a>
+
+        <div class="nav-divider">Контент</div>
 
         <a href="{{ route('gallery.index') }}" class="sidebar-link {{ request()->is('gallery*') ? 'active' : '' }}">
             <span class="icon-frame"><i class="bi bi-images"></i></span>
@@ -418,15 +424,17 @@
         </a>
 
         <a href="{{ route('templates.index') }}" class="sidebar-link {{ request()->is('templates*') ? 'active' : '' }}">
-            <span class="icon-frame"><i class="bi bi-chat-text-fill"></i></span>
+            <span class="icon-frame"><i class="bi bi-journal-text"></i></span>
             <span class="item-text">Шаблони</span>
         </a>
     </nav>
 
-    <div class="sidebar-footer mt-auto">
-        <div class="sidebar-link">
+    <div class="sidebar-footer mt-auto" id="settings-footer">
+        
+        <div class="sidebar-link" id="settings-toggle">
             <span class="icon-frame"><i class="bi bi-gear-wide-connected"></i></span>
             <span class="item-text">Налаштування</span>
+            <i class="bi bi-chevron-down ms-auto mobile-arrow"></i>
         </div>
         
         <div class="sidebar-submenu">
@@ -435,7 +443,7 @@
                 <span class="item-text-sub">Профіль</span>
             </a>
             <a href="{{ route('finance.index') }}" class="sidebar-link-sub {{ request()->is('finance*') ? 'active' : '' }}">
-                <span class="icon-frame"><i class="bi bi-cash-coin"></i></span>
+                <span class="icon-frame"><i class="bi bi-wallet2"></i></span>
                 <span class="item-text-sub">Фінанси</span>
             </a>
 
@@ -443,21 +451,22 @@
 
              <a href="#" class="sidebar-link-sub">
                 <span class="icon-frame"><i class="bi bi-share-fill"></i></span>
-                <span class="item-text-sub">Соціалізація</span>
+                <span class="item-text-sub">Соц. мережі</span>
             </a>
              <a href="#" class="sidebar-link-sub">
-                <span class="icon-frame"><i class="bi bi-truck-front-fill"></i></span>
-                <span class="item-text-sub">Інтеграція Нова Пошта</span>
+                <span class="icon-frame"><i class="bi bi-box-seam"></i></span>
+                <span class="item-text-sub">Нова Пошта</span>
             </a>
             <a href="#" class="sidebar-link-sub">
-                <span class="icon-frame"><i class="bi bi-three-dots"></i></span>
-                <span class="item-text-sub">Інші налаштування</span>
+                <span class="icon-frame"><i class="bi bi-sliders"></i></span>
+                <span class="item-text-sub">Система</span>
             </a>
         </div>
     </div>
 </aside>
 
 <script>
+/* JS Логіка */
 (() => {
   const badge = document.getElementById('chat-unread-badge');
   const dot = document.getElementById('chat-unread-dot');
@@ -484,18 +493,29 @@
   updateBadge();
   setInterval(updateBadge, 30000);
 })();
+
+// Mobile Toggle Logic
+document.addEventListener('DOMContentLoaded', () => {
+    const settingsToggle = document.getElementById('settings-toggle');
+    const settingsFooter = document.getElementById('settings-footer');
+
+    if (settingsToggle && settingsFooter) {
+        settingsToggle.addEventListener('click', (e) => {
+            if (window.innerWidth < 992) {
+                settingsFooter.classList.toggle('mobile-active');
+            }
+        });
+    }
+});
 </script>
 
 <style>
+    /* Стилі для бейджа */
     .chat-badge-collapsed {
         position: absolute;
-        top: -2px;
-        right: -2px;
-        width: 15px;
-        height: 15px;
-        background: #ef4444;
-        border: 2px solid #0f172a;
-        border-radius: 50%;
+        top: -1px; right: -1px; width: 12px; height: 12px;
+        background: #ef4444; border: 2px solid var(--sidebar-bg); border-radius: 50%;
+        box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
     }
 
     @media (min-width: 992px) {
