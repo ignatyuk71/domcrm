@@ -378,7 +378,7 @@
                   
                   <!-- ІНДИКАТОР ЗБЕРІГАННЯ (ELITE DESIGN) -->
                   <div
-                    v-if="order.delivery_status_code === 'at_warehouse' && order.delivery_hold_days >= 2"
+                    v-if="order.delivery_status_code === 'at_warehouse' && order.delivery_hold_days >= 3"
                     class="storage-alert"
                     :class="getStorageClass(order.delivery_hold_days)"
                   >
