@@ -207,6 +207,13 @@ async function refreshDeliveryStatus(order) {
     order.delivery_status_code = data.delivery_status_code || order.delivery_status_code;
     order.delivery_status_updated_at = data.delivery_status_updated_at || order.delivery_status_updated_at;
     order.last_tracked_at = data.last_tracked_at || order.last_tracked_at;
+    if (data.warehouse_entered_at) {
+      order.delivery_status_entered_at = data.warehouse_entered_at;
+      order.delivery_hold_days = calcHoldDays(data.warehouse_entered_at);
+    } else if (order.delivery_status_code !== 'at_warehouse') {
+      order.delivery_hold_days = null;
+      order.delivery_status_entered_at = '';
+    }
   } catch (error) {
     console.error('Не вдалося оновити статус доставки', error);
     alert(error.response?.data?.message || 'Не вдалося оновити статус доставки');
@@ -255,7 +262,11 @@ function mapOrder(order) {
   const sourceRef = order.source || {};
   const latestReceipt = order.latest_fiscal_receipt || order.latestFiscalReceipt || null;
   const deliveryStatusUpdatedAt = delivery.delivery_status_updated_at || '';
-  const deliveryHoldDays = deliveryStatusUpdatedAt ? calcHoldDays(deliveryStatusUpdatedAt) : null;
+  const warehouseStatus = delivery.active_warehouse_status || delivery.latest_warehouse_status || null;
+  const warehouseEnteredAt = warehouseStatus?.entered_at || '';
+  const fallbackEnteredAt = deliveryStatusUpdatedAt;
+  const holdFrom = warehouseEnteredAt || fallbackEnteredAt;
+  const deliveryHoldDays = holdFrom ? calcHoldDays(holdFrom) : null;
 
   return {
     ...order,
@@ -303,6 +314,7 @@ function mapOrder(order) {
     delivery_status: delivery.delivery_status_label || '',
     delivery_status_code: delivery.delivery_status_code || '',
     delivery_status_updated_at: deliveryStatusUpdatedAt,
+    delivery_status_entered_at: warehouseEnteredAt || fallbackEnteredAt,
     last_tracked_at: delivery.last_tracked_at || '',
     delivery_status_color: delivery.delivery_status_color || '',
     delivery_status_icon: delivery.delivery_status_icon || '',

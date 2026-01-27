@@ -41,6 +41,7 @@ class OrderController extends Controller
                 'source',
                 'tags',
                 'delivery',
+                'delivery.activeWarehouseStatus',
                 'payment:id,order_id,prepay_amount,currency,method',
                 'items' => fn ($q) => $q
                     ->select('id', 'order_id', 'product_id', 'product_variant_id', 'product_title', 'sku', 'size', 'price', 'qty', 'total')
@@ -84,11 +85,14 @@ class OrderController extends Controller
             ->when($request->filled('payment_status'), fn ($q) => $q->where('payment_status', $request->string('payment_status')))
             ->when($request->filled('delivery_hold_days'), function ($q) use ($request) {
                 $days = max((int) $request->get('delivery_hold_days'), 1);
-                $thresholdDate = now()->subDays($days)->toDateString();
+                $thresholdDate = now()->subDays($days);
                 $q->whereHas('delivery', function ($dq) use ($thresholdDate) {
                     $dq->where('delivery_status_code', 'at_warehouse')
-                        ->whereNotNull('delivery_status_updated_at')
-                        ->whereDate('delivery_status_updated_at', '<=', $thresholdDate);
+                        ->whereHas('statusHistory', function ($hq) use ($thresholdDate) {
+                            $hq->where('status_code', 'at_warehouse')
+                                ->whereNull('exited_at')
+                                ->where('entered_at', '<=', $thresholdDate);
+                        });
                 });
             })
             ->when($request->filled('search'), function ($q) use ($request) {
@@ -653,6 +657,7 @@ class OrderController extends Controller
                 'delivery_status_updated_at' => null,
                 'last_tracked_at' => null,
             ]);
+            $order->delivery->statusHistory()->whereNull('exited_at')->update(['exited_at' => now()]);
 
             return response()->json([
                 'success' => true, 
@@ -730,6 +735,8 @@ class OrderController extends Controller
             'delivery_status_updated_at' => now(),
             'last_tracked_at' => now(),
         ])->saveQuietly();
+        $delivery->syncStatusHistory($normalized, now());
+        $delivery->load('activeWarehouseStatus');
 
         return response()->json([
             'success' => true,
@@ -740,6 +747,7 @@ class OrderController extends Controller
             'delivery_status_icon' => $delivery->delivery_status_icon,
             'delivery_status_updated_at' => $delivery->delivery_status_updated_at,
             'last_tracked_at' => $delivery->last_tracked_at,
+            'warehouse_entered_at' => $delivery->activeWarehouseStatus?->entered_at,
         ]);
     }
 }

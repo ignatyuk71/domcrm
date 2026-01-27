@@ -10,10 +10,11 @@
         display: flex;
         flex-direction: column;
         height: 100vh;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        z-index: 1045; /* Вище ніж navbar */
+        transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        z-index: 1045;
         border-right: 1px solid rgba(255,255,255,0.05);
-        overflow-x: hidden;
+        /* Дозволяємо випадаючому меню виходити за межі на ПК */
+        overflow: visible !important; 
     }
 
     /* --- ЛОГОТИП --- */
@@ -26,6 +27,7 @@
         border-bottom: 1px solid rgba(255,255,255,0.08);
         background: rgba(0,0,0,0.2);
         flex-shrink: 0;
+        overflow: hidden;
     }
 
     .logo-box {
@@ -46,38 +48,45 @@
         display: flex;
         flex-direction: column;
         white-space: nowrap;
-        opacity: 0; /* За замовчуванням приховано на ПК */
-        transition: opacity 0.3s;
+        opacity: 0;
+        transition: opacity 0.2s;
     }
 
     .company { color: #fff; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.5px; }
     .version { color: #64748b; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
 
-    /* --- НАВІГАЦІЯ --- */
+    /* --- НАВІГАЦІЯ (СЕРЕДИНА) --- */
     .sidebar-nav {
         flex: 1;
         padding: 20px 12px;
         display: flex;
         flex-direction: column;
         gap: 8px;
-        overflow-y: auto;
+        /* Скрол тільки тут на ПК */
+        overflow-y: auto; 
+        overflow-x: hidden;
+        scrollbar-width: none; 
+        -ms-overflow-style: none;
     }
+    .sidebar-nav::-webkit-scrollbar { display: none; }
 
     .sidebar-link {
         display: flex;
         align-items: center;
         height: 52px;
-        padding: 0 12px; /* Внутрішні відступи */
+        padding: 0 12px;
         border-radius: 12px;
         text-decoration: none;
         color: #94a3b8;
         transition: all 0.2s ease;
         position: relative;
         white-space: nowrap;
+        flex-shrink: 0;
+        overflow: hidden; 
     }
 
     .icon-frame {
-        min-width: 30px; /* Фіксоване місце під іконку */
+        min-width: 30px;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -91,10 +100,9 @@
         font-weight: 600;
         font-size: 0.95rem;
         opacity: 0;
-        transition: opacity 0.3s;
+        transition: opacity 0.2s;
     }
 
-    /* Ховер ефекти */
     .sidebar-link:hover {
         background: rgba(255,255,255,0.08);
         color: #f1f5f9;
@@ -108,7 +116,6 @@
     }
     .sidebar-link.active .icon-frame { color: #818cf8; }
 
-    /* Розділювач */
     .nav-divider {
         margin: 20px 0 10px 16px;
         text-transform: uppercase;
@@ -117,87 +124,227 @@
         font-weight: 700;
         letter-spacing: 1px;
         opacity: 0;
-        transition: opacity 0.3s;
+        transition: opacity 0.2s;
+        white-space: nowrap;
     }
 
+    /* --- ФУТЕР (НАЛАШТУВАННЯ) --- */
     .sidebar-footer {
         padding: 20px;
         border-top: 1px solid rgba(255,255,255,0.05);
-        flex-shrink: 0;
+        flex-shrink: 0; 
+        position: relative; 
+        z-index: 1200; 
     }
 
-    /* --- ЛОГІКА ПК (DESKTOP) --- */
+    /* =================================================================
+       ЛОГІКА ПК (DESKTOP) - Тільки для екранів ширше 992px
+       ================================================================= */
     @media (min-width: 992px) {
         .pro-sidebar {
             width: 80px;
             position: fixed;
             top: 0;
             left: 0;
-            background-color: #0f172a !important; /* ВИПРАВЛЕНО: примусовий темний фон */
+            background-color: #0f172a !important;
         }
 
-        .pro-sidebar:hover {
+        /* Розширюємо сайдбар при наведенні, АЛЕ НЕ ЯКЩО ми на футері */
+        .pro-sidebar:hover:not(:has(.sidebar-footer:hover)) {
             width: 280px;
             box-shadow: 10px 0 30px rgba(0,0,0,0.3);
         }
 
-        /* Показуємо текст при наведенні */
-        .pro-sidebar:hover .logo-text,
-        .pro-sidebar:hover .item-text,
-        .pro-sidebar:hover .nav-divider {
+        .pro-sidebar:hover:not(:has(.sidebar-footer:hover)) .logo-text,
+        .pro-sidebar:hover:not(:has(.sidebar-footer:hover)) .item-text,
+        .pro-sidebar:hover:not(:has(.sidebar-footer:hover)) .nav-divider {
             opacity: 1;
             transition-delay: 0.1s;
         }
 
-        /* Відступ для контенту на сторінці */
+        /* Кнопка налаштувань на ПК - тільки іконка */
+        .sidebar-footer > .sidebar-link > .item-text { display: none !important; }
+
+        .sidebar-footer > .sidebar-link {
+            justify-content: center;
+            width: 46px;
+            height: 46px;
+            margin: 0 auto;
+            border-radius: 12px;
+            padding: 0;
+            background: transparent;
+            position: relative; 
+        }
+        .sidebar-footer > .sidebar-link .icon-frame { margin-right: 0; }
+
+        .sidebar-footer:hover > .sidebar-link {
+            background: #1e293b;
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        /* --- ВИПАДАЮЧЕ МЕНЮ (Pop-out) ДЛЯ ПК --- */
+        .sidebar-footer .sidebar-submenu {
+            position: absolute;
+            left: 70px; 
+            bottom: 15px;
+            width: 270px; 
+            background: #1e293b;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            
+            opacity: 0;
+            visibility: hidden;
+            transform: translateX(-10px);
+            transition: all 0.2s ease;
+            z-index: 1500; 
+        }
+
+        .sidebar-footer .sidebar-submenu::before {
+            content: '';
+            position: absolute;
+            left: -6px; bottom: 24px;
+            width: 12px; height: 12px;
+            background: #1e293b;
+            border-left: 1px solid rgba(255,255,255,0.1);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            transform: rotate(45deg);
+        }
+
+        .sidebar-footer .sidebar-submenu::after {
+            content: '';
+            position: absolute;
+            top: 0; bottom: 0; left: -25px; width: 25px;
+        }
+
+        .sidebar-footer:hover .sidebar-submenu {
+            opacity: 1;
+            visibility: visible;
+            transform: translateX(0);
+        }
+
+        .sidebar-footer .sidebar-link-sub {
+            padding: 10px 14px;
+            font-size: 0.9rem;
+            border-radius: 8px;
+            color: #cbd5e1;
+            display: flex;
+            align-items: center;
+            text-decoration: none;
+            white-space: nowrap; 
+        }
+        .sidebar-footer .sidebar-link-sub:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: #fff;
+        }
+        .sidebar-footer .sidebar-link-sub .icon-frame {
+            font-size: 1.1rem; margin-right: 12px; min-width: 24px; color: #94a3b8;
+        }
+        .sidebar-footer .sidebar-link-sub:hover .icon-frame { color: #818cf8; }
+        
+        .submenu-divider { height: 1px; background: rgba(255,255,255,0.1); margin: 6px 4px; }
+        
         body { padding-left: 80px; transition: padding-left 0.3s; }
     }
 
-    /* --- ЛОГІКА МОБІЛЬНА (MOBILE) --- */
+    /* =================================================================
+       ЛОГІКА МОБІЛЬНА (MOBILE) - Простий список
+       ================================================================= */
     @media (max-width: 991px) {
-        /* Скидаємо стилі фіксованого сайдбару для мобільного */
-        .pro-sidebar {
-            width: 280px !important; /* Фіксована ширина */
-            transform: none;
-            box-shadow: none;
-            background-color: #0f172a !important; /* На всяк випадок */
+        .pro-sidebar { 
+            width: 280px !important; 
+            overflow-y: auto !important; /* На мобільному скролимо все разом */
         }
         
-        /* Текст завжди видно на мобільному */
-        .logo-text, .item-text, .nav-divider {
-            opacity: 1 !important;
+        /* Робимо всі тексти видимими */
+        .logo-text, .item-text, .nav-divider { opacity: 1 !important; }
+        
+        .mobile-header { display: flex; align-items: center; justify-content: space-between; padding: 15px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); background: #0f172a; }
+        .btn-close-white { filter: invert(1); opacity: 0.8; }
+        body { padding-left: 0 !important; }
+
+        /* --- СКИДАННЯ СТИЛІВ ФУТЕРА ДЛЯ МОБІЛЬНОГО --- */
+        .sidebar-footer {
+            height: auto;
+            border-top: 1px solid rgba(255,255,255,0.05);
+            padding: 10px 12px 30px 12px; /* Трохи відступу знизу */
         }
 
-        /* Стилі для offcanvas header */
-        .mobile-header {
+        /* Заголовок "Налаштування" як звичайний пункт меню */
+        .sidebar-footer > .sidebar-link {
+            width: 100%;
+            justify-content: flex-start;
+            height: 52px;
+            margin-bottom: 5px;
+            padding: 0 12px;
+            background: transparent;
+            pointer-events: none; /* Щоб не клікалось, бо це просто заголовок групи */
+        }
+        
+        /* Повертаємо текст "Налаштування" */
+        .sidebar-footer > .sidebar-link .item-text { 
+            display: block !important; 
+            color: #fff; 
+        }
+
+        /* Стиль списку підменю (акордеон) */
+        .sidebar-footer .sidebar-submenu {
+            position: static; /* Відміняємо позиціонування */
+            display: flex;
+            flex-direction: column;
+            background: transparent;
+            box-shadow: none;
+            border: none;
+            padding: 0 0 0 10px; /* Відступ зліва для ієрархії */
+            width: 100%;
+            opacity: 1;
+            visibility: visible;
+            transform: none;
+            gap: 2px;
+        }
+
+        /* Пункти підменю */
+        .sidebar-footer .sidebar-link-sub {
+            padding: 10px 12px;
+            font-size: 0.9rem;
+            color: #94a3b8;
+            text-decoration: none;
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            padding: 15px 20px;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-            background: #0f172a;
+            border-left: 1px solid rgba(255,255,255,0.1); /* Лінія зліва для краси */
+            border-radius: 0 8px 8px 0;
+            margin-left: 14px; /* Вирівнювання під іконку шестерні */
         }
         
-        .btn-close-white {
-            filter: invert(1);
-            opacity: 0.8;
+        .sidebar-footer .sidebar-link-sub .icon-frame {
+            font-size: 1.1rem; 
+            margin-right: 12px; 
+            min-width: 24px; 
+            color: #64748b;
         }
 
-        /* Прибираємо відступ body на мобільному */
-        body { padding-left: 0 !important; }
+        /* Ховаємо декоративні елементи ПК версії */
+        .sidebar-footer .sidebar-submenu::before, 
+        .sidebar-footer .sidebar-submenu::after, 
+        .submenu-divider { 
+            display: none; 
+        }
     }
 </style>
 
-<!-- Sidebar -->
 <aside class="pro-sidebar offcanvas-lg offcanvas-start" tabindex="-1" id="mobileSidebar" aria-labelledby="sidebarLabel">
     
-    <!-- Кнопка закриття (тільки для мобільного) -->
     <div class="mobile-header d-lg-none">
         <span class="fw-bold text-white fs-5">Меню</span>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" data-bs-target="#mobileSidebar" aria-label="Close"></button>
     </div>
 
-    <!-- Логотип -->
     <div class="sidebar-header">
         <div class="logo-box">
             <i class="bi bi-buildings-fill"></i>
@@ -208,7 +355,6 @@
         </div>
     </div>
 
-    <!-- Навігація -->
     <nav class="sidebar-nav">
         <a href="{{ route('dashboard') }}" class="sidebar-link {{ request()->is('dashboard') ? 'active' : '' }}">
             <span class="icon-frame"><i class="bi bi-grid-1x2-fill"></i></span>
@@ -227,7 +373,6 @@
 
         <div class="nav-divider">Склад</div>
 
-        <!-- Отримуємо кількість замовлень у черзі пакування -->
         @php
             $packingCount = \App\Models\Order::whereIn('status_id', config('packing.status_ids.queue', [4]))->count();
         @endphp
@@ -278,20 +423,35 @@
         </a>
     </nav>
 
-    <!-- Футер -->
     <div class="sidebar-footer mt-auto">
         <div class="sidebar-link">
             <span class="icon-frame"><i class="bi bi-gear-wide-connected"></i></span>
             <span class="item-text">Налаштування</span>
         </div>
+        
         <div class="sidebar-submenu">
-            <a href="{{ route('profile.edit') }}" class="sidebar-link sidebar-link-sub {{ request()->is('profile*') ? 'active' : '' }}">
+            <a href="{{ route('profile.edit') }}" class="sidebar-link-sub {{ request()->is('profile*') ? 'active' : '' }}">
                 <span class="icon-frame"><i class="bi bi-person-circle"></i></span>
-                <span class="item-text">Профіль</span>
+                <span class="item-text-sub">Профіль</span>
             </a>
-            <a href="{{ route('finance.index') }}" class="sidebar-link sidebar-link-sub {{ request()->is('finance*') ? 'active' : '' }}">
+            <a href="{{ route('finance.index') }}" class="sidebar-link-sub {{ request()->is('finance*') ? 'active' : '' }}">
                 <span class="icon-frame"><i class="bi bi-cash-coin"></i></span>
-                <span class="item-text">Фінанси</span>
+                <span class="item-text-sub">Фінанси</span>
+            </a>
+
+            <div class="submenu-divider"></div>
+
+             <a href="#" class="sidebar-link-sub">
+                <span class="icon-frame"><i class="bi bi-share-fill"></i></span>
+                <span class="item-text-sub">Соціалізація</span>
+            </a>
+             <a href="#" class="sidebar-link-sub">
+                <span class="icon-frame"><i class="bi bi-truck-front-fill"></i></span>
+                <span class="item-text-sub">Інтеграція Нова Пошта</span>
+            </a>
+            <a href="#" class="sidebar-link-sub">
+                <span class="icon-frame"><i class="bi bi-three-dots"></i></span>
+                <span class="item-text-sub">Інші налаштування</span>
             </a>
         </div>
     </div>
@@ -304,6 +464,7 @@
   if (!badge) return;
 
   const updateBadge = async () => {
+    if (document.hidden) return; 
     try {
       const response = await fetch('/api/chat/unread-count', { headers: { 'Accept': 'application/json' } });
       if (!response.ok) return;
@@ -318,11 +479,8 @@
         badge.classList.add('d-none');
         if (dot) dot.classList.add('d-none');
       }
-    } catch (_) {
-      // No-op: avoid spamming console in prod
-    }
+    } catch (e) { console.error(e); }
   };
-
   updateBadge();
   setInterval(updateBadge, 30000);
 })();
@@ -341,30 +499,8 @@
     }
 
     @media (min-width: 992px) {
-        .chat-badge-expanded {
-            display: none;
-        }
-
-        .pro-sidebar:hover .chat-badge-expanded {
-            display: inline-flex;
-        }
-
-        .pro-sidebar:hover .chat-badge-collapsed {
-            display: none;
-        }
-    }
-
-    .sidebar-submenu {
-        margin: 0.35rem 0 0.75rem 0.75rem;
-        border-left: 1px solid rgba(148, 163, 184, 0.25);
-        padding-left: 0.75rem;
-        display: flex;
-        flex-direction: column;
-        gap: 0.35rem;
-    }
-
-    .sidebar-link-sub {
-        padding: 0.45rem 0.75rem;
-        font-size: 0.9rem;
+        .chat-badge-expanded { display: none; }
+        .pro-sidebar:hover .chat-badge-expanded { display: inline-flex; }
+        .pro-sidebar:hover .chat-badge-collapsed { display: none; }
     }
 </style>

@@ -4,6 +4,9 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Carbon;
 
 class OrderDelivery extends Model
 {
@@ -56,6 +59,46 @@ class OrderDelivery extends Model
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class);
+    }
+
+    public function statusHistory(): HasMany
+    {
+        return $this->hasMany(OrderDeliveryStatusHistory::class, 'order_delivery_id');
+    }
+
+    public function activeWarehouseStatus(): HasOne
+    {
+        return $this->hasOne(OrderDeliveryStatusHistory::class, 'order_delivery_id')
+            ->where('status_code', 'at_warehouse')
+            ->whereNull('exited_at')
+            ->latestOfMany('entered_at');
+    }
+
+    public function syncStatusHistory(array $normalized, Carbon $timestamp): void
+    {
+        $code = $normalized['code'] ?? null;
+        if (!$code) {
+            return;
+        }
+
+        $active = $this->statusHistory()
+            ->whereNull('exited_at')
+            ->latest('entered_at')
+            ->first();
+
+        if (!$active || $active->status_code !== $code) {
+            if ($active) {
+                $active->forceFill(['exited_at' => $timestamp])->saveQuietly();
+            }
+
+            $this->statusHistory()->create([
+                'status_code' => $code,
+                'status_label' => $normalized['label'] ?? null,
+                'status_description' => $normalized['description'] ?? null,
+                'source_code' => $normalized['source_code'] ?? null,
+                'entered_at' => $timestamp,
+            ]);
+        }
     }
 
     // Константи платника

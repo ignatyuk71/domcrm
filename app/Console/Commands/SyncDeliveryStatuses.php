@@ -117,6 +117,7 @@ class SyncDeliveryStatuses extends Command
                     'delivery_status_updated_at' => $now,
                     'last_tracked_at' => $now,
                 ])->saveQuietly();
+                $delivery->syncStatusHistory($normalized, $now);
 
                 // Отримуємо ID статусу для CRM через Mapper
                 $npCode = (int) ($row['StatusCode'] ?? $row['Status'] ?? 0);
