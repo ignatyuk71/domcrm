@@ -1,28 +1,32 @@
 name: Deploy to Mirohost
+
 on:
   push:
     branches:
       - main
+
 jobs:
   web-deploy:
     name: Deploy
     runs-on: ubuntu-latest
-    steps:
-    - name: Get latest code
-      uses: actions/checkout@v3
 
-    - name: Sync files to Mirohost
-      uses: SamKirkland/FTP-Deploy-Action@v4.3.4
-      with:
-        server: ovh21.mirohost.net
-        username: ${{ secrets.FTP_USERNAME }}
-        password: ${{ secrets.FTP_PASSWORD }}
-        server-dir: /domcrm.com.ua/
-        exclude: |
-          **/.git/**
-          **/.git*
-          **/node_modules/**
-          **/vendor/**
-          **/storage/**
-          .github/workflows/**
-          .env
+    steps:
+      - name: Get latest code
+        uses: actions/checkout@v4
+
+      - name: Sync files to Mirohost
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
+        with:
+          server: vs2489.mirohost.net        # НОВИЙ сервер
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          port: 21                            # можна не писати, за замовчуванням 21
+          server-dir: /domcrm.com.ua/         # корінь сайту (як було)
+          exclude: |
+            **/.git/**
+            **/.git*
+            **/node_modules/**
+            **/vendor/**
+            **/storage/**
+            .github/workflows/**
+            .env
