@@ -628,6 +628,15 @@ class OrderController extends Controller
         }
 
         if (($delivery->delivery_type ?? 'warehouse') === 'courier') {
+            if (!$delivery->settlement_ref) {
+                return response()->json([
+                    'message' => 'Не вибрано населений пункт (SettlementRef)',
+                    'details' => [
+                        'settlement_ref' => $delivery->settlement_ref ?? 'null',
+                    ]
+                ], 422);
+            }
+
             if (!$delivery->street_ref || !$delivery->building) {
                 return response()->json([
                     'message' => 'Не заповнені дані адреси для курʼєра',

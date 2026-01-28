@@ -104,7 +104,7 @@
       <section v-else class="animate-fade-in">
         <div class="mb-3 position-relative">
           <label class="form-label-custom">Вулиця</label>
-          <div class="input-wrapper" :class="{ 'opacity-50': !local.city_ref }">
+          <div class="input-wrapper" :class="{ 'opacity-50': !local.settlement_ref }">
             <i class="bi bi-signpost-split input-prefix"></i>
             <input
               type="text"
@@ -114,8 +114,8 @@
               v-model="streetQuery"
               @focus="onStreetFocus"
               @blur="scheduleCloseStreet"
-              :disabled="!local.city_ref"
-              placeholder="Почніть вводити..."
+              :disabled="!local.settlement_ref"
+              placeholder="Почніть вводити (2+ символи)..."
             />
             <div v-if="streetLoading" class="input-suffix">
               <div class="spinner-border text-primary custom-spinner" role="status"></div>
@@ -279,8 +279,9 @@ watch(streetQuery, (val) => {
   local.street_ref = '';
 
   if (streetTimer) clearTimeout(streetTimer);
-  if ((!local.city_ref && !local.settlement_ref) || local.delivery_type !== 'courier') return;
-  
+  if (!local.settlement_ref || local.delivery_type !== 'courier') return;
+  if (!val || val.length < 2) { streetOptions.value = []; return; }
+
   streetTimer = setTimeout(() => loadStreets(val), 800);
 });
 
@@ -308,6 +309,10 @@ async function loadWarehouses(query) {
 }
 
 async function loadStreets(query) {
+  if (!local.settlement_ref || !query || query.length < 2) {
+    streetOptions.value = [];
+    return;
+  }
   streetLoading.value = true;
   try {
     const { data } = await fetchStreets({
@@ -357,7 +362,6 @@ function onWarehouseFocus() {
 
 function onStreetFocus() {
   showStreetDropdown.value = true;
-  if ((local.city_ref || local.settlement_ref) && !streetOptions.value.length) loadStreets('');
 }
 
 function resetDeliveryFields() {

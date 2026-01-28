@@ -312,6 +312,11 @@ class NovaPoshtaService
      */
     public function searchSettlementStreets(string $settlementRef, string $query, int $limit = 25): array
     {
+        $query = trim($query);
+        if (mb_strlen($query) < 2) {
+            return [];
+        }
+
         $resp = $this->makeRequest('Address', 'searchSettlementStreets', [
             'SettlementRef' => $settlementRef,
             'StreetName' => $query,
@@ -335,6 +340,11 @@ class NovaPoshtaService
      */
     public function searchStreets(string $cityRef, string $query, ?string $settlementRef = null, int $limit = 25): array
     {
+        $query = trim($query);
+        if (mb_strlen($query) < 2) {
+            return [];
+        }
+
         if ($settlementRef) {
             return $this->searchSettlementStreets($settlementRef, $query, $limit);
         }

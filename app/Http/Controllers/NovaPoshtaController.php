@@ -63,7 +63,7 @@ class NovaPoshtaController extends Controller
         $query = trim($request->query('q', ''));
         $limit = (int) $request->query('limit', 25);
 
-        if ((!$cityRef && !$settlementRef) || (mb_strlen($query) < 2 && $query !== '')) {
+        if (!$settlementRef || mb_strlen($query) < 2) {
             return response()->json(['data' => []]);
         }
 

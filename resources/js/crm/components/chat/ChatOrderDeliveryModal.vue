@@ -123,10 +123,10 @@
                         type="text" 
                         class="modern-input" 
                         v-model="streetQuery"
-                        :disabled="!local.city_ref && !local.settlement_ref"
+                        :disabled="!local.settlement_ref"
                         @focus="onStreetFocus"
                         @blur="scheduleCloseStreet"
-                        placeholder="Вулиця"
+                        placeholder="Вулиця (2+ символи)"
                       >
                       <div v-if="streetLoading" class="spinner-input"></div>
                       <div v-if="showStreetDropdown && (streetOptions.length || streetLoading)" class="dropdown-menu-custom">
@@ -345,7 +345,8 @@ watch(streetQuery, (val) => {
   local.street_name = val;
   local.street_ref = '';
   if (streetTimer) clearTimeout(streetTimer);
-  if ((!local.city_ref && !local.settlement_ref) || local.delivery_type !== 'courier') return;
+  if (!local.settlement_ref || local.delivery_type !== 'courier') return;
+  if (!val || val.length < 2) { streetOptions.value = []; return; }
   streetTimer = setTimeout(async () => loadStreets(val), 500);
 });
 
@@ -358,6 +359,10 @@ const loadWarehouses = async (query) => {
 };
 
 const loadStreets = async (query) => {
+  if (!local.settlement_ref || !query || query.length < 2) {
+    streetOptions.value = [];
+    return;
+  }
   streetLoading.value = true;
   try {
     const { data } = await fetchStreets({
@@ -378,7 +383,7 @@ const selectStreet = (street) => {
 };
 
 const onWarehouseFocus = () => { showWarehouseDropdown.value = true; if(local.city_ref && !warehouseOptions.value.length) loadWarehouses(''); };
-const onStreetFocus = () => { showStreetDropdown.value = true; if((local.city_ref || local.settlement_ref) && !streetOptions.value.length) loadStreets(''); };
+const onStreetFocus = () => { showStreetDropdown.value = true; };
 const scheduleCloseCity = () => setTimeout(() => showCityDropdown.value = false, 200);
 const scheduleCloseWarehouse = () => setTimeout(() => showWarehouseDropdown.value = false, 200);
 const scheduleCloseStreet = () => setTimeout(() => showStreetDropdown.value = false, 200);
