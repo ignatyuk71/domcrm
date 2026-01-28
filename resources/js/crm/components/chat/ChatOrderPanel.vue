@@ -477,35 +477,12 @@ const groupedProducts = computed(() => {
 
 <style scoped>
 /* Додані стилі для 3-рядкового виводу */
-.delivery-details-stack {
-  display: flex;
-  flex-direction: column;
-  margin-top: 4px;
-}
-.delivery-row {
-  line-height: 1.2;
-}
-.city-text {
-  font-size: 14px;
-  font-weight: 800;
-  color: #1e293b;
-}
-.point-text {
-  font-size: 12px;
-  color: #64748b;
-  font-weight: 600;
-}
-.payer-text {
-  font-size: 11px;
-  color: #94a3b8;
-  font-weight: 700;
-  text-transform: uppercase;
-  margin-top: 2px;
-}
-.payer-text span {
-  color: #a78bfb;
-}
-
+.delivery-details-stack {display: flex; flex-direction: column; margin-top: 4px;}
+.delivery-row {line-height: 1.2;}
+.city-text {font-size: 14px; font-weight: 800; color: #1e293b;}
+.point-text {font-size: 12px; color: #64748b; font-weight: 600;}
+.payer-text {font-size: 11px; color: #94a3b8; font-weight: 700; text-transform: uppercase;margin-top: 2px;}
+.payer-text span {color: #a78bfb;}
 /* Решта стилів з Ultra V2 */
 .ultra-backdrop { position: fixed; inset: 0; background: rgba(10, 15, 30, 0.4); z-index: 99998; backdrop-filter: blur(12px); }
 .order-panel-elite { position: fixed; top: 0; right: 0; width: 480px; max-width: 100%; height: 100vh; background: #ffffff; z-index: 99999; display: flex; flex-direction: column; box-shadow: -20px 0 80px rgba(0, 0, 0, 0.2); }
