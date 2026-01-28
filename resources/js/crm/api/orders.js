@@ -16,6 +16,10 @@ export function updateOrderStatus(id, statusId) {
     return http.patch(`/orders/${id}/status`, { status_id: statusId });
 }
 
+export function updateOrderComment(id, commentInternal) {
+    return http.patch(`/orders/${id}/comment`, { comment_internal: commentInternal });
+}
+
 export function createOrder(payload) {
     return http.post('/orders', payload);
 }

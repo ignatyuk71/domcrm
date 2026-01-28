@@ -1,5 +1,27 @@
 <template>
   <section class="workspace">
+    <div class="toast-container position-fixed top-50 start-50 translate-middle p-3" style="z-index: 1080;">
+      <div
+        v-if="commentNotice.message"
+        class="toast show"
+        :class="`text-bg-${commentNotice.type}`"
+        style="opacity: 0.9;"
+        role="alert"
+        aria-live="assertive"
+        aria-atomic="true"
+      >
+        <div class="d-flex">
+          <div class="toast-body">{{ commentNotice.message }}</div>
+          <button
+            type="button"
+            class="btn-close btn-close-white me-2 m-auto"
+            aria-label="Close"
+            @click="commentNotice.message = ''"
+          ></button>
+        </div>
+      </div>
+    </div>
+
     <OrdersTopbar
       v-model:search="filters.search"
       :status-chips="statusChips"
@@ -31,6 +53,7 @@
         @cancel-ttn="handleCancelTtn"
         @refresh-delivery="refreshDeliveryStatus"
         @open-customer="openCustomer"
+        @save-comment="saveComment"
       />
 
       <OrdersPagination
@@ -79,7 +102,7 @@ import OrdersPagination from '@/crm/components/orders/list/OrdersPagination.vue'
 import OrderTagsModal from '@/crm/components/orders/list/OrderTagsModal.vue';
 import OrderStatusesModal from '@/crm/components/orders/list/OrderStatusesModal.vue';
 import CustomerQuickView from '@/crm/components/orders/list/CustomerQuickView.vue';
-import { listOrders, deleteOrder, updateOrderTags, updateOrderStatus } from '@/crm/api/orders';
+import { listOrders, deleteOrder, updateOrderTags, updateOrderStatus, updateOrderComment } from '@/crm/api/orders';
 import { fetchTags } from '@/crm/api/tags';
 import { fetchStatuses } from '@/crm/api/statuses';
 import { getCustomer } from '@/crm/api/customers';
@@ -107,6 +130,7 @@ const statusesModalLoading = ref(false);
 const statuses = ref([]);
 const statusesOrder = ref(null);
 const selectedStatusId = ref(null);
+const commentNotice = reactive({ type: 'success', message: '' });
 const meta = ref({ current_page: 1, last_page: 1, total: 0 });
 const holdFilterOptions = [3, 4, 5, 6];
 const holdFilterDays = ref(3);
@@ -444,6 +468,26 @@ async function saveTags() {
   } catch (e) {
     console.error('Не вдалося оновити теги', e);
     alert('Не вдалося оновити теги');
+  }
+}
+
+async function saveComment({ order, comment }) {
+  if (!order?.id) return;
+  const trimmed = typeof comment === 'string' ? comment.trim() : '';
+  const nextValue = trimmed === '' ? null : trimmed;
+  try {
+    const { data } = await updateOrderComment(order.id, nextValue);
+    const saved = data?.comment_internal ?? nextValue ?? '';
+    order.comment = saved || '';
+    const idx = orders.value.findIndex((o) => o.id === order.id);
+    if (idx !== -1) orders.value[idx].comment = order.comment;
+    commentNotice.type = 'success';
+    commentNotice.message = 'Нотатку збережено';
+    setTimeout(() => { commentNotice.message = ''; }, 2500);
+  } catch (e) {
+    console.error('Не вдалося зберегти нотатку', e);
+    commentNotice.type = 'danger';
+    commentNotice.message = 'Не вдалося зберегти нотатку';
   }
 }
 

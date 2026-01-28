@@ -1,5 +1,5 @@
 <script setup>
-  import { ref, computed } from 'vue';
+  import { ref, computed, watch } from 'vue';
   import {
     formatCurrency,
     formatDate,
@@ -25,7 +25,7 @@
     order: { type: Object, required: true },
   });
   
-  defineEmits([
+  const emit = defineEmits([
     'open-tags',
     'open-statuses',
     'copy-ttn',
@@ -33,7 +33,27 @@
     'print-ttn',
     'cancel-ttn',
     'refresh-delivery',
+    'save-comment',
   ]);
+
+  const localComment = ref(props.order.comment || '');
+  const isCommentDirty = computed(() => {
+    const current = (props.order.comment || '').trim();
+    const local = (localComment.value || '').trim();
+    return current !== local;
+  });
+
+  const saveComment = () => {
+    const trimmed = (localComment.value || '').trim();
+    emit('save-comment', trimmed === '' ? null : trimmed);
+  };
+
+  watch(
+    () => props.order.comment,
+    (value) => {
+      localComment.value = value || '';
+    }
+  );
   
   // --- LOGIC FOR PHONE COPY & SOCIALS ---
   const isPhoneCopied = ref(false);
@@ -127,7 +147,7 @@
       </div>
   
       <div class="order-tags-bar">
-        <div class="d-flex align-items-center gap-2 flex-wrap">
+        <div class="tags-col">
           <span class="label-text">Теги</span>
           <div class="tags-wrapper">
             <span
@@ -141,6 +161,28 @@
             </span>
             <button class="btn-add-tag" @click.stop="$emit('open-tags')">
               <i class="bi bi-plus-lg me-1"></i> Додати
+            </button>
+          </div>
+        </div>
+
+        <div class="notes-col">
+          <span class="label-text">Нотатки</span>
+          <div class="notes-row">
+            <input
+              v-model="localComment"
+              class="note-input"
+              type="text"
+              placeholder="Нотатка для менеджера..."
+              @click.stop
+              @keydown.enter.stop.prevent="saveComment"
+            >
+            <button
+              class="btn-save-note"
+              type="button"
+              :disabled="!isCommentDirty"
+              @click.stop="saveComment"
+            >
+              OK
             </button>
           </div>
         </div>
@@ -506,12 +548,24 @@
   .payment-pill { display: inline-flex; align-items: center; gap: 4px; font-size: 0.8rem; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: #f1f5f9; border: 1px solid #e2e8f0; color: #475569; }
   
   /* TAGS */
-  .order-tags-bar { margin-top: 8px; padding: 8px 12px; background: rgba(255, 255, 255, 0.6); border-radius: 10px; border: 1px dashed #cbd5e1; }
+  .order-tags-bar { margin-top: 8px; padding: 8px 12px; background: rgba(255, 255, 255, 0.6); border-radius: 10px; border: 1px dashed #cbd5e1; display: grid; grid-template-columns: 1fr 2fr; gap: 10px 16px; }
   .label-text { font-size: 0.7rem; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
+  .tags-col, .notes-col { display: flex; flex-direction: column; gap: 6px; }
   .tags-wrapper { display: flex; flex-wrap: wrap; gap: 6px; }
   .tag-chip { font-size: 0.7rem; padding: 3px 9px; border-radius: 999px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; background: #fff; border: 1px solid #e2e8f0; color: #64748b; }
   .btn-add-tag { font-size: 0.7rem; padding: 3px 10px; border-radius: 999px; border: 1px dashed #cbd5e1; background: #fff; color: #64748b; cursor: pointer; transition: all 0.15s; }
   .btn-add-tag:hover { border-color: #6366f1; color: #6366f1; background: #eef2ff; }
+
+  .notes-row { display: flex; align-items: center; gap: 6px; }
+  .note-input { flex: 1; min-width: 160px; height: 32px; border-radius: 8px; border: 1px solid #cbd5e1; padding: 4px 10px; font-size: 0.8rem; color: #334155; background: #fff; }
+  .note-input:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15); }
+  .btn-save-note { height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid #cbd5e1; background: #fff; font-size: 0.75rem; font-weight: 700; color: #334155; cursor: pointer; transition: all 0.15s; }
+  .btn-save-note:hover:not(:disabled) { border-color: #6366f1; color: #4f46e5; background: #eef2ff; }
+  .btn-save-note:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  @media (max-width: 991px) {
+    .order-tags-bar { grid-template-columns: 1fr; }
+  }
   
   /* PANEL CARDS */
   .panel-card { background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02); padding: 12px; display: flex; flex-direction: column; }

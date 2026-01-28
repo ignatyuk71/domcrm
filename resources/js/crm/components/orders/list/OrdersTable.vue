@@ -29,6 +29,7 @@
     'refresh-delivery': null,
     'open-customer': null,
     'quick-fiscalize': null,
+    'save-comment': null,
   });
 
   const ttnConfirmOpen = ref(false);
@@ -182,6 +183,10 @@
 
               <td class="cell-phone">
                 <span class="phone-text">{{ order.phone }}</span>
+                <div v-if="order.comment" class="comment-snippet">
+                  <i class="bi bi-chat-left-text-fill me-1"></i>
+                  {{ order.comment }}
+                </div>
               </td>
 
               <td class="cell-status">
@@ -438,6 +443,7 @@
                     @print-ttn="$emit('print-ttn', order)"
                     @cancel-ttn="$emit('cancel-ttn', order)"
                     @refresh-delivery="$emit('refresh-delivery', order)"
+                    @save-comment="$emit('save-comment', { order, comment: $event })"
                   />
                 </div>
               </td>
@@ -526,6 +532,7 @@
 .row-expanded td { border-bottom: none; }
 .order-id { font-family: 'Courier New', monospace; font-weight: 700; color: #3b82f6; background: rgba(59, 130, 246, 0.08); padding: 2px 6px; border-radius: 4px; font-size: 0.85rem; }
 .phone-text { font-family: 'Consolas', monospace; color: #475569; font-size: 0.85rem; letter-spacing: -0.5px; }
+.comment-snippet { margin-top: 4px; font-size: 0.75rem; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
 .date-text { font-size: 0.8rem; }
 .tags-wrapper { display: flex; flex-wrap: wrap; gap: 4px; }
 .tag-pill { font-size: 0.7rem; padding: 3px 8px; border-radius: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; border: 1px solid transparent; }

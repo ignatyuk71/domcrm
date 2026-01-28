@@ -484,6 +484,22 @@ class OrderController extends Controller
         return response()->json(['data' => $tags]);
     }
 
+    /** Оновлення внутрішнього коментаря. */
+    public function updateComment(Request $request, Order $order): JsonResponse
+    {
+        $data = $request->validate([
+            'comment_internal' => ['nullable', 'string'],
+        ]);
+
+        $order->update([
+            'comment_internal' => $data['comment_internal'] ?? null,
+        ]);
+
+        return response()->json([
+            'comment_internal' => $order->comment_internal,
+        ]);
+    }
+
     /** Тимчасовий номер (замінимо на id після створення). */
     protected function generateOrderNumber(): string
     {
