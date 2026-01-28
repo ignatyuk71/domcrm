@@ -177,6 +177,7 @@ const model = defineModel({ type: Object, default: () => ({}) });
 
 const local = reactive({
   city_ref: '', 
+  settlement_ref: '',
   city_name: '', 
   warehouse_ref: '', 
   warehouse_name: '',
@@ -243,6 +244,7 @@ watch(cityQuery, (val) => {
   // Якщо користувач почав стирати назву міста - скидаємо Ref
   if (!val || val !== local.city_name) {
      local.city_ref = '';
+     local.settlement_ref = '';
      resetDeliveryFields();
   }
 
@@ -305,13 +307,18 @@ async function loadWarehouses(query) {
 async function loadStreets(query) {
   streetLoading.value = true;
   try {
-    const { data } = await fetchStreets({ cityRef: local.city_ref, query });
+    const { data } = await fetchStreets({
+      cityRef: local.city_ref,
+      settlementRef: local.settlement_ref,
+      query
+    });
     streetOptions.value = data?.data || data || [];
   } finally { streetLoading.value = false; }
 }
 
 function selectCity(city) {
   local.city_ref = city.ref; 
+  local.settlement_ref = city.settlement_ref || '';
   local.city_name = city.name;
   skipFetch.city = true; 
   cityQuery.value = city.name;

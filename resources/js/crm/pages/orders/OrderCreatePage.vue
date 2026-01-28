@@ -164,6 +164,7 @@ const form = reactive({
     payer: 'recipient', 
     ttn: '',
     city_ref: '',
+    settlement_ref: '',
     city_name: '',
     warehouse_ref: '',
     warehouse_name: '',

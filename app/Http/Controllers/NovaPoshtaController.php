@@ -59,13 +59,14 @@ class NovaPoshtaController extends Controller
     public function streets(Request $request): JsonResponse
     {
         $cityRef = $request->query('city_ref');
+        $settlementRef = $request->query('settlement_ref');
         $query = trim($request->query('q', ''));
 
-        if (!$cityRef || mb_strlen($query) < 2) {
+        if ((!$cityRef && !$settlementRef) || mb_strlen($query) < 2) {
             return response()->json(['data' => []]);
         }
 
-        $data = $this->np->searchStreets($cityRef, $query);
+        $data = $this->np->searchStreets($cityRef ?? '', $query, $settlementRef);
 
         return response()->json([
             'data' => $data ?? []

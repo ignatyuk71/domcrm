@@ -26,6 +26,7 @@ class OrderDelivery extends Model
         'delivery_cost',
 
         'city_ref',
+        'settlement_ref',
         'city_name',
 
         'warehouse_ref',

@@ -209,6 +209,7 @@ const local = reactive({
   delivery_type: 'warehouse',
   city_name: '',
   city_ref: '',
+  settlement_ref: '',
   warehouse_name: '',
   warehouse_ref: '',
   street_name: '',
@@ -283,6 +284,7 @@ watch(cityQuery, (val) => {
   if (skipFetch.city) { skipFetch.city = false; return; }
   local.city_name = val;
   local.city_ref = '';
+  local.settlement_ref = '';
   if (cityTimer) clearTimeout(cityTimer);
   if (!val || val.length < 2) { cityOptions.value = []; return; }
   cityTimer = setTimeout(async () => {
@@ -310,6 +312,7 @@ watch(warehouseQuery, (val) => {
 
 const selectCity = (city) => {
   local.city_ref = city.ref;
+  local.settlement_ref = city.settlement_ref || '';
   local.city_name = city.name;
   skipFetch.city = true; cityQuery.value = city.name;
   showCityDropdown.value = false;
@@ -330,9 +333,41 @@ const selectWarehouse = (wh) => {
   showWarehouseDropdown.value = false;
 };
 
-// ... (решта логіки вулиць залишається) ...
+watch(streetQuery, (val) => {
+  if (skipFetch.street) { skipFetch.street = false; return; }
+  local.street_name = val;
+  if (streetTimer) clearTimeout(streetTimer);
+  if ((!local.city_ref && !local.settlement_ref) || local.delivery_type !== 'courier') return;
+  streetTimer = setTimeout(async () => loadStreets(val), 500);
+});
+
+const loadWarehouses = async (query) => {
+  warehouseLoading.value = true;
+  try {
+    const { data } = await fetchWarehouses({ cityRef: local.city_ref, query });
+    warehouseOptions.value = data?.data || [];
+  } finally { warehouseLoading.value = false; }
+};
+
+const loadStreets = async (query) => {
+  try {
+    const { data } = await fetchStreets({
+      cityRef: local.city_ref,
+      settlementRef: local.settlement_ref,
+      query
+    });
+    streetOptions.value = data?.data || [];
+  } finally {}
+};
+
+const selectStreet = (street) => {
+  local.street_name = street.name;
+  skipFetch.street = true; streetQuery.value = street.name;
+  showStreetDropdown.value = false;
+};
+
 const onWarehouseFocus = () => { showWarehouseDropdown.value = true; if(local.city_ref && !warehouseOptions.value.length) loadWarehouses(''); };
-const onStreetFocus = () => { showStreetDropdown.value = true; };
+const onStreetFocus = () => { showStreetDropdown.value = true; if((local.city_ref || local.settlement_ref) && !streetOptions.value.length) loadStreets(''); };
 const scheduleCloseCity = () => setTimeout(() => showCityDropdown.value = false, 200);
 const scheduleCloseWarehouse = () => setTimeout(() => showWarehouseDropdown.value = false, 200);
 const scheduleCloseStreet = () => setTimeout(() => showStreetDropdown.value = false, 200);

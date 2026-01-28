@@ -165,6 +165,7 @@ const form = reactive({
     payer: 'recipient', 
     ttn: '',
     city_ref: '',
+    settlement_ref: '',
     city_name: '',
     warehouse_ref: '',
     warehouse_name: '',
@@ -296,6 +297,7 @@ async function loadOrder() {
       
       // НП Поля
       city_ref: del.city_ref || '',
+      settlement_ref: del.settlement_ref || '',
       city_name: del.city_name || '',
       warehouse_ref: del.warehouse_ref || '',
       warehouse_name: del.warehouse_name || '',

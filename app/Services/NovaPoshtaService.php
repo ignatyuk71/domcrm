@@ -253,10 +253,14 @@ class NovaPoshtaService
         $addresses = $resp['data'][0]['Addresses'] ?? [];
 
         return collect($addresses)->map(function ($item) {
+            $settlementRef = $item['SettlementRef'] ?? $item['Ref'] ?? null;
+
             return [
-                'ref'  => $item['DeliveryCity'] ?? $item['Ref'] ?? $item['SettlementRef'] ?? null,
+                'ref' => $item['DeliveryCity'] ?? $item['Ref'] ?? $settlementRef ?? null,
+                'settlement_ref' => $settlementRef,
                 'name' => $item['Present'] ?? '',
                 'area' => $item['Area'] ?? $item['Region'] ?? null,
+                'type' => $item['SettlementTypeDescription'] ?? $item['SettlementType'] ?? null,
             ];
         })->filter(fn($row) => !empty($row['ref']))->values()->all();
     }
@@ -281,6 +285,57 @@ class NovaPoshtaService
                 'type'     => $item['TypeOfWarehouse'] ?? null,
             ];
         })->values()->all();
+    }
+
+    /**
+     * Пошук вулиць для сіл/смт через SettlementRef
+     */
+    public function searchSettlementStreets(string $settlementRef, string $query, int $limit = 50): array
+    {
+        $resp = $this->makeRequest('Address', 'searchSettlementStreets', [
+            'SettlementRef' => $settlementRef,
+            'StreetName' => $query,
+            'Limit' => $limit,
+        ]);
+
+        $addresses = $resp['data'][0]['Addresses'] ?? $resp['data'] ?? [];
+
+        return collect($addresses)->map(function ($item) {
+            return [
+                'ref' => $item['SettlementStreetRef'] ?? $item['Ref'] ?? null,
+                'name' => $item['Present'] ?? $item['Description'] ?? '',
+                'type' => $item['StreetsType'] ?? null,
+                'type_description' => $item['StreetsTypeDescription'] ?? null,
+            ];
+        })->filter(fn($row) => !empty($row['ref']) && !empty($row['name']))->values()->all();
+    }
+
+    /**
+     * Пошук вулиць (fallback по CityRef)
+     */
+    public function searchStreets(string $cityRef, string $query, ?string $settlementRef = null, int $limit = 50): array
+    {
+        if ($settlementRef) {
+            return $this->searchSettlementStreets($settlementRef, $query, $limit);
+        }
+
+        if (!$cityRef) {
+            return [];
+        }
+
+        $resp = $this->makeRequest('AddressGeneral', 'getStreet', [
+            'CityRef' => $cityRef,
+            'FindByString' => $query,
+            'Page' => 1,
+            'Limit' => $limit,
+        ]);
+
+        return collect($resp['data'] ?? [])->map(function ($item) {
+            return [
+                'ref' => $item['Ref'] ?? null,
+                'name' => $item['Description'] ?? '',
+            ];
+        })->filter(fn($row) => !empty($row['ref']) && !empty($row['name']))->values()->all();
     }
 
     /**
