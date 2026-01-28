@@ -47,7 +47,11 @@
     </template>
 
     <template #profile>
-      <ChatProfile :customer="activeChat" @close="closeProfile" />
+      <ChatProfile
+        :customer="activeChat"
+        @close="closeProfile"
+        @update-stage="handleUpdateStage"
+      />
     </template>
   </ChatLayout>
 </template>

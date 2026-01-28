@@ -241,7 +241,7 @@ import axios from 'axios';
 import ChatOrderPanel from '@/crm/components/chat/ChatOrderPanel.vue';
 
 const props = defineProps({ customer: Object });
-const emit = defineEmits(['close']);
+const emit = defineEmits(['close', 'update-stage']);
 
 const showNameInput = ref(false);
 const phoneFocused = ref(false);
@@ -576,6 +576,9 @@ const createOrderFromDraft = async () => {
     orderSubmitState.orderId = order.id || null;
     orderSubmitState.orderNumber = order.order_number || order.id || null;
     orderSubmitState.totalAmount = totalAmount;
+    if (props.customer?.conversation_id) {
+      emit('update-stage', { conversationId: props.customer.conversation_id, stage: 'done' });
+    }
   } catch (e) {
     console.error(e);
     showToast('Не вдалося створити замовлення.', 'error');
