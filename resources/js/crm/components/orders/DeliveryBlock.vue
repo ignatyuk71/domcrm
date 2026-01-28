@@ -186,6 +186,7 @@ const local = reactive({
   carrier: 'nova_poshta', 
   payer: 'recipient',
   street_name: '', 
+  street_ref: '',
   building: '', 
   apartment: '', 
   address_note: '',
@@ -275,6 +276,7 @@ watch(warehouseQuery, (val) => {
 watch(streetQuery, (val) => {
   if (skipFetch.street) { skipFetch.street = false; return; }
   local.street_name = val;
+  local.street_ref = '';
 
   if (streetTimer) clearTimeout(streetTimer);
   if ((!local.city_ref && !local.settlement_ref) || local.delivery_type !== 'courier') return;
@@ -341,6 +343,7 @@ function selectWarehouse(wh) {
 
 function selectStreet(street) {
   local.street_name = street.name; 
+  local.street_ref = street.ref || '';
   skipFetch.street = true;
   streetQuery.value = street.name; 
   showStreetDropdown.value = false;
@@ -360,7 +363,7 @@ function onStreetFocus() {
 function resetDeliveryFields() {
   // Не стираємо місто, тільки дочірні поля
   local.warehouse_ref = ''; local.warehouse_name = '';
-  local.street_name = ''; local.building = ''; local.apartment = '';
+  local.street_name = ''; local.street_ref = ''; local.building = ''; local.apartment = '';
   warehouseQuery.value = ''; streetQuery.value = '';
   warehouseOptions.value = []; streetOptions.value = [];
 }

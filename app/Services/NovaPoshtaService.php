@@ -155,6 +155,26 @@ class NovaPoshtaService
         $contactRef   = $counterparty['data'][0]['ContactPerson']['data'][0]['Ref'] ?? null;
     
         // --- 5. ПАРАМЕТРИ ТТН ---
+        $deliveryType = $delivery->delivery_type ?? 'warehouse';
+        $recipientAddressRef = $delivery->warehouse_ref;
+        $serviceType = $delivery->service_type ?? \App\Models\OrderDelivery::SERVICE_WAREHOUSE;
+
+        if ($deliveryType === 'courier') {
+            $serviceType = $delivery->service_type ?? \App\Models\OrderDelivery::SERVICE_DOORS;
+            $addressResp = $this->saveRecipientAddress($recipientRef, $delivery);
+
+            if (!($addressResp['success'] ?? false)) {
+                return $addressResp;
+            }
+
+            $recipientAddressRef = $addressResp['data'][0]['Ref'] ?? null;
+            if (!$recipientAddressRef) {
+                return ['success' => false, 'errors' => ['Не вдалося створити адресу отримувача']];
+            }
+
+            $delivery->forceFill(['address_ref' => $recipientAddressRef])->saveQuietly();
+        }
+
         $dbPayer = strtolower($delivery->delivery_payer ?? 'recipient');
         $payerType = ($dbPayer === 'sender') ? 'Sender' : 'Recipient';
 
@@ -168,14 +188,14 @@ class NovaPoshtaService
             'Recipient'          => $recipientRef,
             'ContactRecipient'   => $contactRef,
             'CityRecipient'      => $delivery->city_ref,
-            'RecipientAddress'   => $delivery->warehouse_ref,
+            'RecipientAddress'   => $recipientAddressRef,
             'RecipientsPhone'    => $recipientPhone,
             
             'PayerType'          => $payerType, 
             'PaymentMethod'      => 'Cash',
             
             'CargoType'          => 'Cargo',
-            'ServiceType'        => $delivery->service_type ?? 'WarehouseWarehouse', 
+            'ServiceType'        => $serviceType, 
             
             'Description'        => 'Взуття', 
             'Cost'               => $finalCost,
@@ -361,6 +381,20 @@ class NovaPoshtaService
             'NP_CONTACT_REF'  => $contacts['data'][0]['Ref'] ?? null,
             'NP_SENDER_PHONE' => $contacts['data'][0]['Phones'] ?? null,
         ];
+    }
+
+    /**
+     * Створення адреси отримувача для кур'єрської доставки
+     */
+    private function saveRecipientAddress(string $recipientRef, \App\Models\OrderDelivery $delivery): array
+    {
+        return $this->makeRequest('Address', 'save', [
+            'CounterpartyRef' => $recipientRef,
+            'StreetRef' => $delivery->street_ref,
+            'BuildingNumber' => $delivery->building,
+            'Flat' => $delivery->apartment,
+            'Note' => $delivery->address_note,
+        ]);
     }
 
     /**

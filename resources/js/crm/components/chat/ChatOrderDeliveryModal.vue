@@ -215,8 +215,10 @@ const local = reactive({
   warehouse_name: '',
   warehouse_ref: '',
   street_name: '',
+  street_ref: '',
   building: '',
   apartment: '',
+  address_note: '',
   payer: 'recipient',
 });
 
@@ -261,7 +263,7 @@ const setDeliveryType = (type) => {
   if (type === 'courier') {
     local.warehouse_ref = ''; local.warehouse_name = ''; warehouseQuery.value = ''; warehouseOptions.value = [];
   } else {
-    local.street_name = ''; local.building = ''; local.apartment = ''; streetQuery.value = ''; streetOptions.value = [];
+    local.street_name = ''; local.street_ref = ''; local.building = ''; local.apartment = ''; streetQuery.value = ''; streetOptions.value = [];
   }
 };
 
@@ -288,6 +290,7 @@ watch(cityQuery, (val) => {
   local.city_name = val;
   local.city_ref = '';
   local.settlement_ref = '';
+  local.street_ref = '';
   if (cityTimer) clearTimeout(cityTimer);
   if (!val || val.length < 2) { cityOptions.value = []; return; }
   cityTimer = setTimeout(async () => {
@@ -320,6 +323,7 @@ const selectCity = (city) => {
   skipFetch.city = true; cityQuery.value = city.name;
   showCityDropdown.value = false;
   local.warehouse_ref = ''; local.warehouse_name = ''; warehouseQuery.value = '';
+  local.street_ref = ''; local.street_name = ''; streetQuery.value = '';
   if (local.delivery_type === 'warehouse') {
     skipFetch.warehouse = false;
     warehouseTimer = setTimeout(async () => {
@@ -339,6 +343,7 @@ const selectWarehouse = (wh) => {
 watch(streetQuery, (val) => {
   if (skipFetch.street) { skipFetch.street = false; return; }
   local.street_name = val;
+  local.street_ref = '';
   if (streetTimer) clearTimeout(streetTimer);
   if ((!local.city_ref && !local.settlement_ref) || local.delivery_type !== 'courier') return;
   streetTimer = setTimeout(async () => loadStreets(val), 500);
@@ -367,6 +372,7 @@ const loadStreets = async (query) => {
 
 const selectStreet = (street) => {
   local.street_name = street.name;
+  local.street_ref = street.ref || '';
   skipFetch.street = true; streetQuery.value = street.name;
   showStreetDropdown.value = false;
 };

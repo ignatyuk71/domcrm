@@ -276,8 +276,10 @@ const orderDraft = reactive({
     warehouse_name: '',
     warehouse_ref: '',
     street_name: '',
+    street_ref: '',
     building: '',
     apartment: '',
+    address_note: '',
     payer: 'recipient',
   },
   payment: {
@@ -302,8 +304,10 @@ function resetOrderDraft() {
     warehouse_name: '',
     warehouse_ref: '',
     street_name: '',
+    street_ref: '',
     building: '',
     apartment: '',
+    address_note: '',
     payer: 'recipient',
   };
   orderDraft.payment = {
@@ -564,8 +568,10 @@ const createOrderFromDraft = async () => {
       warehouse_ref: delivery.warehouse_ref || '',
       warehouse_name: delivery.warehouse_name || '',
       street_name: delivery.street_name || '',
+      street_ref: delivery.street_ref || '',
       building: delivery.building || '',
       apartment: delivery.apartment || '',
+      address_note: delivery.address_note || '',
       recipient_name: [delivery.last_name, delivery.first_name, delivery.middle_name].filter(Boolean).join(' '),
       recipient_phone: delivery.phone || form.phone || '',
     },

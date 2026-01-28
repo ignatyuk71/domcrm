@@ -33,6 +33,8 @@ class OrderDelivery extends Model
         'warehouse_name',
 
         'street_name',
+        'street_ref',
+        'address_ref',
         'building',
         'apartment',
         'address_note',

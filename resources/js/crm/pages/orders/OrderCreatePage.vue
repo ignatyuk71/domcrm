@@ -169,6 +169,7 @@ const form = reactive({
     warehouse_ref: '',
     warehouse_name: '',
     street_name: '',
+    street_ref: '',
     building: '',
     apartment: '',
     address_note: '',

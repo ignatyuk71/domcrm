@@ -189,6 +189,8 @@ class OrderController extends Controller
             'delivery.warehouse_ref' => ['nullable', 'string', 'max:64'],
             'delivery.warehouse_name' => ['nullable', 'string', 'max:255'],
             'delivery.street_name' => ['nullable', 'string', 'max:255'],
+            'delivery.street_ref' => ['nullable', 'string', 'max:64'],
+            'delivery.address_ref' => ['nullable', 'string', 'max:64'],
             'delivery.building' => ['nullable', 'string', 'max:64'],
             'delivery.apartment' => ['nullable', 'string', 'max:64'],
             'delivery.address_note' => ['nullable', 'string', 'max:255'],
@@ -289,6 +291,8 @@ class OrderController extends Controller
                 'warehouse_ref' => $data['delivery']['warehouse_ref'] ?? null,
                 'warehouse_name' => $data['delivery']['warehouse_name'] ?? null,
                 'street_name' => $data['delivery']['street_name'] ?? null,
+                'street_ref' => $data['delivery']['street_ref'] ?? null,
+                'address_ref' => $data['delivery']['address_ref'] ?? null,
                 'building' => $data['delivery']['building'] ?? null,
                 'apartment' => $data['delivery']['apartment'] ?? null,
                 'address_note' => $data['delivery']['address_note'] ?? null,
@@ -348,6 +352,8 @@ class OrderController extends Controller
             'delivery.warehouse_ref' => ['nullable', 'string', 'max:64'],
             'delivery.warehouse_name' => ['nullable', 'string', 'max:255'],
             'delivery.street_name' => ['nullable', 'string', 'max:255'],
+            'delivery.street_ref' => ['nullable', 'string', 'max:64'],
+            'delivery.address_ref' => ['nullable', 'string', 'max:64'],
             'delivery.building' => ['nullable', 'string', 'max:64'],
             'delivery.apartment' => ['nullable', 'string', 'max:64'],
             'delivery.address_note' => ['nullable', 'string', 'max:255'],
@@ -416,6 +422,11 @@ class OrderController extends Controller
             );
 
             // Доставка
+            $existingAddressRef = $order->delivery?->address_ref;
+            $addressRef = array_key_exists('address_ref', $data['delivery'] ?? [])
+                ? ($data['delivery']['address_ref'] ?? null)
+                : $existingAddressRef;
+
             $order->delivery()->updateOrCreate(
                 ['order_id' => $order->id],
                 [
@@ -429,6 +440,8 @@ class OrderController extends Controller
                     'warehouse_ref' => $data['delivery']['warehouse_ref'] ?? null,
                     'warehouse_name' => $data['delivery']['warehouse_name'] ?? null,
                     'street_name' => $data['delivery']['street_name'] ?? null,
+                    'street_ref' => $data['delivery']['street_ref'] ?? null,
+                    'address_ref' => $addressRef,
                     'building' => $data['delivery']['building'] ?? null,
                     'apartment' => $data['delivery']['apartment'] ?? null,
                     'address_note' => $data['delivery']['address_note'] ?? null,
@@ -604,14 +617,36 @@ class OrderController extends Controller
         $order->load(['delivery', 'customer', 'items.product']);
 
         // 1. Перевіряємо, чи заповнені дані для доставки
-        if (!$order->delivery || !$order->delivery->city_ref || !$order->delivery->warehouse_ref) {
+        $delivery = $order->delivery;
+        if (!$delivery || !$delivery->city_ref) {
             return response()->json([
-                'message' => 'Не заповнені дані міста або відділення',
+                'message' => 'Не заповнені дані міста',
                 'details' => [
-                    'city' => $order->delivery->city_ref ?? 'null',
-                    'warehouse' => $order->delivery->warehouse_ref ?? 'null'
+                    'city' => $delivery->city_ref ?? 'null',
                 ]
             ], 422);
+        }
+
+        if (($delivery->delivery_type ?? 'warehouse') === 'courier') {
+            if (!$delivery->street_ref || !$delivery->building) {
+                return response()->json([
+                    'message' => 'Не заповнені дані адреси для курʼєра',
+                    'details' => [
+                        'street_ref' => $delivery->street_ref ?? 'null',
+                        'building' => $delivery->building ?? 'null',
+                    ]
+                ], 422);
+            }
+        } else {
+            if (!$delivery->warehouse_ref) {
+                return response()->json([
+                    'message' => 'Не заповнені дані міста або відділення',
+                    'details' => [
+                        'city' => $delivery->city_ref ?? 'null',
+                        'warehouse' => $delivery->warehouse_ref ?? 'null'
+                    ]
+                ], 422);
+            }
         }
 
         // 2. Викликаємо сервіс для створення накладної

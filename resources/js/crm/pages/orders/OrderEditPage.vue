@@ -170,6 +170,7 @@ const form = reactive({
     warehouse_ref: '',
     warehouse_name: '',
     street_name: '',
+    street_ref: '',
     building: '',
     apartment: '',
     address_note: '',
@@ -304,6 +305,7 @@ async function loadOrder() {
       
       // Адреса
       street_name: del.street_name || '',
+      street_ref: del.street_ref || '',
       building: del.building || '',
       apartment: del.apartment || '',
       address_note: del.address_note || '',
