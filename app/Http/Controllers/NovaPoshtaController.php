@@ -61,12 +61,13 @@ class NovaPoshtaController extends Controller
         $cityRef = $request->query('city_ref');
         $settlementRef = $request->query('settlement_ref');
         $query = trim($request->query('q', ''));
+        $limit = (int) $request->query('limit', 25);
 
-        if ((!$cityRef && !$settlementRef) || mb_strlen($query) < 2) {
+        if ((!$cityRef && !$settlementRef) || (mb_strlen($query) < 2 && $query !== '')) {
             return response()->json(['data' => []]);
         }
 
-        $data = $this->np->searchStreets($cityRef ?? '', $query, $settlementRef);
+        $data = $this->np->searchStreets($cityRef ?? '', $query, $settlementRef, $limit);
 
         return response()->json([
             'data' => $data ?? []

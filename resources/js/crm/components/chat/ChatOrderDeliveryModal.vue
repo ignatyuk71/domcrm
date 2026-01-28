@@ -123,12 +123,14 @@
                         type="text" 
                         class="modern-input" 
                         v-model="streetQuery"
-                        :disabled="!local.city_ref"
+                        :disabled="!local.city_ref && !local.settlement_ref"
                         @focus="onStreetFocus"
                         @blur="scheduleCloseStreet"
                         placeholder="Вулиця"
                       >
-                      <div v-if="showStreetDropdown && streetOptions.length" class="dropdown-menu-custom">
+                      <div v-if="streetLoading" class="spinner-input"></div>
+                      <div v-if="showStreetDropdown && (streetOptions.length || streetLoading)" class="dropdown-menu-custom">
+                         <div v-if="streetLoading" class="dropdown-item text-muted small">Пошук...</div>
                          <div v-for="st in streetOptions" :key="st.ref" class="dropdown-item" @mousedown.prevent="selectStreet(st)">
                             {{ st.name }}
                          </div>
@@ -230,6 +232,7 @@ const showWarehouseDropdown = ref(false);
 const showStreetDropdown = ref(false);
 const cityLoading = ref(false);
 const warehouseLoading = ref(false);
+const streetLoading = ref(false);
 
 let cityTimer, warehouseTimer, streetTimer;
 const skipFetch = reactive({ city: false, warehouse: false, street: false });
@@ -350,14 +353,16 @@ const loadWarehouses = async (query) => {
 };
 
 const loadStreets = async (query) => {
+  streetLoading.value = true;
   try {
     const { data } = await fetchStreets({
       cityRef: local.city_ref,
       settlementRef: local.settlement_ref,
-      query
+      query,
+      limit: 25
     });
     streetOptions.value = data?.data || [];
-  } finally {}
+  } finally { streetLoading.value = false; }
 };
 
 const selectStreet = (street) => {

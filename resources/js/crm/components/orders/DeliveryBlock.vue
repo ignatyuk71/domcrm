@@ -61,7 +61,7 @@
 
       <section v-if="local.delivery_type !== 'courier'" class="position-relative animate-fade-in">
         <label class="form-label-custom">Відділення або поштомат</label>
-        <div class="input-wrapper" :class="{ 'opacity-50': !local.city_ref }">
+        <div class="input-wrapper" :class="{ 'opacity-50': !local.city_ref && !local.settlement_ref }">
           <i class="bi bi-building-up input-prefix"></i>
           <input
             type="text"
@@ -71,7 +71,7 @@
             v-model="warehouseQuery"
             @focus="onWarehouseFocus"
             @blur="scheduleCloseWarehouse"
-            :disabled="!local.city_ref"
+            :disabled="!local.city_ref && !local.settlement_ref"
             placeholder="Введіть номер або назву..."
           />
           <div v-if="warehouseLoading" class="input-suffix">
@@ -121,7 +121,8 @@
               <div class="spinner-border text-primary custom-spinner" role="status"></div>
             </div>
           </div>
-          <div v-if="showStreetDropdown && streetOptions.length" class="custom-dropdown shadow">
+          <div v-if="showStreetDropdown && (streetOptions.length || streetLoading)" class="custom-dropdown shadow">
+            <div v-if="streetLoading" class="dropdown-item text-muted small">Пошук...</div>
             <button 
               v-for="s in streetOptions" 
               :key="s.ref" 
@@ -276,7 +277,7 @@ watch(streetQuery, (val) => {
   local.street_name = val;
 
   if (streetTimer) clearTimeout(streetTimer);
-  if (!local.city_ref || local.delivery_type !== 'courier') return;
+  if ((!local.city_ref && !local.settlement_ref) || local.delivery_type !== 'courier') return;
   
   streetTimer = setTimeout(() => loadStreets(val), 800);
 });
@@ -310,7 +311,8 @@ async function loadStreets(query) {
     const { data } = await fetchStreets({
       cityRef: local.city_ref,
       settlementRef: local.settlement_ref,
-      query
+      query,
+      limit: 25
     });
     streetOptions.value = data?.data || data || [];
   } finally { streetLoading.value = false; }
@@ -352,7 +354,7 @@ function onWarehouseFocus() {
 
 function onStreetFocus() {
   showStreetDropdown.value = true;
-  if (local.city_ref && !streetOptions.value.length) loadStreets('');
+  if ((local.city_ref || local.settlement_ref) && !streetOptions.value.length) loadStreets('');
 }
 
 function resetDeliveryFields() {

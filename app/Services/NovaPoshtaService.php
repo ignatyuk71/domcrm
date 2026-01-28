@@ -290,7 +290,7 @@ class NovaPoshtaService
     /**
      * Пошук вулиць для сіл/смт через SettlementRef
      */
-    public function searchSettlementStreets(string $settlementRef, string $query, int $limit = 50): array
+    public function searchSettlementStreets(string $settlementRef, string $query, int $limit = 25): array
     {
         $resp = $this->makeRequest('Address', 'searchSettlementStreets', [
             'SettlementRef' => $settlementRef,
@@ -313,7 +313,7 @@ class NovaPoshtaService
     /**
      * Пошук вулиць (fallback по CityRef)
      */
-    public function searchStreets(string $cityRef, string $query, ?string $settlementRef = null, int $limit = 50): array
+    public function searchStreets(string $cityRef, string $query, ?string $settlementRef = null, int $limit = 25): array
     {
         if ($settlementRef) {
             return $this->searchSettlementStreets($settlementRef, $query, $limit);
