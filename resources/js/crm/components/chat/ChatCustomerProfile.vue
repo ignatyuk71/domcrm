@@ -543,6 +543,7 @@ const createOrderFromDraft = async () => {
       product_variant_id: item.product_variant_id || null,
       title: item.title || '',
       sku: item.sku || '',
+      size: item.size || '',
       qty: Number(item.qty || 1),
       price: Number(item.price || 0),
     })),
