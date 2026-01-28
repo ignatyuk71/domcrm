@@ -270,14 +270,12 @@ function mapOrder(order) {
 
   return {
     ...order,
-    payment_method: payment.method || order.payment_method || '',
     customer_id: order.customer_id || customer.id || null,
     order_number: order.order_number || order.id,
     client: customer.full_name || [customer.first_name, customer.last_name].filter(Boolean).join(' ') || 'Гість',
     customer_orders_count: Number(customer.orders_count ?? 1),
     phone: customer.phone || '',
     email: customer.email || '',
-    source_code: sourceRef.code || order.source || '',
     source_name: sourceRef.name || order.source || '—',
     source_icon: sourceRef.icon ? `bi ${sourceRef.icon}` : '',
     source_color: sourceRef.color || '',
@@ -288,25 +286,19 @@ function mapOrder(order) {
     payment_status: order.payment_status,
     payment_status_label: paymentLabels[order.payment_status] || '—',
     tags: order.tags || [],
-    itemsCount: order.items_count || (order.items ? order.items.length : 0),
     items: (order.items || []).map((item) => ({
       ...item,
       title: item.product_title || item.title || 'Товар',
       size: item.size || '',
-      color_name: item.color_name || item.product?.color?.name || '',
       photo: buildPhotoUrl(
         item.product?.main_photo_url ||
-          item.product?.main_photo_path ||
-          item.main_photo_url ||
-          item.main_photo_path ||
-          item.photo
+          item.product?.main_photo_path
       ),
       total: Number(item.total ?? Number(item.qty || 0) * Number(item.price || 0)),
     })),
     total: Number(order.items_sum_total ?? order.total_sum ?? 0),
     currency: order.currency || 'UAH',
     ttn: delivery.ttn || '',
-    ttn_ref: delivery.ttn_ref || '',
     loadingTtn: false,
     refreshingDelivery: false,
     address: delivery.warehouse_name || [delivery.city_name, delivery.street_name].filter(Boolean).join(', ') || '—',
@@ -314,13 +306,10 @@ function mapOrder(order) {
     delivery_status: delivery.delivery_status_label || '',
     delivery_status_code: delivery.delivery_status_code || '',
     delivery_status_updated_at: deliveryStatusUpdatedAt,
-    delivery_status_entered_at: warehouseEnteredAt || fallbackEnteredAt,
-    last_tracked_at: delivery.last_tracked_at || '',
     delivery_status_color: delivery.delivery_status_color || '',
     delivery_status_icon: delivery.delivery_status_icon || '',
     delivery_carrier: delivery.carrier === 'nova_poshta' ? 'Нова Пошта' : delivery.carrier || '',
     delivery_payer: delivery.delivery_payer === 'sender' ? 'Відправник' : 'Отримувач',
-    delivery_cost: Number(delivery.delivery_cost ?? 0),
     prepay_amount: Number(
       order.prepay_amount ??
       payment.prepay_amount ??
