@@ -1,5 +1,5 @@
 <template>
-  <div class="delivery-card p-3 border rounded-4 bg-white shadow-sm">
+  <div class="delivery-card glass-card">
     <div class="d-flex flex-column gap-4">
       
       <section>
@@ -21,12 +21,12 @@
 
       <section class="position-relative">
         <label class="form-label-custom">Місто доставки</label>
-        <div class="input-wrapper">
-          <i class="bi bi-search input-prefix"></i>
+        <div class="input-modern-wrapper">
+          <i class="bi bi-search prefix-icon"></i>
           <input
             type="text"
             autocomplete="off"
-            class="form-control custom-input"
+            class="form-control input-modern with-prefix"
             :class="{ 'is-invalid': errors.city_name }"
             v-model="cityQuery"
             @focus="showCityDropdown = true"
@@ -34,39 +34,40 @@
             placeholder="Оберіть місто..."
           />
           <div v-if="cityLoading" class="input-suffix">
-            <div class="spinner-border text-primary custom-spinner" role="status"></div>
+            <div class="loader-mini"></div>
+          </div>
+          
+          <div v-if="showCityDropdown && (cityOptions.length || cityError)" class="premium-dropdown">
+            <div v-if="cityError" class="dropdown-item text-danger small">{{ cityError }}</div>
+            <button
+              v-for="city in cityOptions"
+              :key="city.ref"
+              type="button"
+              class="dropdown-item"
+              @mousedown.prevent="selectCity(city)"
+            >
+              <div class="d-flex align-items-center">
+                <i class="bi bi-geo-alt me-2 text-muted"></i>
+                <div>
+                  <div class="fw-bold">{{ city.name }}</div>
+                  <div class="text-muted smaller">{{ city.area }}</div>
+                </div>
+              </div>
+            </button>
           </div>
         </div>
         
-        <div v-if="showCityDropdown && (cityOptions.length || cityError)" class="custom-dropdown shadow">
-          <div v-if="cityError" class="dropdown-item text-danger small">{{ cityError }}</div>
-          <button
-            v-for="city in cityOptions"
-            :key="city.ref"
-            type="button"
-            class="dropdown-item"
-            @mousedown.prevent="selectCity(city)"
-          >
-            <div class="d-flex align-items-center">
-              <i class="bi bi-geo-alt me-2 text-muted"></i>
-              <div>
-                <div class="fw-bold">{{ city.name }}</div>
-                <div class="text-muted smaller">{{ city.area }}</div>
-              </div>
-            </div>
-          </button>
-        </div>
         <div class="invalid-feedback d-block" v-if="errors.city_name">{{ errors.city_name }}</div>
       </section>
 
       <section v-if="local.delivery_type !== 'courier'" class="position-relative animate-fade-in">
         <label class="form-label-custom">Відділення або поштомат</label>
-        <div class="input-wrapper" :class="{ 'opacity-50': !local.city_ref }">
-          <i class="bi bi-building-up input-prefix"></i>
+        <div class="input-modern-wrapper" :class="{ 'opacity-50': !local.city_ref }">
+          <i class="bi bi-building-up prefix-icon"></i>
           <input
             type="text"
             autocomplete="off"
-            class="form-control custom-input"
+            class="form-control input-modern with-prefix"
             :class="{ 'is-invalid': errors.warehouse_name }"
             v-model="warehouseQuery"
             @focus="onWarehouseFocus"
@@ -75,41 +76,42 @@
             placeholder="Введіть номер або назву..."
           />
           <div v-if="warehouseLoading" class="input-suffix">
-            <div class="spinner-border text-primary custom-spinner" role="status"></div>
+            <div class="loader-mini"></div>
+          </div>
+
+          <div v-if="showWarehouseDropdown && warehouseOptions.length" class="premium-dropdown">
+            <button
+              v-for="wh in warehouseOptions"
+              :key="wh.ref || wh.name"
+              type="button"
+              class="dropdown-item"
+              @mousedown.prevent="selectWarehouse(wh)"
+            >
+              <div class="d-flex gap-2 text-start">
+                <i class="bi" :class="wh.name.includes('Поштомат') ? 'bi-mailbox text-info' : 'bi-door-open text-primary'"></i>
+                <span class="small fw-medium">{{ wh.name }}</span>
+              </div>
+            </button>
           </div>
         </div>
 
-        <div v-if="showWarehouseDropdown && warehouseOptions.length" class="custom-dropdown shadow">
-          <button
-            v-for="wh in warehouseOptions"
-            :key="wh.ref || wh.name"
-            type="button"
-            class="dropdown-item"
-            @mousedown.prevent="selectWarehouse(wh)"
-          >
-            <div class="d-flex gap-2 text-start">
-              <i class="bi" :class="wh.name.includes('Поштомат') ? 'bi-mailbox text-info' : 'bi-door-open text-primary'"></i>
-              <span class="small fw-medium">{{ wh.name }}</span>
-            </div>
-          </button>
-        </div>
         <div class="invalid-feedback d-block" v-if="errors.warehouse_name">{{ errors.warehouse_name }}</div>
         
         <div class="mt-3">
           <label class="form-label-custom">Додатково (ПІБ або коментар)</label>
-          <input class="form-control custom-input-small" v-model="local.address_note" placeholder="Наприклад: Отримувач інша особа" />
+          <input class="form-control input-modern input-modern-small" v-model="local.address_note" placeholder="Наприклад: Отримувач інша особа" />
         </div>
       </section>
 
       <section v-else class="animate-fade-in">
         <div class="mb-3 position-relative">
           <label class="form-label-custom">Вулиця</label>
-          <div class="input-wrapper" :class="{ 'opacity-50': !local.settlement_ref }">
-            <i class="bi bi-signpost-split input-prefix"></i>
+          <div class="input-modern-wrapper" :class="{ 'opacity-50': !local.settlement_ref }">
+            <i class="bi bi-signpost-split prefix-icon"></i>
             <input
               type="text"
               autocomplete="off"
-              class="form-control custom-input"
+              class="form-control input-modern with-prefix"
               :class="{ 'is-invalid': errors.street_name }"
               v-model="streetQuery"
               @focus="onStreetFocus"
@@ -118,31 +120,32 @@
               placeholder="Почніть вводити (2+ символи)..."
             />
             <div v-if="streetLoading" class="input-suffix">
-              <div class="spinner-border text-primary custom-spinner" role="status"></div>
+              <div class="loader-mini"></div>
             </div>
-          </div>
-          <div v-if="showStreetDropdown && (streetOptions.length || streetLoading)" class="custom-dropdown shadow">
-            <div v-if="streetLoading" class="dropdown-item text-muted small">Пошук...</div>
-            <button 
-              v-for="s in streetOptions" 
-              :key="s.ref" 
-              type="button"
-              class="dropdown-item" 
-              @mousedown.prevent="selectStreet(s)"
-            >
-              {{ s.name }}
-            </button>
+
+            <div v-if="showStreetDropdown && (streetOptions.length || streetLoading)" class="premium-dropdown">
+              <div v-if="streetLoading" class="dropdown-item text-muted small">Пошук...</div>
+              <button 
+                v-for="s in streetOptions" 
+                :key="s.ref" 
+                type="button"
+                class="dropdown-item" 
+                @mousedown.prevent="selectStreet(s)"
+              >
+                {{ s.name }}
+              </button>
+            </div>
           </div>
         </div>
 
         <div class="row g-2">
           <div class="col-6">
             <label class="form-label-custom">Будинок</label>
-            <input class="form-control custom-input" :class="{ 'is-invalid': errors.building }" v-model="local.building" placeholder="10/А" />
+            <input class="form-control input-modern" :class="{ 'is-invalid': errors.building }" v-model="local.building" placeholder="10/А" />
           </div>
           <div class="col-6">
             <label class="form-label-custom">Кв./Офіс</label>
-            <input class="form-control custom-input" v-model="local.apartment" placeholder="42" />
+            <input class="form-control input-modern" v-model="local.apartment" placeholder="42" />
           </div>
         </div>
       </section>
@@ -166,7 +169,7 @@
 </template>
 
 <script setup>
-import { reactive, ref, watch, onMounted } from 'vue';
+import { reactive, ref, watch } from 'vue';
 import { fetchCities, fetchWarehouses } from '@/crm/api/novaPoshta';
 import http from '@/crm/api/http';
 
@@ -252,13 +255,12 @@ watch(cityQuery, (val) => {
   resetDeliveryFields();
 
   if (cityTimer) clearTimeout(cityTimer);
-  // Змінив ліміт з 4 на 2 символи
   if (!val || val.length < 3) { 
     cityOptions.value = []; 
     return; 
   }
   
-  cityTimer = setTimeout(() => loadCities(val), 800); 
+  cityTimer = setTimeout(() => loadCities(val), 400); 
 });
 
 // ПОШУК ВІДДІЛЕНЬ
@@ -270,7 +272,7 @@ watch(warehouseQuery, (val) => {
   if (warehouseTimer) clearTimeout(warehouseTimer);
   if (!local.city_ref) return;
   
-  warehouseTimer = setTimeout(() => loadWarehouses(val), 800);
+  warehouseTimer = setTimeout(() => loadWarehouses(val), 400);
 });
 
 // ПОШУК ВУЛИЦЬ
@@ -283,7 +285,7 @@ watch(streetQuery, (val) => {
   if (!local.settlement_ref || local.delivery_type !== 'courier') return;
   if (!val || val.length < 2) { streetOptions.value = []; return; }
 
-  streetTimer = setTimeout(() => loadStreets(val), 800);
+  streetTimer = setTimeout(() => loadStreets(val), 400);
 });
 
 async function loadCities(query) {
@@ -303,7 +305,6 @@ async function loadCities(query) {
 async function loadWarehouses(query) {
   warehouseLoading.value = true;
   try {
-    // limit 50 іноді замало, але ок
     const { data } = await fetchWarehouses({ cityRef: local.city_ref, query, limit: 100 });
     warehouseOptions.value = data?.data || data || [];
   } finally { warehouseLoading.value = false; }
@@ -367,7 +368,6 @@ function selectStreet(street) {
 
 function onWarehouseFocus() {
   showWarehouseDropdown.value = true;
-  // Якщо поле пусте, але місто обране - вантажимо список
   if (local.city_ref && !warehouseOptions.value.length) loadWarehouses('');
 }
 
@@ -382,7 +382,6 @@ function resetStreetFields() {
 }
 
 function resetDeliveryFields() {
-  // Не стираємо місто/settlement, тільки дочірні поля
   clearWarehouseFields();
   resetStreetFields();
 }
@@ -400,31 +399,74 @@ const scheduleCloseStreet = () => setTimeout(() => showStreetDropdown.value = fa
 </script>
 
 <style scoped>
-.delivery-card { max-width: 100%; background: #fdfdfd; }
-.form-label-custom { font-size: 0.7rem; font-weight: 800; text-transform: uppercase; color: #8898aa; margin-bottom: 0.4rem; display: block; }
-.input-wrapper { position: relative; display: flex; align-items: center; }
-.custom-input { 
-  border-radius: 10px; 
-  padding: 0.65rem 2.6rem 0.65rem 2.4rem; 
-  border: 1px solid #e9ecef; 
-  transition: all 0.2s; 
-  font-size: 0.9rem; 
-  width: 100%;
+.delivery-card {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  padding: 1.25rem;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
 }
-.custom-input:focus { border-color: #0d6efd; box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.08); background: #fff; }
-.input-prefix { position: absolute; left: 0.9rem; color: #adb5bd; z-index: 4; }
-.input-suffix { position: absolute; right: 0.8rem; display: flex; align-items: center; justify-content: center; z-index: 5; }
-.custom-spinner { width: 1.1rem; height: 1.1rem; border-width: 0.15em; }
+
+.form-label-custom { font-size: 0.7rem; font-weight: 800; text-transform: uppercase; color: #64748b; margin-bottom: 0.4rem; display: block; }
+
+/* У цього блока вже є position: relative, тому dropdown всередині позиціонується від нього */
+.input-modern-wrapper {
+  position: relative;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  transition: all 0.2s ease;
+  display: flex; align-items: center;
+}
+.input-modern-wrapper:hover { background: #fff; border-color: #cbd5e1; }
+.input-modern-wrapper:focus-within { background: #fff; border-color: #6366f1; box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15); }
+
+.input-modern {
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 14px 16px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #0f172a;
+  outline: none;
+  border-radius: 14px;
+}
+.input-modern.with-prefix { padding-left: 46px; }
+.input-modern.input-modern-small { padding: 10px 14px; border-radius: 12px; }
+
+.prefix-icon { position: absolute; left: 16px; color: #94a3b8; font-size: 1.1rem; transition: color 0.2s; }
+.input-modern-wrapper:focus-within .prefix-icon { color: #6366f1; }
+
+.input-suffix { position: absolute; right: 0.9rem; display: flex; align-items: center; justify-content: center; }
+.loader-mini { width: 16px; height: 16px; border: 2px solid #e2e8f0; border-top-color: #6366f1; border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { 100% { transform: rotate(360deg); } }
+
 .delivery-toggle-group { display: flex; background: #f4f6f9; padding: 4px; border-radius: 12px; gap: 4px; }
 .toggle-item { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px; border-radius: 9px; cursor: pointer; transition: all 0.2s; font-weight: 600; color: #6c757d; font-size: 0.9rem; margin-bottom: 0; }
 .btn-check:checked + .toggle-item { background: #fff; color: #0d6efd; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
-.custom-dropdown { position: absolute; top: 105%; left: 0; right: 0; z-index: 1050; background: white; border-radius: 10px; max-height: 250px; overflow-y: auto; border: 1px solid #eee; box-shadow: 0 10px 15px rgba(0,0,0,0.05); }
+
+/* Тут змін не треба, так як ми перенесли HTML */
+.premium-dropdown {
+  position: absolute;
+  top: calc(100% + 4px); /* 4px від нижнього краю input-modern-wrapper */
+  left: 0; right: 0;
+  background: white;
+  border: 1px solid #f1f5f9;
+  border-radius: 16px;
+  box-shadow: 0 20px 40px -5px rgba(0, 0, 0, 0.15);
+  z-index: 2000;
+  overflow: hidden;
+  max-height: 280px;
+  overflow-y: auto;
+}
 .dropdown-item { padding: 10px 14px; border: none; background: none; width: 100%; text-align: left; transition: background 0.15s; border-bottom: 1px solid #f8f9fa; font-size: 0.85rem; cursor: pointer; }
-.dropdown-item:hover { background: #f1f7ff; }
+.dropdown-item:hover { background: #eff6ff; }
+
 .payer-selector { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .payer-option { border: 1px solid #e9ecef; padding: 10px; border-radius: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; transition: 0.2s; background: white; color: #6c757d; font-weight: 500; font-size: 0.9rem; }
 .payer-option.active { border-color: #0d6efd; background: #f0f7ff; color: #0d6efd; }
+
 .animate-fade-in { animation: fadeIn 0.3s ease; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
-.custom-input-small { border-radius: 8px; border: 1px solid #e9ecef; padding: 0.5rem; font-size: 0.85rem; width: 100%; }
 </style>
