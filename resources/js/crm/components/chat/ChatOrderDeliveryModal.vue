@@ -123,7 +123,7 @@
                         type="text" 
                         class="modern-input" 
                         v-model="streetQuery"
-                        :disabled="!local.settlement_ref"
+                        :disabled="!local.city_ref"
                         @focus="onStreetFocus"
                         @blur="scheduleCloseStreet"
                         placeholder="Вулиця (2+ символи)"
@@ -318,7 +318,7 @@ watch(warehouseQuery, (val) => {
 
 const selectCity = (city) => {
   local.city_ref = city.ref;
-  local.settlement_ref = city.settlement_ref || '';
+  local.settlement_ref = '';
   local.city_name = city.name;
   skipFetch.city = true; cityQuery.value = city.name;
   showCityDropdown.value = false;
@@ -345,7 +345,7 @@ watch(streetQuery, (val) => {
   local.street_name = val;
   local.street_ref = '';
   if (streetTimer) clearTimeout(streetTimer);
-  if (!local.settlement_ref || local.delivery_type !== 'courier') return;
+  if (!local.city_ref || local.delivery_type !== 'courier') return;
   if (!val || val.length < 2) { streetOptions.value = []; return; }
   streetTimer = setTimeout(async () => loadStreets(val), 500);
 });
@@ -359,7 +359,7 @@ const loadWarehouses = async (query) => {
 };
 
 const loadStreets = async (query) => {
-  if (!local.settlement_ref || !query || query.length < 2) {
+  if (!local.city_ref || !query || query.length < 2) {
     streetOptions.value = [];
     return;
   }
@@ -367,7 +367,6 @@ const loadStreets = async (query) => {
   try {
     const { data } = await fetchStreets({
       cityRef: local.city_ref,
-      settlementRef: local.settlement_ref,
       query,
       limit: 25
     });

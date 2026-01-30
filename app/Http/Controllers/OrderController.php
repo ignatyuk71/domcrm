@@ -279,10 +279,18 @@ class OrderController extends Controller
             ]);
 
             // Доставка
+            $deliveryType = $data['delivery']['delivery_type'] ?? 'warehouse';
+            $serviceType = $data['delivery']['service_type'] ?? match ($deliveryType) {
+                'courier' => \App\Models\OrderDelivery::SERVICE_DOORS,
+                'postomat' => \App\Models\OrderDelivery::SERVICE_POSTOMAT,
+                default => \App\Models\OrderDelivery::SERVICE_WAREHOUSE,
+            };
+
             OrderDelivery::create([
                 'order_id' => $order->id,
                 'carrier' => $data['delivery']['carrier'] ?? 'nova_poshta',
-                'delivery_type' => $data['delivery']['delivery_type'] ?? 'warehouse',
+                'delivery_type' => $deliveryType,
+                'service_type' => $serviceType,
                 'delivery_payer' => $data['delivery']['payer'] ?? 'recipient',
                 'ttn' => $data['delivery']['ttn'] ?? null,
                 'city_ref' => $data['delivery']['city_ref'] ?? null,
@@ -427,11 +435,19 @@ class OrderController extends Controller
                 ? ($data['delivery']['address_ref'] ?? null)
                 : $existingAddressRef;
 
+            $deliveryType = $data['delivery']['delivery_type'] ?? 'warehouse';
+            $serviceType = $data['delivery']['service_type'] ?? match ($deliveryType) {
+                'courier' => \App\Models\OrderDelivery::SERVICE_DOORS,
+                'postomat' => \App\Models\OrderDelivery::SERVICE_POSTOMAT,
+                default => \App\Models\OrderDelivery::SERVICE_WAREHOUSE,
+            };
+
             $order->delivery()->updateOrCreate(
                 ['order_id' => $order->id],
                 [
                     'carrier' => $data['delivery']['carrier'] ?? 'nova_poshta',
-                    'delivery_type' => $data['delivery']['delivery_type'] ?? 'warehouse',
+                    'delivery_type' => $deliveryType,
+                    'service_type' => $serviceType,
                     'delivery_payer' => $data['delivery']['payer'] ?? 'recipient',
                     'ttn' => $data['delivery']['ttn'] ?? null,
                     'city_ref' => $data['delivery']['city_ref'] ?? null,
@@ -628,15 +644,6 @@ class OrderController extends Controller
         }
 
         if (($delivery->delivery_type ?? 'warehouse') === 'courier') {
-            if (!$delivery->settlement_ref) {
-                return response()->json([
-                    'message' => 'Не вибрано населений пункт (SettlementRef)',
-                    'details' => [
-                        'settlement_ref' => $delivery->settlement_ref ?? 'null',
-                    ]
-                ], 422);
-            }
-
             if (!$delivery->street_ref || !$delivery->building) {
                 return response()->json([
                     'message' => 'Не заповнені дані адреси для курʼєра',
@@ -691,6 +698,77 @@ class OrderController extends Controller
             'message' => $error,
             'sent_data_check' => [
                 'city'  => $order->delivery->city_ref,
+                'phone' => $order->customer->phone
+            ]
+        ], 400);
+    }
+
+    /** ГЕНЕРАЦІЯ ТТН НОВОЇ ПОШТИ ДЛЯ КУРʼЄРА */
+    public function generateTTNCourier(\App\Models\Order $order, \App\Services\NovaPoshtaService $np): JsonResponse
+    {
+        $order->refresh();
+        $order->load(['delivery', 'customer', 'items.product']);
+
+        $delivery = $order->delivery;
+        if (!$delivery || !$delivery->settlement_ref || !$delivery->city_ref) {
+            return response()->json([
+                'message' => 'Не заповнені дані міста/населеного пункту (CityRef/SettlementRef)',
+                'details' => [
+                    'city_ref' => $delivery->city_ref ?? 'null',
+                    'settlement_ref' => $delivery->settlement_ref ?? 'null',
+                ]
+            ], 422);
+        }
+
+        if (!$delivery->street_ref || !$delivery->building) {
+            return response()->json([
+                'message' => 'Не заповнені дані адреси для курʼєра',
+                'details' => [
+                    'street_ref' => $delivery->street_ref ?? 'null',
+                    'building' => $delivery->building ?? 'null',
+                ]
+            ], 422);
+        }
+
+        $result = $np->createWaybillCourier($order);
+
+        if (isset($result['success']) && $result['success']) {
+            $ttnData = $result['data'][0];
+            $ttnNumber = $ttnData['IntDocNumber'];
+            $ttnRef    = $ttnData['Ref'];
+
+            $order->delivery->update([
+                'ttn'     => $ttnNumber,
+                'ttn_ref' => $ttnRef
+            ]);
+
+            $order->update([
+                'search_blob' => $this->buildSearchBlob($order->customer, $ttnNumber)
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'ttn'     => $ttnNumber,
+                'ref'     => $ttnRef
+            ]);
+        }
+
+        $error = $result['errors'][0] ?? 'Помилка Нової Пошти';
+        \Illuminate\Support\Facades\Log::error('NovaPoshta courier: generateTTNCourier failed', [
+            'order_id' => $order->id,
+            'delivery_id' => $order->delivery?->id,
+            'settlement_ref' => $order->delivery?->settlement_ref,
+            'street_ref' => $order->delivery?->street_ref,
+            'street_name' => $order->delivery?->street_name,
+            'building' => $order->delivery?->building,
+            'apartment' => $order->delivery?->apartment,
+            'np_errors' => $result['errors'] ?? null,
+            'np_warnings' => $result['warnings'] ?? null,
+        ]);
+        return response()->json([
+            'message' => $error,
+            'sent_data_check' => [
+                'settlement_ref'  => $order->delivery->settlement_ref,
                 'phone' => $order->customer->phone
             ]
         ], 400);

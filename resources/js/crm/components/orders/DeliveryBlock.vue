@@ -61,7 +61,7 @@
 
       <section v-if="local.delivery_type !== 'courier'" class="position-relative animate-fade-in">
         <label class="form-label-custom">Відділення або поштомат</label>
-        <div class="input-wrapper" :class="{ 'opacity-50': !local.city_ref && !local.settlement_ref }">
+        <div class="input-wrapper" :class="{ 'opacity-50': !local.city_ref }">
           <i class="bi bi-building-up input-prefix"></i>
           <input
             type="text"
@@ -71,7 +71,7 @@
             v-model="warehouseQuery"
             @focus="onWarehouseFocus"
             @blur="scheduleCloseWarehouse"
-            :disabled="!local.city_ref && !local.settlement_ref"
+            :disabled="!local.city_ref"
             placeholder="Введіть номер або назву..."
           />
           <div v-if="warehouseLoading" class="input-suffix">
@@ -167,7 +167,8 @@
 
 <script setup>
 import { reactive, ref, watch, onMounted } from 'vue';
-import { fetchCities, fetchWarehouses, fetchStreets } from '@/crm/api/novaPoshta';
+import { fetchCities, fetchWarehouses } from '@/crm/api/novaPoshta';
+import http from '@/crm/api/http';
 
 const props = defineProps({
   errors: { type: Object, default: () => ({}) },
@@ -179,6 +180,7 @@ const model = defineModel({ type: Object, default: () => ({}) });
 const local = reactive({
   city_ref: '', 
   settlement_ref: '',
+  settlement_name: '',
   city_name: '', 
   warehouse_ref: '', 
   warehouse_name: '',
@@ -242,13 +244,12 @@ watch(() => model.value, (newVal) => {
 watch(cityQuery, (val) => {
   if (skipFetch.city) { skipFetch.city = false; return; }
   
-  local.city_name = val; 
-  // Якщо користувач почав стирати назву міста - скидаємо Ref
-  if (!val || val !== local.city_name) {
-     local.city_ref = '';
-     local.settlement_ref = '';
-     resetDeliveryFields();
-  }
+  local.city_name = val;
+  // Користувач вводить вручну — скидаємо Ref та дочірні поля
+  local.city_ref = '';
+  local.settlement_ref = '';
+  local.settlement_name = '';
+  resetDeliveryFields();
 
   if (cityTimer) clearTimeout(cityTimer);
   // Змінив ліміт з 4 на 2 символи
@@ -309,33 +310,43 @@ async function loadWarehouses(query) {
 }
 
 async function loadStreets(query) {
-  if (!local.settlement_ref || !query || query.length < 2) {
+  const hasQuery = query && query.length >= 2;
+  if (!local.settlement_ref || !hasQuery) {
     streetOptions.value = [];
     return;
   }
   streetLoading.value = true;
   try {
-    const { data } = await fetchStreets({
-      cityRef: local.city_ref,
-      settlementRef: local.settlement_ref,
-      query,
-      limit: 25
+    const { data } = await http.get('/nova-poshta/streets', {
+      params: {
+        settlement_ref: local.settlement_ref,
+        q: query,
+        limit: 25
+      }
     });
     streetOptions.value = data?.data || data || [];
   } finally { streetLoading.value = false; }
 }
 
 function selectCity(city) {
-  local.city_ref = city.ref; 
-  local.settlement_ref = city.settlement_ref || '';
-  local.city_name = city.name;
-  skipFetch.city = true; 
-  cityQuery.value = city.name;
-  showCityDropdown.value = false; 
-  
-  resetDeliveryFields();
-  // Автоматично завантажуємо список відділень після вибору міста
-  if (local.delivery_type !== 'courier') loadWarehouses('');
+  clearWarehouseFields();
+  resetStreetFields();
+
+  const deliveryCityRef = city.delivery_city_ref || city.ref || '';
+  const settlementRef = city.settlement_ref || city.ref || deliveryCityRef || '';
+
+  local.city_ref = deliveryCityRef;
+  local.settlement_ref = settlementRef;
+  local.city_name = city.name || '';
+  local.settlement_name = city.name || '';
+
+  skipFetch.city = true;
+  cityQuery.value = local.city_name;
+  showCityDropdown.value = false;
+
+  if (local.delivery_type === 'warehouse') {
+    loadWarehouses('');
+  }
 }
 
 function selectWarehouse(wh) {
@@ -348,7 +359,7 @@ function selectWarehouse(wh) {
 
 function selectStreet(street) {
   local.street_name = street.name; 
-  local.street_ref = street.ref || '';
+  local.street_ref = street.street_ref || street.ref || '';
   skipFetch.street = true;
   streetQuery.value = street.name; 
   showStreetDropdown.value = false;
@@ -364,12 +375,23 @@ function onStreetFocus() {
   showStreetDropdown.value = true;
 }
 
-function resetDeliveryFields() {
-  // Не стираємо місто, тільки дочірні поля
-  local.warehouse_ref = ''; local.warehouse_name = '';
+function resetStreetFields() {
   local.street_name = ''; local.street_ref = ''; local.building = ''; local.apartment = '';
-  warehouseQuery.value = ''; streetQuery.value = '';
-  warehouseOptions.value = []; streetOptions.value = [];
+  streetQuery.value = '';
+  streetOptions.value = [];
+}
+
+function resetDeliveryFields() {
+  // Не стираємо місто/settlement, тільки дочірні поля
+  clearWarehouseFields();
+  resetStreetFields();
+}
+
+function clearWarehouseFields() {
+  local.warehouse_ref = '';
+  local.warehouse_name = '';
+  warehouseQuery.value = '';
+  warehouseOptions.value = [];
 }
 
 const scheduleCloseCity = () => setTimeout(() => showCityDropdown.value = false, 200);

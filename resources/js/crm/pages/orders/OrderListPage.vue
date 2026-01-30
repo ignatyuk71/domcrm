@@ -147,7 +147,11 @@ async function generateTtn(order) {
 
   order.loadingTtn = true;
   try {
-    const response = await fetch(`/orders/${order.id}/generate-ttn`, {
+    const deliveryType = order?.delivery?.delivery_type || order?.delivery_type || 'warehouse';
+    const endpoint = deliveryType === 'courier'
+      ? `/orders/${order.id}/generate-ttn-courier`
+      : `/orders/${order.id}/generate-ttn`;
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

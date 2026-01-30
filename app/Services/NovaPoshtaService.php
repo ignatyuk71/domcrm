@@ -28,7 +28,7 @@ class NovaPoshtaService
         }
 
         try {
-            $response = Http::timeout(15)->post($this->endpoint, [
+            $response = Http::timeout(50)->post($this->endpoint, [
                 'apiKey' => $this->apiKey,
                 'modelName' => $model,
                 'calledMethod' => $method,
@@ -37,7 +37,17 @@ class NovaPoshtaService
 
             $result = $response->json();
 
-            if (!$response->successful() || (isset($result['success']) && !$result['success'])) {
+            // Фільтруємо помилки, які ми плануємо обробляти автоматично (щоб не засмічувати логи)
+            $isHandledError = false;
+            if (isset($result['errors']) && is_array($result['errors'])) {
+                $errStr = implode(' ', $result['errors']);
+                // Ці помилки означають, що треба спробувати інший CityRef, тому це не критичний збій
+                if (str_contains($errStr, "Street doesn't exists") || str_contains($errStr, "Recipient address is not in this city")) { 
+                    $isHandledError = true;
+                }
+            }
+
+            if ((!$response->successful() || (isset($result['success']) && !$result['success'])) && !$isHandledError) {
                 Log::error("NovaPoshta API error: {$model}/{$method}", [
                     'errors' => $result['errors'] ?? $response->body(),
                     'sent_params' => $properties
@@ -52,131 +62,39 @@ class NovaPoshtaService
     }
 
     /**
-     * Створення ТТН на основі даних замовлення
-     * ОНОВЛЕНО: Розумний розрахунок габаритів (об'єм замість висоти)
+     * Створення ТТН на основі даних замовлення (для відділення)
      */
     public function createWaybill(\App\Models\Order $order)
     {
-        $order->load(['delivery', 'customer', 'items.product.category', 'items.product.color', 'payment']);
+        $order->load('delivery');
+        if (($order->delivery->delivery_type ?? 'warehouse') === 'courier') {
+            return $this->createWaybillCourier($order);
+        }
+
+        $order->load(['delivery', 'customer', 'items.product', 'payment']);
         
         $delivery = $order->delivery;
         $customer = $order->customer;
         $payment  = $order->payment;
         $itemsSummary = $this->buildItemsSummary($order);
     
-        // --- 1. РОЗРАХУНОК ВАГИ ТА ОБ'ЄМУ ---
-        $totalWeightKg = 0;
-        $totalVolumeCm3 = 0;
+        // 1. Розрахунок ваги/об'єму (спрощено винесено в окремий блок для читабельності, але логіка та ж)
+        $dimensions = $this->calculateDimensions($order->items);
+    
+        // 2. Розрахунок вартості
+        $costs = $this->calculateCosts($order, $payment);
+    
+        // 3. Контрагент
+        $recipientData = $this->getOrCreateRecipient($customer);
+        if (!$recipientData['success']) return $recipientData;
         
-        // Максимальні габарити ОДНОГО товару (щоб коробка не була меншою за товар)
-        $maxItemWidth = 0;
-        $maxItemLength = 0;
-        $maxItemHeight = 0;
+        $recipientRef = $recipientData['ref'];
+        $contactRef = $recipientData['contact_ref'];
+        $recipientPhone = $recipientData['phone'];
     
-        foreach ($order->items as $item) {
-            $product = $item->product;
-            $qty = $item->qty ?: 1;
-            
-            // Дефолтні розміри (якщо у товарі 0)
-            $w = $product?->width_cm ?: 20;
-            $l = $product?->length_cm ?: 30;
-            $h = $product?->height_cm ?: 10; // змінив дефолт на 10, щоб було компактніше
-            $weight = $product ? ($product->weight_g / 1000) : 0.5;
-
-            // Накопичуємо загальну вагу та загальний об'єм
-            $totalWeightKg += $weight * $qty;
-            $totalVolumeCm3 += ($w * $l * $h) * $qty;
-
-            // Запам'ятовуємо найбільший товар
-            $maxItemWidth = max($maxItemWidth, $w);
-            $maxItemLength = max($maxItemLength, $l);
-            $maxItemHeight = max($maxItemHeight, $h);
-        }
-    
-        // Мінімальна вага 0.1 кг
-        $totalWeightKg = max($totalWeightKg, 0.1);
-
-        // --- 2. ПІДБІР ГАБАРИТІВ КОРОБКИ ---
-        // Починаємо з бази: довжина і ширина найбільшого товару
-        $calcLength = max($maxItemLength, 10);
-        $calcWidth = max($maxItemWidth, 10);
-        
-        // Вираховуємо висоту з об'єму: H = V / (L * W) + 10% запасу
-        $calcHeight = ceil(($totalVolumeCm3 * 1.1) / ($calcLength * $calcWidth));
-
-        // ЛОГІКА "СПЛЮЩУВАННЯ": 
-        // Якщо висота > 60 см, пробуємо збільшити ширину (покласти товари поруч)
-        if ($calcHeight > 60) {
-            $calcWidth *= 2; 
-            $calcHeight = ceil(($totalVolumeCm3 * 1.1) / ($calcLength * $calcWidth));
-        }
-
-        // Якщо все ще високо, збільшуємо довжину
-        if ($calcHeight > 60) {
-            $calcLength *= 2;
-            $calcHeight = ceil(($totalVolumeCm3 * 1.1) / ($calcLength * $calcWidth));
-        }
-        
-        // Фінальна страховка (мінімум 1 см висоти)
-        $calcHeight = max($calcHeight, 1);
-
-        // Розрахунок об'ємної ваги для API
-        $volumetricVolume = ($calcLength * $calcWidth * $calcHeight) / 1000000;
-    
-        // --- 3. РОЗРАХУНОК СУМ ---
-        $calculatedTotal = $order->items->sum('total');
-        // Оціночна вартість (мінімум 200 грн, щоб не було помилок, якщо сума 0)
-        $finalCost = ($calculatedTotal > 0) ? (string)round($calculatedTotal) : '200';
-    
-        $afterpayment = 0;
-        if ($payment) {
-            if (in_array($payment->method, ['cod', 'prepay'])) {
-                $afterpayment = $calculatedTotal - ($payment->prepay_amount ?: 0);
-            }
-        }
-        $afterpayment = ($afterpayment > 0) ? (string)round($afterpayment) : 0;
-    
-        // --- 4. КОНТРАГЕНТ (ОТРИМУВАЧ) ---
-        $recipientPhone = preg_replace('/[^0-9]/', '', $customer->phone);
-        
-        $counterparty = $this->makeRequest('Counterparty', 'save', [
-            'FirstName'            => trim($customer->first_name) ?: 'Клієнт',
-            'LastName'             => trim($customer->last_name) ?: 'CRM',
-            'Phone'                => $recipientPhone,
-            'CounterpartyProperty' => 'Recipient',
-            'CounterpartyType'     => 'PrivatePerson',
-        ]);
-    
-        if (!($counterparty['success'] ?? false)) {
-            return $counterparty;
-        }
-    
-        $recipientRef = $counterparty['data'][0]['Ref'];
-        $contactRef   = $counterparty['data'][0]['ContactPerson']['data'][0]['Ref'] ?? null;
-    
-        // --- 5. ПАРАМЕТРИ ТТН ---
-        $deliveryType = $delivery->delivery_type ?? 'warehouse';
+        // 4. Параметри ТТН
         $recipientAddressRef = $delivery->warehouse_ref;
-        $serviceType = $delivery->service_type ?? \App\Models\OrderDelivery::SERVICE_WAREHOUSE;
-
-        if ($deliveryType === 'courier') {
-            $serviceType = $delivery->service_type ?? \App\Models\OrderDelivery::SERVICE_DOORS;
-            $addressResp = $this->saveRecipientAddress($recipientRef, $delivery);
-
-            if (!($addressResp['success'] ?? false)) {
-                return $addressResp;
-            }
-
-            $recipientAddressRef = $addressResp['data'][0]['Ref'] ?? null;
-            if (!$recipientAddressRef) {
-                return ['success' => false, 'errors' => ['Не вдалося створити адресу отримувача']];
-            }
-
-            $delivery->forceFill(['address_ref' => $recipientAddressRef])->saveQuietly();
-        }
-
-        $dbPayer = strtolower($delivery->delivery_payer ?? 'recipient');
-        $payerType = ($dbPayer === 'sender') ? 'Sender' : 'Recipient';
+        $payerType = (strtolower($delivery->delivery_payer ?? 'recipient') === 'sender') ? 'Sender' : 'Recipient';
 
         $params = [
             'Sender'             => config('services.nova_poshta.sender_ref'),
@@ -193,257 +111,266 @@ class NovaPoshtaService
             
             'PayerType'          => $payerType, 
             'PaymentMethod'      => 'Cash',
-            
             'CargoType'          => 'Cargo',
-            'ServiceType'        => $serviceType, 
-            
+            'ServiceType'        => \App\Models\OrderDelivery::SERVICE_WAREHOUSE, 
             'Description'        => 'Взуття', 
-            'Cost'               => $finalCost,
+            'Cost'               => $costs['cost'],
             'SeatsAmount'        => '1',
-            'Weight'             => (string)$totalWeightKg,
-            
-            // Передаємо розраховані габарити "віртуальної коробки"
-            'OptionsSeat' => [
-                [
-                    'volumetricVolume' => (string)$volumetricVolume,
-                    'volumetricWidth'  => (string)$calcWidth,
-                    'volumetricLength' => (string)$calcLength,
-                    'volumetricHeight' => (string)$calcHeight,
-                    'weight'           => (string)$totalWeightKg,
-                ]
-            ],
-
+            'Weight'             => $dimensions['weight'],
+            'OptionsSeat'        => [$dimensions['options']],
             'AdditionalInformation' => $itemsSummary ?: ('Зам. №' . $order->id),
             'InfoRegClientBarcodes' => 'Зам. №' . $order->id,
         ];
     
-        if ($afterpayment > 0) {
-            $params['AfterpaymentOnGoodsCost'] = $afterpayment;
+        if ($costs['afterpayment'] > 0) {
+            $params['AfterpaymentOnGoodsCost'] = $costs['afterpayment'];
         }
     
         return $this->makeRequest('InternetDocument', 'save', $params);
+    }
+
+
+    public function createWaybillCourier(\App\Models\Order $order): array
+    {
+        $order->load(['delivery', 'customer', 'items.product', 'payment']);
+
+        $delivery = $order->delivery;
+        $customer = $order->customer;
+        $payment  = $order->payment;
+        $itemsSummary = $this->buildItemsSummary($order);
+
+        $dimensions = $this->calculateDimensions($order->items);
+        $costs = $this->calculateCosts($order, $payment);
+
+        $phone = preg_replace('/[^0-9]/', '', (string) $customer->phone);
+
+        $settlementRef = $delivery->settlement_ref ?: $delivery->city_ref;
+        $street = trim((string) $delivery->street_name);
+        $house  = trim((string) $delivery->building);
+        $flat   = trim((string) $delivery->apartment);
+
+        $recipientName = trim((string)($customer->last_name . ' ' . $customer->first_name));
+        $recipientName = $recipientName ?: 'Отримувач';
+
+        $payerType = (strtolower($delivery->delivery_payer ?? 'recipient') === 'sender') ? 'Sender' : 'Recipient';
+
+        $params = [
+            // sender
+            'Sender'        => config('services.nova_poshta.sender_ref'),
+            'CitySender'    => config('services.nova_poshta.sender_city'),
+            'SenderAddress' => config('services.nova_poshta.sender_warehouse'),
+            'ContactSender' => config('services.nova_poshta.contact_ref'),
+            'SendersPhone'  => config('services.nova_poshta.sender_phone'),
+
+            // recipient (СХЕМА NEW ADDRESS)
+            'RecipientCityRef'      => $settlementRef,
+            'RecipientAddressName'  => $street,
+            'RecipientHouse'        => $house,
+            'RecipientFlat'         => $flat,
+
+            'RecipientType'         => 'PrivatePerson',
+            'RecipientName'         => $recipientName,
+            'RecipientContactName'  => $recipientName,
+            'RecipientsPhone'       => $phone,
+
+            'NewAddress'            => '1',
+
+            // shipment
+            'ServiceType'   => \App\Models\OrderDelivery::SERVICE_DOORS,
+            'CargoType'     => 'Cargo',
+            'PayerType'     => $payerType,
+            'PaymentMethod' => 'Cash',
+
+            'SeatsAmount'   => '1',
+            'Weight'        => $dimensions['weight'],
+            'OptionsSeat'   => [$dimensions['options']],
+            'Cost'          => $costs['cost'],
+            'Description'   => 'Взуття',
+            'AdditionalInformation' => $itemsSummary ?: ('Зам. №' . $order->id),
+            'InfoRegClientBarcodes' => 'Зам. №' . $order->id,
+        ];
+
+        if ($costs['afterpayment'] > 0) {
+            $params['AfterpaymentOnGoodsCost'] = $costs['afterpayment'];
+        }
+
+        $resp = $this->makeRequest('InternetDocument', 'save', $params);
+        if (!($resp['success'] ?? false)) {
+            \Log::error('NP InternetDocument/save failed', [
+                'order_id' => $order->id,
+                'sent' => $params,
+                'resp' => $resp,
+            ]);
+        }
+
+        return $resp;
+    }
+    
+    
+    
+
+    // --- ДОПОМІЖНІ МЕТОДИ (винесені для чистоти коду) ---
+
+    private function calculateDimensions($items): array
+    {
+        $totalWeightKg = 0;
+        $totalVolumeCm3 = 0;
+        $maxItemWidth = 0; $maxItemLength = 0; $maxItemHeight = 0;
+
+        foreach ($items as $item) {
+            $product = $item->product;
+            $qty = max($item->qty ?: 1, 1);
+            $w = $product?->width_cm ?: 20;
+            $l = $product?->length_cm ?: 30;
+            $h = $product?->height_cm ?: 10;
+            $weight = $product ? ($product->weight_g / 1000) : 0.5;
+
+            $totalWeightKg += $weight * $qty;
+            $totalVolumeCm3 += ($w * $l * $h) * $qty;
+            $maxItemWidth = max($maxItemWidth, $w);
+            $maxItemLength = max($maxItemLength, $l);
+            $maxItemHeight = max($maxItemHeight, $h);
+        }
+
+        $totalWeightKg = max($totalWeightKg, 0.1);
+        $calcLength = max($maxItemLength, 10);
+        $calcWidth = max($maxItemWidth, 10);
+        $calcHeight = ceil(($totalVolumeCm3 * 1.1) / ($calcLength * $calcWidth));
+        
+        // Проста логіка пакування (якщо дуже висока, розширюємо основу)
+        if ($calcHeight > 60) { $calcWidth *= 2; $calcHeight = ceil(($totalVolumeCm3 * 1.1) / ($calcLength * $calcWidth)); }
+        if ($calcHeight > 60) { $calcLength *= 2; $calcHeight = ceil(($totalVolumeCm3 * 1.1) / ($calcLength * $calcWidth)); }
+        $calcHeight = max($calcHeight, 1);
+
+        $volumetricVolume = ($calcLength * $calcWidth * $calcHeight) / 1000000;
+
+        return [
+            'weight' => (string)$totalWeightKg,
+            'options' => [
+                'volumetricVolume' => (string)$volumetricVolume,
+                'volumetricWidth'  => (string)$calcWidth,
+                'volumetricLength' => (string)$calcLength,
+                'volumetricHeight' => (string)$calcHeight,
+                'weight'           => (string)$totalWeightKg,
+            ]
+        ];
+    }
+
+    private function calculateCosts($order, $payment): array
+    {
+        $calculatedTotal = $order->items->sum('total');
+        $finalCost = ($calculatedTotal > 0) ? (string)round($calculatedTotal) : '200';
+        
+        $afterpayment = 0;
+        if ($payment && in_array($payment->method, ['cod', 'prepay'])) {
+            $afterpayment = $calculatedTotal - ($payment->prepay_amount ?: 0);
+        }
+        $afterpayment = ($afterpayment > 0) ? (string)round($afterpayment) : 0;
+
+        return ['cost' => $finalCost, 'afterpayment' => $afterpayment];
+    }
+
+    private function getOrCreateRecipient($customer): array
+    {
+        $recipientPhone = preg_replace('/[^0-9]/', '', $customer->phone);
+        
+        $counterparty = $this->makeRequest('Counterparty', 'save', [
+            'FirstName'            => trim($customer->first_name) ?: 'Клієнт',
+            'LastName'             => trim($customer->last_name) ?: 'CRM',
+            'Phone'                => $recipientPhone,
+            'CounterpartyProperty' => 'Recipient',
+            'CounterpartyType'     => 'PrivatePerson',
+        ]);
+    
+        if (!($counterparty['success'] ?? false)) {
+            return ['success' => false, 'errors' => $counterparty['errors'] ?? ['Error creating counterparty']];
+        }
+
+        return [
+            'success' => true,
+            'ref' => $counterparty['data'][0]['Ref'],
+            'contact_ref' => $counterparty['data'][0]['ContactPerson']['data'][0]['Ref'] ?? null,
+            'phone' => $recipientPhone
+        ];
     }
 
     private function buildItemsSummary(\App\Models\Order $order): string
     {
         $parts = [];
         foreach ($order->items as $item) {
-            $category = trim((string) ($item->product?->category?->name ?? ''));
-            $color = trim((string) ($item->product?->color?->name ?? ''));
-            $size = trim((string) ($item->size ?? ''));
-
-            $labelParts = array_values(array_filter([$category, $color, $size]));
-            if (!$labelParts) {
-                continue;
-            }
-
-            $qty = (int) ($item->qty ?: 1);
-            $parts[] = implode('/', $labelParts) . ' - ' . max($qty, 1).'пар.';
+            $labelParts = array_values(array_filter([
+                trim((string)($item->product?->category?->name ?? '')),
+                trim((string)($item->product?->color?->name ?? '')),
+                trim((string)($item->size ?? ''))
+            ]));
+            if (!$labelParts) continue;
+            $parts[] = implode('/', $labelParts) . ' - ' . max((int)$item->qty, 1).'пар.';
         }
-
         $summary = trim(implode('; ', $parts));
-        if ($summary === '') {
-            return '';
-        }
-
-        $limit = 100;
-        $length = function_exists('mb_strlen') ? mb_strlen($summary) : strlen($summary);
-        if ($length > $limit) {
-            $cut = $limit - 3;
-            $summary = function_exists('mb_substr')
-                ? mb_substr($summary, 0, $cut)
-                : substr($summary, 0, $cut);
-            $summary .= '...';
-        }
-
-        return $summary;
+        return mb_strlen($summary) > 100 ? mb_substr($summary, 0, 97) . '...' : $summary;
     }
 
-    /**
-     * Пошук міст
-     */
+    // --- МЕТОДИ ПОШУКУ (без змін) ---
+    
     public function searchCities(string $query, int $limit = 20): array
     {
-        $resp = $this->makeRequest('Address', 'searchSettlements', [
-            'CityName' => $query,
-            'Page' => 1,
-            'Limit' => $limit,
-        ]);
-
-        $addresses = $resp['data'][0]['Addresses'] ?? [];
-
-        return collect($addresses)->map(function ($item) {
-            $settlementRef = $item['SettlementRef'] ?? $item['Ref'] ?? null;
-
-            return [
-                'ref' => $item['DeliveryCity'] ?? $item['Ref'] ?? $settlementRef ?? null,
-                'settlement_ref' => $settlementRef,
-                'name' => $item['Present'] ?? '',
-                'area' => $item['Area'] ?? $item['Region'] ?? null,
-                'type' => $item['SettlementTypeDescription'] ?? $item['SettlementType'] ?? null,
-            ];
-        })->filter(fn($row) => !empty($row['ref']))->values()->all();
+        $resp = $this->makeRequest('Address', 'searchSettlements', ['CityName' => $query, 'Page' => 1, 'Limit' => $limit]);
+        return collect($resp['data'][0]['Addresses'] ?? [])->map(fn($item) => [
+            'ref' => $item['DeliveryCity'] ?? $item['Ref'] ?? $item['SettlementRef'] ?? null,
+            'delivery_city_ref' => $item['DeliveryCity'] ?? null,
+            'settlement_ref' => $item['SettlementRef'] ?? $item['Ref'] ?? null,
+            'name' => $item['Present'] ?? '',
+            'area' => $item['Area'] ?? $item['Region'] ?? null,
+            'type' => $item['SettlementTypeDescription'] ?? null,
+        ])->filter(fn($row) => !empty($row['ref']))->values()->all();
     }
 
-    /**
-     * Списки відділень
-     */
     public function getWarehouses(string $cityRef, ?string $query = null, int $limit = 50): array
     {
-        $resp = $this->makeRequest('AddressGeneral', 'getWarehouses', [
-            'CityRef'      => $cityRef,
-            'FindByString' => $query ?? '',
-            'Page'         => 1,
-            'Limit'        => $limit,
-        ]);
-
-        return collect($resp['data'] ?? [])->map(function ($item) {
-            return [
-                'ref'      => $item['Ref'] ?? null,
-                'name'     => $item['Description'] ?? '',
-                'category' => $item['Category'] ?? null,
-                'type'     => $item['TypeOfWarehouse'] ?? null,
-            ];
-        })->values()->all();
+        $resp = $this->makeRequest('AddressGeneral', 'getWarehouses', ['CityRef' => $cityRef, 'FindByString' => $query ?? '', 'Page' => 1, 'Limit' => $limit]);
+        return collect($resp['data'] ?? [])->map(fn($item) => [
+            'ref' => $item['Ref'] ?? null,
+            'name' => $item['Description'] ?? '',
+            'category' => $item['Category'] ?? null,
+            'type' => $item['TypeOfWarehouse'] ?? null,
+        ])->values()->all();
     }
 
-    /**
-     * Пошук вулиць для сіл/смт через SettlementRef
-     */
     public function searchSettlementStreets(string $settlementRef, string $query, int $limit = 25): array
     {
-        $query = trim($query);
-        if (mb_strlen($query) < 2) {
-            return [];
-        }
-
-        $resp = $this->makeRequest('Address', 'searchSettlementStreets', [
-            'SettlementRef' => $settlementRef,
-            'StreetName' => $query,
-            'Limit' => $limit,
-        ]);
-
-        $addresses = $resp['data'][0]['Addresses'] ?? $resp['data'] ?? [];
-
-        return collect($addresses)->map(function ($item) {
-            return [
-                'ref' => $item['SettlementStreetRef'] ?? $item['Ref'] ?? null,
-                'name' => $item['Present'] ?? $item['Description'] ?? '',
-                'type' => $item['StreetsType'] ?? null,
-                'type_description' => $item['StreetsTypeDescription'] ?? null,
-            ];
-        })->filter(fn($row) => !empty($row['ref']) && !empty($row['name']))->values()->all();
+        if (mb_strlen(trim($query)) < 2) return [];
+        $resp = $this->makeRequest('Address', 'searchSettlementStreets', ['SettlementRef' => $settlementRef, 'StreetName' => trim($query), 'Limit' => $limit]);
+        return collect($resp['data'][0]['Addresses'] ?? [])->map(fn($item) => [
+            'ref' => $item['SettlementStreetRef'] ?? $item['StreetRef'] ?? null,
+            'name' => $item['Present'] ?? $item['Description'] ?? '',
+            'type' => $item['StreetsType'] ?? null,
+        ])->filter(fn($row) => !empty($row['ref']))->values()->all();
     }
 
-    /**
-     * Пошук вулиць (fallback по CityRef)
-     */
-    public function searchStreets(string $cityRef, string $query, ?string $settlementRef = null, int $limit = 25): array
+    public function searchStreets(string $cityRef, string $query, int $limit = 25): array
     {
-        $query = trim($query);
-        if (mb_strlen($query) < 2) {
-            return [];
-        }
-
-        if ($settlementRef) {
-            return $this->searchSettlementStreets($settlementRef, $query, $limit);
-        }
-
-        if (!$cityRef) {
-            return [];
-        }
-
-        $resp = $this->makeRequest('AddressGeneral', 'getStreet', [
-            'CityRef' => $cityRef,
-            'FindByString' => $query,
-            'Page' => 1,
-            'Limit' => $limit,
-        ]);
-
-        return collect($resp['data'] ?? [])->map(function ($item) {
-            return [
-                'ref' => $item['Ref'] ?? null,
-                'name' => $item['Description'] ?? '',
-            ];
-        })->filter(fn($row) => !empty($row['ref']) && !empty($row['name']))->values()->all();
-    }
-
-    /**
-     * Отримання даних відправника (налаштовується один раз)
-     */
-    public function getSenderData(): array
-    {
-        $counterparties = $this->makeRequest('Counterparty', 'getCounterparties', [
-            'CounterpartyProperty' => 'Sender',
-            'Page' => 1
-        ]);
-
-        $sender = $counterparties['data'][0] ?? null;
-        if (!$sender) return ['success' => false, 'message' => 'Sender not found'];
-
-        $contacts = $this->makeRequest('Counterparty', 'getCounterpartyContactPersons', [
-            'Ref' => $sender['Ref']
-        ]);
-
-        return [
-            'success'         => true,
-            'NP_SENDER_REF'   => $sender['Ref'],
-            'NP_CONTACT_REF'  => $contacts['data'][0]['Ref'] ?? null,
-            'NP_SENDER_PHONE' => $contacts['data'][0]['Phones'] ?? null,
-        ];
-    }
-
-    /**
-     * Створення адреси отримувача для кур'єрської доставки
-     */
-    private function saveRecipientAddress(string $recipientRef, \App\Models\OrderDelivery $delivery): array
-    {
-        return $this->makeRequest('Address', 'save', [
-            'CounterpartyRef' => $recipientRef,
-            'StreetRef' => $delivery->street_ref,
-            'BuildingNumber' => $delivery->building,
-            'Flat' => $delivery->apartment,
-            'Note' => $delivery->address_note,
-        ]);
-    }
-
-    /**
-     * Видалення ТТН
-     * @param string $ttnRef — внутрішній Ref накладної
-     */
-    public function deleteWaybill(string $ttnRef)
-    {
-        return $this->makeRequest('InternetDocument', 'delete', [
-            'DocumentRefs' => [$ttnRef]
-        ]);
+        if (mb_strlen(trim($query)) < 2 || !$cityRef) return [];
+        $resp = $this->makeRequest('AddressGeneral', 'getStreet', ['CityRef' => $cityRef, 'FindByString' => trim($query), 'Page' => 1, 'Limit' => $limit]);
+        return collect($resp['data'] ?? [])->map(fn($item) => [
+            'ref' => $item['Ref'] ?? null,
+            'name' => $item['Description'] ?? '',
+        ])->filter(fn($row) => !empty($row['ref']))->values()->all();
     }
     
-    /**
-     * Посилання на друк МАЛЕНЬКОЇ наклейки (100х100)
-     */
+    public function deleteWaybill(string $ttnRef)
+    {
+        return $this->makeRequest('InternetDocument', 'delete', ['DocumentRefs' => [$ttnRef]]);
+    }
+
     public function getPrintLink(string $ttn): string
     {
         return "https://my.novaposhta.ua/orders/printMarkings/orders[]/{$ttn}/type/pdf/zebra/1/apiKey/{$this->apiKey}";
     }
 
-    /**
-     * Отримання статусів відправлень (масовий трекінг).
-     */
     public function getStatuses(array $documents): ?array
     {
-        if (empty($documents)) {
-            return null;
-        }
-
-        $payload = [
-            'Documents' => array_map(function (array $doc) {
-                return [
-                    'DocumentNumber' => $doc['DocumentNumber'] ?? $doc['ttn'] ?? $doc['number'] ?? null,
-                    'Phone' => $doc['Phone'] ?? $doc['phone'] ?? null,
-                ];
-            }, $documents),
-        ];
-
+        if (empty($documents)) return null;
+        $payload = ['Documents' => array_map(fn($doc) => ['DocumentNumber' => $doc['ttn'] ?? $doc['number'] ?? null, 'Phone' => $doc['phone'] ?? null], $documents)];
         return $this->makeRequest('TrackingDocument', 'getStatusDocuments', $payload);
     }
 }

@@ -150,6 +150,7 @@ Route::middleware('auth')->group(function () {
         
         // Нова Пошта: Генерація, Анулювання та Друк
         Route::post('/orders/{order}/generate-ttn', 'generateTTN')->name('orders.generateTTN');
+        Route::post('/orders/{order}/generate-ttn-courier', 'generateTTNCourier')->name('orders.generateTTNCourier');
         Route::post('/orders/{order}/cancel-ttn', 'cancelTTN')->name('orders.cancelTTN');
         Route::get('/orders/{order}/print-ttn', 'printTTN')->name('orders.printTTN');
         Route::post('/orders/{order}/track-delivery', 'trackDelivery')->name('orders.trackDelivery');
@@ -202,6 +203,61 @@ Route::middleware('auth')->group(function () {
         // Debug маршрут для перевірки даних відправника
         Route::get('/debug-sender', fn(\App\Services\NovaPoshtaService $np) => $np->getSenderData())->name('debug');
     });
+
+    // Debug: перевірка відповідності StreetRef до SettlementRef для конкретного замовлення
+    Route::get('/debug-np-address/{order}', function (Order $order, \App\Services\NovaPoshtaService $np) {
+        if (!config('app.debug') && !app()->environment('local')) {
+            abort(404);
+        }
+
+        $order->load('delivery');
+        $delivery = $order->delivery;
+
+        if (!$delivery) {
+            return response()->json([
+                'error' => 'Delivery not found for order',
+                'order_id' => $order->id,
+            ], 404);
+        }
+
+        $streetRef = $delivery->street_ref;
+        $streetName = $delivery->street_name;
+
+        $result = [
+            'order_id' => $order->id,
+            'order_number' => $order->order_number ?? null,
+            'delivery' => [
+                'city_ref' => $delivery->city_ref,
+                'street_ref' => $streetRef,
+                'street_name' => $streetName,
+                'building' => $delivery->building,
+                'apartment' => $delivery->apartment,
+            ],
+        ];
+
+        if (!$delivery->city_ref || !$streetName) {
+            $result['error'] = 'Missing city_ref or street_name';
+            return response()->json($result, 422);
+        }
+
+        $options = $np->searchStreets((string) $delivery->city_ref, $streetName, 50);
+        $match = false;
+        foreach ($options as $option) {
+            if (($option['ref'] ?? null) === $streetRef) {
+                $match = true;
+                break;
+            }
+        }
+
+        $result['search'] = [
+            'query' => $streetName,
+            'count' => count($options),
+            'match' => $match,
+            'options' => $options,
+        ];
+
+        return response()->json($result);
+    })->name('novaPoshta.debugAddress');
 
     // --- ТОВАРИ (Products) ---
     Route::controller(ProductController::class)->prefix('products')->name('products.')->group(function () {
