@@ -8,6 +8,8 @@ use App\Http\Controllers\StatusController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\NovaPoshtaController;
 use App\Http\Controllers\OrderSourceController;
+use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\ColorController;
 use App\Http\Controllers\FiscalController;
 use App\Http\Controllers\FinanceController;
 use App\Http\Controllers\PackingController;
@@ -275,6 +277,24 @@ Route::middleware('auth')->group(function () {
     Route::get('/statuses', [StatusController::class, 'index'])->name('statuses.index');
     Route::get('/order-sources', [OrderSourceController::class, 'index'])->name('orderSources.index');
     Route::get('/tags', [TagController::class, 'index'])->name('tags.index');
+    Route::post('/tags', [TagController::class, 'store'])->name('tags.store');
+    Route::put('/tags/{tag}', [TagController::class, 'update'])->name('tags.update');
+    Route::delete('/tags/{tag}', [TagController::class, 'destroy'])->name('tags.destroy');
+
+    // --- НАЛАШТУВАННЯ: ДОВІДНИКИ ---
+    Route::prefix('settings')->name('settings.')->group(function () {
+        Route::get('/categories', [CategoryController::class, 'index'])->name('categories.index');
+        Route::post('/categories', [CategoryController::class, 'store'])->name('categories.store');
+        Route::put('/categories/{category}', [CategoryController::class, 'update'])->name('categories.update');
+        Route::delete('/categories/{category}', [CategoryController::class, 'destroy'])->name('categories.destroy');
+
+        Route::get('/colors', [ColorController::class, 'index'])->name('colors.index');
+        Route::post('/colors', [ColorController::class, 'store'])->name('colors.store');
+        Route::put('/colors/{color}', [ColorController::class, 'update'])->name('colors.update');
+        Route::delete('/colors/{color}', [ColorController::class, 'destroy'])->name('colors.destroy');
+
+        Route::get('/tags', [TagController::class, 'index'])->name('tags.index');
+    });
     Route::resource('templates', MessageTemplateController::class);
     Route::get('/api/templates-list', function () {
         return MessageTemplate::where('is_active', true)

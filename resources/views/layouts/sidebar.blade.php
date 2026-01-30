@@ -461,6 +461,18 @@
                 <span class="icon-frame"><i class="bi bi-sliders"></i></span>
                 <span class="item-text-sub">Система</span>
             </a>
+            <a href="{{ route('settings.categories.index') }}" class="sidebar-link-sub {{ request()->is('settings/categories') ? 'active' : '' }}">
+                <span class="icon-frame"><i class="bi bi-tags"></i></span>
+                <span class="item-text-sub">Категорії</span>
+            </a>
+            <a href="{{ route('settings.colors.index') }}" class="sidebar-link-sub {{ request()->is('settings/colors') ? 'active' : '' }}">
+                <span class="icon-frame"><i class="bi bi-palette2"></i></span>
+                <span class="item-text-sub">Кольори</span>
+            </a>
+            <a href="{{ route('settings.tags.index') }}" class="sidebar-link-sub {{ request()->is('settings/tags') ? 'active' : '' }}">
+                <span class="icon-frame"><i class="bi bi-bookmark-star"></i></span>
+                <span class="item-text-sub">Теги</span>
+            </a>
         </div>
     </div>
 </aside>

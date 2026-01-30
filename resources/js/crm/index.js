@@ -10,6 +10,9 @@ import ChatFunnelPage from './pages/chat/ChatFunnelPage.vue';
 import GalleryPage from './pages/gallery/GalleryPage.vue';
 import CustomerListPage from './pages/customers/CustomerListPage.vue';
 import FinancePage from './pages/finance/FinancePage.vue';
+import SettingsCategoriesPage from './pages/settings/SettingsCategoriesPage.vue';
+import SettingsColorsPage from './pages/settings/SettingsColorsPage.vue';
+import SettingsTagsPage from './pages/settings/SettingsTagsPage.vue';
 import './styles/crm.css';
 import PackingListPage from '../Pages/Packing/PackingList.vue';
 import PackingWorkspacePage from '../Pages/Packing/PackingWorkspace.vue';
@@ -137,6 +140,33 @@ export function mountFinance(selector = '#crm-finance') {
     return app;
 }
 
+export function mountSettingsCategories(selector = '#crm-settings-categories') {
+    const el = document.querySelector(selector);
+    if (!el) return;
+
+    const app = createApp(SettingsCategoriesPage);
+    app.mount(el);
+    return app;
+}
+
+export function mountSettingsColors(selector = '#crm-settings-colors') {
+    const el = document.querySelector(selector);
+    if (!el) return;
+
+    const app = createApp(SettingsColorsPage);
+    app.mount(el);
+    return app;
+}
+
+export function mountSettingsTags(selector = '#crm-settings-tags') {
+    const el = document.querySelector(selector);
+    if (!el) return;
+
+    const app = createApp(SettingsTagsPage);
+    app.mount(el);
+    return app;
+}
+
 // Auto-mount if element exists
 function autoMount() {
     mountOrderCreate();
@@ -151,6 +181,9 @@ function autoMount() {
     mountChatFunnel();
     mountGallery();
     mountFinance();
+    mountSettingsCategories();
+    mountSettingsColors();
+    mountSettingsTags();
 }
 
 if (document.readyState !== 'loading') {
