@@ -369,8 +369,19 @@ class NovaPoshtaService
 
     public function getStatuses(array $documents): ?array
     {
-        if (empty($documents)) return null;
-        $payload = ['Documents' => array_map(fn($doc) => ['DocumentNumber' => $doc['ttn'] ?? $doc['number'] ?? null, 'Phone' => $doc['phone'] ?? null], $documents)];
+        if (empty($documents)) {
+            return null;
+        }
+
+        // Підтримуємо різні формати вхідних ключів (cron, manual, legacy).
+        $payload = [
+            'Documents' => array_map(function (array $doc) {
+                return [
+                    'DocumentNumber' => $doc['DocumentNumber'] ?? $doc['ttn'] ?? $doc['number'] ?? null,
+                    'Phone' => $doc['Phone'] ?? $doc['phone'] ?? null,
+                ];
+            }, $documents),
+        ];
         return $this->makeRequest('TrackingDocument', 'getStatusDocuments', $payload);
     }
 }
