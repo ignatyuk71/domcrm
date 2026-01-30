@@ -97,7 +97,7 @@
         </div>
 
         <div class="grid-item">
-          <div class="glass-card">
+          <div class="glass-card overflow-visible">
             <div class="card-header">
               <div class="icon-circle text-rose">
                 <i class="bi bi-geo-alt-fill"></i>
@@ -440,6 +440,7 @@ onMounted(load);
   transition: transform 0.3s ease;
 }
 .glass-card.accent-border { border-top: 4px solid #6366f1; }
+.glass-card.overflow-visible { overflow: visible; }
 
 .card-header { padding: 1.75rem; display: flex; align-items: flex-start; gap: 1rem; border-bottom: 1px solid #f1f5f9; }
 .card-header h3 { font-size: 1.1rem; font-weight: 700; margin: 0; color: #0f172a; }
@@ -568,7 +569,7 @@ onMounted(load);
   border: 1px solid #f1f5f9;
   border-radius: 16px;
   box-shadow: 0 20px 40px -5px rgba(0, 0, 0, 0.15);
-  z-index: 50;
+  z-index: 2000;
   overflow: hidden;
   max-height: 280px;
   overflow-y: auto;
