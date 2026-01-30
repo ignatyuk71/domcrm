@@ -319,10 +319,24 @@
                     {{ order.address || '—' }}
                   </span>
                 </div>
+                <div v-if="order.delivery_type === 'courier'" class="address-row align-items-start">
+                  <i class="bi bi-house-door text-muted mt-1"></i>
+                  <span class="text-secondary small">
+                    Курʼєрська доставка
+                    <span v-if="order.building"> • буд. {{ order.building }}</span>
+                    <span v-if="order.apartment">, кв. {{ order.apartment }}</span>
+                  </span>
+                </div>
                 <div class="address-row mt-2 pt-2 border-top">
                   <span class="text-muted small me-1">Платник:</span>
                   <span class="text-dark small fw-bold">
                     {{ order.delivery_payer || '—' }}
+                  </span>
+                </div>
+                <div class="address-row">
+                  <span class="text-muted small me-1">Спосіб оплати:</span>
+                  <span class="text-dark small fw-bold">
+                    {{ order.payment_method_label || '—' }}
                   </span>
                 </div>
               </div>

@@ -16,6 +16,7 @@ use App\Http\Controllers\PackingController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\MessageTemplateController;
 use App\Http\Controllers\ChatApiController;
+use App\Http\Controllers\NovaPoshtaSettingsController;
 use App\Models\MessageTemplate;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -294,6 +295,9 @@ Route::middleware('auth')->group(function () {
         Route::delete('/colors/{color}', [ColorController::class, 'destroy'])->name('colors.destroy');
 
         Route::get('/tags', [TagController::class, 'index'])->name('tags.index');
+        Route::get('/nova-poshta', [NovaPoshtaSettingsController::class, 'index'])->name('novaPoshta.index');
+        Route::post('/nova-poshta', [NovaPoshtaSettingsController::class, 'save'])->name('novaPoshta.save');
+        Route::post('/nova-poshta/fetch-refs', [NovaPoshtaSettingsController::class, 'fetchRefs'])->name('novaPoshta.fetchRefs');
     });
     Route::resource('templates', MessageTemplateController::class);
     Route::get('/api/templates-list', function () {

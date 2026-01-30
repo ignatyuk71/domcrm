@@ -453,7 +453,7 @@
                 <span class="icon-frame"><i class="bi bi-share-fill"></i></span>
                 <span class="item-text-sub">Соц. мережі</span>
             </a>
-             <a href="#" class="sidebar-link-sub">
+             <a href="{{ route('settings.novaPoshta.index') }}" class="sidebar-link-sub {{ request()->is('settings/nova-poshta') ? 'active' : '' }}">
                 <span class="icon-frame"><i class="bi bi-box-seam"></i></span>
                 <span class="item-text-sub">Нова Пошта</span>
             </a>

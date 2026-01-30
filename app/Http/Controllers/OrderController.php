@@ -823,7 +823,7 @@ class OrderController extends Controller
         }
 
         // Параметр /type/pdf/zebra/1 генерує саме маленьку наклейку для термопринтера
-        $link = "https://my.novaposhta.ua/orders/printMarkings/orders[]/{$ttn}/type/pdf/zebra/1/apiKey/" . config('services.nova_poshta.api_key');
+        $link = $np->getPrintLink($ttn);
 
         return response()->json([
             'success' => true,

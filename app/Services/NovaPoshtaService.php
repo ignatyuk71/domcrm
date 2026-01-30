@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\NovaPoshtaSetting;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -9,12 +10,25 @@ class NovaPoshtaService
 {
     protected string $apiKey;
     protected string $endpoint = 'https://api.novaposhta.ua/v2.0/json/';
+    protected ?NovaPoshtaSetting $settings = null;
 
     public function __construct()
     {
-        $this->apiKey = config('services.nova_poshta.api_key') 
-            ?? config('services.novaposhta.key') 
+        $this->settings = NovaPoshtaSetting::current();
+        $this->apiKey = $this->settings?->api_key
+            ?? config('services.nova_poshta.api_key')
+            ?? config('services.novaposhta.key')
             ?? env('NOVA_POSHTA_API_KEY', '');
+    }
+
+    public function getApiKey(): string
+    {
+        return $this->apiKey;
+    }
+
+    private function setting(string $field, string $configKey): ?string
+    {
+        return $this->settings?->{$field} ?: config($configKey);
     }
 
     /**
@@ -61,6 +75,74 @@ class NovaPoshtaService
         }
     }
 
+    private function makeRequestWithKey(string $apiKey, string $model, string $method, array $properties = []): array
+    {
+        if (!$apiKey) {
+            return ['success' => false, 'errors' => ['API key is missing']];
+        }
+
+        try {
+            $response = Http::timeout(15)->post($this->endpoint, [
+                'apiKey' => $apiKey,
+                'modelName' => $model,
+                'calledMethod' => $method,
+                'methodProperties' => $properties,
+            ]);
+
+            return $response->json();
+        } catch (\Throwable $e) {
+            return ['success' => false, 'errors' => [$e->getMessage()]];
+        }
+    }
+
+    public function fetchRefsByApiKey(string $apiKey): array
+    {
+        $counterparties = $this->makeRequestWithKey($apiKey, 'Counterparty', 'getCounterparties', [
+            'CounterpartyProperty' => 'Sender',
+            'Page' => 1,
+        ]);
+
+        if (!($counterparties['success'] ?? false)) {
+            return [
+                'success' => false,
+                'errors' => $counterparties['errors'] ?? null,
+                'message' => 'Не вдалося отримати відправника',
+            ];
+        }
+
+        $sender = $counterparties['data'][0] ?? null;
+        if (!$sender) {
+            return [
+                'success' => false,
+                'errors' => ['Sender not found'],
+                'message' => 'Не вдалося отримати відправника',
+            ];
+        }
+
+        $contacts = $this->makeRequestWithKey($apiKey, 'Counterparty', 'getCounterpartyContactPersons', [
+            'Ref' => $sender['Ref'],
+        ]);
+
+        if (!($contacts['success'] ?? false)) {
+            return [
+                'success' => false,
+                'errors' => $contacts['errors'] ?? null,
+                'message' => 'Не вдалося отримати контактну особу',
+            ];
+        }
+
+        $contact = $contacts['data'][0] ?? null;
+
+        return [
+            'success' => true,
+            'data' => [
+                'sender_ref' => $sender['Ref'] ?? null,
+                'contact_ref' => $contact['Ref'] ?? null,
+                'sender_phone' => $contact['Phones'] ?? null,
+            ],
+        ];
+    }
+
     /**
      * Створення ТТН на основі даних замовлення (для відділення)
      */
@@ -97,11 +179,11 @@ class NovaPoshtaService
         $payerType = (strtolower($delivery->delivery_payer ?? 'recipient') === 'sender') ? 'Sender' : 'Recipient';
 
         $params = [
-            'Sender'             => config('services.nova_poshta.sender_ref'),
-            'CitySender'         => config('services.nova_poshta.sender_city'),
-            'SenderAddress'      => config('services.nova_poshta.sender_warehouse'),
-            'ContactSender'      => config('services.nova_poshta.contact_ref'),
-            'SendersPhone'       => config('services.nova_poshta.sender_phone'),
+            'Sender'             => $this->setting('sender_ref', 'services.nova_poshta.sender_ref'),
+            'CitySender'         => $this->setting('sender_city_ref', 'services.nova_poshta.sender_city'),
+            'SenderAddress'      => $this->setting('sender_warehouse_ref', 'services.nova_poshta.sender_warehouse'),
+            'ContactSender'      => $this->setting('contact_ref', 'services.nova_poshta.contact_ref'),
+            'SendersPhone'       => $this->setting('sender_phone', 'services.nova_poshta.sender_phone'),
             
             'Recipient'          => $recipientRef,
             'ContactRecipient'   => $contactRef,
@@ -156,11 +238,11 @@ class NovaPoshtaService
 
         $params = [
             // sender
-            'Sender'        => config('services.nova_poshta.sender_ref'),
-            'CitySender'    => config('services.nova_poshta.sender_city'),
-            'SenderAddress' => config('services.nova_poshta.sender_warehouse'),
-            'ContactSender' => config('services.nova_poshta.contact_ref'),
-            'SendersPhone'  => config('services.nova_poshta.sender_phone'),
+            'Sender'        => $this->setting('sender_ref', 'services.nova_poshta.sender_ref'),
+            'CitySender'    => $this->setting('sender_city_ref', 'services.nova_poshta.sender_city'),
+            'SenderAddress' => $this->setting('sender_warehouse_ref', 'services.nova_poshta.sender_warehouse'),
+            'ContactSender' => $this->setting('contact_ref', 'services.nova_poshta.contact_ref'),
+            'SendersPhone'  => $this->setting('sender_phone', 'services.nova_poshta.sender_phone'),
 
             // recipient (СХЕМА NEW ADDRESS)
             'RecipientCityRef'      => $settlementRef,

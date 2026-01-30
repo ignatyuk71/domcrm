@@ -329,7 +329,9 @@ function mapOrder(order) {
     ttn: delivery.ttn || '',
     loadingTtn: false,
     refreshingDelivery: false,
-    address: delivery.warehouse_name || [delivery.city_name, delivery.street_name].filter(Boolean).join(', ') || '—',
+    address: (delivery.delivery_type === 'courier'
+      ? [delivery.city_name, delivery.street_name].filter(Boolean).join(', ')
+      : delivery.warehouse_name) || '—',
     city_name: delivery.city_name || '',
     delivery_status: delivery.delivery_status_label || '',
     delivery_status_code: delivery.delivery_status_code || '',
@@ -338,12 +340,23 @@ function mapOrder(order) {
     delivery_status_icon: delivery.delivery_status_icon || '',
     delivery_carrier: delivery.carrier === 'nova_poshta' ? 'Нова Пошта' : delivery.carrier || '',
     delivery_payer: delivery.delivery_payer === 'sender' ? 'Відправник' : 'Отримувач',
+    delivery_type: delivery.delivery_type || 'warehouse',
+    street_name: delivery.street_name || '',
+    building: delivery.building || '',
+    apartment: delivery.apartment || '',
     prepay_amount: Number(
       order.prepay_amount ??
       payment.prepay_amount ??
       payment.prepayment ??
       0
     ),
+    payment_method_label: payment.method === 'cod'
+      ? 'Накладений платіж'
+      : payment.method === 'card'
+        ? 'Оплата на рахунок'
+        : payment.method === 'prepay'
+          ? 'Часткова передоплата'
+          : '—',
     comment: order.comment_internal || '',
     created_at: order.created_at,
     latestFiscalReceipt: latestReceipt,
