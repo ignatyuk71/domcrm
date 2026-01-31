@@ -29,126 +29,87 @@
 
     <div class="row g-4">
       <div class="col-lg-8">
-        <div class="card modern-card h-100">
+        
+        <div class="card modern-card mb-4">
           <div class="card-header-clean p-4 border-bottom border-light d-flex justify-content-between align-items-center">
-            <h5 class="mb-0 fw-bold text-dark">Налаштування підключення</h5>
-            <button class="btn btn-icon-round" type="button" @click="openAuthModal" aria-label="Редагувати авторизацію">
+            <h5 class="mb-0 fw-bold text-dark">Автоматизація та режим роботи</h5>
+            <button class="btn btn-icon-round" type="button" @click="openAuthModal" aria-label="Налаштування">
               <i class="bi bi-gear-fill"></i>
             </button>
           </div>
           <div class="card-body p-4">
-            
-            <form @submit.prevent="saveSettings">
-              <div class="row g-4 mb-4">
-                <div class="col-12">
-                  <div class="auth-summary p-3 rounded-3 border border-light-subtle bg-body-secondary bg-opacity-25">
-                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
-                      <div style="min-width: 0;">
-                        <div class="text-uppercase small text-muted fw-semibold">API URL</div>
-                        <div class="fw-semibold text-dark text-truncate" :title="form.api_url">
-                          {{ form.api_url || '—' }}
-                        </div>
-                      </div>
-                      <button type="button" class="btn btn-light btn-sm" @click="showApiEdit = !showApiEdit">
-                        <i class="bi me-1" :class="showApiEdit ? 'bi-chevron-up' : 'bi-pencil'"></i>
-                        {{ showApiEdit ? 'Сховати' : 'Редагувати' }}
-                      </button>
-                    </div>
+            <div class="row g-4 text-center text-md-start">
+              <div class="col-md-4">
+                <div class="d-flex align-items-center justify-content-center justify-content-md-start gap-3">
+                  <div class="icon-box-sm bg-success-subtle text-success rounded-circle">
+                    <i class="bi bi-sun-fill"></i>
                   </div>
-                  <transition name="slide-fade">
-                    <div v-if="showApiEdit" class="mt-3">
-                      <label class="form-label fw-semibold text-secondary small text-uppercase ls-1">API URL</label>
-                      <div class="input-group-modern">
-                        <span class="input-icon"><i class="bi bi-link-45deg"></i></span>
-                        <input v-model="form.api_url" type="text" class="form-control" placeholder="https://api.checkbox.in.ua...">
-                      </div>
-                    </div>
-                  </transition>
-                </div>
-
-                <div class="col-12">
-                  <div class="auth-summary p-3 rounded-3 border border-light-subtle bg-body-secondary bg-opacity-25">
-                    <div class="d-flex align-items-center justify-content-between">
-                      <div>
-                        <div class="text-uppercase small text-muted fw-semibold">Авторизація</div>
-                        <div class="fw-semibold text-dark">
-                          {{ hasLicenseKey && hasPassword && form.login ? 'Встановлено' : 'Не налаштовано' }}
-                        </div>
-                      </div>
-                      <div class="d-flex align-items-center gap-2">
-                        <span class="badge" :class="hasLicenseKey ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary'">
-                          Ключ
-                        </span>
-                        <span class="badge" :class="form.login ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary'">
-                          Логін
-                        </span>
-                        <span class="badge" :class="hasPassword ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary'">
-                          Пароль
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div class="position-relative my-5">
-                <hr class="text-muted-light">
-                <span class="position-absolute top-50 start-50 translate-middle bg-white px-3 text-muted small fw-bold text-uppercase ls-1">Автоматизація</span>
-              </div>
-
-              <div class="row g-4">
-                <div class="col-md-4">
-                  <div class="time-card p-3 rounded-3 bg-success-subtle border border-success-subtle">
-                    <label class="form-label text-success fw-bold small"><i class="bi bi-sun me-1"></i> Відкриття</label>
-                    <input v-model="form.open_time" type="time" class="form-control time-input bg-transparent border-0 p-0 fw-bold fs-5 text-dark">
-                  </div>
-                </div>
-                <div class="col-md-4">
-                  <div class="time-card p-3 rounded-3 bg-danger-subtle border border-danger-subtle">
-                    <label class="form-label text-danger fw-bold small"><i class="bi bi-moon me-1"></i> Закриття</label>
-                    <input v-model="form.close_time" type="time" class="form-control time-input bg-transparent border-0 p-0 fw-bold fs-5 text-dark">
-                  </div>
-                </div>
-                <div class="col-md-4">
-                  <div class="time-card p-3 rounded-3 bg-primary-subtle border border-primary-subtle">
-                    <label class="form-label text-primary fw-bold small"><i class="bi bi-cloud-upload me-1"></i> Фіскалізація</label>
-                    <input v-model="form.queue_process_time" type="time" class="form-control time-input bg-transparent border-0 p-0 fw-bold fs-5 text-dark">
-                  </div>
-                </div>
-              </div>
-
-              <div class="bg-body-secondary bg-opacity-50 rounded-4 p-4 mt-4">
-                <div class="d-flex justify-content-between align-items-center mb-3">
                   <div>
-                    <h6 class="mb-0 fw-bold text-dark">Активність інтеграції</h6>
-                    <small class="text-muted">Увімкнути роботу з Checkbox API</small>
-                  </div>
-                  <div class="form-check form-switch">
-                    <input v-model="form.enabled" class="form-check-input custom-switch" type="checkbox" style="width: 3em; height: 1.5em;">
+                    <div class="text-muted small text-uppercase fw-bold ls-1">Відкриття</div>
+                    <div class="fs-5 fw-bold text-dark">{{ form.open_time }}</div>
                   </div>
                 </div>
-                <hr class="my-3 border-secondary opacity-10">
-                <div class="d-flex justify-content-between align-items-center">
-                  <div>
-                    <h6 class="mb-0 fw-bold text-dark">Нічна черга</h6>
-                    <small class="text-muted">Накопичувати чеки вночі замість помилки</small>
+              </div>
+              
+              <div class="col-md-4">
+                 <div class="d-flex align-items-center justify-content-center justify-content-md-start gap-3">
+                  <div class="icon-box-sm bg-info-subtle text-info rounded-circle">
+                    <i class="bi bi-magic"></i>
                   </div>
-                  <div class="form-check form-switch">
-                    <input v-model="form.queue_enabled" class="form-check-input custom-switch" type="checkbox" style="width: 3em; height: 1.5em;">
+                  <div>
+                    <div class="text-muted small text-uppercase fw-bold ls-1">Авто-фіскалізація</div>
+                    <div class="fs-5 fw-bold text-dark">{{ form.queue_process_time }}</div>
                   </div>
                 </div>
               </div>
 
-              <div class="mt-5 d-flex justify-content-end">
-                <button type="submit" class="btn btn-primary btn-lg px-5 rounded-pill shadow-lg d-flex align-items-center gap-2" :disabled="loading.save">
-                  <span v-if="loading.save" class="spinner-border spinner-border-sm" role="status"></span>
-                  <i v-else class="bi bi-check2-circle"></i> 
-                  Зберегти налаштування
-                </button>
+              <div class="col-md-4">
+                 <div class="d-flex align-items-center justify-content-center justify-content-md-start gap-3">
+                  <div class="icon-box-sm bg-indigo-subtle text-indigo rounded-circle">
+                    <i class="bi bi-moon-stars-fill"></i>
+                  </div>
+                  <div>
+                    <div class="text-muted small text-uppercase fw-bold ls-1">Закриття</div>
+                    <div class="fs-5 fw-bold text-dark">{{ form.close_time }}</div>
+                  </div>
+                </div>
               </div>
-            </form>
+            </div>
+
+            <div class="mt-4 pt-3 border-top border-light d-flex align-items-center gap-2">
+               <span class="badge rounded-pill border" :class="form.enabled ? 'bg-success-subtle text-success border-success-subtle' : 'bg-light text-muted'">
+                 <i class="bi me-1" :class="form.enabled ? 'bi-check-circle-fill' : 'bi-pause-circle'"></i>
+                 Загальна автоматизація: {{ form.enabled ? 'УВІМКНЕНО' : 'ВИМКНЕНО' }}
+               </span>
+               <span class="badge rounded-pill border" :class="form.queue_enabled ? 'bg-primary-subtle text-primary border-primary-subtle' : 'bg-light text-muted'">
+                 <i class="bi me-1" :class="form.queue_enabled ? 'bi-lightning-fill' : 'bi-pause-circle'"></i>
+                 Черга: {{ form.queue_enabled ? 'АКТИВНА' : 'ЗУПИНЕНА' }}
+               </span>
+            </div>
           </div>
         </div>
+
+        <div class="card modern-card h-100" style="min-height: 350px;">
+           <div class="card-header-clean p-4 d-flex justify-content-between align-items-center">
+            <div>
+              <h5 class="mb-0 fw-bold text-dark">Активність за добу</h5>
+              <small class="text-muted">Кількість фіскалізованих чеків по годинах</small>
+            </div>
+          </div>
+          <div class="card-body p-2">
+             <div v-if="loading.chart" class="d-flex justify-content-center align-items-center h-100 py-5">
+                <div class="spinner-border text-primary" role="status"></div>
+             </div>
+             <ApexChart
+               v-else
+               type="area"
+               height="300"
+               :options="chartOptions"
+               :series="chartSeries"
+             />
+          </div>
+        </div>
+
       </div>
 
       <div class="col-lg-4">
@@ -217,7 +178,7 @@
             
             <div class="d-flex align-items-start gap-2 mt-4 text-muted small">
               <i class="bi bi-info-circle-fill text-primary mt-1"></i>
-              <span style="font-size: 0.85rem">Чеки, створені поза робочим часом, автоматично накопичуються тут для подальшої відправки.</span>
+              <span style="font-size: 0.85rem">Чеки поза робочим часом накопичуються тут для подальшої відправки.</span>
             </div>
           </div>
         </div>
@@ -290,16 +251,21 @@
     <transition name="fade">
       <div v-if="showAuthModal" class="modal-backdrop" @click.self="closeAuthModal">
         <div class="modal-card">
-          <div class="d-flex justify-content-between align-items-center mb-3">
-            <h5 class="mb-0 fw-bold text-dark">Авторизація Checkbox</h5>
-            <button type="button" class="btn btn-link text-muted" @click="closeAuthModal">
+          <div class="d-flex justify-content-between align-items-center mb-4">
+            <h5 class="mb-0 fw-bold text-dark">Налаштування Checkbox</h5>
+            <button type="button" class="btn btn-link text-muted p-0" @click="closeAuthModal">
               <i class="bi bi-x-lg"></i>
             </button>
           </div>
 
           <div class="row g-3">
+            
             <div class="col-12">
-              <label class="form-label fw-semibold text-secondary small text-uppercase ls-1">Ліцензійний ключ</label>
+               <h6 class="text-uppercase text-muted small fw-bold mb-3 ls-1">Авторизація</h6>
+            </div>
+
+            <div class="col-12">
+              <label class="form-label small fw-semibold text-secondary">Ліцензійний ключ</label>
               <div class="input-group-modern" :class="{'is-valid': hasLicenseKey}">
                 <span class="input-icon"><i class="bi bi-key"></i></span>
                 <input v-model="form.license_key" type="password" class="form-control"
@@ -309,7 +275,7 @@
             </div>
 
             <div class="col-md-6">
-              <label class="form-label fw-semibold text-secondary small text-uppercase ls-1">Логін касира</label>
+              <label class="form-label small fw-semibold text-secondary">Логін касира</label>
               <div class="input-group-modern">
                 <span class="input-icon"><i class="bi bi-person"></i></span>
                 <input v-model="form.login" type="text" class="form-control" placeholder="login">
@@ -317,7 +283,7 @@
             </div>
 
             <div class="col-md-6">
-              <label class="form-label fw-semibold text-secondary small text-uppercase ls-1">Пароль касира</label>
+              <label class="form-label small fw-semibold text-secondary">Пароль касира</label>
               <div class="input-group-modern" :class="{'is-valid': hasPassword}">
                 <span class="input-icon"><i class="bi bi-shield-lock"></i></span>
                 <input v-model="form.password" type="password" class="form-control"
@@ -325,9 +291,42 @@
                 <span v-if="hasPassword" class="valid-icon"><i class="bi bi-check-circle-fill text-success"></i></span>
               </div>
             </div>
+
+             <div class="col-12 mt-4">
+               <div class="d-flex justify-content-between align-items-center mb-3">
+                 <h6 class="text-uppercase text-muted small fw-bold mb-0 ls-1">Режим роботи та автоматизація</h6>
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="flexSwitchCheckDefault" v-model="form.enabled">
+                    <label class="form-check-label small" for="flexSwitchCheckDefault">Активно</label>
+                  </div>
+               </div>
+            </div>
+
+            <div class="col-md-4">
+               <label class="form-label small fw-semibold text-secondary">Відкриття зміни</label>
+               <input v-model="form.open_time" type="time" class="form-control form-control-lg bg-light border-0">
+            </div>
+             <div class="col-md-4">
+               <label class="form-label small fw-semibold text-secondary">Фіскалізація черги</label>
+               <input v-model="form.queue_process_time" type="time" class="form-control form-control-lg bg-light border-0">
+            </div>
+             <div class="col-md-4">
+               <label class="form-label small fw-semibold text-secondary">Закриття зміни</label>
+               <input v-model="form.close_time" type="time" class="form-control form-control-lg bg-light border-0">
+            </div>
+
+            <div class="col-12 mt-3">
+               <div class="form-check form-switch">
+                  <input class="form-check-input" type="checkbox" id="queueCheck" v-model="form.queue_enabled">
+                  <label class="form-check-label small text-muted" for="queueCheck">
+                    Дозволити накопичення чеків у черзі (якщо зміна закрита)
+                  </label>
+               </div>
+            </div>
+
           </div>
 
-          <div class="d-flex justify-content-end gap-2 mt-4">
+          <div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
             <button type="button" class="btn btn-light" @click="closeAuthModal">Скасувати</button>
             <button type="button" class="btn btn-primary" @click="saveSettings" :disabled="loading.save">
               <span v-if="loading.save" class="spinner-border spinner-border-sm me-2"></span>
@@ -343,7 +342,10 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue';
 import { formatCurrency } from '@/crm/utils/orderDisplay';
-// Замініть цей імпорт на ваш реальний шлях
+// Підключення ApexCharts (переконайтесь що встановили: npm install apexcharts vue3-apexcharts)
+import ApexChart from 'vue3-apexcharts';
+
+// Імпорт ваших API методів (перевірте шлях)
 import {
   fetchFinanceSettings,
   saveFinanceSettings,
@@ -357,21 +359,22 @@ const loading = reactive({
   save: false,
   test: false,
   shift: false,
-  queue: false
+  queue: false,
+  chart: false
 });
 
 const notice = reactive({ type: '', message: '' });
-const shiftStatus = ref('unknown'); // 'opened', 'closed', 'error', 'unknown'
+const shiftStatus = ref('unknown'); 
 const shiftMessage = ref('Статус невідомий');
 const queueCount = ref(0);
 const showAuthModal = ref(false);
-const showApiEdit = ref(false);
 
 const hasLicenseKey = ref(false);
 const hasPassword = ref(false);
 const receipts = ref([]);
 const receiptsDate = ref('');
 const dailyTotalCents = ref(0);
+const hourlyCounts = ref([]);
 
 const form = reactive({
   api_url: '',
@@ -415,9 +418,7 @@ const statusIcon = computed(() => {
 });
 
 const dailyTotalFormatted = computed(() => formatCurrency(Number(dailyTotalCents.value || 0) / 100));
-
 const receiptsCount = computed(() => receipts.value.length);
-
 const receiptsDateLabel = computed(() => {
   if (!receiptsDate.value) return 'сьогодні';
   const parsed = new Date(receiptsDate.value);
@@ -425,24 +426,80 @@ const receiptsDateLabel = computed(() => {
   return parsed.toLocaleDateString('uk-UA', { day: '2-digit', month: 'long', year: 'numeric' });
 });
 
+// --- CHART CONFIGURATION ---
+// Дані для графіка на основі чеків
+const chartSeries = computed(() => {
+  let hoursData;
+  if (Array.isArray(hourlyCounts.value) && hourlyCounts.value.length === 24) {
+    hoursData = hourlyCounts.value.map((value) => Number(value) || 0);
+  } else {
+    hoursData = new Array(24).fill(0);
+    receipts.value.forEach((receipt) => {
+      if (!receipt?.created_at) return;
+      const parsed = new Date(receipt.created_at);
+      if (Number.isNaN(parsed.getTime())) return;
+      const hour = parsed.getHours();
+      if (hour >= 0 && hour < 24) hoursData[hour] += 1;
+    });
+  }
+
+  return [{
+    name: 'Кількість чеків',
+    data: hoursData,
+  }];
+});
+
+const chartOptions = computed(() => ({
+  chart: {
+    type: 'area',
+    height: 300,
+    fontFamily: 'inherit',
+    toolbar: { show: false },
+    zoom: { enabled: false }
+  },
+  dataLabels: { enabled: false },
+  stroke: { curve: 'smooth', width: 2 },
+  fill: {
+    type: 'gradient',
+    gradient: {
+      shadeIntensity: 1,
+      opacityFrom: 0.7,
+      opacityTo: 0.2,
+      stops: [0, 90, 100]
+    }
+  },
+  colors: ['#0dcaf0'], // Cyan колір як на скріні
+  xaxis: {
+    categories: Array.from({length: 24}, (_, i) => `${String(i).padStart(2, '0')}:00`),
+    axisBorder: { show: false },
+    axisTicks: { show: false },
+    labels: {
+      style: { colors: '#9ca3af', fontSize: '11px' }
+    }
+  },
+  yaxis: {
+    show: false // Приховуємо вісь Y для чистоти як на макеті
+  },
+  grid: {
+    borderColor: '#f3f4f6',
+    strokeDashArray: 4,
+    yaxis: { lines: { show: true } } 
+  },
+  tooltip: {
+    theme: 'light',
+    x: { show: true }
+  }
+}));
+
+// --- Helper Functions ---
+
 const receiptTypeLabel = (type) => {
-  const map = {
-    sell: 'Продаж',
-    return: 'Повернення',
-    service_in: 'Службове внесення',
-    service_out: 'Службове вилучення',
-  };
+  const map = { sell: 'Продаж', return: 'Повернення', service_in: 'Внесення', service_out: 'Вилучення' };
   return map[type] || '—';
 };
 
 const receiptStatusLabel = (status) => {
-  const map = {
-    success: 'Успішно',
-    pending: 'В черзі',
-    processing: 'Обробка',
-    error: 'Помилка',
-    canceled: 'Скасовано',
-  };
+  const map = { success: 'Успішно', pending: 'В черзі', processing: 'Обробка', error: 'Помилка', canceled: 'Скасовано' };
   return map[status] || '—';
 };
 
@@ -458,48 +515,13 @@ const receiptStatusClass = (status) => {
 };
 
 const formatReceiptAmount = (amount) => formatCurrency(Number(amount || 0) / 100);
-
 const formatReceiptTime = (value) => {
   if (!value) return '—';
   const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return String(value);
-  return parsed.toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' });
+  return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' });
 };
 
-// --- Actions (Логіка збережена з вашого прикладу) ---
-
-const normalizeShiftStatus = (rawStatus) => {
-  if (!rawStatus) return 'unknown';
-  const value = String(rawStatus).toLowerCase();
-
-  if (value === 'opened' || value === 'open' || value.includes('opened') || value.includes('відкрит')) return 'opened';
-  if (value === 'closed' || value === 'close' || value.includes('closed') || value.includes('закрит')) return 'closed';
-  if (value === 'error' || value === 'failed' || value.includes('error') || value.includes('помил')) return 'error';
-
-  return 'unknown';
-};
-
-const setShiftFromStatus = (rawStatus) => {
-  const normalized = normalizeShiftStatus(rawStatus);
-  shiftStatus.value = normalized;
-
-  if (normalized === 'opened') {
-    shiftMessage.value = 'Зміна відкрита';
-    return;
-  }
-
-  if (normalized === 'closed') {
-    shiftMessage.value = 'Зміна закрита';
-    return;
-  }
-
-  if (normalized === 'error') {
-    shiftMessage.value = 'Помилка';
-    return;
-  }
-
-  shiftMessage.value = 'Статус невідомий';
-};
+// --- Actions ---
 
 const showNotice = (type, msg) => {
   notice.type = type;
@@ -507,7 +529,26 @@ const showNotice = (type, msg) => {
   setTimeout(() => { notice.message = ''; }, 5000);
 };
 
+const normalizeShiftStatus = (rawStatus) => {
+  if (!rawStatus) return 'unknown';
+  const value = String(rawStatus).toLowerCase();
+  if (value.includes('opened') || value.includes('open') || value.includes('відкрит')) return 'opened';
+  if (value.includes('closed') || value.includes('close') || value.includes('закрит')) return 'closed';
+  if (value.includes('error') || value.includes('fail')) return 'error';
+  return 'unknown';
+};
+
+const setShiftFromStatus = (rawStatus) => {
+  const normalized = normalizeShiftStatus(rawStatus);
+  shiftStatus.value = normalized;
+  if (normalized === 'opened') shiftMessage.value = 'Зміна відкрита';
+  else if (normalized === 'closed') shiftMessage.value = 'Зміна закрита';
+  else if (normalized === 'error') shiftMessage.value = 'Помилка';
+  else shiftMessage.value = 'Статус невідомий';
+};
+
 const loadSettings = async () => {
+  loading.chart = true;
   try {
     const data = await fetchFinanceSettings();
     const s = data.settings || {};
@@ -524,18 +565,20 @@ const loadSettings = async () => {
     hasPassword.value = !!s.has_password;
     
     queueCount.value = data.queue?.waiting || 0;
+    
+    // Дані для таблиці та графіка
     const receiptsPayload = data.receipts || {};
     receipts.value = Array.isArray(receiptsPayload.items) ? receiptsPayload.items : [];
     receiptsDate.value = receiptsPayload.date || '';
     dailyTotalCents.value = receiptsPayload.daily_total ?? 0;
+    hourlyCounts.value = Array.isArray(receiptsPayload.hourly_counts) ? receiptsPayload.hourly_counts : [];
     
-    // Оновлення статусу при завантаженні (якщо API повертає)
-    if (data.shift_status) {
-        setShiftFromStatus(data.shift_status);
-    }
+    if (data.shift_status) setShiftFromStatus(data.shift_status);
   } catch (e) {
     console.error(e);
     showNotice('danger', 'Не вдалося завантажити налаштування');
+  } finally {
+    loading.chart = false;
   }
 };
 
@@ -548,6 +591,7 @@ const saveSettings = async () => {
     hasPassword.value = hasPassword.value || !!form.password;
     form.license_key = '';
     form.password = '';
+    closeAuthModal(); // Закриваємо модалку після збереження
   } catch (e) {
     showNotice('danger', e.response?.data?.message || 'Помилка збереження');
   } finally {
@@ -555,10 +599,7 @@ const saveSettings = async () => {
   }
 };
 
-const openAuthModal = () => {
-  showAuthModal.value = true;
-};
-
+const openAuthModal = () => showAuthModal.value = true;
 const closeAuthModal = () => {
   showAuthModal.value = false;
   form.license_key = '';
@@ -570,13 +611,7 @@ const testConnection = async () => {
   try {
     const res = await testFinanceConnection();
     const statusSource = res.shift?.status || res.message;
-    const normalized = normalizeShiftStatus(statusSource);
-    if (normalized !== 'unknown') {
-      setShiftFromStatus(statusSource);
-    } else {
-      shiftStatus.value = 'unknown';
-      shiftMessage.value = res.message || 'Зв\'язок встановлено';
-    }
+    setShiftFromStatus(statusSource);
     showNotice('success', 'Зв\'язок перевірено успішно');
   } catch (e) {
     shiftStatus.value = 'error';
@@ -595,9 +630,7 @@ const openShift = async () => {
       shiftStatus.value = 'opened';
       shiftMessage.value = 'Зміну відкрито';
       showNotice('success', 'Зміну успішно відкрито');
-    } else {
-      throw new Error(res.message);
-    }
+    } else throw new Error(res.message);
   } catch (e) {
     showNotice('danger', e.response?.data?.message || e.message || 'Не вдалося відкрити зміну');
   } finally {
@@ -613,9 +646,7 @@ const closeShift = async () => {
       shiftStatus.value = 'closed';
       shiftMessage.value = 'Зміну закрито';
       showNotice('success', 'Зміну успішно закрито');
-    } else {
-      throw new Error(res.message);
-    }
+    } else throw new Error(res.message);
   } catch (e) {
     showNotice('danger', e.response?.data?.message || e.message || 'Не вдалося закрити зміну');
   } finally {
@@ -648,248 +679,49 @@ onMounted(() => {
   color: #344767;
 }
 
-.icon-square {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.5rem;
-}
-
-.ls-1 {
-  letter-spacing: 1px;
-}
+.icon-square { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; }
+.icon-box-sm { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; }
+.ls-1 { letter-spacing: 1px; }
 
 /* Картки */
-.modern-card {
-  border: none;
-  border-radius: 16px;
-  background: #fff;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
+.modern-card { border: none; border-radius: 16px; background: #fff; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.02); transition: transform 0.3s ease, box-shadow 0.3s ease; }
+.bg-indigo-subtle { background-color: #e0e7ff; color: #4338ca; }
 
 /* Inputs */
-.input-group-modern {
-  position: relative;
-  display: flex;
-  align-items: center;
-  background: #f8f9fa;
-  border: 1px solid #e9ecef;
-  border-radius: 10px;
-  padding: 0.5rem 1rem;
-  transition: all 0.2s ease;
-}
+.input-group-modern { position: relative; display: flex; align-items: center; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 10px; padding: 0.5rem 1rem; transition: all 0.2s ease; }
+.input-group-modern:focus-within { background: #fff; border-color: #0d6efd; box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15); }
+.input-group-modern .input-icon { color: #6c757d; font-size: 1.1rem; margin-right: 0.75rem; }
+.input-group-modern .form-control { border: none; background: transparent; padding: 0; color: #344767; font-weight: 500; }
+.input-group-modern .form-control:focus { box-shadow: none; }
+.valid-icon { margin-left: 0.5rem; }
 
-.input-group-modern:focus-within {
-  background: #fff;
-  border-color: #0d6efd;
-  box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15);
-}
+/* Status Card Gradient */
+.bg-gradient-primary { background: linear-gradient(135deg, #4e73df 0%, #224abe 100%); }
+.card-bg-circle-1, .card-bg-circle-2 { position: absolute; border-radius: 50%; background: rgba(255, 255, 255, 0.1); z-index: 0; }
+.card-bg-circle-1 { width: 200px; height: 200px; top: -50px; right: -50px; }
+.card-bg-circle-2 { width: 150px; height: 150px; bottom: -30px; left: -30px; }
 
-.input-group-modern .input-icon {
-  color: #6c757d;
-  font-size: 1.1rem;
-  margin-right: 0.75rem;
-}
+/* Buttons */
+.btn-white { background: white; border: none; transition: all 0.2s; }
+.btn-white:hover { background: #f8f9fa; transform: translateY(-1px); }
+.btn-success-soft { background: rgba(25, 135, 84, 0.2); color: #fff; border: 1px solid rgba(255, 255, 255, 0.3); font-weight: 600; }
+.btn-success-soft:hover:not(:disabled) { background: #198754; color: white; }
+.btn-danger-soft { background: rgba(220, 53, 69, 0.2); color: #fff; border: 1px solid rgba(255, 255, 255, 0.3); font-weight: 600; }
+.btn-danger-soft:hover:not(:disabled) { background: #dc3545; color: white; }
+.btn-icon-round { width: 44px; height: 44px; border-radius: 50%; border: 1px solid #e9ecef; background: #fff; color: #4b5563; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+.btn-icon-round:hover { background: #f8f9fa; color: #0d6efd; box-shadow: 0 4px 10px rgba(13, 110, 253, 0.15); }
 
-.input-group-modern .form-control {
-  border: none;
-  background: transparent;
-  padding: 0;
-  color: #344767;
-  font-weight: 500;
-}
+/* Modal */
+.modal-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.5); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: 1.5rem; z-index: 1055; }
+.modal-card { width: 100%; max-width: 640px; background: #fff; border-radius: 20px; padding: 2rem; box-shadow: 0 20px 60px rgba(15, 23, 42, 0.2); }
 
-.input-group-modern .form-control:focus {
-  box-shadow: none;
-}
-
-.valid-icon {
-  margin-left: 0.5rem;
-}
-
-/* Time Inputs (видаляємо стандартні стилі браузера) */
-.time-input::-webkit-calendar-picker-indicator {
-  cursor: pointer;
-  opacity: 0.6;
-}
-.time-input:focus {
-    box-shadow: none;
-    outline: none;
-}
-
-/* Status Card Gradient Backgrounds */
-.bg-gradient-primary {
-  background: linear-gradient(135deg, #4e73df 0%, #224abe 100%);
-}
-
-.card-bg-circle-1, .card-bg-circle-2 {
-  position: absolute;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
-  z-index: 0;
-}
-
-.card-bg-circle-1 {
-  width: 200px;
-  height: 200px;
-  top: -50px;
-  right: -50px;
-}
-
-.card-bg-circle-2 {
-  width: 150px;
-  height: 150px;
-  bottom: -30px;
-  left: -30px;
-}
-
-/* Кнопки */
-.btn-white {
-  background: white;
-  border: none;
-  transition: all 0.2s;
-}
-.btn-white:hover {
-  background: #f8f9fa;
-  transform: translateY(-1px);
-}
-
-.btn-success-soft {
-  background: rgba(25, 135, 84, 0.2);
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  font-weight: 600;
-  transition: all 0.2s;
-}
-.btn-success-soft:hover:not(:disabled) {
-  background: #198754;
-  color: white;
-}
-.btn-success-soft:disabled {
-    background: rgba(255,255,255,0.1);
-    color: rgba(255,255,255,0.5);
-    border-color: transparent;
-}
-
-.btn-danger-soft {
-  background: rgba(220, 53, 69, 0.2);
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  font-weight: 600;
-  transition: all 0.2s;
-}
-.btn-danger-soft:hover:not(:disabled) {
-  background: #dc3545;
-  color: white;
-}
-.btn-danger-soft:disabled {
-    background: rgba(255,255,255,0.1);
-    color: rgba(255,255,255,0.5);
-    border-color: transparent;
-}
-
-.btn-icon-round {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  border: 1px solid #e9ecef;
-  background: #fff;
-  color: #4b5563;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-}
-.btn-icon-round:hover {
-  background: #f8f9fa;
-  color: #0d6efd;
-  box-shadow: 0 4px 10px rgba(13, 110, 253, 0.15);
-}
-
-.auth-summary .badge {
-  font-weight: 600;
-}
-
-.receipts-table th {
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #6b7280;
-}
-
-.receipts-table td {
-  padding: 0.85rem 1rem;
-}
-
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.5);
-  backdrop-filter: blur(6px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1.5rem;
-  z-index: 1055;
-}
-
-.modal-card {
-  width: 100%;
-  max-width: 640px;
-  background: #fff;
-  border-radius: 20px;
-  padding: 2rem;
-  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.2);
-}
-
-.fade-enter-active, .fade-leave-active {
-  transition: opacity 0.2s ease;
-}
-.fade-enter-from, .fade-leave-to {
-  opacity: 0;
-}
-
-/* Pulse Animation */
-.pulse-dot {
-  width: 10px;
-  height: 10px;
-  background-color: #198754;
-  border-radius: 50%;
-  position: relative;
-}
-
-.pulse-dot::after {
-  content: '';
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  top: 0;
-  left: 0;
-  background-color: #198754;
-  border-radius: 50%;
-  animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
-}
-
-@keyframes pulse-ring {
-  0% { transform: scale(1); opacity: 0.8; }
-  100% { transform: scale(2.5); opacity: 0; }
-}
-
-/* Transitions */
-.slide-fade-enter-active, .slide-fade-leave-active {
-  transition: all 0.3s ease;
-}
-.slide-fade-enter-from, .slide-fade-leave-to {
-  transform: translateY(-10px);
-  opacity: 0;
-}
-
-/* Backdrop blur helper */
-.backdrop-blur {
-    backdrop-filter: blur(5px);
-}
+/* Animations */
+.fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+.pulse-dot { width: 10px; height: 10px; background-color: #198754; border-radius: 50%; position: relative; }
+.pulse-dot::after { content: ''; position: absolute; width: 100%; height: 100%; top: 0; left: 0; background-color: #198754; border-radius: 50%; animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite; }
+@keyframes pulse-ring { 0% { transform: scale(1); opacity: 0.8; } 100% { transform: scale(2.5); opacity: 0; } }
+.slide-fade-enter-active, .slide-fade-leave-active { transition: all 0.3s ease; }
+.slide-fade-enter-from, .slide-fade-leave-to { transform: translateY(-10px); opacity: 0; }
+.backdrop-blur { backdrop-filter: blur(5px); }
 </style>

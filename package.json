@@ -20,8 +20,10 @@
     },
     "dependencies": {
         "@vitejs/plugin-vue": "^6.0.3",
+        "apexcharts": "^5.3.6",
         "bootstrap": "^5.3.8",
         "bootstrap-icons": "^1.13.1",
-        "vue": "^3.5.26"
+        "vue": "^3.5.26",
+        "vue3-apexcharts": "^1.10.0"
     }
 }
