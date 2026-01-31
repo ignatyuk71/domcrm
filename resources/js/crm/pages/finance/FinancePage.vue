@@ -144,7 +144,7 @@
             </div>
           </div>
           <!-- CHANGED: max-height: 380px для відображення приблизно 5 чеків -->
-          <div class="table-responsive custom-scrollbar" style="max-height: 380px;">
+          <div class="table-responsive custom-scrollbar" style="max-height: 300px;">
             <table class="table table-hover align-middle mb-0 custom-table">
               <thead class="bg-light sticky-top" style="z-index: 2;">
                 <tr>
