@@ -1,10 +1,8 @@
 <template>
   <header class="topbar sticky-top">
-    <!-- ВЕРХНІЙ РЯДОК: ПОШУК ТА СТВОРЕННЯ -->
     <div class="toolbar-header px-4 py-3">
       <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
         
-        <!-- ЛІВА ЧАСТИНА -->
         <div class="d-none d-md-block"></div>
 
         <div class="d-flex align-items-center gap-2 w-100 w-md-auto">
@@ -27,13 +25,10 @@
       </div>
     </div>
 
-    <!-- НИЖНІЙ РЯДОК: ФІЛЬТРИ -->
     <div class="toolbar-filters px-4 pb-3">
-      <!-- ВИПРАВЛЕНО: Прибрано overflow-auto з батька -->
-      <div class="filters-container d-flex align-items-center justify-content-between gap-3">
+      <div class="filters-container d-flex flex-wrap align-items-start justify-content-between gap-3">
         
-        <!-- СТАТУСИ (ЛІВА ЧАСТИНА - скролиться окремо) -->
-        <div class="d-flex gap-2 overflow-auto no-scrollbar status-scroll-area">
+        <div class="d-flex flex-wrap gap-2 status-scroll-area">
           <button
             v-for="opt in statusChips"
             :key="opt.value"
@@ -56,7 +51,6 @@
           </button>
         </div>
 
-        <!-- СПЕЦІАЛЬНИЙ ФІЛЬТР "КОНТРОЛЬ ЗБЕРІГАННЯ" (ПРАВА ЧАСТИНА) -->
         <div v-if="holdFilterEnabled" class="special-filter-zone">
           <div class="divider-vertical"></div>
           
@@ -77,7 +71,6 @@
               <div class="toggle-content">
                 <span class="toggle-label">Контроль зберігання</span>
                 
-                <!-- Випадаючий список днів -->
                 <div 
                   class="toggle-sub-interactive" 
                   @click.stop="toggleDaysDropdown"
@@ -90,7 +83,6 @@
               <div class="toggle-switch-ui"></div>
             </button>
 
-            <!-- ВИПАДАЮЧИЙ СПИСОК ДНІВ (Збільшений z-index) -->
             <transition name="dropdown-fade">
               <div v-if="showDaysDropdown" class="days-dropdown-menu">
                 <div class="dropdown-header">Термін зберігання</div>
@@ -185,19 +177,26 @@ const vClickOutside = {
 .btn-create { height: 40px; display: flex; align-items: center; padding: 0 20px; border-radius: 12px; background: linear-gradient(135deg, #6366f1, #4f46e5); border: none; color: #fff; font-weight: 600; font-size: 0.9rem; transition: all 0.2s; white-space: nowrap; }
 .btn-create:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35); color: #fff; }
 
-/* --- FILTERS CONTAINER (FIXED OVERFLOW) --- */
+/* --- FILTERS CONTAINER --- */
 .filters-container {
   position: relative;
+  flex-wrap: wrap;
+  align-items: flex-start;
 }
 
-/* STATUS CHIPS SCROLL AREA */
+/* STATUS CHIPS AREA */
 .status-scroll-area {
   flex: 1; /* Займає вільне місце */
-  min-width: 0; /* Дозволяє стискатися */
-  padding-bottom: 4px; /* Місце для тіні при ховері */
+  min-width: 250px; /* UPDATED: Даємо мінімальну ширину, щоб не стискалось в 0 */
+  flex-wrap: nowrap !important;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  -webkit-overflow-scrolling: touch;
 }
 
-.filter-chip { height: 36px; padding: 0 5px; border-radius: 7px; border: 1px solid #e2e8f0; background: #fff; color: #64748b; font-size: 0.85rem; font-weight: 500; white-space: nowrap; transition: all 0.2s; display: flex; align-items: center; gap: 8px; cursor: pointer; flex-shrink: 0; }
+.filter-chip { height: 36px; padding: 0 8px; border-radius: 7px; border: 1px solid #e2e8f0; background: #fff; color: #64748b; font-size: 0.85rem; font-weight: 500; white-space: nowrap; transition: all 0.2s; display: flex; align-items: center; gap: 8px; cursor: pointer; }
 .filter-chip:hover { background: #f8fafc; border-color: #cbd5e1; color: #334155; }
 .filter-chip.active { border-color: transparent; transform: translateY(-1px); }
 
@@ -207,6 +206,7 @@ const vClickOutside = {
   align-items: center;
   gap: 16px;
   flex-shrink: 0; /* Не стискається */
+  align-self: flex-start;
 }
 
 .divider-vertical {
@@ -231,7 +231,7 @@ const vClickOutside = {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   min-width: 210px;
   position: relative;
-  overflow: visible; /* Дозволяємо випадання */
+  overflow: visible;
 }
 
 /* Іконка зліва */
@@ -275,7 +275,7 @@ const vClickOutside = {
   margin-left: -6px;
   border-radius: 4px;
   transition: background 0.2s;
-  cursor: pointer; /* Явно вказуємо курсор */
+  cursor: pointer;
 }
 .toggle-sub-interactive:hover {
   background: rgba(99, 102, 241, 0.1);
@@ -316,7 +316,7 @@ const vClickOutside = {
 }
 
 .alert-toggle-btn.is-active {
-  background: #fff7ed; /* Світло-помаранчевий фон */
+  background: #fff7ed;
   border-color: #fdba74;
 }
 
@@ -337,11 +337,11 @@ const vClickOutside = {
 }
 
 .alert-toggle-btn.is-active .toggle-switch-ui {
-  background: #f97316; /* Помаранчевий */
+  background: #f97316;
 }
 
 .alert-toggle-btn.is-active .toggle-switch-ui::after {
-  left: 18px; /* Зсув кружечка вправо */
+  left: 18px;
 }
 
 /* --- DAYS DROPDOWN MENU --- */
@@ -353,9 +353,9 @@ const vClickOutside = {
   background: #fff;
   border: 1px solid #e2e8f0;
   border-radius: 16px;
-  box-shadow: 0 10px 30px -5px rgba(0,0,0,0.15); /* Більша тінь */
+  box-shadow: 0 10px 30px -5px rgba(0,0,0,0.15);
   padding: 12px;
-  z-index: 1050; /* Високий z-index */
+  z-index: 1050;
   transform-origin: top right;
 }
 
@@ -421,9 +421,6 @@ const vClickOutside = {
   transform: scale(0.5);
 }
 
-.no-scrollbar::-webkit-scrollbar { display: none; }
-.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
 /* MOBILE */
 @media (max-width: 768px) {
   .special-filter-zone {
@@ -433,7 +430,6 @@ const vClickOutside = {
   }
   .divider-vertical { display: none; }
   
-  /* Адаптація дропдауна для мобільного */
   .days-dropdown-menu {
     position: fixed;
     top: auto;

@@ -257,7 +257,8 @@ async function fetchData() {
       page: filters.page,
       per_page: filters.per_page,
       search: filters.search || undefined,
-      status: filters.statuses?.length ? filters.statuses : undefined,
+      // Send as comma-separated string to avoid array serialization edge cases
+      status_ids: filters.statuses?.length ? filters.statuses.join(',') : undefined,
       payment_status: filters.payment_status || undefined,
       delivery_hold_days: filters.delivery_hold_days || undefined,
     });
@@ -545,33 +546,18 @@ async function loadStatuses() {
     const { data } = await fetchStatuses({ type: 'order' });
     const list = data?.data || data || [];
     statuses.value = Array.isArray(list) ? list : [];
-    const primaryStatusNames = new Set([
-      'Новий',
-      'В обробці',
-      'Підтверджено (на склад)',
-      'Упакування (ТТН)',
-      'Відправлено',
-      'Прибуло у відділення',
-      'Успішно завершено',
-      'Повернення',
-    ]);
-    const primaryStatuses = statuses.value.filter((st) => primaryStatusNames.has(st.name));
-    const groupedByName = new Map();
-    for (const status of primaryStatuses) {
-      if (!groupedByName.has(status.name)) groupedByName.set(status.name, []);
-      groupedByName.get(status.name).push(status);
-    }
+    const hiddenStatusCodes = new Set(['cancelled', 'canceled', 'packing']);
+    const hiddenStatusNames = new Set(['Скасовано', 'Запаковано']);
     statusChips.value = [
       { value: '', label: 'Всі', icon: 'bi-grid', color: null },
-      ...Array.from(groupedByName.entries()).map(([name, statusesGroup]) => {
-        const base = statusesGroup[0];
-        return {
-          value: statusesGroup.map((st) => st.code),
-          label: name,
-          icon: base.icon,
-          color: base.color,
-        };
-      }),
+      ...statuses.value
+        .filter((status) => !hiddenStatusCodes.has(status.code) && !hiddenStatusNames.has(status.name))
+        .map((status) => ({
+          value: status.id,
+          label: status.name,
+          icon: status.icon,
+          color: status.color,
+        })),
     ];
   } catch (e) {
     console.error('Не вдалося завантажити статуси', e);

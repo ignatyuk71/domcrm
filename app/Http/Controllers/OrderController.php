@@ -61,26 +61,32 @@ class OrderController extends Controller
             ])
             ->withSum('items', 'total')
             ->withCount('items')
-            ->when($request->filled('status'), function ($q) use ($request) {
-                $status = $request->get('status');
+            ->when($request->filled('status_ids') || $request->filled('status_id') || $request->filled('status'), function ($q) use ($request) {
+                $status = $request->get('status_ids', $request->get('status_id', $request->get('status')));
                 if (is_array($status)) {
-                    $values = array_filter($status, fn ($v) => $v !== null && $v !== '');
+                    $values = $status;
                 } else {
-                    $statusString = (string) $status;
-                    $values = str_contains($statusString, ',')
-                        ? array_filter(array_map('trim', explode(',', $statusString)))
-                        : array_filter([$statusString]);
+                    $statusString = trim((string) $status);
+                    $values = $statusString === ''
+                        ? []
+                        : (str_contains($statusString, ',')
+                            ? array_map('trim', explode(',', $statusString))
+                            : [$statusString]);
                 }
 
-                if (!$values) {
-                    return $q;
+                $ids = array_values(array_filter(array_map(function ($value) {
+                    $value = trim((string) $value);
+                    if ($value === '') {
+                        return null;
+                    }
+                    return ctype_digit($value) ? (int) $value : null;
+                }, $values), fn ($value) => $value !== null && $value > 0));
+
+                if (!$ids) {
+                    return $q->whereRaw('1 = 0');
                 }
 
-                return $q->where(function ($sq) use ($values) {
-                    $sq->whereHas('statusRef', function ($statusQuery) use ($values) {
-                        $statusQuery->whereIn('code', $values);
-                    })->orWhereIn('status', $values);
-                });
+                return $q->whereIn('status_id', $ids);
             })
             ->when($request->filled('payment_status'), fn ($q) => $q->where('payment_status', $request->string('payment_status')))
             ->when($request->filled('delivery_hold_days'), function ($q) use ($request) {
