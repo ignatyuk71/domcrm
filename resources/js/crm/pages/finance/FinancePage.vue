@@ -275,7 +275,7 @@
             <div class="spinner-border text-primary text-opacity-25" role="status"></div>
          </div>
          <div class="px-2 pt-2">
-           <apexchart type="area" height="300" :options="chartOptions" :series="chartSeries"></apexchart>
+           <ApexChart type="area" height="300" :options="chartOptions" :series="chartSeries" />
          </div>
       </div>
     </div>
@@ -398,7 +398,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue';
 import { formatCurrency } from '@/crm/utils/orderDisplay';
-import VueApexCharts from "vue3-apexcharts";
+import ApexChart from 'vue3-apexcharts';
 import {
   fetchFinanceSettings,
   saveFinanceSettings,
@@ -407,8 +407,6 @@ import {
   closeFinanceShift,
   processFinanceQueue,
 } from '@/crm/services/financeApi';
-
-const apexchart = VueApexCharts;
 
 const loading = reactive({ save: false, test: false, shift: false, queue: false, chart: false });
 const toasts = ref([]); // Замінено notice на масив toasts
@@ -421,6 +419,7 @@ const hasLicenseKey = ref(false);
 const hasPassword = ref(false);
 const receipts = ref([]);
 const dailyTotalCents = ref(0);
+const hourlyAmounts = ref([]);
 
 const form = reactive({
   api_url: '', 
@@ -444,13 +443,18 @@ const statusIcon = computed(() => shiftStatus.value === 'opened' ? 'bi-unlock-fi
 const connectionStatusColor = computed(() => shiftStatus.value === 'error' ? 'bg-danger' : 'bg-success');
 const dailyTotalFormatted = computed(() => formatCurrency(Number(dailyTotalCents.value || 0) / 100));
 
-// --- CHART DATA (Сума в гривнях) ---
+// --- CHART DATA (Сума в гривнях, тільки success + sell) ---
 const chartSeries = computed(() => {
   const hoursData = new Array(24).fill(0);
-  if (receipts.value.length) {
-    receipts.value.forEach(r => {
+  if (Array.isArray(hourlyAmounts.value) && hourlyAmounts.value.length === 24) {
+    hourlyAmounts.value.forEach((amount, idx) => {
+      hoursData[idx] = Number(amount || 0) / 100;
+    });
+  } else if (receipts.value.length) {
+    receipts.value.forEach((r) => {
+      if (r?.status !== 'success' || r?.type !== 'sell') return;
       const h = new Date(r.created_at).getHours();
-      if(h >= 0 && h < 24) {
+      if (h >= 0 && h < 24) {
         hoursData[h] += (r.total_amount || 0) / 100;
       }
     });
@@ -474,14 +478,14 @@ const chartOptions = computed(() => ({
   yaxis: { 
     show: true,
     labels: {
-      formatter: (value) => value.toFixed(0) + ' ₴',
+      formatter: (value) => `${Math.round(value).toLocaleString('uk-UA')} ₴`,
       style: { colors: '#9ca3af', fontSize: '10px' }
     }
   },
   grid: { show: true, borderColor: '#f3f4f6', strokeDashArray: 4, padding: { top: 0, right: 0, bottom: 0, left: 10 } },
   tooltip: { 
     theme: 'light', 
-    y: { formatter: function (val) { return val.toFixed(2) + " грн"; } }
+    y: { formatter: (val) => formatCurrency(val) }
   }
 }));
 
@@ -489,10 +493,18 @@ const chartOptions = computed(() => ({
 const receiptStatusClass = (s) => ({
   success: 'bg-success-subtle text-success',
   error: 'bg-danger-subtle text-danger',
-  pending: 'bg-warning-subtle text-warning-emphasis'
+  pending: 'bg-warning-subtle text-warning-emphasis',
+  processing: 'bg-warning-subtle text-warning-emphasis',
+  canceled: 'bg-secondary-subtle text-secondary'
 }[s] || 'bg-light text-muted');
 
-const receiptStatusLabel = (s) => ({ success: 'Успішно', error: 'Помилка', pending: 'Черга' }[s] || s);
+const receiptStatusLabel = (s) => ({
+  success: 'Успішно',
+  error: 'Помилка',
+  pending: 'Черга',
+  processing: 'Обробка',
+  canceled: 'Скасовано'
+}[s] || s);
 const receiptTypeLabel = (t) => ({ sell: 'Продаж', return: 'Повернення', service_in: 'Внесення', service_out: 'Вилучення' }[t] || t);
 const formatReceiptAmount = (a) => formatCurrency(Number(a||0)/100);
 const formatReceiptTime = (v) => v ? new Date(v).toLocaleTimeString('uk-UA', {hour:'2-digit', minute:'2-digit'}) : '-';
@@ -530,6 +542,7 @@ const loadSettings = async () => {
     queueCount.value = data.queue?.waiting || 0;
     receipts.value = data.receipts?.items || [];
     dailyTotalCents.value = data.receipts?.daily_total || 0;
+    hourlyAmounts.value = data.receipts?.hourly_amounts || [];
     shiftStatus.value = normalizeStatus(data.shift_status);
     shiftMessage.value = getStatusMsg(shiftStatus.value);
   } catch(e) { console.error(e); } 
@@ -635,7 +648,7 @@ onMounted(loadSettings);
 .toast-slide-move { transition: transform 0.4s ease; }
 
 /* KPI CARDS */
-.stat-card { transition: transform 0.2s; border-radius: 12px; }
+.stat-card { transition: transform 0.2s; border-radius: 12px; position: relative; }
 .stat-card:hover { transform: translateY(-2px); }
 .icon-shape { width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; }
 .progress-line { height: 3px; width: 100%; position: absolute; bottom: 0; left: 0; }
