@@ -36,7 +36,6 @@
           <div v-if="cityLoading" class="input-suffix">
             <div class="loader-mini"></div>
           </div>
-          упаіваівфваіф
           <div v-if="showCityDropdown && (cityOptions.length || cityError)" class="premium-dropdown">
             <div v-if="cityError" class="dropdown-item text-danger small">{{ cityError }}</div>
             <button
