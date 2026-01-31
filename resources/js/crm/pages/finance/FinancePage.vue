@@ -41,11 +41,29 @@
             <form @submit.prevent="saveSettings">
               <div class="row g-4 mb-4">
                 <div class="col-12">
-                  <label class="form-label fw-semibold text-secondary small text-uppercase ls-1">API URL</label>
-                  <div class="input-group-modern">
-                    <span class="input-icon"><i class="bi bi-link-45deg"></i></span>
-                    <input v-model="form.api_url" type="text" class="form-control" placeholder="https://api.checkbox.in.ua...">
+                  <div class="auth-summary p-3 rounded-3 border border-light-subtle bg-body-secondary bg-opacity-25">
+                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+                      <div style="min-width: 0;">
+                        <div class="text-uppercase small text-muted fw-semibold">API URL</div>
+                        <div class="fw-semibold text-dark text-truncate" :title="form.api_url">
+                          {{ form.api_url || '—' }}
+                        </div>
+                      </div>
+                      <button type="button" class="btn btn-light btn-sm" @click="showApiEdit = !showApiEdit">
+                        <i class="bi me-1" :class="showApiEdit ? 'bi-chevron-up' : 'bi-pencil'"></i>
+                        {{ showApiEdit ? 'Сховати' : 'Редагувати' }}
+                      </button>
+                    </div>
                   </div>
+                  <transition name="slide-fade">
+                    <div v-if="showApiEdit" class="mt-3">
+                      <label class="form-label fw-semibold text-secondary small text-uppercase ls-1">API URL</label>
+                      <div class="input-group-modern">
+                        <span class="input-icon"><i class="bi bi-link-45deg"></i></span>
+                        <input v-model="form.api_url" type="text" class="form-control" placeholder="https://api.checkbox.in.ua...">
+                      </div>
+                    </div>
+                  </transition>
                 </div>
 
                 <div class="col-12">
@@ -207,6 +225,68 @@
       </div>
     </div>
 
+    <div class="row g-4 mt-2">
+      <div class="col-12">
+        <div class="card modern-card">
+          <div class="card-header-clean p-4 border-bottom border-light d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <div>
+              <h5 class="mb-1 fw-bold text-dark">Архів чеків за {{ receiptsDateLabel }}</h5>
+              <div class="text-muted small">
+                Сума надходжень за день:
+                <span class="fw-semibold text-dark">{{ dailyTotalFormatted }}</span>
+              </div>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+              <span class="badge bg-light text-dark">Всього: {{ receiptsCount }}</span>
+              <button class="btn btn-light btn-sm" type="button" @click="loadSettings" :disabled="loading.save || loading.queue">
+                <i class="bi bi-arrow-repeat me-1"></i> Оновити
+              </button>
+            </div>
+          </div>
+          <div class="card-body p-0">
+            <div v-if="!receiptsCount" class="p-4 text-muted">
+              За сьогодні ще немає чеків.
+            </div>
+            <div v-else class="table-responsive">
+              <table class="table table-hover align-middle mb-0 receipts-table">
+                <thead class="table-light">
+                  <tr>
+                    <th>Час</th>
+                    <th>Статус</th>
+                    <th>Тип</th>
+                    <th class="text-end">Сума</th>
+                    <th class="text-end">Чек</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="receipt in receipts" :key="receipt.id">
+                    <td class="text-muted small">{{ formatReceiptTime(receipt.created_at) }}</td>
+                    <td>
+                      <span class="badge" :class="receiptStatusClass(receipt.status)">
+                        {{ receiptStatusLabel(receipt.status) }}
+                      </span>
+                    </td>
+                    <td>{{ receiptTypeLabel(receipt.type) }}</td>
+                    <td class="text-end fw-semibold">{{ formatReceiptAmount(receipt.total_amount) }}</td>
+                    <td class="text-end">
+                      <a
+                        v-if="receipt.check_link"
+                        :href="receipt.check_link"
+                        target="_blank"
+                        rel="noopener"
+                        class="btn btn-link btn-sm"
+                      >Відкрити</a>
+                      <span v-else class="text-muted">—</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <transition name="fade">
       <div v-if="showAuthModal" class="modal-backdrop" @click.self="closeAuthModal">
         <div class="modal-card">
@@ -262,6 +342,7 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue';
+import { formatCurrency } from '@/crm/utils/orderDisplay';
 // Замініть цей імпорт на ваш реальний шлях
 import {
   fetchFinanceSettings,
@@ -284,9 +365,13 @@ const shiftStatus = ref('unknown'); // 'opened', 'closed', 'error', 'unknown'
 const shiftMessage = ref('Статус невідомий');
 const queueCount = ref(0);
 const showAuthModal = ref(false);
+const showApiEdit = ref(false);
 
 const hasLicenseKey = ref(false);
 const hasPassword = ref(false);
+const receipts = ref([]);
+const receiptsDate = ref('');
+const dailyTotalCents = ref(0);
 
 const form = reactive({
   api_url: '',
@@ -328,6 +413,58 @@ const statusIcon = computed(() => {
     default: return 'bi-question-circle-fill';
   }
 });
+
+const dailyTotalFormatted = computed(() => formatCurrency(Number(dailyTotalCents.value || 0) / 100));
+
+const receiptsCount = computed(() => receipts.value.length);
+
+const receiptsDateLabel = computed(() => {
+  if (!receiptsDate.value) return 'сьогодні';
+  const parsed = new Date(receiptsDate.value);
+  if (Number.isNaN(parsed.getTime())) return receiptsDate.value;
+  return parsed.toLocaleDateString('uk-UA', { day: '2-digit', month: 'long', year: 'numeric' });
+});
+
+const receiptTypeLabel = (type) => {
+  const map = {
+    sell: 'Продаж',
+    return: 'Повернення',
+    service_in: 'Службове внесення',
+    service_out: 'Службове вилучення',
+  };
+  return map[type] || '—';
+};
+
+const receiptStatusLabel = (status) => {
+  const map = {
+    success: 'Успішно',
+    pending: 'В черзі',
+    processing: 'Обробка',
+    error: 'Помилка',
+    canceled: 'Скасовано',
+  };
+  return map[status] || '—';
+};
+
+const receiptStatusClass = (status) => {
+  const map = {
+    success: 'bg-success-subtle text-success',
+    pending: 'bg-warning-subtle text-warning-emphasis',
+    processing: 'bg-warning-subtle text-warning-emphasis',
+    error: 'bg-danger-subtle text-danger',
+    canceled: 'bg-secondary-subtle text-secondary',
+  };
+  return map[status] || 'bg-light text-dark';
+};
+
+const formatReceiptAmount = (amount) => formatCurrency(Number(amount || 0) / 100);
+
+const formatReceiptTime = (value) => {
+  if (!value) return '—';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return String(value);
+  return parsed.toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' });
+};
 
 // --- Actions (Логіка збережена з вашого прикладу) ---
 
@@ -387,6 +524,10 @@ const loadSettings = async () => {
     hasPassword.value = !!s.has_password;
     
     queueCount.value = data.queue?.waiting || 0;
+    const receiptsPayload = data.receipts || {};
+    receipts.value = Array.isArray(receiptsPayload.items) ? receiptsPayload.items : [];
+    receiptsDate.value = receiptsPayload.date || '';
+    dailyTotalCents.value = receiptsPayload.daily_total ?? 0;
     
     // Оновлення статусу при завантаженні (якщо API повертає)
     if (data.shift_status) {
@@ -671,6 +812,17 @@ onMounted(() => {
 
 .auth-summary .badge {
   font-weight: 600;
+}
+
+.receipts-table th {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #6b7280;
+}
+
+.receipts-table td {
+  padding: 0.85rem 1rem;
 }
 
 .modal-backdrop {

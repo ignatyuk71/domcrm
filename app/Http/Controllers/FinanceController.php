@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\CheckboxSetting;
+use App\Models\FiscalReceipt;
 use App\Models\FiscalQueue;
 use App\Services\CheckboxService;
 use App\Services\FiscalQueueService;
@@ -34,6 +35,30 @@ class FinanceController extends Controller
             ->where('status', FiscalQueue::STATUS_WAITING)
             ->count();
 
+        $todayStart = now()->startOfDay();
+        $todayEnd = now()->endOfDay();
+
+        $todayReceipts = FiscalReceipt::query()
+            ->whereBetween('created_at', [$todayStart, $todayEnd])
+            ->orderByDesc('created_at')
+            ->limit(200)
+            ->get([
+                'id',
+                'order_id',
+                'type',
+                'status',
+                'fiscal_code',
+                'check_link',
+                'total_amount',
+                'created_at',
+            ]);
+
+        $todayTotal = (int) FiscalReceipt::query()
+            ->whereBetween('created_at', [$todayStart, $todayEnd])
+            ->where('status', FiscalReceipt::STATUS_SUCCESS)
+            ->where('type', FiscalReceipt::TYPE_SELL)
+            ->sum('total_amount');
+
         $shiftStatus = null;
         $connection = CheckboxSetting::resolveCheckboxConnection();
         $hasCredentials = !empty($connection['license_key'])
@@ -60,6 +85,20 @@ class FinanceController extends Controller
             'shift_status' => $shiftStatus,
             'queue' => [
                 'waiting' => $queueCount,
+            ],
+            'receipts' => [
+                'date' => $todayStart->toDateString(),
+                'daily_total' => $todayTotal,
+                'items' => $todayReceipts->map(fn ($receipt) => [
+                    'id' => $receipt->id,
+                    'order_id' => $receipt->order_id,
+                    'type' => $receipt->type,
+                    'status' => $receipt->status,
+                    'fiscal_code' => $receipt->fiscal_code,
+                    'check_link' => $receipt->check_link,
+                    'total_amount' => (int) $receipt->total_amount,
+                    'created_at' => $receipt->created_at,
+                ]),
             ],
         ]);
     }
