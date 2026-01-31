@@ -134,7 +134,7 @@
     <!-- 2. MAIN CONTENT (Table + Actions) -->
     <div class="row g-4 mb-4">
       
-      <!-- ТАБЛИЦЯ ІСТОРІЇ (З фіксованою висотою та скролом) -->
+      <!-- ТАБЛИЦЯ ІСТОРІЇ (З фіксованою висотою ~5 рядків) -->
       <div class="col-lg-8">
         <div class="card border-0 shadow-sm h-100">
           <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
@@ -143,8 +143,8 @@
                <span class="badge bg-light text-muted fw-normal" v-if="receipts.length">Всього: {{ receipts.length }}</span>
             </div>
           </div>
-          <!-- ОНОВЛЕНО: Додано стиль max-height та клас custom-scrollbar -->
-          <div class="table-responsive custom-scrollbar" style="max-height: 500px;">
+          <!-- CHANGED: max-height: 380px для відображення приблизно 5 чеків -->
+          <div class="table-responsive custom-scrollbar" style="max-height: 380px;">
             <table class="table table-hover align-middle mb-0 custom-table">
               <thead class="bg-light sticky-top" style="z-index: 2;">
                 <tr>
