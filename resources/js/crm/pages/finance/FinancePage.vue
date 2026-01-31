@@ -188,40 +188,16 @@
             <span class="badge bg-light text-dark">Чеків: {{ receiptsCount }}</span>
           </div>
           <div class="card-body p-4">
-            <div class="chart-scroll">
-              <div class="chart-inner">
-                <svg class="fiscal-chart-svg" :viewBox="`0 0 ${chartWidth} ${chartHeight}`" preserveAspectRatio="none">
-                  <defs>
-                    <linearGradient id="fiscalGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stop-color="#2ec4b6" stop-opacity="0.5" />
-                      <stop offset="100%" stop-color="#2ec4b6" stop-opacity="0" />
-                    </linearGradient>
-                  </defs>
-                  <g class="chart-grid">
-                    <line
-                      v-for="(y, idx) in chartGridLines"
-                      :key="`grid-${idx}`"
-                      x1="0"
-                      :x2="chartWidth"
-                      :y1="y"
-                      :y2="y"
-                    />
-                  </g>
-                  <path class="chart-area" :d="chartAreaPath" fill="url(#fiscalGradient)" />
-                  <path class="chart-line" :d="chartLinePath" />
-                </svg>
-                <div class="chart-axis">
-                  <div
-                    v-for="(label, idx) in chartHours"
-                    :key="label"
-                    class="chart-label"
-                    :class="{ 'is-dim': idx % 2 !== 0 }"
-                  >
-                    {{ label }}
-                  </div>
-                </div>
-              </div>
+            <div v-if="loading.chart" class="d-flex justify-content-center align-items-center py-5">
+              <div class="spinner-border text-primary" role="status"></div>
             </div>
+            <ApexChart
+              v-else
+              type="area"
+              height="300"
+              :options="chartOptions"
+              :series="chartSeries"
+            />
           </div>
         </div>
       </div>
@@ -415,6 +391,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue';
 import { formatCurrency } from '@/crm/utils/orderDisplay';
+import ApexChart from 'vue3-apexcharts';
 // Замініть цей імпорт на ваш реальний шлях
 import {
   fetchFinanceSettings,
@@ -429,7 +406,8 @@ const loading = reactive({
   save: false,
   test: false,
   shift: false,
-  queue: false
+  queue: false,
+  chart: false
 });
 
 const notice = reactive({ type: '', message: '' });
@@ -486,13 +464,6 @@ const statusIcon = computed(() => {
   }
 });
 
-const chartWidth = 240;
-const chartHeight = 90;
-const chartPadding = 12;
-const chartBaseY = chartHeight - chartPadding;
-const chartPlotHeight = chartHeight - chartPadding * 2;
-const chartStep = chartWidth / 23;
-
 const dailyTotalFormatted = computed(() => formatCurrency(Number(dailyTotalCents.value || 0) / 100));
 
 const receiptsCount = computed(() => receipts.value.length);
@@ -504,53 +475,87 @@ const receiptsDateLabel = computed(() => {
   return parsed.toLocaleDateString('uk-UA', { day: '2-digit', month: 'long', year: 'numeric' });
 });
 
-const chartHours = computed(() => Array.from({ length: 24 }, (_, idx) => `${String(idx).padStart(2, '0')}:00`));
+const chartCategories = computed(() => Array.from({ length: 24 }, (_, idx) => `${String(idx).padStart(2, '0')}:00`));
 
 const chartSeries = computed(() => {
+  let hoursData;
   if (Array.isArray(hourlyCounts.value) && hourlyCounts.value.length === 24) {
-    return hourlyCounts.value.map((value) => Number(value) || 0);
+    hoursData = hourlyCounts.value.map((value) => Number(value) || 0);
+  } else {
+    hoursData = new Array(24).fill(0);
+    receipts.value.forEach((receipt) => {
+      if (!receipt?.created_at) return;
+      const parsed = new Date(receipt.created_at);
+      if (Number.isNaN(parsed.getTime())) return;
+      const hour = parsed.getHours();
+      if (hour >= 0 && hour < 24) hoursData[hour] += 1;
+    });
   }
-  const values = Array.from({ length: 24 }, () => 0);
-  receipts.value.forEach((receipt) => {
-    if (!receipt?.created_at) return;
-    const parsed = new Date(receipt.created_at);
-    if (Number.isNaN(parsed.getTime())) return;
-    values[parsed.getHours()] += 1;
-  });
-  return values;
+
+  return [{
+    name: 'Кількість чеків',
+    data: hoursData,
+  }];
 });
 
-const chartMax = computed(() => Math.max(...chartSeries.value, 1));
+const chartMax = computed(() => {
+  const values = chartSeries.value?.[0]?.data || [];
+  return Math.max(...values, 1);
+});
 
-const chartPoints = computed(() => chartSeries.value.map((value, idx) => {
-  const x = chartStep * idx;
-  const y = chartBaseY - (value / chartMax.value) * chartPlotHeight;
-  return { x, y };
+const chartOptions = computed(() => ({
+  chart: {
+    type: 'area',
+    height: 300,
+    fontFamily: 'inherit',
+    foreColor: '#94a3b8',
+    toolbar: { show: false },
+    zoom: { enabled: false },
+    animations: { enabled: true, easing: 'easeinout', speed: 600 },
+  },
+  dataLabels: { enabled: false },
+  legend: { show: false },
+  stroke: { curve: 'smooth', width: 3, lineCap: 'round' },
+  markers: { size: 0, hover: { size: 4 } },
+  fill: {
+    type: 'gradient',
+    gradient: {
+      shadeIntensity: 0.7,
+      opacityFrom: 0.5,
+      opacityTo: 0.05,
+      stops: [0, 70, 100],
+    },
+  },
+  colors: ['#2ec4b6'],
+  xaxis: {
+    categories: chartCategories.value,
+    axisBorder: { show: false },
+    axisTicks: { show: false },
+    labels: {
+      style: { colors: '#94a3b8', fontSize: '11px' },
+      offsetY: 4,
+    },
+  },
+  yaxis: {
+    show: false,
+    min: 0,
+    max: Math.ceil(chartMax.value * 1.2),
+  },
+  grid: {
+    borderColor: '#e5e7eb',
+    strokeDashArray: 6,
+    xaxis: { lines: { show: false } },
+    yaxis: { lines: { show: true } },
+    padding: { left: 8, right: 8, top: 8, bottom: 0 },
+  },
+  tooltip: {
+    theme: 'light',
+    x: { show: true },
+    y: {
+      formatter: (value) => `${value} чеків`,
+    },
+  },
 }));
-
-const chartLinePath = computed(() => {
-  const points = chartPoints.value;
-  if (!points.length) return '';
-  return points
-    .map((point, idx) => `${idx === 0 ? 'M' : 'L'} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`)
-    .join(' ');
-});
-
-const chartAreaPath = computed(() => {
-  const points = chartPoints.value;
-  if (!points.length) return '';
-  const line = points.map((point) => `L ${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(' ');
-  return `M 0 ${chartBaseY} ${line} L ${chartWidth} ${chartBaseY} Z`;
-});
-
-const chartGridLines = computed(() => {
-  const lines = [];
-  const steps = 4;
-  for (let i = 0; i <= steps; i += 1) {
-    lines.push(chartPadding + (chartPlotHeight / steps) * i);
-  }
-  return lines;
-});
 
 const receiptTypeLabel = (type) => {
   const map = {
@@ -635,6 +640,7 @@ const showNotice = (type, msg) => {
 };
 
 const loadSettings = async () => {
+  loading.chart = true;
   try {
     const data = await fetchFinanceSettings();
     const s = data.settings || {};
@@ -659,11 +665,13 @@ const loadSettings = async () => {
     
     // Оновлення статусу при завантаженні (якщо API повертає)
     if (data.shift_status) {
-        setShiftFromStatus(data.shift_status);
+      setShiftFromStatus(data.shift_status);
     }
   } catch (e) {
     console.error(e);
     showNotice('danger', 'Не вдалося завантажити налаштування');
+  } finally {
+    loading.chart = false;
   }
 };
 
@@ -970,49 +978,6 @@ onMounted(() => {
   color: #111827;
 }
 
-.chart-scroll {
-  overflow-x: auto;
-}
-
-.chart-inner {
-  min-width: 840px;
-}
-
-.fiscal-chart-svg {
-  width: 100%;
-  height: 140px;
-  display: block;
-}
-
-.chart-grid line {
-  stroke: #e5e7eb;
-  stroke-dasharray: 6 6;
-}
-
-.chart-line {
-  fill: none;
-  stroke: #2ec4b6;
-  stroke-width: 2.5;
-}
-
-.chart-axis {
-  display: grid;
-  grid-template-columns: repeat(24, minmax(32px, 1fr));
-  gap: 0;
-  font-size: 0.7rem;
-  color: #6b7280;
-  margin-top: 6px;
-}
-
-.chart-label {
-  text-align: center;
-  white-space: nowrap;
-}
-
-.chart-label.is-dim {
-  color: #cbd5e1;
-}
-
 .receipts-table th {
   font-size: 0.72rem;
   text-transform: uppercase;
@@ -1099,10 +1064,6 @@ onMounted(() => {
 @media (max-width: 992px) {
   .automation-grid {
     grid-template-columns: 1fr;
-  }
-
-  .chart-inner {
-    min-width: 720px;
   }
 }
 </style>
