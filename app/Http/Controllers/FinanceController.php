@@ -67,6 +67,22 @@ class FinanceController extends Controller
             }
         }
 
+        $hourlyAmounts = array_fill(0, 24, 0);
+        $hourlyAmountRows = FiscalReceipt::query()
+            ->whereBetween('created_at', [$todayStart, $todayEnd])
+            ->where('status', FiscalReceipt::STATUS_SUCCESS)
+            ->where('type', FiscalReceipt::TYPE_SELL)
+            ->selectRaw('HOUR(created_at) as hour, SUM(total_amount) as amount')
+            ->groupBy('hour')
+            ->get();
+
+        foreach ($hourlyAmountRows as $row) {
+            $hour = (int) ($row->hour ?? 0);
+            if ($hour >= 0 && $hour <= 23) {
+                $hourlyAmounts[$hour] = (int) $row->amount;
+            }
+        }
+
         $todayTotal = (int) FiscalReceipt::query()
             ->whereBetween('created_at', [$todayStart, $todayEnd])
             ->where('status', FiscalReceipt::STATUS_SUCCESS)
@@ -104,6 +120,7 @@ class FinanceController extends Controller
                 'date' => $todayStart->toDateString(),
                 'daily_total' => $todayTotal,
                 'hourly_counts' => $hourlyCounts,
+                'hourly_amounts' => $hourlyAmounts,
                 'items' => $todayReceipts->map(fn ($receipt) => [
                     'id' => $receipt->id,
                     'order_id' => $receipt->order_id,

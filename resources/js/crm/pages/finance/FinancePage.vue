@@ -183,7 +183,7 @@
           <div class="card-header-clean p-4 border-bottom border-light d-flex flex-wrap align-items-center justify-content-between gap-3">
             <div>
               <h5 class="mb-1 fw-bold text-dark">Фіскалізація за день</h5>
-              <div class="text-muted small">Графік активності за {{ receiptsDateLabel }}</div>
+              <div class="text-muted small">Сума фіскалізації за {{ receiptsDateLabel }}</div>
             </div>
             <span class="badge bg-light text-dark">Чеків: {{ receiptsCount }}</span>
           </div>
@@ -422,6 +422,7 @@ const receipts = ref([]);
 const receiptsDate = ref('');
 const dailyTotalCents = ref(0);
 const hourlyCounts = ref([]);
+const hourlyAmounts = ref([]);
 
 const form = reactive({
   api_url: '',
@@ -479,21 +480,24 @@ const chartCategories = computed(() => Array.from({ length: 24 }, (_, idx) => `$
 
 const chartSeries = computed(() => {
   let hoursData;
-  if (Array.isArray(hourlyCounts.value) && hourlyCounts.value.length === 24) {
-    hoursData = hourlyCounts.value.map((value) => Number(value) || 0);
+  if (Array.isArray(hourlyAmounts.value) && hourlyAmounts.value.length === 24) {
+    hoursData = hourlyAmounts.value.map((value) => Number(value || 0) / 100);
   } else {
     hoursData = new Array(24).fill(0);
     receipts.value.forEach((receipt) => {
       if (!receipt?.created_at) return;
+      if (receipt.status !== 'success' || receipt.type !== 'sell') return;
       const parsed = new Date(receipt.created_at);
       if (Number.isNaN(parsed.getTime())) return;
       const hour = parsed.getHours();
-      if (hour >= 0 && hour < 24) hoursData[hour] += 1;
+      if (hour >= 0 && hour < 24) {
+        hoursData[hour] += Number(receipt.total_amount || 0) / 100;
+      }
     });
   }
 
   return [{
-    name: 'Кількість чеків',
+    name: 'Сума',
     data: hoursData,
   }];
 });
@@ -537,9 +541,12 @@ const chartOptions = computed(() => ({
     },
   },
   yaxis: {
-    show: false,
+    show: true,
     min: 0,
     max: Math.ceil(chartMax.value * 1.2),
+    labels: {
+      formatter: (value) => `${Math.round(value).toLocaleString('uk-UA')} грн`,
+    },
   },
   grid: {
     borderColor: '#e5e7eb',
@@ -552,7 +559,7 @@ const chartOptions = computed(() => ({
     theme: 'light',
     x: { show: true },
     y: {
-      formatter: (value) => `${value} чеків`,
+      formatter: (value) => formatCurrency(value),
     },
   },
 }));
@@ -662,6 +669,7 @@ const loadSettings = async () => {
     receiptsDate.value = receiptsPayload.date || '';
     dailyTotalCents.value = receiptsPayload.daily_total ?? 0;
     hourlyCounts.value = Array.isArray(receiptsPayload.hourly_counts) ? receiptsPayload.hourly_counts : [];
+    hourlyAmounts.value = Array.isArray(receiptsPayload.hourly_amounts) ? receiptsPayload.hourly_amounts : [];
     
     // Оновлення статусу при завантаженні (якщо API повертає)
     if (data.shift_status) {
