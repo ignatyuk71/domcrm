@@ -570,7 +570,10 @@ const loadSettings = async () => {
     hourlyAmounts.value = data.receipts?.hourly_amounts || [];
     shiftStatus.value = normalizeStatus(data.shift_status);
     shiftMessage.value = getStatusMsg(shiftStatus.value);
-  } catch(e) { console.error(e); } 
+  } catch(e) { 
+    console.error(e);
+    showNotice('danger', 'Не вдалося отримати статус зміни'); 
+  }
   finally { loading.chart = false; }
 };
 
