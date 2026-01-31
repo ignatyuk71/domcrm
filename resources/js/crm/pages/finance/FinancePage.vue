@@ -1,6 +1,30 @@
 <template>
-  <div class="finance-page container-fluid py-4">
+  <div class="finance-page container-fluid py-4 position-relative">
     
+    <!-- TOAST NOTIFICATIONS (Спливаючі повідомлення) -->
+    <div class="toast-container position-fixed top-0 end-0 p-4" style="z-index: 1070;">
+      <transition-group name="toast-slide">
+        <div 
+          v-for="toast in toasts" 
+          :key="toast.id" 
+          class="custom-toast mb-3 shadow-lg d-flex align-items-center"
+          :class="toast.type === 'success' ? 'toast-success' : 'toast-error'"
+        >
+          <div class="toast-icon-box">
+             <i class="bi" :class="toast.type === 'success' ? 'bi-check-lg' : 'bi-exclamation-triangle-fill'"></i>
+          </div>
+          <div class="toast-content ps-3 pe-4 py-3">
+             <div class="toast-title">{{ toast.type === 'success' ? 'Успішно' : 'Помилка' }}</div>
+             <div class="toast-msg">{{ toast.message }}</div>
+          </div>
+          <button class="btn-close me-3 small" @click="removeToast(toast.id)"></button>
+          
+          <!-- Прогрес бар часу -->
+          <div class="toast-progress" :style="{ animationDuration: '5000ms' }"></div>
+        </div>
+      </transition-group>
+    </div>
+
     <!-- HEADER SECTION -->
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
       <div>
@@ -25,14 +49,6 @@
         </button>
       </div>
     </div>
-
-    <!-- NOTIFICATIONS -->
-    <transition name="slide-fade">
-      <div v-if="notice.message" class="alert modern-alert mb-4 shadow-sm border-0 d-flex align-items-center" :class="`alert-${notice.type}`">
-        <i class="bi fs-5 me-3" :class="notice.type === 'success' ? 'bi-check-circle-fill' : 'bi-exclamation-triangle-fill'"></i>
-        <div class="fw-medium">{{ notice.message }}</div>
-      </div>
-    </transition>
 
     <!-- 1. KPI CARDS (СТАТИСТИКА) -->
     <div class="row g-3 mb-4">
@@ -115,34 +131,56 @@
       </div>
     </div>
 
-    <!-- 2. MAIN CONTENT (Chart + Actions) -->
+    <!-- 2. MAIN CONTENT (Table + Actions) -->
     <div class="row g-4 mb-4">
       
-      <!-- ГРАФІК (ЛІВА ЧАСТИНА) -->
+      <!-- ТАБЛИЦЯ ІСТОРІЇ -->
       <div class="col-lg-8">
         <div class="card border-0 shadow-sm h-100">
-          <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
-            <h6 class="fw-bold mb-0 text-dark">Динаміка виторгу</h6>
-            <span class="badge bg-light text-muted fw-normal">Сума грн / година</span>
+          <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+            <h6 class="fw-bold mb-0 text-dark">Історія операцій</h6>
+            <div class="d-flex gap-2">
+               <span class="badge bg-light text-muted fw-normal" v-if="receipts.length">Всього: {{ receipts.length }}</span>
+            </div>
           </div>
-          <div class="card-body p-0 position-relative" style="min-height: 320px;">
-             <div v-if="loading.chart" class="position-absolute w-100 h-100 d-flex justify-content-center align-items-center bg-white z-2">
-                <div class="spinner-border text-primary text-opacity-25" role="status"></div>
-             </div>
-             <div class="px-2 pt-2">
-               <!-- Компонент графіка -->
-               <apexchart type="area" height="300" :options="chartOptions" :series="chartSeries"></apexchart>
-             </div>
+          <div class="table-responsive h-100">
+            <table class="table table-hover align-middle mb-0 custom-table">
+              <thead class="bg-light sticky-top">
+                <tr>
+                  <th class="ps-4 text-muted x-small text-uppercase">Час</th>
+                  <th class="text-muted x-small text-uppercase">Статус</th>
+                  <th class="text-muted x-small text-uppercase">Тип</th>
+                  <th class="text-muted x-small text-uppercase text-end">Сума</th>
+                  <th class="pe-4 text-muted x-small text-uppercase text-end">Дія</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="receipts.length === 0">
+                  <td colspan="5" class="text-center py-5 text-muted">
+                     <i class="bi bi-inbox fs-4 d-block mb-2 opacity-50"></i>
+                     Операцій за сьогодні не знайдено
+                  </td>
+                </tr>
+                <tr v-for="receipt in receipts" :key="receipt.id">
+                  <td class="ps-4 fw-medium text-dark">{{ formatReceiptTime(receipt.created_at) }}</td>
+                  <td><span class="badge rounded-pill fw-normal" :class="receiptStatusClass(receipt.status)">{{ receiptStatusLabel(receipt.status) }}</span></td>
+                  <td class="text-muted small">{{ receiptTypeLabel(receipt.type) }}</td>
+                  <td class="text-end fw-bold text-dark">{{ formatReceiptAmount(receipt.total_amount) }}</td>
+                  <td class="pe-4 text-end">
+                    <a v-if="receipt.check_link" :href="receipt.check_link" target="_blank" class="btn btn-sm btn-light rounded-pill">Чек <i class="bi bi-box-arrow-up-right ms-1"></i></a>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
 
-      <!-- ПАНЕЛЬ КЕРУВАННЯ (ОНОВЛЕНИЙ GLASSMORPHISM) -->
+      <!-- ПАНЕЛЬ КЕРУВАННЯ -->
       <div class="col-lg-4">
         
         <div class="card border-0 shadow-lg h-100 overflow-hidden bg-gradient-primary text-white position-relative">
           
-          <!-- Декоративні кола (для фону) -->
           <div class="circle-decoration one"></div>
           <div class="circle-decoration two"></div>
           
@@ -151,26 +189,22 @@
             <!-- ВЕРХНЯ ЧАСТИНА -->
             <div>
               <div class="d-flex justify-content-between align-items-center mb-4">
-                 <!-- Бейдж каси (Скляний ефект) -->
                  <div class="badge-glass px-3 py-2 d-flex align-items-center gap-2">
                     <i class="bi bi-shop"></i>
                     <span class="fw-medium">Каса №1</span>
                  </div>
                  
-                 <!-- Кнопка оновлення (Скляна) -->
                  <button class="btn btn-icon-glass" @click="testConnection" :disabled="loading.test" title="Перевірити з'єднання">
                     <i class="bi bi-arrow-repeat" :class="{'spin': loading.test}"></i>
                  </button>
               </div>
               
-              <!-- ЗАГОЛОВОК СТАТУСУ -->
               <div class="mt-2">
                  <h2 class="display-6 fw-bold mb-1">
                    {{ shiftStatus === 'opened' ? 'Зміна відкрита' : 'Зміна закрита' }}
                  </h2>
                  
                  <div class="d-flex align-items-center mt-2">
-                    <!-- Пульсуюча крапка -->
                     <div class="status-dot-pulse me-2" :class="shiftStatus === 'opened' ? 'bg-success' : 'bg-danger'"></div>
                     <span class="text-white text-opacity-75 font-monospace small">
                       {{ shiftMessage }}
@@ -179,12 +213,11 @@
               </div>
             </div>
 
-            <!-- НИЖНЯ ЧАСТИНА (КНОПКИ) -->
+            <!-- НИЖНЯ ЧАСТИНА -->
             <div class="mt-auto pt-4">
               
               <div class="d-grid gap-3">
                 
-                <!-- КНОПКА ЧЕРГИ (Завжди видна, але заблокована якщо 0) -->
                 <button 
                    class="btn fw-bold shadow-sm py-2 position-relative overflow-hidden"
                    :class="queueCount > 0 ? 'btn-warning' : 'btn-glass-disabled'" 
@@ -196,7 +229,6 @@
                     Відправити чеки з черги ({{ queueCount }})
                  </button>
 
-                <!-- Варіант: ВІДКРИТИ ЗМІНУ -->
                 <button 
                   v-if="shiftStatus !== 'opened'"
                   class="btn btn-action-glass py-3 position-relative overflow-hidden group"
@@ -210,7 +242,6 @@
                    </div>
                 </button>
 
-                <!-- Варіант: ЗАКРИТИ ЗМІНУ -->
                 <button 
                   v-else
                   class="btn btn-action-danger-glass py-3 position-relative overflow-hidden group"
@@ -233,37 +264,19 @@
       </div>
     </div>
 
-    <!-- 3. TABLE (АРХІВ ЧЕКІВ) -->
-    <div class="card border-0 shadow-sm">
-      <div class="card-header bg-white border-bottom py-3">
-        <h6 class="fw-bold mb-0 text-dark">Історія операцій</h6>
+    <!-- 3. CHART SECTION -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+        <h6 class="fw-bold mb-0 text-dark">Динаміка виторгу</h6>
+        <span class="badge bg-light text-muted fw-normal">Сума грн / година</span>
       </div>
-      <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0 custom-table">
-          <thead class="bg-light">
-            <tr>
-              <th class="ps-4 text-muted x-small text-uppercase">Час</th>
-              <th class="text-muted x-small text-uppercase">Статус</th>
-              <th class="text-muted x-small text-uppercase">Тип</th>
-              <th class="text-muted x-small text-uppercase text-end">Сума</th>
-              <th class="pe-4 text-muted x-small text-uppercase text-end">Дія</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="receipts.length === 0">
-              <td colspan="5" class="text-center py-5 text-muted">Операцій за сьогодні не знайдено</td>
-            </tr>
-            <tr v-for="receipt in receipts" :key="receipt.id">
-              <td class="ps-4 fw-medium text-dark">{{ formatReceiptTime(receipt.created_at) }}</td>
-              <td><span class="badge rounded-pill fw-normal" :class="receiptStatusClass(receipt.status)">{{ receiptStatusLabel(receipt.status) }}</span></td>
-              <td class="text-muted small">{{ receiptTypeLabel(receipt.type) }}</td>
-              <td class="text-end fw-bold text-dark">{{ formatReceiptAmount(receipt.total_amount) }}</td>
-              <td class="pe-4 text-end">
-                <a v-if="receipt.check_link" :href="receipt.check_link" target="_blank" class="btn btn-sm btn-light rounded-pill">Чек <i class="bi bi-box-arrow-up-right ms-1"></i></a>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <div class="card-body p-0 position-relative" style="min-height: 320px;">
+         <div v-if="loading.chart" class="position-absolute w-100 h-100 d-flex justify-content-center align-items-center bg-white z-2">
+            <div class="spinner-border text-primary text-opacity-25" role="status"></div>
+         </div>
+         <div class="px-2 pt-2">
+           <apexchart type="area" height="300" :options="chartOptions" :series="chartSeries"></apexchart>
+         </div>
       </div>
     </div>
 
@@ -398,7 +411,7 @@ import {
 const apexchart = VueApexCharts;
 
 const loading = reactive({ save: false, test: false, shift: false, queue: false, chart: false });
-const notice = reactive({ type: '', message: '' });
+const toasts = ref([]); // Замінено notice на масив toasts
 const shiftStatus = ref('unknown'); 
 const shiftMessage = ref('Отримання статусу...');
 const queueCount = ref(0);
@@ -484,8 +497,19 @@ const receiptTypeLabel = (t) => ({ sell: 'Продаж', return: 'Поверне
 const formatReceiptAmount = (a) => formatCurrency(Number(a||0)/100);
 const formatReceiptTime = (v) => v ? new Date(v).toLocaleTimeString('uk-UA', {hour:'2-digit', minute:'2-digit'}) : '-';
 
-// --- Actions ---
-const showNotice = (t, m) => { notice.type = t; notice.message = m; setTimeout(()=>notice.message='', 4000); };
+// --- Actions (TOASTS) ---
+// Оновлена функція showNotice для підтримки тостів
+const showNotice = (type, message) => { 
+  const id = Date.now();
+  toasts.value.push({ id, type, message });
+  // Автоматичне видалення через 5 секунд
+  setTimeout(() => removeToast(id), 5000);
+};
+
+const removeToast = (id) => {
+  toasts.value = toasts.value.filter(t => t.id !== id);
+};
+
 const openSettingsModal = () => showSettingsModal.value = true;
 const closeSettingsModal = () => showSettingsModal.value = false;
 
@@ -526,7 +550,7 @@ const saveSettings = async () => {
   loading.save = true;
   try { 
     await saveFinanceSettings(form); 
-    showNotice('success', 'Збережено'); 
+    showNotice('success', 'Налаштування збережено'); 
     closeSettingsModal(); 
     if (form.license_key) hasLicenseKey.value = true;
     if (form.password) hasPassword.value = true;
@@ -573,13 +597,50 @@ onMounted(loadSettings);
 .x-small { font-size: 0.7rem; letter-spacing: 0.5px; }
 .ls-1 { letter-spacing: 1px; }
 
+/* --- TOASTS STYLES --- */
+.custom-toast {
+  width: 350px;
+  background: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+  transition: all 0.3s ease;
+  border-left: 4px solid transparent;
+}
+.toast-success { border-left-color: #198754; }
+.toast-error { border-left-color: #dc3545; }
+
+.toast-icon-box {
+  width: 50px; height: 100%; min-height: 60px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.5rem;
+}
+.toast-success .toast-icon-box { background: rgba(25, 135, 84, 0.1); color: #198754; }
+.toast-error .toast-icon-box { background: rgba(220, 53, 69, 0.1); color: #dc3545; }
+
+.toast-content { flex: 1; }
+.toast-title { font-weight: 700; font-size: 0.95rem; margin-bottom: 2px; }
+.toast-msg { font-size: 0.85rem; color: #64748b; line-height: 1.3; }
+
+.toast-progress {
+  position: absolute; bottom: 0; left: 0; height: 3px; background: rgba(0,0,0,0.1); width: 100%;
+  animation: toastProgress linear forwards;
+}
+@keyframes toastProgress { from { width: 100%; } to { width: 0%; } }
+
+/* Toast Transitions */
+.toast-slide-enter-active, .toast-slide-leave-active { transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+.toast-slide-enter-from { transform: translateX(100%); opacity: 0; }
+.toast-slide-leave-to { transform: translateX(100%); opacity: 0; }
+.toast-slide-move { transition: transform 0.4s ease; }
+
 /* KPI CARDS */
 .stat-card { transition: transform 0.2s; border-radius: 12px; }
 .stat-card:hover { transform: translateY(-2px); }
 .icon-shape { width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; }
 .progress-line { height: 3px; width: 100%; position: absolute; bottom: 0; left: 0; }
 
-/* --- NEW GLASSMORPHISM STYLES --- */
+/* --- GLASSMORPHISM STYLES --- */
 .bg-gradient-primary {
   background: linear-gradient(135deg, #4f46e5 0%, #3b82f6 50%, #0ea5e9 100%);
 }
