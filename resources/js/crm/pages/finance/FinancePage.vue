@@ -1,6 +1,7 @@
 <template>
   <div class="finance-page container-fluid py-4">
     
+    <!-- HEADER SECTION -->
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
       <div>
         <h1 class="h3 fw-bold text-dark mb-1 d-flex align-items-center">
@@ -11,18 +12,21 @@
       </div>
       
       <div class="d-flex align-items-center gap-2">
+        <!-- Індикатор API -->
         <div class="d-flex align-items-center px-3 py-2 bg-white rounded-pill shadow-sm border border-light">
           <span class="pulse-dot me-2" :class="connectionStatusColor"></span>
           <span class="small fw-semibold text-muted">Checkbox API</span>
         </div>
 
-        <button class="btn btn-white shadow-sm border border-light rounded-pill px-3 fw-semibold" @click="openAuthModal">
+        <!-- Кнопка налаштувань -->
+        <button class="btn btn-white shadow-sm border border-light rounded-pill px-3 fw-semibold" @click="openSettingsModal">
           <i class="bi bi-gear-fill text-muted me-2"></i>
           Налаштування
         </button>
       </div>
     </div>
 
+    <!-- NOTIFICATIONS -->
     <transition name="slide-fade">
       <div v-if="notice.message" class="alert modern-alert mb-4 shadow-sm border-0 d-flex align-items-center" :class="`alert-${notice.type}`">
         <i class="bi fs-5 me-3" :class="notice.type === 'success' ? 'bi-check-circle-fill' : 'bi-exclamation-triangle-fill'"></i>
@@ -30,9 +34,11 @@
       </div>
     </transition>
 
+    <!-- 1. KPI CARDS (СТАТИСТИКА) -->
     <div class="row g-3 mb-4">
+      <!-- Статус зміни -->
       <div class="col-6 col-md-3">
-        <div class="card border-0 shadow-sm h-100 overflow-hidden position-relative stat-card">
+        <div class="card border-0 shadow-sm h-100 stat-card">
           <div class="card-body p-3">
             <div class="d-flex justify-content-between align-items-start">
               <div>
@@ -50,6 +56,7 @@
         </div>
       </div>
 
+      <!-- Черга -->
       <div class="col-6 col-md-3">
         <div class="card border-0 shadow-sm h-100 stat-card">
           <div class="card-body p-3">
@@ -67,6 +74,7 @@
         </div>
       </div>
 
+      <!-- Виторг -->
       <div class="col-6 col-md-3">
         <div class="card border-0 shadow-sm h-100 stat-card">
           <div class="card-body p-3">
@@ -84,6 +92,7 @@
         </div>
       </div>
 
+      <!-- Автоматизація -->
       <div class="col-6 col-md-3">
         <div class="card border-0 shadow-sm h-100 stat-card">
           <div class="card-body p-3">
@@ -100,91 +109,131 @@
                 <i class="bi bi-robot"></i>
               </div>
             </div>
-            <div class="mt-2 x-small text-muted" v-if="form.enabled">
-              <i class="bi bi-clock me-1"></i> {{ form.open_time }} - {{ form.close_time }}
-            </div>
           </div>
           <div class="progress-line bg-indigo" :style="{ opacity: form.enabled ? 1 : 0 }"></div>
         </div>
       </div>
     </div>
 
+    <!-- 2. MAIN CONTENT (Chart + Actions) -->
     <div class="row g-4 mb-4">
       
+      <!-- ГРАФІК (ЛІВА ЧАСТИНА) -->
       <div class="col-lg-8">
         <div class="card border-0 shadow-sm h-100">
           <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
-            <h6 class="fw-bold mb-0 text-dark">Активність фіскалізації</h6>
-            <span class="badge bg-light text-muted fw-normal">за 24 години</span>
+            <h6 class="fw-bold mb-0 text-dark">Динаміка виторгу</h6>
+            <span class="badge bg-light text-muted fw-normal">Сума грн / година</span>
           </div>
           <div class="card-body p-0 position-relative" style="min-height: 320px;">
              <div v-if="loading.chart" class="position-absolute w-100 h-100 d-flex justify-content-center align-items-center bg-white z-2">
                 <div class="spinner-border text-primary text-opacity-25" role="status"></div>
              </div>
-             
              <div class="px-2 pt-2">
-               <apexchart 
-                 type="area" 
-                 height="300" 
-                 :options="chartOptions" 
-                 :series="chartSeries"
-               ></apexchart>
+               <!-- Компонент графіка -->
+               <apexchart type="area" height="300" :options="chartOptions" :series="chartSeries"></apexchart>
              </div>
           </div>
         </div>
       </div>
 
+      <!-- ПАНЕЛЬ КЕРУВАННЯ (ОНОВЛЕНИЙ GLASSMORPHISM) -->
       <div class="col-lg-4">
+        
         <div class="card border-0 shadow-lg h-100 overflow-hidden bg-gradient-primary text-white position-relative">
+          
+          <!-- Декоративні кола (для фону) -->
           <div class="circle-decoration one"></div>
           <div class="circle-decoration two"></div>
           
           <div class="card-body position-relative z-1 d-flex flex-column justify-content-between p-4">
             
-            <div class="mb-4">
-              <div class="d-flex justify-content-between align-items-center mb-3">
-                <span class="badge bg-white bg-opacity-20 backdrop-blur fw-normal">Каса №1</span>
-                <button class="btn btn-sm btn-link text-white text-opacity-75 p-0" @click="testConnection">
-                  <i class="bi bi-arrow-repeat" :class="{'spin': loading.test}"></i>
-                </button>
-              </div>
-              <h3 class="fw-bold mb-1">{{ shiftStatus === 'opened' ? 'Зміна відкрита' : 'Зміна закрита' }}</h3>
-              <p class="text-white text-opacity-75 small">{{ shiftMessage }}</p>
-            </div>
-
-            <div class="actions-grid">
-               <button 
-                class="btn btn-action-white w-100 mb-2" 
-                @click="openShift" 
-                :disabled="shiftStatus === 'opened' || loading.shift"
-              >
-                 <span v-if="loading.shift && shiftStatus !== 'opened'" class="spinner-border spinner-border-sm me-2"></span>
-                 <i v-else class="bi bi-unlock-fill me-2 text-success"></i>
-                 <span class="text-dark fw-bold">Відкрити зміну</span>
-              </button>
-
-              <button 
-                class="btn btn-action-danger w-100" 
-                @click="closeShift" 
-                :disabled="shiftStatus === 'closed' || loading.shift"
-              >
-                 <span v-if="loading.shift && shiftStatus === 'opened'" class="spinner-border spinner-border-sm me-2"></span>
-                 <i v-else class="bi bi-lock-fill me-2"></i>
-                 <span>Закрити зміну</span>
-              </button>
-
-              <div class="mt-4 pt-3 border-top border-white border-opacity-10">
-                 <button class="btn btn-sm btn-link text-white text-opacity-75 text-decoration-none px-0" @click="processQueue" :disabled="queueCount === 0 || loading.queue">
-                    <i class="bi bi-send me-1"></i> Відправити чеки з черги ({{ queueCount }})
+            <!-- ВЕРХНЯ ЧАСТИНА -->
+            <div>
+              <div class="d-flex justify-content-between align-items-center mb-4">
+                 <!-- Бейдж каси (Скляний ефект) -->
+                 <div class="badge-glass px-3 py-2 d-flex align-items-center gap-2">
+                    <i class="bi bi-shop"></i>
+                    <span class="fw-medium">Каса №1</span>
+                 </div>
+                 
+                 <!-- Кнопка оновлення (Скляна) -->
+                 <button class="btn btn-icon-glass" @click="testConnection" :disabled="loading.test" title="Перевірити з'єднання">
+                    <i class="bi bi-arrow-repeat" :class="{'spin': loading.test}"></i>
                  </button>
               </div>
+              
+              <!-- ЗАГОЛОВОК СТАТУСУ -->
+              <div class="mt-2">
+                 <h2 class="display-6 fw-bold mb-1">
+                   {{ shiftStatus === 'opened' ? 'Зміна відкрита' : 'Зміна закрита' }}
+                 </h2>
+                 
+                 <div class="d-flex align-items-center mt-2">
+                    <!-- Пульсуюча крапка -->
+                    <div class="status-dot-pulse me-2" :class="shiftStatus === 'opened' ? 'bg-success' : 'bg-danger'"></div>
+                    <span class="text-white text-opacity-75 font-monospace small">
+                      {{ shiftMessage }}
+                    </span>
+                 </div>
+              </div>
             </div>
 
+            <!-- НИЖНЯ ЧАСТИНА (КНОПКИ) -->
+            <div class="mt-auto pt-4">
+              
+              <div class="d-grid gap-3">
+                
+                <!-- КНОПКА ЧЕРГИ (Завжди видна, але заблокована якщо 0) -->
+                <button 
+                   class="btn fw-bold shadow-sm py-2 position-relative overflow-hidden"
+                   :class="queueCount > 0 ? 'btn-warning' : 'btn-glass-disabled'" 
+                   @click="processQueue" 
+                   :disabled="loading.queue || queueCount === 0"
+                 >
+                    <span v-if="loading.queue" class="spinner-border spinner-border-sm me-2"></span>
+                    <i v-else class="bi bi-send-fill me-2"></i>
+                    Відправити чеки з черги ({{ queueCount }})
+                 </button>
+
+                <!-- Варіант: ВІДКРИТИ ЗМІНУ -->
+                <button 
+                  v-if="shiftStatus !== 'opened'"
+                  class="btn btn-action-glass py-3 position-relative overflow-hidden group"
+                  @click="openShift" 
+                  :disabled="loading.shift"
+                >
+                   <div class="position-relative z-1 d-flex align-items-center justify-content-center gap-2">
+                      <span v-if="loading.shift" class="spinner-border spinner-border-sm text-white me-2"></span>
+                      <i v-else class="bi bi-unlock-fill fs-5"></i>
+                      <span class="fw-bold text-uppercase ls-1">Відкрити зміну</span>
+                   </div>
+                </button>
+
+                <!-- Варіант: ЗАКРИТИ ЗМІНУ -->
+                <button 
+                  v-else
+                  class="btn btn-action-danger-glass py-3 position-relative overflow-hidden group"
+                  @click="closeShift" 
+                  :disabled="loading.shift"
+                >
+                   <div class="position-relative z-1 d-flex align-items-center justify-content-center gap-2">
+                      <span v-if="loading.shift" class="spinner-border spinner-border-sm text-white me-2"></span>
+                      <i v-else class="bi bi-lock-fill fs-5"></i>
+                      <span class="fw-bold text-uppercase ls-1">Закрити зміну</span>
+                   </div>
+                </button>
+
+              </div>
+
+            </div>
           </div>
         </div>
+
       </div>
     </div>
 
+    <!-- 3. TABLE (АРХІВ ЧЕКІВ) -->
     <div class="card border-0 shadow-sm">
       <div class="card-header bg-white border-bottom py-3">
         <h6 class="fw-bold mb-0 text-dark">Історія операцій</h6>
@@ -202,24 +251,15 @@
           </thead>
           <tbody>
             <tr v-if="receipts.length === 0">
-              <td colspan="5" class="text-center py-5 text-muted">
-                <i class="bi bi-inbox fs-4 d-block mb-2"></i>
-                Операцій за сьогодні не знайдено
-              </td>
+              <td colspan="5" class="text-center py-5 text-muted">Операцій за сьогодні не знайдено</td>
             </tr>
             <tr v-for="receipt in receipts" :key="receipt.id">
               <td class="ps-4 fw-medium text-dark">{{ formatReceiptTime(receipt.created_at) }}</td>
-              <td>
-                 <span class="badge rounded-pill fw-normal" :class="receiptStatusClass(receipt.status)">
-                   {{ receiptStatusLabel(receipt.status) }}
-                 </span>
-              </td>
+              <td><span class="badge rounded-pill fw-normal" :class="receiptStatusClass(receipt.status)">{{ receiptStatusLabel(receipt.status) }}</span></td>
               <td class="text-muted small">{{ receiptTypeLabel(receipt.type) }}</td>
               <td class="text-end fw-bold text-dark">{{ formatReceiptAmount(receipt.total_amount) }}</td>
               <td class="pe-4 text-end">
-                <a v-if="receipt.check_link" :href="receipt.check_link" target="_blank" class="btn btn-sm btn-light rounded-pill">
-                  Чек <i class="bi bi-box-arrow-up-right ms-1"></i>
-                </a>
+                <a v-if="receipt.check_link" :href="receipt.check_link" target="_blank" class="btn btn-sm btn-light rounded-pill">Чек <i class="bi bi-box-arrow-up-right ms-1"></i></a>
               </td>
             </tr>
           </tbody>
@@ -227,55 +267,114 @@
       </div>
     </div>
 
+    <!-- MODAL (НАЛАШТУВАННЯ) -->
     <transition name="fade">
-      <div v-if="showAuthModal" class="modal-backdrop" @click.self="closeAuthModal">
-        <div class="modal-card">
-          <div class="modal-header border-bottom mb-4 pb-3">
-             <h5 class="fw-bold m-0">Налаштування ПРРО</h5>
-             <button class="btn-close" @click="closeAuthModal"></button>
-          </div>
-          
-          <div class="row g-3">
-             <div class="col-12"><label class="form-label fw-bold small text-muted">API CREDENTIALS</label></div>
-             <div class="col-12">
-               <input v-model="form.license_key" type="password" class="form-control" :placeholder="hasLicenseKey ? 'Ключ ліцензії (встановлено)' : 'Ключ ліцензії'">
-             </div>
-             <div class="col-md-6">
-               <input v-model="form.login" type="text" class="form-control" placeholder="Логін касира">
-             </div>
-             <div class="col-md-6">
-               <input v-model="form.password" type="password" class="form-control" :placeholder="hasPassword ? 'Пароль (встановлено)' : 'Пароль'">
-             </div>
-
-             <div class="col-12 mt-4"><label class="form-label fw-bold small text-muted">АВТОМАТИЗАЦІЯ</label></div>
-             
-             <div class="col-12 mb-2">
-               <div class="form-check form-switch p-0 d-flex justify-content-between align-items-center border rounded p-3">
-                 <label class="form-check-label ms-2 fw-medium" for="autoSwitch">Увімкнути авто-зміни</label>
-                 <input class="form-check-input m-0" type="checkbox" id="autoSwitch" v-model="form.enabled">
-               </div>
-             </div>
-
-             <div class="col-4">
-               <label class="small text-muted mb-1">Відкриття</label>
-               <input v-model="form.open_time" type="time" class="form-control">
-             </div>
-             <div class="col-4">
-               <label class="small text-muted mb-1">Фіскалізація</label>
-               <input v-model="form.queue_process_time" type="time" class="form-control">
-             </div>
-             <div class="col-4">
-               <label class="small text-muted mb-1">Закриття</label>
-               <input v-model="form.close_time" type="time" class="form-control">
-             </div>
-          </div>
-
-          <div class="modal-footer pt-4 mt-4 border-top d-flex justify-content-end gap-2">
-            <button class="btn btn-light" @click="closeAuthModal">Скасувати</button>
-            <button class="btn btn-primary px-4" @click="saveSettings" :disabled="loading.save">
-               {{ loading.save ? 'Збереження...' : 'Зберегти' }}
+      <div v-if="showSettingsModal" class="modal-backdrop" @click.self="closeSettingsModal">
+        <div class="modal-card modal-card-lg">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0 fw-bold text-dark">Налаштування підключення</h5>
+            <button type="button" class="btn btn-link text-muted" @click="closeSettingsModal">
+              <i class="bi bi-x-lg"></i>
             </button>
           </div>
+
+          <form @submit.prevent="saveSettings">
+            <div class="row g-4 mb-4">
+              <div class="col-12">
+                <label class="form-label fw-semibold text-secondary small text-uppercase ls-1">API URL</label>
+                <div class="input-group-modern">
+                  <span class="input-icon"><i class="bi bi-link-45deg"></i></span>
+                  <input v-model="form.api_url" type="text" class="form-control" placeholder="https://api.checkbox.in.ua/api/v1">
+                </div>
+              </div>
+
+              <div class="col-12">
+                <div class="text-uppercase small text-muted fw-semibold">Авторизація</div>
+              </div>
+
+              <div class="col-12">
+                <label class="form-label fw-semibold text-secondary small text-uppercase ls-1">Ліцензійний ключ</label>
+                <div class="input-group-modern" :class="{'is-valid': hasLicenseKey}">
+                  <span class="input-icon"><i class="bi bi-key"></i></span>
+                  <input v-model="form.license_key" type="password" class="form-control" :placeholder="hasLicenseKey ? '•••••••• (встановлено)' : 'Введіть ключ ліцензії'">
+                  <span v-if="hasLicenseKey" class="valid-icon"><i class="bi bi-check-circle-fill text-success"></i></span>
+                </div>
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold text-secondary small text-uppercase ls-1">Логін касира</label>
+                <div class="input-group-modern">
+                  <span class="input-icon"><i class="bi bi-person"></i></span>
+                  <input v-model="form.login" type="text" class="form-control" placeholder="login">
+                </div>
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-semibold text-secondary small text-uppercase ls-1">Пароль касира</label>
+                <div class="input-group-modern" :class="{'is-valid': hasPassword}">
+                  <span class="input-icon"><i class="bi bi-shield-lock"></i></span>
+                  <input v-model="form.password" type="password" class="form-control" :placeholder="hasPassword ? '•••••••• (встановлено)' : 'Введіть пароль'">
+                  <span v-if="hasPassword" class="valid-icon"><i class="bi bi-check-circle-fill text-success"></i></span>
+                </div>
+              </div>
+            </div>
+
+            <div class="position-relative my-4">
+              <hr class="text-muted-light">
+              <span class="position-absolute top-50 start-50 translate-middle bg-white px-3 text-muted small fw-bold text-uppercase ls-1">Автоматизація</span>
+            </div>
+
+            <div class="row g-4">
+              <div class="col-md-4">
+                <div class="time-card p-3 rounded-3 bg-success-subtle border border-success-subtle">
+                  <label class="form-label text-success fw-bold small"><i class="bi bi-sun me-1"></i> Відкриття</label>
+                  <input v-model="form.open_time" type="time" class="form-control time-input bg-transparent border-0 p-0 fw-bold fs-5 text-dark">
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="time-card p-3 rounded-3 bg-danger-subtle border border-danger-subtle">
+                  <label class="form-label text-danger fw-bold small"><i class="bi bi-moon me-1"></i> Закриття</label>
+                  <input v-model="form.close_time" type="time" class="form-control time-input bg-transparent border-0 p-0 fw-bold fs-5 text-dark">
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="time-card p-3 rounded-3 bg-primary-subtle border border-primary-subtle">
+                  <label class="form-label text-primary fw-bold small"><i class="bi bi-cloud-upload me-1"></i> Фіскалізація</label>
+                  <input v-model="form.queue_process_time" type="time" class="form-control time-input bg-transparent border-0 p-0 fw-bold fs-5 text-dark">
+                </div>
+              </div>
+            </div>
+
+            <div class="bg-body-secondary bg-opacity-50 rounded-4 p-4 mt-4">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                  <h6 class="mb-0 fw-bold text-dark">Активність інтеграції</h6>
+                  <small class="text-muted">Увімкнути роботу з Checkbox API</small>
+                </div>
+                <div class="form-check form-switch">
+                  <input v-model="form.enabled" class="form-check-input custom-switch" type="checkbox" style="width: 3em; height: 1.5em;">
+                </div>
+              </div>
+              <hr class="my-3 border-secondary opacity-10">
+              <div class="d-flex justify-content-between align-items-center">
+                <div>
+                  <h6 class="mb-0 fw-bold text-dark">Нічна черга</h6>
+                  <small class="text-muted">Накопичувати чеки вночі замість помилки</small>
+                </div>
+                <div class="form-check form-switch">
+                  <input v-model="form.queue_enabled" class="form-check-input custom-switch" type="checkbox" style="width: 3em; height: 1.5em;">
+                </div>
+              </div>
+            </div>
+
+            <div class="d-flex justify-content-end gap-2 mt-4">
+              <button type="button" class="btn btn-light" @click="closeSettingsModal">Скасувати</button>
+              <button type="submit" class="btn btn-primary" :disabled="loading.save">
+                <span v-if="loading.save" class="spinner-border spinner-border-sm me-2"></span>
+                Зберегти
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </transition>
@@ -303,16 +402,23 @@ const notice = reactive({ type: '', message: '' });
 const shiftStatus = ref('unknown'); 
 const shiftMessage = ref('Отримання статусу...');
 const queueCount = ref(0);
-const showAuthModal = ref(false);
+const showSettingsModal = ref(false); 
+
 const hasLicenseKey = ref(false);
 const hasPassword = ref(false);
 const receipts = ref([]);
 const dailyTotalCents = ref(0);
 
 const form = reactive({
-  api_url: '', license_key: '', login: '', password: '',
-  open_time: '08:00', close_time: '23:00', queue_process_time: '08:30',
-  enabled: true, queue_enabled: true,
+  api_url: '', 
+  license_key: '', 
+  login: '', 
+  password: '',
+  open_time: '08:00', 
+  close_time: '23:00', 
+  queue_process_time: '08:30',
+  enabled: true, 
+  queue_enabled: true,
 });
 
 // --- Computed ---
@@ -325,23 +431,26 @@ const statusIcon = computed(() => shiftStatus.value === 'opened' ? 'bi-unlock-fi
 const connectionStatusColor = computed(() => shiftStatus.value === 'error' ? 'bg-danger' : 'bg-success');
 const dailyTotalFormatted = computed(() => formatCurrency(Number(dailyTotalCents.value || 0) / 100));
 
-// --- Chart Data ---
+// --- CHART DATA (Сума в гривнях) ---
 const chartSeries = computed(() => {
   const hoursData = new Array(24).fill(0);
   if (receipts.value.length) {
     receipts.value.forEach(r => {
       const h = new Date(r.created_at).getHours();
-      if(h >= 0 && h < 24) hoursData[h]++;
+      if(h >= 0 && h < 24) {
+        hoursData[h] += (r.total_amount || 0) / 100;
+      }
     });
   }
-  return [{ name: 'Чеки', data: hoursData }];
+  const formattedData = hoursData.map(val => Number(val.toFixed(2)));
+  return [{ name: 'Сума', data: formattedData }];
 });
 
 const chartOptions = computed(() => ({
   chart: { type: 'area', fontFamily: 'inherit', toolbar: { show: false }, zoom: { enabled: false } },
   stroke: { curve: 'smooth', width: 3 },
   fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0.05, stops: [0, 90, 100] } },
-  colors: ['#6366f1'], // Modern Indigo color
+  colors: ['#6366f1'],
   dataLabels: { enabled: false },
   xaxis: { 
     categories: Array.from({length: 24}, (_, i) => `${i}:00`),
@@ -349,9 +458,18 @@ const chartOptions = computed(() => ({
     axisTicks: { show: false },
     labels: { style: { colors: '#9ca3af', fontSize: '10px' } }
   },
-  yaxis: { show: false },
+  yaxis: { 
+    show: true,
+    labels: {
+      formatter: (value) => value.toFixed(0) + ' ₴',
+      style: { colors: '#9ca3af', fontSize: '10px' }
+    }
+  },
   grid: { show: true, borderColor: '#f3f4f6', strokeDashArray: 4, padding: { top: 0, right: 0, bottom: 0, left: 10 } },
-  tooltip: { theme: 'light', x: { show: true } }
+  tooltip: { 
+    theme: 'light', 
+    y: { formatter: function (val) { return val.toFixed(2) + " грн"; } }
+  }
 }));
 
 // --- Helpers ---
@@ -366,10 +484,10 @@ const receiptTypeLabel = (t) => ({ sell: 'Продаж', return: 'Поверне
 const formatReceiptAmount = (a) => formatCurrency(Number(a||0)/100);
 const formatReceiptTime = (v) => v ? new Date(v).toLocaleTimeString('uk-UA', {hour:'2-digit', minute:'2-digit'}) : '-';
 
-// --- Actions (Simplified for brevity) ---
+// --- Actions ---
 const showNotice = (t, m) => { notice.type = t; notice.message = m; setTimeout(()=>notice.message='', 4000); };
-const openAuthModal = () => showAuthModal.value = true;
-const closeAuthModal = () => showAuthModal.value = false;
+const openSettingsModal = () => showSettingsModal.value = true;
+const closeSettingsModal = () => showSettingsModal.value = false;
 
 const loadSettings = async () => {
   loading.chart = true;
@@ -377,7 +495,8 @@ const loadSettings = async () => {
     const data = await fetchFinanceSettings();
     const s = data.settings || {};
     Object.assign(form, {
-      ...s, 
+      ...s,
+      api_url: s.api_url || 'https://api.checkbox.in.ua/api/v1',
       open_time: s.open_time?.slice(0,5) || '08:00',
       close_time: s.close_time?.slice(0,5) || '23:00',
       queue_process_time: s.queue_process_time?.slice(0,5) || '08:30'
@@ -405,34 +524,42 @@ const getStatusMsg = (s) => s === 'opened' ? 'Каса працює в штат�
 
 const saveSettings = async () => {
   loading.save = true;
-  try { await saveFinanceSettings(form); showNotice('success', 'Збережено'); closeAuthModal(); } 
-  catch(e) { showNotice('danger', 'Помилка'); } 
+  try { 
+    await saveFinanceSettings(form); 
+    showNotice('success', 'Збережено'); 
+    closeSettingsModal(); 
+    if (form.license_key) hasLicenseKey.value = true;
+    if (form.password) hasPassword.value = true;
+    form.license_key = '';
+    form.password = '';
+  } 
+  catch(e) { showNotice('danger', 'Помилка збереження'); } 
   finally { loading.save = false; }
 };
 
 const testConnection = async () => {
   loading.test = true;
-  try { const res = await testFinanceConnection(); shiftStatus.value = normalizeStatus(res.shift?.status); shiftMessage.value = res.message; showNotice('success', 'OK'); } 
-  catch(e) { shiftStatus.value = 'error'; showNotice('danger', 'Error'); } 
+  try { const res = await testFinanceConnection(); shiftStatus.value = normalizeStatus(res.shift?.status); shiftMessage.value = res.message; showNotice('success', 'Зв\'язок встановлено'); } 
+  catch(e) { shiftStatus.value = 'error'; showNotice('danger', 'Помилка з\'єднання'); } 
   finally { loading.test = false; }
 };
 
 const openShift = async () => {
   loading.shift = true;
   try { await openFinanceShift(); shiftStatus.value = 'opened'; shiftMessage.value = 'Відкрито'; showNotice('success', 'Зміну відкрито'); } 
-  catch(e) { showNotice('danger', 'Помилка'); } finally { loading.shift = false; }
+  catch(e) { showNotice('danger', 'Не вдалося відкрити зміну'); } finally { loading.shift = false; }
 };
 
 const closeShift = async () => {
   loading.shift = true;
   try { await closeFinanceShift(); shiftStatus.value = 'closed'; shiftMessage.value = 'Закрито'; showNotice('success', 'Зміну закрито'); } 
-  catch(e) { showNotice('danger', 'Помилка'); } finally { loading.shift = false; }
+  catch(e) { showNotice('danger', 'Не вдалося закрити зміну'); } finally { loading.shift = false; }
 };
 
 const processQueue = async () => {
   loading.queue = true;
   try { await processFinanceQueue(); showNotice('success', 'Чергу оброблено'); loadSettings(); } 
-  catch(e) { showNotice('danger', 'Помилка'); } finally { loading.queue = false; }
+  catch(e) { showNotice('danger', 'Помилка обробки'); } finally { loading.queue = false; }
 };
 
 onMounted(loadSettings);
@@ -444,6 +571,7 @@ onMounted(loadSettings);
 .text-indigo { color: #6366f1; }
 .bg-indigo { background-color: #6366f1; }
 .x-small { font-size: 0.7rem; letter-spacing: 0.5px; }
+.ls-1 { letter-spacing: 1px; }
 
 /* KPI CARDS */
 .stat-card { transition: transform 0.2s; border-radius: 12px; }
@@ -451,18 +579,92 @@ onMounted(loadSettings);
 .icon-shape { width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; }
 .progress-line { height: 3px; width: 100%; position: absolute; bottom: 0; left: 0; }
 
-/* GRADIENT CARD (CONTROL PANEL) */
-.bg-gradient-primary { background: linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%); }
-.circle-decoration { position: absolute; border-radius: 50%; background: rgba(255,255,255,0.1); }
-.circle-decoration.one { width: 150px; height: 150px; top: -40px; right: -40px; }
-.circle-decoration.two { width: 100px; height: 100px; bottom: -20px; left: 20px; }
-.backdrop-blur { backdrop-filter: blur(4px); }
+/* --- NEW GLASSMORPHISM STYLES --- */
+.bg-gradient-primary {
+  background: linear-gradient(135deg, #4f46e5 0%, #3b82f6 50%, #0ea5e9 100%);
+}
 
-/* BUTTONS */
-.btn-action-white { background: #fff; border: none; padding: 12px; border-radius: 10px; transition: all 0.2s; }
-.btn-action-white:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-.btn-action-danger { background: rgba(0,0,0,0.2); color: #fff; border: 1px solid rgba(255,255,255,0.2); padding: 12px; border-radius: 10px; transition: all 0.2s; }
-.btn-action-danger:hover { background: rgba(220,38,38,0.8); border-color: transparent; }
+.circle-decoration {
+  position: absolute; border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0) 70%); pointer-events: none;
+}
+.circle-decoration.one { width: 300px; height: 300px; top: -100px; right: -50px; opacity: 0.6; }
+.circle-decoration.two { width: 200px; height: 200px; bottom: -50px; left: -50px; opacity: 0.4; }
+
+.badge-glass {
+  background: rgba(255, 255, 255, 0.15); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 50px;
+  font-size: 0.85rem; color: #fff; box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+}
+
+.btn-icon-glass {
+  width: 40px; height: 40px; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease;
+}
+.btn-icon-glass:hover { background: rgba(255, 255, 255, 0.25); transform: rotate(30deg); }
+
+.status-dot-pulse {
+  width: 10px; height: 10px; border-radius: 50%; position: relative;
+}
+.status-dot-pulse::after {
+  content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 100%; height: 100%; border-radius: 50%; background: inherit; animation: pulse-ring 2s infinite; opacity: 0.6;
+}
+@keyframes pulse-ring { 0% { width: 100%; height: 100%; opacity: 0.6; } 100% { width: 300%; height: 300%; opacity: 0; } }
+
+/* GLASS ACTION BUTTONS */
+.btn-action-glass {
+  background: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.4);
+  color: white; border-radius: 12px; transition: all 0.3s ease;
+}
+.btn-action-glass:hover { background: rgba(255, 255, 255, 0.35); transform: translateY(-2px); box-shadow: 0 10px 20px rgba(0,0,0,0.15); }
+
+.btn-action-danger-glass {
+  background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.15);
+  color: white; border-radius: 12px; transition: all 0.3s ease;
+}
+.btn-action-danger-glass:hover {
+  background: rgba(220, 38, 38, 0.6); border-color: rgba(220, 38, 38, 0.8); box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+}
+
+.btn-hover-effect {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  background: linear-gradient(120deg, transparent, rgba(255,255,255,0.3), transparent);
+  transform: translateX(-100%); transition: 0.5s;
+}
+.group:hover .btn-hover-effect { transform: translateX(100%); }
+
+/* DISABLED GLASS BUTTON (GRAY BLOCKED) */
+.btn-glass-disabled {
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.5);
+  pointer-events: none; /* Block clicks */
+}
+
+/* MODAL & GENERAL STYLES */
+.modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15,23,42,0.4); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 1050; }
+.modal-card { background: #fff; width: 100%; max-width: 500px; border-radius: 16px; padding: 24px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); animation: modalUp 0.3s ease-out; overflow-y: auto; max-height: 90vh; }
+.modal-card-lg { max-width: 700px; }
+@keyframes modalUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+.btn-white { background: #fff; color: #1e293b; border: none; transition: all 0.2s; }
+.btn-white:hover { transform: translateY(-1px); box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+
+/* FORM ELEMENTS */
+.input-group-modern { position: relative; display: flex; align-items: center; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 10px; padding: 0.5rem 1rem; transition: all 0.2s ease; }
+.input-group-modern:focus-within { background: #fff; border-color: #0d6efd; box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15); }
+.input-group-modern .input-icon { color: #6c757d; font-size: 1.1rem; margin-right: 0.75rem; }
+.input-group-modern .form-control { border: none; background: transparent; padding: 0; color: #344767; font-weight: 500; }
+.input-group-modern .form-control:focus { box-shadow: none; }
+.valid-icon { margin-left: 0.5rem; }
+
+/* TIME INPUTS */
+.time-card { transition: transform 0.2s; }
+.time-card:hover { transform: translateY(-2px); }
+.time-input::-webkit-calendar-picker-indicator { cursor: pointer; opacity: 0.6; }
+.time-input:focus { outline: none; box-shadow: none; }
 
 /* ANIMATIONS */
 .spin { animation: spin 1s linear infinite; }
@@ -473,13 +675,7 @@ onMounted(loadSettings);
 .slide-fade-enter-active { transition: all 0.3s ease-out; }
 .slide-fade-enter-from { transform: translateY(-20px); opacity: 0; }
 
-/* MODAL */
-.modal-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15,23,42,0.4); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 1050; }
-.modal-card { background: #fff; width: 100%; max-width: 500px; border-radius: 16px; padding: 24px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); animation: modalUp 0.3s ease-out; }
-@keyframes modalUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-
 /* TABLE */
 .custom-table th { font-weight: 600; letter-spacing: 0.05em; border-bottom: 1px solid #e2e8f0; }
 .custom-table td { padding: 1rem 0.75rem; border-bottom: 1px solid #f1f5f9; }
-.custom-table tr:last-child td { border-bottom: none; }
 </style>
