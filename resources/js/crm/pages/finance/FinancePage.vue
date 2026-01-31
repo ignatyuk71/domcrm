@@ -59,7 +59,7 @@
             <div class="d-flex justify-content-between align-items-start">
               <div>
                 <div class="text-uppercase text-muted x-small fw-bold mb-1">Статус зміни</div>
-                <div class="h5 mb-0 fw-bold" :class="shiftStatus === 'opened' ? 'text-success' : 'text-danger'">
+                <div class="h5 mb-0 fw-bold" :class="`text-${shiftTone}`">
                   {{ shiftBadge }}
                 </div>
               </div>
@@ -68,7 +68,7 @@
               </div>
             </div>
           </div>
-          <div class="progress-line" :class="shiftStatus === 'opened' ? 'bg-success' : 'bg-danger'"></div>
+          <div class="progress-line" :class="`bg-${shiftTone}`"></div>
         </div>
       </div>
 
@@ -202,11 +202,11 @@
               
               <div class="mt-2">
                  <h2 class="display-6 fw-bold mb-1">
-                   {{ shiftStatus === 'opened' ? 'Зміна відкрита' : 'Зміна закрита' }}
+                   {{ shiftTitle }}
                  </h2>
                  
                  <div class="d-flex align-items-center mt-2">
-                    <div class="status-dot-pulse me-2" :class="shiftStatus === 'opened' ? 'bg-success' : 'bg-danger'"></div>
+                    <div class="status-dot-pulse me-2" :class="`bg-${shiftTone}`"></div>
                     <span class="text-white text-opacity-75 font-monospace small">
                       {{ shiftMessage }}
                     </span>
@@ -438,10 +438,36 @@ const form = reactive({
 const shiftBadge = computed(() => {
   if (shiftStatus.value === 'opened') return 'Відкрито';
   if (shiftStatus.value === 'closed') return 'Закрито';
-  return 'Помилка';
+  if (shiftStatus.value === 'error') return 'Помилка';
+  return 'Невідомо';
 });
-const statusIcon = computed(() => shiftStatus.value === 'opened' ? 'bi-unlock-fill text-success' : 'bi-lock-fill text-danger');
-const connectionStatusColor = computed(() => shiftStatus.value === 'error' ? 'bg-danger' : 'bg-success');
+
+const shiftTitle = computed(() => {
+  if (shiftStatus.value === 'opened') return 'Зміна відкрита';
+  if (shiftStatus.value === 'closed') return 'Зміна закрита';
+  if (shiftStatus.value === 'error') return 'Помилка з’єднання';
+  return 'Статус невідомий';
+});
+
+const shiftTone = computed(() => {
+  if (shiftStatus.value === 'opened') return 'success';
+  if (shiftStatus.value === 'closed') return 'warning';
+  if (shiftStatus.value === 'error') return 'danger';
+  return 'secondary';
+});
+
+const statusIcon = computed(() => {
+  if (shiftStatus.value === 'opened') return 'bi-unlock-fill';
+  if (shiftStatus.value === 'closed') return 'bi-lock-fill';
+  if (shiftStatus.value === 'error') return 'bi-exclamation-triangle-fill';
+  return 'bi-question-circle-fill';
+});
+
+const connectionStatusColor = computed(() => {
+  if (shiftStatus.value === 'error') return 'bg-danger';
+  if (shiftStatus.value === 'unknown') return 'bg-secondary';
+  return 'bg-success';
+});
 const dailyTotalFormatted = computed(() => formatCurrency(Number(dailyTotalCents.value || 0) / 100));
 
 // --- CHART DATA (Сума в гривнях, тільки success + sell) ---
@@ -550,13 +576,19 @@ const loadSettings = async () => {
 
 const normalizeStatus = (s) => {
   if(!s) return 'unknown';
-  const v = s.toLowerCase();
-  if(v.includes('open')) return 'opened';
-  if(v.includes('close')) return 'closed';
-  return 'error';
+  const v = String(s).toLowerCase();
+  if(v.includes('open') || v.includes('відкрит')) return 'opened';
+  if(v.includes('close') || v.includes('закрит')) return 'closed';
+  if(v.includes('error') || v.includes('fail') || v.includes('помил')) return 'error';
+  return 'unknown';
 };
 
-const getStatusMsg = (s) => s === 'opened' ? 'Каса працює в штатному режимі' : (s === 'closed' ? 'Зміна закрита, чеки накопичуються' : 'Помилка з\'єднання');
+const getStatusMsg = (s) => {
+  if(s === 'opened') return 'Каса працює в штатному режимі';
+  if(s === 'closed') return 'Зміна закрита, чеки накопичуються';
+  if(s === 'error') return 'Помилка з\'єднання';
+  return 'Статус невідомий';
+};
 
 const saveSettings = async () => {
   loading.save = true;
