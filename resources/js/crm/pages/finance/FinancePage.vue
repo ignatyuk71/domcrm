@@ -134,7 +134,7 @@
     <!-- 2. MAIN CONTENT (Table + Actions) -->
     <div class="row g-4 mb-4">
       
-      <!-- ТАБЛИЦЯ ІСТОРІЇ -->
+      <!-- ТАБЛИЦЯ ІСТОРІЇ (З фіксованою висотою та скролом) -->
       <div class="col-lg-8">
         <div class="card border-0 shadow-sm h-100">
           <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
@@ -143,9 +143,10 @@
                <span class="badge bg-light text-muted fw-normal" v-if="receipts.length">Всього: {{ receipts.length }}</span>
             </div>
           </div>
-          <div class="table-responsive h-100">
+          <!-- ОНОВЛЕНО: Додано стиль max-height та клас custom-scrollbar -->
+          <div class="table-responsive custom-scrollbar" style="max-height: 500px;">
             <table class="table table-hover align-middle mb-0 custom-table">
-              <thead class="bg-light sticky-top">
+              <thead class="bg-light sticky-top" style="z-index: 2;">
                 <tr>
                   <th class="ps-4 text-muted x-small text-uppercase">Час</th>
                   <th class="text-muted x-small text-uppercase">Статус</th>
@@ -510,11 +511,9 @@ const formatReceiptAmount = (a) => formatCurrency(Number(a||0)/100);
 const formatReceiptTime = (v) => v ? new Date(v).toLocaleTimeString('uk-UA', {hour:'2-digit', minute:'2-digit'}) : '-';
 
 // --- Actions (TOASTS) ---
-// Оновлена функція showNotice для підтримки тостів
 const showNotice = (type, message) => { 
   const id = Date.now();
   toasts.value.push({ id, type, message });
-  // Автоматичне видалення через 5 секунд
   setTimeout(() => removeToast(id), 5000);
 };
 
@@ -752,4 +751,22 @@ onMounted(loadSettings);
 /* TABLE */
 .custom-table th { font-weight: 600; letter-spacing: 0.05em; border-bottom: 1px solid #e2e8f0; }
 .custom-table td { padding: 1rem 0.75rem; border-bottom: 1px solid #f1f5f9; }
+
+/* Custom Scrollbar for Table */
+.custom-scrollbar {
+  overflow-y: auto;
+}
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
 </style>
