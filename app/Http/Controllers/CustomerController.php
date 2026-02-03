@@ -69,7 +69,8 @@ class CustomerController extends Controller
         $recentOrders = Order::query()
             ->where('customer_id', $customer->id)
             ->with([
-                'delivery:id,order_id,ttn,delivery_status_label,delivery_status_code,city_name,warehouse_name',
+                'delivery:id,order_id,ttn,delivery_status_label,delivery_status_code,delivery_status_updated_at,city_name,warehouse_name',
+                'delivery.activeWarehouseStatus:order_delivery_id,entered_at,exited_at',
                 'statusRef:id,code,name,icon,color',
                 'items' => fn ($q) => $q->select('id', 'order_id', 'product_title', 'qty', 'price', 'product_id')
                     ->with('product:id,main_photo_path'),

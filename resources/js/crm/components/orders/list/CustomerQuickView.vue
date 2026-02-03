@@ -196,7 +196,7 @@
               class="template-card"
             >
               <div class="template-info">
-                <div class="template-title">{{ tpl.title }}</div>
+                <div class="template-title">{{ tpl.processedTitle || tpl.title }}</div>
                 <div class="template-text">{{ truncateText(tpl.processedText, 80) }}</div>
               </div>
               <button class="btn-copy-template" @click="copyTemplate(tpl.processedText)">
@@ -281,6 +281,13 @@ const openTemplates = () => {
 
 const processedTemplates = computed(() => {
   const lastOrder = recentOrders.value.length > 0 ? recentOrders.value[0] : null;
+  const storageOrder = recentOrders.value.find(
+    (order) => order?.delivery?.delivery_status_code === 'at_warehouse'
+  ) || lastOrder;
+
+  const storageDays = calculateStorageDays(storageOrder);
+  const storageDaysText = storageDays !== null ? String(storageDays) : 'немає даних';
+  const storageDaysLabel = storageDays !== null ? `${storageDays} дн.` : 'немає даних';
 
   const replacements = {
     '{{name}}': customerName.value || 'немає даних',
@@ -288,18 +295,23 @@ const processedTemplates = computed(() => {
     '{{amount}}': lastOrder ? formatCurrency(lastOrder.items_sum_total, lastOrder.currency) : 'немає даних',
     '{{price}}': lastOrder ? formatCurrency(lastOrder.items_sum_total, lastOrder.currency) : 'немає даних',
     '{{order_id}}': lastOrder?.id || 'немає даних',
+    '{{storage_days}}': storageDaysText,
+    '{{storage_days_label}}': storageDaysLabel,
   };
 
   return rawTemplates.value.map((tpl) => {
     let text = tpl.content || '';
+    let title = tpl.title || '';
 
     for (const [key, value] of Object.entries(replacements)) {
       text = text.replaceAll(key, value);
+      title = title.replaceAll(key, value);
     }
 
     return {
       ...tpl,
       processedText: text,
+      processedTitle: title,
     };
   });
 });
@@ -325,6 +337,25 @@ const truncateText = (text, limit) => {
   if (!text) return '';
   if (text.length <= limit) return text;
   return `${text.slice(0, limit)}...`;
+};
+
+const calculateStorageDays = (order) => {
+  if (!order?.delivery) return null;
+  if (order.delivery.delivery_status_code !== 'at_warehouse') return null;
+
+  const enteredAt = order.delivery?.active_warehouse_status?.entered_at;
+  const fallback = order.delivery?.delivery_status_updated_at;
+  const sourceDate = enteredAt || fallback;
+  if (!sourceDate) return null;
+
+  const parsed = new Date(sourceDate);
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  const now = new Date();
+  const startNow = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startThen = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+  const diffMs = startNow.getTime() - startThen.getTime();
+  return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
 };
 
 function close() {
