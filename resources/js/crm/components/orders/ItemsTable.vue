@@ -20,7 +20,7 @@
         <span>Додати</span>
       </button>
     </div>
-
+авпаврлжопржоіварпжіловрж
     <div class="flex-grow-1 overflow-auto custom-scroll bg-body-tertiary bg-opacity-10 position-relative">
       <table class="table table-borderless align-middle mb-0 w-100 position-relative" style="border-collapse: separate; border-spacing: 0;">
         <thead class="sticky-top bg-white shadow-sm z-index-10">
