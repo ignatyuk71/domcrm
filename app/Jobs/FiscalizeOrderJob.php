@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\FiscalReceipt;
 use App\Models\Order;
+use App\Models\Status;
 use App\Services\CheckboxService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
@@ -279,9 +280,17 @@ class FiscalizeOrderJob implements ShouldQueue, ShouldBeUnique
     {
         if ($this->getAlreadyPaidAmount() >= $totalOrder) {
             $updates = [];
-            $fiscalizedId = config('fiscal.status_ids.fiscalized');
-            if ($fiscalizedId && $this->order->status_id !== $fiscalizedId) {
-                $updates['status_id'] = $fiscalizedId;
+            $fiscalizedCode = 'delivered_paid';
+            $fiscalizedId = Status::query()
+                ->where('type', 'order')
+                ->where('code', $fiscalizedCode)
+                ->value('id') ?? config('fiscal.status_ids.fiscalized');
+
+            if ($fiscalizedId && $this->order->status_id !== (int) $fiscalizedId) {
+                $updates['status_id'] = (int) $fiscalizedId;
+            }
+            if ($this->order->status !== $fiscalizedCode) {
+                $updates['status'] = $fiscalizedCode;
             }
             if ($this->order->payment_status !== 'paid') {
                 $updates['payment_status'] = 'paid';

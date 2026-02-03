@@ -6,6 +6,7 @@ use App\Jobs\FiscalizeOrderJob;
 use App\Models\CheckboxSetting;
 use App\Models\FiscalReceipt;
 use App\Models\Order;
+use App\Models\Status;
 use App\Services\FiscalQueueService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
@@ -29,9 +30,21 @@ class FiscalizeDeliveredOrders extends Command
             return self::SUCCESS;
         }
         $statusIds = config('fiscal.status_ids', []);
-        
-        // Нам потрібен ТІЛЬКИ фінальний статус (ID 11), який означає "Забрав/Успішно"
-        $fiscalizedId = (int) ($statusIds['fiscalized'] ?? 11);
+
+        // Нам потрібен ТІЛЬКИ фінальний статус, який означає "Забрав/Успішно"
+        $fiscalizedCode = 'delivered_paid';
+        $fiscalizedId = Status::query()
+            ->where('type', 'order')
+            ->where('code', $fiscalizedCode)
+            ->value('id');
+
+        if (!$fiscalizedId) {
+            $fiscalizedId = (int) ($statusIds['fiscalized'] ?? 11);
+            $cronLog->warning('Fiscal status code not found, fallback to status_id', [
+                'status_code' => $fiscalizedCode,
+                'fallback_id' => $fiscalizedId,
+            ]);
+        }
 
         $this->info("Пошук замовлень для фіскалізації (Status ID: {$fiscalizedId})...");
 
