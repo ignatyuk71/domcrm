@@ -71,6 +71,7 @@ class CustomerController extends Controller
             ->with([
                 'delivery',
                 'delivery.activeWarehouseStatus',
+                'payment:id,order_id,method,prepay_amount,currency',
                 'statusRef:id,code,name,icon,color',
                 'items' => fn ($q) => $q->select('id', 'order_id', 'product_title', 'qty', 'price', 'product_id')
                     ->with('product:id,main_photo_path'),

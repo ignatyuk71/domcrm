@@ -283,18 +283,40 @@ const processedTemplates = computed(() => {
   const lastOrder = recentOrders.value.length > 0 ? recentOrders.value[0] : null;
   const storageOrder = recentOrders.value.find(
     (order) => order?.delivery?.delivery_status_code === 'at_warehouse'
-  ) || lastOrder;
+  ) || null;
+  const templateOrder = storageOrder || lastOrder;
 
-  const storageDays = calculateStorageDays(storageOrder);
+  const storageDays = calculateStorageDays(storageOrder || lastOrder);
   const storageDaysText = storageDays !== null ? String(storageDays) : 'немає даних';
   const storageDaysLabel = storageDays !== null ? `${storageDays} дн.` : 'немає даних';
+  const orderAmount = templateOrder ? formatCurrency(templateOrder.items_sum_total, templateOrder.currency) : 'немає даних';
+  const itemsCount = templateOrder?.items?.length ?? null;
+  const itemsList = buildItemsList(templateOrder?.items);
+  const paymentMethodLabel = resolvePaymentMethodLabel(templateOrder?.payment?.method);
+  const prepayAmount = formatPrepayAmount(templateOrder?.payment?.prepay_amount, templateOrder?.payment?.currency || templateOrder?.currency);
+  const deliveryStatus = templateOrder?.delivery?.delivery_status_label
+    || templateOrder?.delivery?.delivery_status
+    || templateOrder?.delivery?.status
+    || 'немає даних';
+  const orderStatus = templateOrder?.statusRef?.name || templateOrder?.status || 'немає даних';
+  const orderDate = templateOrder?.created_at ? formatDate(templateOrder.created_at) : 'немає даних';
 
   const replacements = {
     '{{name}}': customerName.value || 'немає даних',
-    '{{ttn}}': lastOrder?.delivery?.ttn || 'немає даних',
-    '{{amount}}': lastOrder ? formatCurrency(lastOrder.items_sum_total, lastOrder.currency) : 'немає даних',
-    '{{price}}': lastOrder ? formatCurrency(lastOrder.items_sum_total, lastOrder.currency) : 'немає даних',
-    '{{order_id}}': lastOrder?.id || 'немає даних',
+    '{{phone}}': customerPhone.value || 'немає даних',
+    '{{ttn}}': templateOrder?.delivery?.ttn || 'немає даних',
+    '{{amount}}': orderAmount,
+    '{{price}}': orderAmount,
+    '{{order_id}}': templateOrder?.id || 'немає даних',
+    '{{city}}': templateOrder?.delivery?.city_name || 'немає даних',
+    '{{warehouse}}': buildWarehouseLabel(templateOrder?.delivery) || 'немає даних',
+    '{{delivery_status}}': deliveryStatus,
+    '{{order_date}}': orderDate,
+    '{{status}}': orderStatus,
+    '{{items_count}}': itemsCount !== null ? String(itemsCount) : 'немає даних',
+    '{{items_list}}': itemsList,
+    '{{payment_method}}': paymentMethodLabel,
+    '{{prepay_amount}}': prepayAmount,
     '{{storage_days}}': storageDaysText,
     '{{storage_days_label}}': storageDaysLabel,
   };
@@ -337,6 +359,56 @@ const truncateText = (text, limit) => {
   if (!text) return '';
   if (text.length <= limit) return text;
   return `${text.slice(0, limit)}...`;
+};
+
+const resolvePaymentMethodLabel = (method) => {
+  if (!method) return 'немає даних';
+
+  const normalized = String(method).toLowerCase();
+  const map = {
+    cod: 'Післяплата',
+    cash: 'Готівка',
+    card: 'Оплата карткою',
+    online: 'Онлайн оплата',
+    prepay: 'Передоплата',
+    bank: 'Банківський переказ',
+  };
+
+  return map[normalized] || 'Інший спосіб оплати';
+};
+
+const formatPrepayAmount = (amount, currency) => {
+  const numeric = Number(amount);
+  if (!Number.isFinite(numeric)) {
+    return formatCurrency(0, currency || 'UAH');
+  }
+
+  return formatCurrency(numeric, currency || 'UAH');
+};
+
+const buildItemsList = (items) => {
+  if (!items || items.length === 0) return 'немає даних';
+
+  return items
+    .map((item) => {
+      const title = item?.product_title || item?.product?.name || 'Товар';
+      const qty = item?.qty ?? 1;
+      return `${title} × ${qty}`;
+    })
+    .join(', ');
+};
+
+const buildWarehouseLabel = (delivery) => {
+  if (!delivery) return null;
+
+  if (delivery.warehouse_name) return delivery.warehouse_name;
+  if (delivery.warehouse) return delivery.warehouse;
+
+  const parts = [];
+  if (delivery.street) parts.push(delivery.street);
+  if (delivery.building) parts.push(`буд. ${delivery.building}`);
+  if (delivery.apartment) parts.push(`кв. ${delivery.apartment}`);
+  return parts.length > 0 ? parts.join(', ') : null;
 };
 
 const calculateStorageDays = (order) => {
