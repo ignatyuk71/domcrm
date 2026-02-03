@@ -94,11 +94,11 @@ class DeliveryStatusMapper
      * Мапінг коду НП у CRM-статус (id).
      * Тут визначається, який ID статусу отримає замовлення в базі даних.
      */
-    public static function getCrmStatusId(int $npCode): ?int
+    public static function getCrmStatusCode(int $npCode): ?string
     {
         // 1. Створено ТТН -> Запаковано (ID 4)
         if ($npCode === self::NP_REGISTERED) {
-            return 4; 
+            return 'packed';
         }
 
         // 2. У дорозі -> Відправлено (ID 5)
@@ -108,27 +108,27 @@ class DeliveryStatusMapper
             self::NP_IN_CITY_RECIPIENT,
             self::NP_ON_WAY_TO_RECIPIENT,
         ], true)) {
-            return 5; 
+            return 'shipped';
         }
 
         // 3. Прибуло -> Прибуло у відділення (ID 6)
         if (in_array($npCode, [self::NP_ARRIVED, self::NP_ARRIVED_2], true)) {
-            return 6; 
+            return 'delivered';
         }
 
         // 4. Отримано -> Успішно завершено (ID 11)
         if (in_array($npCode, [self::NP_RECEIVED, self::NP_MONEY_RECEIVED, self::NP_MONEY_RECEIVED_2], true)) {
-            return 11; 
+            return 'delivered_paid';
         }
 
         // 5. Відмова -> Повернення (ID 8)
         if (in_array($npCode, [self::NP_REFUSAL_RECIPIENT, self::NP_REFUSAL_OTHER, self::NP_REFUSAL_ADDRESS], true)) {
-            return 8; 
+            return 'returned';
         }
 
         // 6. Видалено/Не знайдено -> Скасовано (ID 7)
         if (in_array($npCode, [self::NP_DELETED, self::NP_NOT_FOUND], true)) {
-            return 7; 
+            return 'cancelled';
         }
 
         return null;

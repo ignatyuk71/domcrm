@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Order;
+use App\Models\Status;
 use App\Services\NovaPoshtaService;
 use App\Support\DeliveryStatusMapper;
 use Illuminate\Console\Command;
@@ -61,7 +62,12 @@ class SyncDeliveryStatuses extends Command
         $updated = 0;
         $failed = 0;
 
-        $query->chunkById($chunk, function (Collection $orders) use ($novaPoshta, &$checked, &$updated, &$failed) {
+        $statusIdsByCode = Status::query()
+            ->where('type', 'order')
+            ->pluck('id', 'code')
+            ->all();
+
+        $query->chunkById($chunk, function (Collection $orders) use ($novaPoshta, &$checked, &$updated, &$failed, $statusIdsByCode) {
             $mapByTtn = [];
             $documents = [];
 
@@ -121,13 +127,25 @@ class SyncDeliveryStatuses extends Command
 
                 // Отримуємо ID статусу для CRM через Mapper
                 $npCode = (int) ($row['StatusCode'] ?? $row['Status'] ?? 0);
-                $newStatusId = DeliveryStatusMapper::getCrmStatusId($npCode);
+                $newStatusCode = DeliveryStatusMapper::getCrmStatusCode($npCode);
+                $newStatusId = $newStatusCode ? ($statusIdsByCode[$newStatusCode] ?? null) : null;
+
+                if ($newStatusCode && !$newStatusId) {
+                    Log::warning('NovaPoshta status mapped to unknown CRM status code', [
+                        'order_id' => $entry['order']->id,
+                        'np_code' => $npCode,
+                        'status_code' => $newStatusCode,
+                    ]);
+                }
 
                 if ($newStatusId) {
                     $order = $entry['order'];
                     // Якщо статус змінився - оновлюємо
-                    if ($order->status_id !== $newStatusId) {
-                        $order->update(['status_id' => $newStatusId]);
+                    if ($order->status_id !== $newStatusId || $order->status !== $newStatusCode) {
+                        $order->update([
+                            'status_id' => $newStatusId,
+                            'status' => $newStatusCode,
+                        ]);
                         // Тут можна додати Log::info, щоб бачити зміни в консолі/логах
                     }
                 }

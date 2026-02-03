@@ -886,6 +886,29 @@ class OrderController extends Controller
         $delivery->syncStatusHistory($normalized, now());
         $delivery->load('activeWarehouseStatus');
 
+        $npCode = (int) ($data['StatusCode'] ?? $data['Status'] ?? 0);
+        $newStatusCode = DeliveryStatusMapper::getCrmStatusCode($npCode);
+        if ($newStatusCode) {
+            $newStatusId = Status::where('code', $newStatusCode)
+                ->where('type', 'order')
+                ->value('id');
+
+            if ($newStatusId) {
+                if ($order->status_id !== $newStatusId || $order->status !== $newStatusCode) {
+                    $order->update([
+                        'status_id' => $newStatusId,
+                        'status' => $newStatusCode,
+                    ]);
+                }
+            } else {
+                Log::warning('NovaPoshta status mapped to unknown CRM status code (manual)', [
+                    'order_id' => $order->id,
+                    'np_code' => $npCode,
+                    'status_code' => $newStatusCode,
+                ]);
+            }
+        }
+
         return response()->json([
             'success' => true,
             'delivery_status_code' => $delivery->delivery_status_code,
