@@ -11,6 +11,7 @@ return new class extends Migration
         Schema::create('facebook_settings', function (Blueprint $table) {
             $table->id();
             $table->string('page_id')->nullable();
+            $table->string('instagram_account_id')->nullable();
             $table->text('access_token')->nullable();
             $table->string('verify_token')->nullable();
             $table->timestamps();

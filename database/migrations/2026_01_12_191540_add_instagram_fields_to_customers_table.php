@@ -11,10 +11,27 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (!Schema::hasTable('customers')) {
+            return;
+        }
+
         Schema::table('customers', function (Blueprint $table) {
-            $table->string('instagram_user_id')->nullable()->after('fb_user_id');
-            $table->string('instagram_username')->nullable()->after('instagram_user_id');
-            $table->index('instagram_user_id');
+            // Визначаємо колонку, після якої безпечно вставляти
+            $afterColumn = Schema::hasColumn('customers', 'fb_user_id') ? 'fb_user_id' : 'email';
+
+            if (!Schema::hasColumn('customers', 'instagram_user_id')) {
+                $table->string('instagram_user_id')->nullable()->after($afterColumn);
+            }
+
+            if (!Schema::hasColumn('customers', 'instagram_username')) {
+                $table->string('instagram_username')->nullable()->after('instagram_user_id');
+            }
+
+            if (!Schema::hasColumn('customers', 'instagram_user_id')) {
+                // nothing to index
+            } else {
+                $table->index('instagram_user_id');
+            }
         });
     }
 
@@ -23,9 +40,24 @@ return new class extends Migration
      */
     public function down(): void
     {
+        if (!Schema::hasTable('customers')) {
+            return;
+        }
+
         Schema::table('customers', function (Blueprint $table) {
-            $table->dropIndex(['instagram_user_id']);
-            $table->dropColumn(['instagram_user_id', 'instagram_username']);
+            if (Schema::hasColumn('customers', 'instagram_user_id')) {
+                $table->dropIndex(['instagram_user_id']);
+            }
+            $columns = [];
+            if (Schema::hasColumn('customers', 'instagram_user_id')) {
+                $columns[] = 'instagram_user_id';
+            }
+            if (Schema::hasColumn('customers', 'instagram_username')) {
+                $columns[] = 'instagram_username';
+            }
+            if ($columns) {
+                $table->dropColumn($columns);
+            }
         });
     }
 };

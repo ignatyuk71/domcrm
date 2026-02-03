@@ -11,8 +11,14 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (!Schema::hasTable('facebook_settings')) {
+            return;
+        }
+
         Schema::table('facebook_settings', function (Blueprint $table) {
-            $table->string('instagram_account_id')->nullable()->after('page_id');
+            if (!Schema::hasColumn('facebook_settings', 'instagram_account_id')) {
+                $table->string('instagram_account_id')->nullable()->after('page_id');
+            }
         });
     }
 
@@ -21,8 +27,14 @@ return new class extends Migration
      */
     public function down(): void
     {
+        if (!Schema::hasTable('facebook_settings')) {
+            return;
+        }
+
         Schema::table('facebook_settings', function (Blueprint $table) {
-            $table->dropColumn('instagram_account_id');
+            if (Schema::hasColumn('facebook_settings', 'instagram_account_id')) {
+                $table->dropColumn('instagram_account_id');
+            }
         });
     }
 };

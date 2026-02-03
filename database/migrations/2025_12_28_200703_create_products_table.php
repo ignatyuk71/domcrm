@@ -44,7 +44,6 @@ return new class extends Migration
 
             // Індекси для CRM
             $table->index('sku');
-            $table->index('category');
         });
     }
 
