@@ -16,7 +16,7 @@ class SyncDeliveryStatuses extends Command
      *
      * @var string
      */
-    protected $signature = 'delivery:sync-statuses {--chunk=200 : Кількість замовлень у одному запиті до API}';
+    protected $signature = 'delivery:sync-statuses {--chunk=50 : Кількість замовлень у одному запиті до API}';
 
     /**
      * The console command description.
@@ -24,6 +24,10 @@ class SyncDeliveryStatuses extends Command
      * @var string
      */
     protected $description = 'Оновлює статуси доставки (Нова Пошта) для активних відправлень';
+
+    private const DEFAULT_CHUNK = 50;
+    private const MAX_CHUNK = 100; // Ліміт НП на кількість документів в одному запиті
+    private const TTN_PATTERN = '/^\d{14}$/';
 
     /**
      * Фінальні статуси замовлення (не треба опитувати доставку).
@@ -41,8 +45,9 @@ class SyncDeliveryStatuses extends Command
 
     public function handle(NovaPoshtaService $novaPoshta): int
     {
-        $chunk = (int) $this->option('chunk') ?: 200;
-        $chunk = max(1, $chunk);
+        $chunk = (int) $this->option('chunk');
+        $chunk = $chunk > 0 ? $chunk : self::DEFAULT_CHUNK;
+        $chunk = max(1, min($chunk, self::MAX_CHUNK));
 
         // Шукаємо тільки ті замовлення, статус яких НЕ у списку $finalOrderStatuses
         $query = Order::query()
@@ -60,8 +65,9 @@ class SyncDeliveryStatuses extends Command
         $checked = 0;
         $updated = 0;
         $failed = 0;
+        $skipped = 0;
 
-        $query->chunkById($chunk, function (Collection $orders) use ($novaPoshta, &$checked, &$updated, &$failed) {
+        $query->chunkById($chunk, function (Collection $orders) use ($novaPoshta, &$checked, &$updated, &$failed, &$skipped) {
             $mapByTtn = [];
             $documents = [];
 
@@ -70,12 +76,23 @@ class SyncDeliveryStatuses extends Command
                 if (!$delivery || !$delivery->ttn) {
                     continue;
                 }
+                $ttn = trim((string) $delivery->ttn);
+                if (!preg_match(self::TTN_PATTERN, $ttn)) {
+                    Log::warning('NovaPoshta tracking skip: invalid TTN', [
+                        'order_id' => $order->id,
+                        'ttn' => $ttn,
+                    ]);
+                    $skipped++;
+                    continue;
+                }
+
                 $phone = $delivery->recipient_phone ?: ($order->customer?->phone ?? null);
+                $phone = $phone ? preg_replace('/\D+/', '', (string) $phone) : null;
                 $documents[] = [
-                    'DocumentNumber' => $delivery->ttn,
+                    'DocumentNumber' => $ttn,
                     'Phone' => $phone,
                 ];
-                $mapByTtn[$delivery->ttn] = [
+                $mapByTtn[$ttn] = [
                     'delivery' => $delivery,
                     'order' => $order,
                 ];
@@ -138,7 +155,7 @@ class SyncDeliveryStatuses extends Command
             $checked += count($documents);
         }, column: 'id');
 
-        $this->info("Перевірено: {$checked}, оновлено: {$updated}, помилки: {$failed}");
+        $this->info("Перевірено: {$checked}, оновлено: {$updated}, помилки: {$failed}, пропущено: {$skipped}");
 
         return self::SUCCESS;
     }
