@@ -132,6 +132,7 @@ const statusesOrder = ref(null);
 const selectedStatusId = ref(null);
 const commentNotice = reactive({ type: 'success', message: '' });
 const meta = ref({ current_page: 1, last_page: 1, total: 0 });
+const statusCounts = ref({});
 const holdFilterOptions = [3, 4, 5, 6];
 const holdFilterDays = ref(3);
 const holdFilterActive = ref(false);
@@ -140,6 +141,33 @@ const perPageOptions = [15, 30, 60];
 let searchTimer;
 
 const statusChips = ref([{ value: '', label: 'Всі', icon: 'bi-grid', color: null }]);
+const countableStatusCodes = new Set(['new', 'in_process', 'confirmed', 'shipped', 'delivered']);
+
+function buildStatusChips() {
+  const hiddenStatusCodes = new Set(['cancelled', 'canceled', 'packing']);
+  const hiddenStatusNames = new Set(['Скасовано', 'Запаковано']);
+
+  statusChips.value = [
+    { value: '', label: 'Всі', icon: 'bi-grid', color: null },
+    ...statuses.value
+      .filter((status) => !hiddenStatusCodes.has(status.code) && !hiddenStatusNames.has(status.name))
+      .map((status) => {
+        const count = countableStatusCodes.has(status.code)
+          ? (statusCounts.value[status.id] ?? 0)
+          : null;
+        const label = countableStatusCodes.has(status.code)
+          ? `${status.name} · ${count}`
+          : status.name;
+
+        return {
+          value: status.id,
+          label,
+          icon: status.icon,
+          color: status.color,
+        };
+      }),
+  ];
+}
 
 /** ГЕНЕРАЦІЯ ТТН */
 async function generateTtn(order) {
@@ -274,6 +302,12 @@ async function fetchData() {
       from: metaPayload.from ?? 0,
       to: metaPayload.to ?? 0,
     };
+
+    const countsPayload = data.status_counts || data?.data?.status_counts || {};
+    statusCounts.value = countsPayload || {};
+    if (statuses.value.length) {
+      buildStatusChips();
+    }
   } catch (error) {
     console.error(error);
   } finally {
@@ -546,19 +580,7 @@ async function loadStatuses() {
     const { data } = await fetchStatuses({ type: 'order' });
     const list = data?.data || data || [];
     statuses.value = Array.isArray(list) ? list : [];
-    const hiddenStatusCodes = new Set(['cancelled', 'canceled', 'packing']);
-    const hiddenStatusNames = new Set(['Скасовано', 'Запаковано']);
-    statusChips.value = [
-      { value: '', label: 'Всі', icon: 'bi-grid', color: null },
-      ...statuses.value
-        .filter((status) => !hiddenStatusCodes.has(status.code) && !hiddenStatusNames.has(status.name))
-        .map((status) => ({
-          value: status.id,
-          label: status.name,
-          icon: status.icon,
-          color: status.color,
-        })),
-    ];
+    buildStatusChips();
   } catch (e) {
     console.error('Не вдалося завантажити статуси', e);
     statuses.value = [];

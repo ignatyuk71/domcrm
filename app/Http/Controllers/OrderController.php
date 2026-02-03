@@ -127,7 +127,18 @@ class OrderController extends Controller
             ->latest('id')
             ->paginate($perPage);
 
-        return response()->json($orders);
+        $statusCounts = Order::query()
+            ->whereNotNull('status_id')
+            ->select('status_id', DB::raw('COUNT(*) as count'))
+            ->groupBy('status_id')
+            ->pluck('count', 'status_id')
+            ->map(fn ($count) => (int) $count)
+            ->all();
+
+        $payload = $orders->toArray();
+        $payload['status_counts'] = $statusCounts;
+
+        return response()->json($payload);
     }
 
     public function show(Order $order): JsonResponse
