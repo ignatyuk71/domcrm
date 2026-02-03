@@ -77,6 +77,14 @@ class FiscalizeDeliveredOrders extends Command
                             $order->update(['payment_status' => 'paid']);
                             $this->info("Замовлення #{$order->id} вже фіскалізоване. Статус оновлено на paid.");
                         }
+                        $cronLog->info('Fiscal skip: already paid', [
+                            'order_id' => $order->id,
+                            'status_id' => $order->status_id,
+                            'status' => $order->status,
+                            'payment_status' => $order->payment_status,
+                            'total_cents' => $totalOrderCents,
+                            'already_paid_cents' => $alreadyPaid,
+                        ]);
                         continue; // Йдемо до наступного, чек бити не треба
                     }
 
@@ -85,12 +93,29 @@ class FiscalizeDeliveredOrders extends Command
                     
                     // Якщо борг 0 або менше — пропускаємо
                     if ($remaining <= 0) {
+                        $cronLog->info('Fiscal skip: non-positive remaining', [
+                            'order_id' => $order->id,
+                            'status_id' => $order->status_id,
+                            'status' => $order->status,
+                            'payment_status' => $order->payment_status,
+                            'total_cents' => $totalOrderCents,
+                            'already_paid_cents' => $alreadyPaid,
+                            'remaining_cents' => $remaining,
+                        ]);
                         continue;
                     }
 
                     if ($queueEnabled && !$withinWindow) {
                         $queueService->enqueue($order, $remaining, FiscalReceipt::TYPE_SELL);
-                        $cronLog->info("Fiscal queued Order #{$order->id}: " . ($remaining / 100) . " грн");
+                        $cronLog->info('Fiscal queued', [
+                            'order_id' => $order->id,
+                            'status_id' => $order->status_id,
+                            'status' => $order->status,
+                            'payment_status' => $order->payment_status,
+                            'total_cents' => $totalOrderCents,
+                            'already_paid_cents' => $alreadyPaid,
+                            'remaining_cents' => $remaining,
+                        ]);
                         continue;
                     }
 
@@ -101,7 +126,16 @@ class FiscalizeDeliveredOrders extends Command
                         FiscalizeOrderJob::dispatchSync($order, FiscalReceipt::TYPE_SELL, $remaining);
                         
                     } catch (\Throwable $e) {
-                        $cronLog->error("CRON Fiscal Error Order #{$order->id}: " . $e->getMessage());
+                        $cronLog->error('CRON Fiscal Error', [
+                            'order_id' => $order->id,
+                            'status_id' => $order->status_id,
+                            'status' => $order->status,
+                            'payment_status' => $order->payment_status,
+                            'total_cents' => $totalOrderCents,
+                            'already_paid_cents' => $alreadyPaid,
+                            'remaining_cents' => $remaining,
+                            'error' => $e->getMessage(),
+                        ]);
                         $this->error("Помилка для #{$order->id}: " . $e->getMessage());
                     }
                 }
