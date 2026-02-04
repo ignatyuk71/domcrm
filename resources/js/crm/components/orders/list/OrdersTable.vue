@@ -43,6 +43,20 @@
     };
   };
 
+  const isHexColor = (value) => {
+    return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(String(value || '').trim());
+  };
+
+  const getTagClass = (color) => {
+    if (!color) return 'tag-gray';
+    return isHexColor(color) ? '' : `tag-${color}`;
+  };
+
+  const getTagStyle = (color) => {
+    if (!isHexColor(color)) return {};
+    return { backgroundColor: color + '15', color: color };
+  };
+
   const openTtnConfirm = (order) => {
     ttnConfirmOrder.value = order;
     ttnConfirmOpen.value = true;
@@ -172,7 +186,8 @@
                     v-for="tag in order.tags"
                     :key="tag.id"
                     class="tag-pill"
-                    :class="'tag-' + tag.color"
+                    :class="getTagClass(tag.color)"
+                    :style="getTagStyle(tag.color)"
                     :title="tag.name"
                   >
                     <span class="tag-dot"></span>

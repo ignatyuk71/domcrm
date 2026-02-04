@@ -48,6 +48,20 @@
     emit('save-comment', trimmed === '' ? null : trimmed);
   };
 
+  const isHexColor = (value) => {
+    return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(String(value || '').trim());
+  };
+
+  const getTagClass = (color) => {
+    if (!color) return 'tag-gray';
+    return isHexColor(color) ? '' : `tag-${color}`;
+  };
+
+  const getTagStyle = (color) => {
+    if (!isHexColor(color)) return {};
+    return { backgroundColor: color + '15', color: color, borderColor: color + '40' };
+  };
+
   watch(
     () => props.order.comment,
     (value) => {
@@ -154,7 +168,8 @@
               v-for="tag in order.tags"
               :key="tag.id"
               class="tag-chip"
-              :class="'tag-' + tag.color"
+              :class="getTagClass(tag.color)"
+              :style="getTagStyle(tag.color)"
             >
               <i :class="'bi ' + tag.icon"></i>
               {{ tag.name }}
@@ -567,6 +582,11 @@
   .tags-col, .notes-col { display: flex; flex-direction: column; gap: 6px; }
   .tags-wrapper { display: flex; flex-wrap: wrap; gap: 6px; }
   .tag-chip { font-size: 0.7rem; padding: 3px 9px; border-radius: 999px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; background: #fff; border: 1px solid #e2e8f0; color: #64748b; }
+  .tag-red { background: #fee2e2; color: #b91c1c; border-color: #fecaca; }
+  .tag-blue { background: #dbeafe; color: #1d4ed8; border-color: #bfdbfe; }
+  .tag-green { background: #dcfce7; color: #15803d; border-color: #bbf7d0; }
+  .tag-amber { background: #fef3c7; color: #b45309; border-color: #fde68a; }
+  .tag-gray { background: #f3f4f6; color: #4b5563; border-color: #e5e7eb; }
   .btn-add-tag { font-size: 0.7rem; padding: 3px 10px; border-radius: 999px; border: 1px dashed #cbd5e1; background: #fff; color: #64748b; cursor: pointer; transition: all 0.15s; }
   .btn-add-tag:hover { border-color: #6366f1; color: #6366f1; background: #eef2ff; }
 
