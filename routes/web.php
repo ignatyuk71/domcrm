@@ -276,6 +276,9 @@ Route::middleware('auth')->group(function () {
 
     // --- ДОВІДНИКИ ---
     Route::get('/statuses', [StatusController::class, 'index'])->name('statuses.index');
+    Route::post('/statuses', [StatusController::class, 'store'])->name('statuses.store');
+    Route::put('/statuses/{status}', [StatusController::class, 'update'])->name('statuses.update');
+    Route::delete('/statuses/{status}', [StatusController::class, 'destroy'])->name('statuses.destroy');
     Route::get('/order-sources', [OrderSourceController::class, 'index'])->name('orderSources.index');
     Route::get('/tags', [TagController::class, 'index'])->name('tags.index');
     Route::post('/tags', [TagController::class, 'store'])->name('tags.store');
@@ -295,6 +298,7 @@ Route::middleware('auth')->group(function () {
         Route::delete('/colors/{color}', [ColorController::class, 'destroy'])->name('colors.destroy');
 
         Route::get('/tags', [TagController::class, 'index'])->name('tags.index');
+        Route::get('/statuses', [StatusController::class, 'index'])->name('statuses.index');
         Route::get('/nova-poshta', [NovaPoshtaSettingsController::class, 'index'])->name('novaPoshta.index');
         Route::post('/nova-poshta', [NovaPoshtaSettingsController::class, 'save'])->name('novaPoshta.save');
         Route::post('/nova-poshta/fetch-refs', [NovaPoshtaSettingsController::class, 'fetchRefs'])->name('novaPoshta.fetchRefs');

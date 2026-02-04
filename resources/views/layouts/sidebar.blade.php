@@ -473,6 +473,10 @@
                 <span class="icon-frame"><i class="bi bi-bookmark-star"></i></span>
                 <span class="item-text-sub">Теги</span>
             </a>
+            <a href="{{ route('settings.statuses.index') }}" class="sidebar-link-sub {{ request()->is('settings/statuses') ? 'active' : '' }}">
+                <span class="icon-frame"><i class="bi bi-list-check"></i></span>
+                <span class="item-text-sub">Статуси</span>
+            </a>
         </div>
     </div>
 </aside>

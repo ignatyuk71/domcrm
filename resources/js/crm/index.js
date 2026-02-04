@@ -13,6 +13,7 @@ import FinancePage from './pages/finance/FinancePage.vue';
 import SettingsCategoriesPage from './pages/settings/SettingsCategoriesPage.vue';
 import SettingsColorsPage from './pages/settings/SettingsColorsPage.vue';
 import SettingsTagsPage from './pages/settings/SettingsTagsPage.vue';
+import SettingsStatusesPage from './pages/settings/SettingsStatusesPage.vue';
 import SettingsNovaPoshtaPage from './pages/settings/SettingsNovaPoshtaPage.vue';
 import './styles/crm.css';
 import PackingListPage from '../Pages/Packing/PackingList.vue';
@@ -168,6 +169,15 @@ export function mountSettingsTags(selector = '#crm-settings-tags') {
     return app;
 }
 
+export function mountSettingsStatuses(selector = '#crm-settings-statuses') {
+    const el = document.querySelector(selector);
+    if (!el) return;
+
+    const app = createApp(SettingsStatusesPage);
+    app.mount(el);
+    return app;
+}
+
 export function mountSettingsNovaPoshta(selector = '#crm-settings-nova-poshta') {
     const el = document.querySelector(selector);
     if (!el) return;
@@ -194,6 +204,7 @@ function autoMount() {
     mountSettingsCategories();
     mountSettingsColors();
     mountSettingsTags();
+    mountSettingsStatuses();
     mountSettingsNovaPoshta();
 }
 
