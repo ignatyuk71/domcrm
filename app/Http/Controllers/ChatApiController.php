@@ -9,6 +9,7 @@ use App\Models\Conversation;
 use App\Models\Customer;
 use App\Services\MetaService;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -250,10 +251,19 @@ class ChatApiController extends Controller
             return response()->json(['error' => 'Customer not found'], 404);
         }
 
+        $platform = request()->query('platform');
+
         // Первинна синхронізація тільки якщо немає локальних повідомлень
         try {
-            $hasMessages = FacebookMessage::where('customer_id', $id)->exists();
-            if (!$hasMessages && method_exists($metaService, 'syncHistory')) {
+            $hasMessages = FacebookMessage::where('customer_id', $id)
+                ->when($platform, fn ($q) => $q->where('platform', $platform))
+                ->exists();
+            $preferredPlatform = $customer->instagram_user_id ? 'instagram' : 'messenger';
+            if (
+                !$hasMessages
+                && method_exists($metaService, 'syncHistory')
+                && (!$platform || $platform === $preferredPlatform)
+            ) {
                 $metaService->syncHistory($customer);
             }
         } catch (\Throwable $e) {
@@ -267,6 +277,7 @@ class ChatApiController extends Controller
             $messages = FacebookMessage::query()
                 ->with('parent')
                 ->where('customer_id', $id)
+                ->when($platform, fn ($q) => $q->where('platform', $platform))
                 ->orderByRaw('COALESCE(sent_at, created_at) asc')
                 ->get()
                 ->map(function (FacebookMessage $message) {
@@ -294,10 +305,13 @@ class ChatApiController extends Controller
                 });
 
             // Скидаємо лічильники
-            Conversation::where('customer_id', $id)->update(['unread_count' => 0]);
+            Conversation::where('customer_id', $id)
+                ->when($platform, fn ($q) => $q->where('platform', $platform))
+                ->update(['unread_count' => 0]);
             
             FacebookMessage::where('customer_id', $id)
                 ->where('is_from_customer', true)
+                ->when($platform, fn ($q) => $q->where('platform', $platform))
                 ->where('is_read', false)
                 ->update(['is_read' => true]);
 
@@ -321,7 +335,19 @@ class ChatApiController extends Controller
                 'files' => 'nullable|array',
                 'files.*' => 'file|mimes:jpg,jpeg,png,webp,gif,heic,heif|max:5120',
                 'remote_urls' => 'nullable|array',
-                'remote_urls.*' => 'string',
+                'remote_urls.*' => ['string', 'max:2048', function ($attribute, $value, $fail) {
+                    $url = trim((string) $value);
+                    if ($url === '') {
+                        return;
+                    }
+                    if (preg_match('/^(javascript|data):/i', $url)) {
+                        $fail('Invalid url');
+                        return;
+                    }
+                    if (!str_starts_with($url, 'http') && !str_starts_with($url, '/')) {
+                        $fail('Invalid url');
+                    }
+                }],
                 'platform' => 'nullable|string|in:messenger,instagram',
             ]);
         } catch (\Throwable $e) {
@@ -366,9 +392,14 @@ class ChatApiController extends Controller
 
         if (!empty($validated['remote_urls'])) {
             foreach ($validated['remote_urls'] as $remoteUrl) {
-                $attachments[] = ['type' => 'image', 'url' => $remoteUrl];
+                $remoteUrl = trim((string) $remoteUrl);
+                if ($remoteUrl === '') {
+                    continue;
+                }
+                $type = $this->inferRemoteAttachmentType($remoteUrl);
+                $attachments[] = ['type' => $type, 'url' => $remoteUrl];
                 $metaAttachments[] = [
-                    'type' => 'image',
+                    'type' => $type,
                     'url' => str_starts_with($remoteUrl, 'http') ? $remoteUrl : url(ltrim($remoteUrl, '/')),
                 ];
             }
@@ -489,13 +520,17 @@ class ChatApiController extends Controller
     {
         $validated = $request->validate([
             'customer_id' => 'required|integer|exists:customers,id',
+            'platform' => 'nullable|string|in:messenger,instagram',
         ]);
 
         try {
-            Conversation::where('customer_id', $validated['customer_id'])->update(['unread_count' => 0]);
+            Conversation::where('customer_id', $validated['customer_id'])
+                ->when(!empty($validated['platform']), fn ($q) => $q->where('platform', $validated['platform']))
+                ->update(['unread_count' => 0]);
 
             FacebookMessage::where('customer_id', $validated['customer_id'])
                 ->where('is_from_customer', true)
+                ->when(!empty($validated['platform']), fn ($q) => $q->where('platform', $validated['platform']))
                 ->update(['is_read' => true]);
         } catch (\Throwable $e) {
             Log::error('Chat markRead failed', [
@@ -511,22 +546,27 @@ class ChatApiController extends Controller
     public function updates(Request $request, $id)
     {
         $sinceId = (int) $request->query('since_id');
-
-        if ($sinceId <= 0) {
-            return response()->json([
-                'messages' => [],
-                'thread' => null,
-                'has_updates' => false,
-            ]);
-        }
+        $platform = $request->query('platform');
 
         try {
-            $messages = FacebookMessage::query()
-                ->with('parent') // 🔥 ДОДАНО: завантаження батьківського повідомлення
+            $baseQuery = FacebookMessage::query()
+                ->with('parent')
                 ->where('customer_id', $id)
-                ->where('id', '>', $sinceId)
-                ->orderByRaw('COALESCE(sent_at, created_at) asc')
-                ->get();
+                ->when($platform, fn ($q) => $q->where('platform', $platform));
+
+            if ($sinceId > 0) {
+                $messages = (clone $baseQuery)
+                    ->where('id', '>', $sinceId)
+                    ->orderByRaw('COALESCE(sent_at, created_at) asc')
+                    ->get();
+            } else {
+                $messages = (clone $baseQuery)
+                    ->orderByRaw('COALESCE(sent_at, created_at) desc')
+                    ->limit(50)
+                    ->get()
+                    ->reverse()
+                    ->values();
+            }
 
             $normalizedMessages = $messages->map(function (FacebookMessage $message) {
                 // 🔥 ДОДАНО: Логіка формування відповіді (цитати)
@@ -599,5 +639,43 @@ class ChatApiController extends Controller
         $count = Conversation::where('unread_count', '>', 0)->count();
 
         return response()->json(['count' => $count]);
+    }
+
+    public function refreshProfile(int $id, MetaService $metaService): JsonResponse
+    {
+        try {
+            $customer = Customer::findOrFail($id);
+        } catch (\Throwable $e) {
+            return response()->json(['error' => 'Customer not found'], 404);
+        }
+
+        $metaService->updateCustomerProfile($customer);
+        $customer->refresh();
+
+        return response()->json([
+            'data' => [
+                'id' => $customer->id,
+                'first_name' => $customer->first_name,
+                'last_name' => $customer->last_name,
+                'fb_profile_pic' => $customer->fb_profile_pic,
+                'fb_user_id' => $customer->fb_user_id,
+                'instagram_user_id' => $customer->instagram_user_id,
+            ],
+        ]);
+    }
+
+    private function inferRemoteAttachmentType(string $url): string
+    {
+        $lower = strtolower(parse_url($url, PHP_URL_PATH) ?? $url);
+        if (preg_match('/\.(mp4|mov|webm)$/i', $lower)) {
+            return 'video';
+        }
+        if (preg_match('/\.(mp3|wav|ogg)$/i', $lower)) {
+            return 'audio';
+        }
+        if (preg_match('/\.(pdf|doc|docx|xls|xlsx)$/i', $lower)) {
+            return 'file';
+        }
+        return 'image';
     }
 }

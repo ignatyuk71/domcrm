@@ -36,6 +36,13 @@ class WebhookController extends Controller
 
     public function handle(Request $request, MetaService $metaService)
     {
+        if (!$this->verifySignature($request)) {
+            Log::warning('Facebook Webhook: invalid signature', [
+                'ip' => $request->ip(),
+            ]);
+            return response('Invalid signature', 403);
+        }
+
         $data = $request->all();
 
         try {
@@ -63,6 +70,23 @@ class WebhookController extends Controller
         }
 
         return response('EVENT_RECEIVED', 200);
+    }
+
+    private function verifySignature(Request $request): bool
+    {
+        $secret = (string) env('FB_WEBHOOK_SECRET');
+        if ($secret === '') {
+            return true; // Без секрету не блокуємо, щоб не зламати інтеграцію
+        }
+
+        $signature = (string) $request->header('X-Hub-Signature-256');
+        if ($signature === '' || !str_starts_with($signature, 'sha256=')) {
+            return false;
+        }
+
+        $payload = $request->getContent();
+        $hash = hash_hmac('sha256', $payload, $secret);
+        return hash_equals('sha256='.$hash, $signature);
     }
 
     private function processMessage(array $event, string $platform, MetaService $metaService): void

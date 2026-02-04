@@ -16,6 +16,7 @@ use App\Http\Controllers\PackingController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\MessageTemplateController;
 use App\Http\Controllers\ChatApiController;
+use App\Http\Controllers\SavedFileController;
 use App\Http\Controllers\NovaPoshtaSettingsController;
 use App\Models\MessageTemplate;
 use App\Models\Order;
@@ -184,6 +185,10 @@ Route::middleware('auth')->group(function () {
         ->name('chat.stage');
     Route::patch('/api/chat/conversations/{conversation}/tags', [ChatApiController::class, 'updateTags'])
         ->name('chat.updateTags');
+    Route::get('/api/chat/unread-count', [ChatApiController::class, 'getUnreadCount'])->name('chat.unreadCount');
+    Route::get('/api/saved-files', [SavedFileController::class, 'index'])->name('savedFiles.index');
+    Route::post('/api/saved-files', [SavedFileController::class, 'store'])->name('savedFiles.store');
+    Route::delete('/api/saved-files/{id}', [SavedFileController::class, 'destroy'])->name('savedFiles.destroy');
 
     // --- ГАЛЕРЕЯ ---
     Route::view('/gallery', 'gallery.index')->name('gallery.index');

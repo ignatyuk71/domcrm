@@ -31,12 +31,13 @@
 
         <button
           class="action-btn"
-          type="submit"
+          type="button"
           :disabled="disabled"
           :title="hasContent ? 'Надіслати' : 'Надіслати лайк'"
+          @click="handleSendClick"
         >
           <i v-if="hasContent" class="bi bi-send-fill send-icon"></i>
-          <i v-else class="bi bi-hand-thumbs-up-fill like-icon" @click.prevent="sendLike"></i>
+          <i v-else class="bi bi-hand-thumbs-up-fill like-icon"></i>
         </button>
       </div>
 
@@ -200,6 +201,14 @@ function autoResize() {
 
 function sendLike() {
   emit('send', { text: '👍', files: [], remote_urls: [] });
+}
+
+function handleSendClick() {
+  if (hasContent.value) {
+    handleSend();
+    return;
+  }
+  sendLike();
 }
 
 function handleSend() {

@@ -42,7 +42,7 @@
             />
           </div>
 
-          <a v-else :href="att.url" target="_blank" class="attachment-file">
+          <a v-else :href="att.url" target="_blank" rel="noopener noreferrer" class="attachment-file">
             <i class="bi bi-paperclip"></i>
             <span>Завантажити файл</span>
           </a>
@@ -76,14 +76,16 @@ defineEmits(['image-click']);
 // --- Виправлення шляхів для хостингу ---
 const fixUrl = (url) => {
   if (!url || typeof url !== 'string') return '';
+  const trimmed = url.trim();
+  if (/^(javascript|data):/i.test(trimmed)) return '';
   
   // Якщо це повне посилання (Facebook CDN) - не чіпаємо
-  if (url.startsWith('http')) return url;
+  if (trimmed.startsWith('http')) return trimmed;
 
-  if (url.startsWith('chat/')) return `/${url}`;
-  if (url.startsWith('/chat/')) return url;
+  if (trimmed.startsWith('chat/')) return `/${trimmed}`;
+  if (trimmed.startsWith('/chat/')) return trimmed;
   
-  return url;
+  return trimmed;
 };
 
 const hasAttachments = computed(() => {
@@ -106,7 +108,7 @@ const normalizedAttachments = computed(() => {
     const type = att?.type === 'image' || isImage ? 'image' : 'file';
 
     return { type, url };
-  });
+  }).filter((att) => att.url);
 });
 
 const attachmentState = ref([]);
