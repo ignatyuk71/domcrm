@@ -28,12 +28,12 @@ class SyncDeliveryStatuses extends Command
 
     /**
      * Фінальні статуси замовлення (не треба опитувати доставку).
-     * Сюди додано 'delivered_paid' (ID 11), щоб зупинити опитування після отримання.
+     * Важливо: 'delivered' НЕ фінальний (це лише "прибуло"), трекінг має йти до 'delivered_paid'.
+     * 'delivered_paid' (ID 11) фінальний — після нього опитування зупиняється.
      */
     protected array $finalOrderStatuses = [
         'completed',
         'done',
-        'delivered',      // ID 6 (залежить від логіки, іноді тут ще чекають отримання)
         'returned',       // ID 8
         'cancelled',      // ID 7
         'canceled',
@@ -47,7 +47,7 @@ class SyncDeliveryStatuses extends Command
 
         // Шукаємо тільки ті замовлення, статус яких НЕ у списку $finalOrderStatuses
         $query = Order::query()
-            ->whereNotIn('status', $this->finalOrderStatuses) // Тут фільтрується ID 11 (delivered_paid)
+            ->whereNotIn('status', $this->finalOrderStatuses) // Фінальні статуси НЕ трекаємо
             ->whereHas('delivery', function ($q) {
                 $q->where('carrier', 'nova_poshta')
                     ->whereNotNull('ttn');
