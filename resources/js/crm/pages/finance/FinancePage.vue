@@ -353,7 +353,7 @@
               </div>
               <div class="col-md-4">
                 <div class="time-card p-3 rounded-3 bg-primary-subtle border border-primary-subtle">
-                  <label class="form-label text-primary fw-bold small"><i class="bi bi-cloud-upload me-1"></i> Фіскалізація</label>
+                  <label class="form-label text-primary fw-bold small"><i class="bi bi-cloud-upload me-1"></i> Фіскалізація черги</label>
                   <input v-model="form.queue_process_time" type="time" class="form-control time-input bg-transparent border-0 p-0 fw-bold fs-5 text-dark">
                 </div>
               </div>

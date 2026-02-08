@@ -27,6 +27,7 @@ class ManageFiscalShift extends Command
         $now = Carbon::now(config('app.timezone', 'Europe/Kyiv'));
         [$openAt, $closeAt] = $settings->windowTimes($now);
         $queueAt = $settings->queueProcessAt($now);
+        $withinWindow = $now->between($openAt, $closeAt, true);
 
         if ($now->greaterThanOrEqualTo($openAt) && $now->lessThan($closeAt)) {
             $shouldOpen = !$settings->last_opened_at || !$settings->last_opened_at->isSameDay($now);
@@ -54,7 +55,8 @@ class ManageFiscalShift extends Command
             }
         }
 
-        if ($settings->queue_enabled && $now->greaterThanOrEqualTo($queueAt)) {
+        // Обробляємо чергу тільки у вікні роботи та не раніше часу фіскалізації
+        if ($settings->queue_enabled && $withinWindow && $now->greaterThanOrEqualTo($queueAt)) {
             $processed = $queueService->processAvailable();
             if ($processed > 0) {
                 $settings->update(['last_queue_processed_at' => $now]);

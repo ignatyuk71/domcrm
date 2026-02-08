@@ -25,6 +25,8 @@ class FiscalizeDeliveredOrders extends Command
         $now = Carbon::now(config('app.timezone', 'Europe/Kyiv'));
         $queueEnabled = $settings?->queue_enabled ?? false;
         $withinWindow = $settings ? $settings->isWithinWindow($now) : true;
+        $queueAt = $settings?->queueProcessAt($now);
+        $beforeQueueTime = $queueAt ? $now->lessThan($queueAt) : false;
         if ($settings && !$settings->enabled) {
             $this->info('Fiscal integration is disabled.');
             return self::SUCCESS;
@@ -58,7 +60,7 @@ class FiscalizeDeliveredOrders extends Command
                     ->orWhereNull('payment_status');
             })
             // Обробляємо шматками по 50, щоб не грузити пам'ять
-            ->chunk(50, function ($orders) use ($fiscalizedId, $queueEnabled, $withinWindow, $cronLog) {
+            ->chunk(50, function ($orders) use ($fiscalizedId, $queueEnabled, $withinWindow, $beforeQueueTime, $queueAt, $cronLog) {
                 $queueService = app(FiscalQueueService::class);
                 
                 foreach ($orders as $order) {
@@ -105,7 +107,8 @@ class FiscalizeDeliveredOrders extends Command
                         continue;
                     }
 
-                    if ($queueEnabled && !$withinWindow) {
+                    // Якщо ще не час фіскалізації або вікно закрите — складаємо в чергу
+                    if ($queueEnabled && (!$withinWindow || $beforeQueueTime)) {
                         $queueService->enqueue($order, $remaining, FiscalReceipt::TYPE_SELL);
                         $cronLog->info('Fiscal queued', [
                             'order_id' => $order->id,
@@ -115,6 +118,24 @@ class FiscalizeDeliveredOrders extends Command
                             'total_cents' => $totalOrderCents,
                             'already_paid_cents' => $alreadyPaid,
                             'remaining_cents' => $remaining,
+                            'queue_at' => $queueAt?->toDateTimeString(),
+                            'reason' => $beforeQueueTime ? 'before_queue_time' : 'outside_window',
+                        ]);
+                        continue;
+                    }
+
+                    // Якщо черга вимкнена або вікно закрите — нічого не робимо до часу фіскалізації
+                    if (!$withinWindow || $beforeQueueTime) {
+                        $cronLog->info('Fiscal skip: waiting for queue time/window', [
+                            'order_id' => $order->id,
+                            'status_id' => $order->status_id,
+                            'status' => $order->status,
+                            'payment_status' => $order->payment_status,
+                            'total_cents' => $totalOrderCents,
+                            'already_paid_cents' => $alreadyPaid,
+                            'remaining_cents' => $remaining,
+                            'queue_enabled' => $queueEnabled,
+                            'queue_at' => $queueAt?->toDateTimeString(),
                         ]);
                         continue;
                     }
