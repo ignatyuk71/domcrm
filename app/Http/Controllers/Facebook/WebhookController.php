@@ -9,7 +9,6 @@ use App\Models\MetaConnection;
 use App\Services\MetaService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class WebhookController extends Controller
@@ -20,11 +19,10 @@ class WebhookController extends Controller
             ->where('provider', 'meta')
             ->where('is_active', true)
             ->latest('id')
-            ->value('verify_token')
-            ?: DB::table('facebook_settings')->value('verify_token');
+            ->value('verify_token');
 
         if (!$verifyToken) {
-            Log::error('Facebook Webhook: verify_token missing in database.');
+            Log::error('Facebook Webhook: verify_token missing in meta_connections.');
             return response('Forbidden', 403);
         }
 

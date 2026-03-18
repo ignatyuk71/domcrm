@@ -8,7 +8,6 @@ use App\Models\ConversationMeta;
 use App\Models\Customer;
 use App\Models\MetaConnection;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -488,13 +487,7 @@ class MetaService
             return $settings;
         }
 
-        $settings = DB::table('facebook_settings')->first();
-
-        if (!$settings || !$settings->access_token) {
-            throw new \RuntimeException('Meta token is missing.');
-        }
-
-        return $settings;
+        throw new \RuntimeException('Meta token is missing in meta_connections.');
     }
 
     private function findThreadId(string $accessToken, string $recipientId, string $platform): ?string
