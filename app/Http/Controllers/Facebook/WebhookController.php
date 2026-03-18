@@ -80,8 +80,11 @@ class WebhookController extends Controller
 
     private function verifySignature(Request $request): bool
     {
+        // Meta підписує webhook app secret'ом застосунку, а не verify token.
+        // Тому спочатку беремо META_APP_SECRET, а локальний webhook_secret лишаємо лише як fallback.
         $secret = (string) (
-            MetaConnection::query()
+            config('services.meta.app_secret')
+            ?: MetaConnection::query()
                 ->where('provider', 'meta')
                 ->where('is_active', true)
                 ->latest('id')
@@ -92,14 +95,22 @@ class WebhookController extends Controller
             return true; // Без секрету не блокуємо, щоб не зламати інтеграцію
         }
 
-        $signature = (string) $request->header('X-Hub-Signature-256');
-        if ($signature === '' || !str_starts_with($signature, 'sha256=')) {
-            return false;
+        $payload = $request->getContent();
+
+        $signature256 = (string) $request->header('X-Hub-Signature-256');
+        if ($signature256 !== '' && str_starts_with($signature256, 'sha256=')) {
+            $hash256 = hash_hmac('sha256', $payload, $secret);
+            return hash_equals('sha256=' . $hash256, $signature256);
         }
 
-        $payload = $request->getContent();
-        $hash = hash_hmac('sha256', $payload, $secret);
-        return hash_equals('sha256='.$hash, $signature);
+        // Частина Meta-інтеграцій усе ще надсилає sha1 заголовок.
+        $signature = (string) $request->header('X-Hub-Signature');
+        if ($signature !== '' && str_starts_with($signature, 'sha1=')) {
+            $hash = hash_hmac('sha1', $payload, $secret);
+            return hash_equals('sha1=' . $hash, $signature);
+        }
+
+        return false;
     }
 
     private function processMessage(array $event, string $platform, MetaService $metaService): void
