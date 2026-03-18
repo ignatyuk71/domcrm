@@ -17,7 +17,7 @@
       
       <div class="header-section">
         <div class="avatar-wrap">
-          <img v-if="avatarUrl" :src="avatarUrl" class="avatar-img">
+          <img v-if="safeAvatarUrl" :src="safeAvatarUrl" class="avatar-img" @error="avatarFailed = true">
           <div v-else class="avatar-placeholder">{{ displayInitial }}</div>
           
           <div 
@@ -254,6 +254,7 @@ const isOrderSaving = ref(false);
 const historyOrders = ref([]);
 const historyLoading = ref(false);
 const placeholderThumb = 'https://via.placeholder.com/48x48?text=%20';
+const avatarFailed = ref(false);
 
 // Refs для скролу
 const profileContainer = ref(null);
@@ -371,6 +372,7 @@ const displayName = computed(() => {
 });
 const displayInitial = computed(() => (displayName.value ? displayName.value[0].toUpperCase() : '?'));
 const avatarUrl = computed(() => props.customer?.fb_profile_pic || props.customer?.customer_avatar || '');
+const safeAvatarUrl = computed(() => (avatarFailed.value ? '' : avatarUrl.value));
 const isInstagram = computed(() => (props.customer?.source || props.customer?.platform) === 'instagram' || !!props.customer?.instagram_user_id);
 
 watch(() => props.customer, (newVal) => {
@@ -390,6 +392,10 @@ watch(() => props.customer, (newVal) => {
 
 watch(customerId, (id) => {
   if (id) loadCustomerHistory(id);
+});
+
+watch(avatarUrl, () => {
+  avatarFailed.value = false;
 });
 
 const showToast = (msg, type = 'success') => {

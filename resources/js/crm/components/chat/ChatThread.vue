@@ -14,7 +14,12 @@
 
         <div class="chat-thread-user">
           <div class="chat-thread-avatar">
-            <img v-if="activeChat?.customer_avatar" :src="activeChat.customer_avatar" alt="avatar" />
+            <img
+              v-if="safeAvatarUrl"
+              :src="safeAvatarUrl"
+              alt="avatar"
+              @error="avatarFailed = true"
+            />
             <span v-else class="chat-thread-avatar-fallback">
               {{ (activeChat?.customer_name || '?').charAt(0).toUpperCase() }}
             </span>
@@ -181,6 +186,7 @@ const threadBody = ref(null);
 const isTagsOpen = ref(false);
 const tempTagIds = ref([]);
 const localStage = ref('');
+const avatarFailed = ref(false);
 
 // Узгоджені етапи для чату (UI + backend)
 const stageOptions = [
@@ -194,6 +200,13 @@ const stageOptions = [
 
 const activeTagIds = computed(() => {
   return (props.activeChat?.tags || []).map((tag) => tag.id);
+});
+const safeAvatarUrl = computed(() => {
+  if (avatarFailed.value) {
+    return '';
+  }
+
+  return props.activeChat?.customer_avatar || '';
 });
 
 function scrollToBottom() {
@@ -255,6 +268,13 @@ watch(
   async () => {
     await nextTick();
     scrollToBottom();
+  }
+);
+
+watch(
+  () => props.activeChat?.customer_avatar,
+  () => {
+    avatarFailed.value = false;
   }
 );
 

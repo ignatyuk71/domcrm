@@ -85,7 +85,9 @@ class ChatApiController extends Controller
                     'conversation_id' => null,
                     'customer_id' => (int) $message->customer_id,
                     'customer_name' => $name !== '' ? $name : 'Невідомий клієнт',
-                    'customer_avatar' => $hasAvatar ? ($message->fb_profile_pic ?? null) : null,
+                    'customer_avatar' => $hasAvatar
+                        ? $this->resolveAvatarUrl($message->fb_profile_pic ?? null)
+                        : null,
                     'first_name' => $message->first_name ?? null,
                     'last_name' => $message->last_name ?? null,
                     'phone' => $message->phone ?? null,
@@ -221,7 +223,7 @@ class ChatApiController extends Controller
             'conversation_id' => $conversation->id,
             'customer_id' => $conversation->customer_id,
             'customer_name' => $name !== '' ? $name : 'Невідомий клієнт',
-            'customer_avatar' => $customer?->fb_profile_pic,
+            'customer_avatar' => $this->resolveCustomerAvatar($customer),
             'first_name' => $customer?->first_name,
             'last_name' => $customer?->last_name,
             'phone' => $customer?->phone,
@@ -657,7 +659,7 @@ class ChatApiController extends Controller
                 'id' => $customer->id,
                 'first_name' => $customer->first_name,
                 'last_name' => $customer->last_name,
-                'fb_profile_pic' => $customer->fb_profile_pic,
+                'fb_profile_pic' => $this->resolveCustomerAvatar($customer),
                 'fb_user_id' => $customer->fb_user_id,
                 'instagram_user_id' => $customer->instagram_user_id,
             ],
@@ -677,5 +679,60 @@ class ChatApiController extends Controller
             return 'file';
         }
         return 'image';
+    }
+
+    private function resolveAvatarUrl(?string $avatar): ?string
+    {
+        if (!is_string($avatar) || $avatar === '') {
+            return null;
+        }
+
+        if (str_starts_with($avatar, 'http://') || str_starts_with($avatar, 'https://')) {
+            return $avatar;
+        }
+
+        return url(ltrim($avatar, '/'));
+    }
+
+    private function resolveCustomerAvatar(?Customer $customer): ?string
+    {
+        if (!$customer) {
+            return null;
+        }
+
+        $avatar = $customer->fb_profile_pic;
+        if (!is_string($avatar) || $avatar === '') {
+            return null;
+        }
+
+        if ($this->shouldRefreshRemoteAvatar($avatar)) {
+            try {
+                app(MetaService::class)->updateCustomerProfile($customer);
+                $customer->refresh();
+                $avatar = $customer->fb_profile_pic;
+            } catch (\Throwable $e) {
+                Log::warning('Avatar refresh failed during chat formatting', [
+                    'customer_id' => $customer->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return $this->resolveAvatarUrl($avatar);
+    }
+
+    private function shouldRefreshRemoteAvatar(string $avatar): bool
+    {
+        if (!str_starts_with($avatar, 'http://') && !str_starts_with($avatar, 'https://')) {
+            return false;
+        }
+
+        $host = strtolower(parse_url($avatar, PHP_URL_HOST) ?? '');
+
+        return in_array($host, [
+            'platform-lookaside.fbsbx.com',
+            'lookaside.fbsbx.com',
+            'scontent.cdninstagram.com',
+        ], true);
     }
 }

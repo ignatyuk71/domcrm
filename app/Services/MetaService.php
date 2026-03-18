@@ -235,7 +235,10 @@ class MetaService
             }
 
             if (!empty($data['profile_pic'])) {
-                $updateData['fb_profile_pic'] = $data['profile_pic'];
+                $updateData['fb_profile_pic'] = $this->cacheProfileAvatar(
+                    $customer,
+                    (string) $data['profile_pic']
+                ) ?: $data['profile_pic'];
             }
 
             if (!empty($updateData)) {
@@ -432,6 +435,16 @@ class MetaService
         return false;
     }
 
+    public function resolveCustomerAvatarUrl(?Customer $customer): ?string
+    {
+        $avatar = $customer?->fb_profile_pic;
+        if (!is_string($avatar) || $avatar === '') {
+            return null;
+        }
+
+        return $this->toPublicAssetUrl($avatar);
+    }
+
     public function touchConversation(
         int $customerId,
         string $platform,
@@ -526,5 +539,56 @@ class MetaService
     private function graphUrl(string $path): string
     {
         return 'https://graph.facebook.com/' . config('services.meta.graph_version', 'v19.0') . $path;
+    }
+
+    private function cacheProfileAvatar(Customer $customer, string $remoteUrl): ?string
+    {
+        if ($remoteUrl === '') {
+            return null;
+        }
+
+        if (!$this->looksLikeRemoteUrl($remoteUrl)) {
+            return ltrim($remoteUrl, '/');
+        }
+
+        try {
+            $response = Http::timeout(10)->get($remoteUrl);
+            if ($response->failed()) {
+                Log::warning('Profile avatar download failed', [
+                    'customer_id' => $customer->id,
+                    'url' => $remoteUrl,
+                    'status' => $response->status(),
+                ]);
+                return null;
+            }
+
+            $mimeType = $response->header('Content-Type');
+            $extension = $this->guessExtension($remoteUrl, $mimeType);
+            $relativePath = 'avatars/' . date('Y/m') . '/customer_' . $customer->id . '_' . md5($remoteUrl) . '.' . strtolower($extension);
+
+            Storage::disk('chat_uploads')->put($relativePath, $response->body());
+            @chmod(public_path('chat/' . $relativePath), 0644);
+
+            return 'chat/' . $relativePath;
+        } catch (\Throwable $e) {
+            Log::warning('Profile avatar download failed', [
+                'customer_id' => $customer->id,
+                'url' => $remoteUrl,
+                'error' => $e->getMessage(),
+            ]);
+            return null;
+        }
+    }
+
+    private function looksLikeRemoteUrl(string $value): bool
+    {
+        return str_starts_with($value, 'http://') || str_starts_with($value, 'https://');
+    }
+
+    private function toPublicAssetUrl(string $path): string
+    {
+        return $this->looksLikeRemoteUrl($path)
+            ? $path
+            : url(ltrim($path, '/'));
     }
 }

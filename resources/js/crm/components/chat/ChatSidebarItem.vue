@@ -7,10 +7,11 @@
   >
     <div class="avatar-container">
       <img 
-        v-if="item.customer_avatar" 
-        :src="item.customer_avatar" 
+        v-if="safeAvatarUrl" 
+        :src="safeAvatarUrl" 
         class="avatar-img" 
         alt="User" 
+        @error="avatarFailed = true"
       />
       <div v-else class="avatar-placeholder" :class="platformColorClass">
         {{ (item.customer_name || '?').charAt(0).toUpperCase() }}
@@ -60,7 +61,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 const props = defineProps({
   item: { type: Object, required: true },
@@ -68,6 +69,8 @@ const props = defineProps({
 });
 
 defineEmits(['select']);
+
+const avatarFailed = ref(false);
 
 // --- Логіка іконок та кольорів ---
 const platformIconClass = computed(() => {
@@ -100,6 +103,20 @@ const stageClass = computed(() => {
 const tagList = computed(() => props.item.tags || []);
 const visibleTags = computed(() => tagList.value.slice(0, 2));
 const extraTagsCount = computed(() => Math.max(0, tagList.value.length - 2));
+const safeAvatarUrl = computed(() => {
+  if (avatarFailed.value) {
+    return '';
+  }
+
+  return props.item.customer_avatar || '';
+});
+
+watch(
+  () => props.item.customer_avatar,
+  () => {
+    avatarFailed.value = false;
+  }
+);
 
 const getTagStyle = (color) => {
   if (!color) return {};
