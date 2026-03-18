@@ -15,6 +15,7 @@ import SettingsColorsPage from './pages/settings/SettingsColorsPage.vue';
 import SettingsTagsPage from './pages/settings/SettingsTagsPage.vue';
 import SettingsStatusesPage from './pages/settings/SettingsStatusesPage.vue';
 import SettingsNovaPoshtaPage from './pages/settings/SettingsNovaPoshtaPage.vue';
+import SettingsMetaPage from './pages/settings/SettingsMetaPage.vue';
 import './styles/crm.css';
 import PackingListPage from '../Pages/Packing/PackingList.vue';
 import PackingWorkspacePage from '../Pages/Packing/PackingWorkspace.vue';
@@ -187,6 +188,18 @@ export function mountSettingsNovaPoshta(selector = '#crm-settings-nova-poshta') 
     return app;
 }
 
+export function mountSettingsMeta(selector = '#crm-settings-meta') {
+    const el = document.querySelector(selector);
+    if (!el) return;
+
+    const app = createApp(SettingsMetaPage, {
+        initialSuccess: el.dataset.success || '',
+        initialError: el.dataset.error || '',
+    });
+    app.mount(el);
+    return app;
+}
+
 // Auto-mount if element exists
 function autoMount() {
     mountOrderCreate();
@@ -206,6 +219,7 @@ function autoMount() {
     mountSettingsTags();
     mountSettingsStatuses();
     mountSettingsNovaPoshta();
+    mountSettingsMeta();
 }
 
 if (document.readyState !== 'loading') {

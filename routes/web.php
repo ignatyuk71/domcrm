@@ -16,6 +16,7 @@ use App\Http\Controllers\PackingController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\MessageTemplateController;
 use App\Http\Controllers\ChatApiController;
+use App\Http\Controllers\MetaConnectionController;
 use App\Http\Controllers\SavedFileController;
 use App\Http\Controllers\NovaPoshtaSettingsController;
 use App\Models\MessageTemplate;
@@ -304,6 +305,11 @@ Route::middleware('auth')->group(function () {
 
         Route::get('/tags', [TagController::class, 'index'])->name('tags.index');
         Route::get('/statuses', [StatusController::class, 'index'])->name('statuses.index');
+        Route::get('/meta', [MetaConnectionController::class, 'index'])->name('meta.index');
+        Route::post('/meta', [MetaConnectionController::class, 'save'])->name('meta.save');
+        Route::get('/meta/redirect', [MetaConnectionController::class, 'redirectToFacebook'])->name('meta.redirect');
+        Route::get('/meta/callback', [MetaConnectionController::class, 'handleFacebookCallback'])->name('meta.callback');
+        Route::post('/meta/disconnect', [MetaConnectionController::class, 'disconnect'])->name('meta.disconnect');
         Route::get('/nova-poshta', [NovaPoshtaSettingsController::class, 'index'])->name('novaPoshta.index');
         Route::post('/nova-poshta', [NovaPoshtaSettingsController::class, 'save'])->name('novaPoshta.save');
         Route::post('/nova-poshta/fetch-refs', [NovaPoshtaSettingsController::class, 'fetchRefs'])->name('novaPoshta.fetchRefs');

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Facebook;
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use App\Models\FacebookMessage;
+use App\Models\MetaConnection;
 use App\Services\MetaService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -15,7 +16,12 @@ class WebhookController extends Controller
 {
     public function verify(Request $request)
     {
-        $verifyToken = DB::table('facebook_settings')->value('verify_token');
+        $verifyToken = MetaConnection::query()
+            ->where('provider', 'meta')
+            ->where('is_active', true)
+            ->latest('id')
+            ->value('verify_token')
+            ?: DB::table('facebook_settings')->value('verify_token');
 
         if (!$verifyToken) {
             Log::error('Facebook Webhook: verify_token missing in database.');
@@ -74,7 +80,14 @@ class WebhookController extends Controller
 
     private function verifySignature(Request $request): bool
     {
-        $secret = (string) env('FB_WEBHOOK_SECRET');
+        $secret = (string) (
+            MetaConnection::query()
+                ->where('provider', 'meta')
+                ->where('is_active', true)
+                ->latest('id')
+                ->value('webhook_secret')
+            ?: env('FB_WEBHOOK_SECRET')
+        );
         if ($secret === '') {
             return true; // Без секрету не блокуємо, щоб не зламати інтеграцію
         }

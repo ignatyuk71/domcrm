@@ -6,6 +6,7 @@ use App\Models\FacebookMessage;
 use App\Models\Conversation;
 use App\Models\ConversationMeta;
 use App\Models\Customer;
+use App\Models\MetaConnection;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -476,6 +477,17 @@ class MetaService
 
     private function getSettings()
     {
+        $settings = MetaConnection::query()
+            ->where('provider', 'meta')
+            ->where('is_active', true)
+            ->whereNotNull('access_token')
+            ->latest('id')
+            ->first();
+
+        if ($settings?->access_token) {
+            return $settings;
+        }
+
         $settings = DB::table('facebook_settings')->first();
 
         if (!$settings || !$settings->access_token) {
@@ -520,6 +532,6 @@ class MetaService
 
     private function graphUrl(string $path): string
     {
-        return 'https://graph.facebook.com/v19.0'.$path;
+        return 'https://graph.facebook.com/' . config('services.meta.graph_version', 'v19.0') . $path;
     }
 }

@@ -354,7 +354,7 @@
             <i class="bi bi-buildings-fill"></i>
         </div>
         <div class="logo-text">
-            <span class="company">Dom-CRM</span>
+            <span class="company">DomCRM</span>
             <span class="version">Pro Version</span>
         </div>
     </div>
@@ -454,7 +454,7 @@
 
             <div class="submenu-divider"></div>
 
-             <a href="#" class="sidebar-link-sub">
+             <a href="{{ route('settings.meta.index') }}" class="sidebar-link-sub {{ request()->is('settings/meta*') ? 'active' : '' }}">
                 <span class="icon-frame"><i class="bi bi-share-fill"></i></span>
                 <span class="item-text-sub">Соц. мережі</span>
             </a>
