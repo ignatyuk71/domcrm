@@ -378,7 +378,12 @@
         <div class="nav-divider">Склад</div>
 
         @php
-            $packingCount = \App\Models\Order::whereIn('status_id', config('packing.status_ids.queue', [4]))->count();
+            $packingCount = \App\Models\Order::whereIn('status_id', config('packing.status_ids.queue', [4]))
+                ->where(function ($query) {
+                    $query->whereNull('packing_status')
+                        ->orWhere('packing_status', 'pending');
+                })
+                ->count();
         @endphp
 
         <a href="{{ route('packing.list') }}" class="sidebar-link {{ request()->is('packing*') ? 'active' : '' }}">

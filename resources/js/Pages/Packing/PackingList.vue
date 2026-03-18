@@ -74,7 +74,8 @@
             :class="{
               'is-priority': order.is_priority && isPending(order),
               'is-processing': isProcessing(order),
-              'is-packed': isPacked(order)
+              'is-packed': isPacked(order),
+              'is-skipped': isSkipped(order)
             }"
           >
             <!-- Червона смужка для пріоритетних -->
@@ -89,6 +90,9 @@
                   
                   <span v-if="isProcessing(order)" class="badge-status processing">
                     <i class="bi bi-lightning-fill"></i> У роботі
+                  </span>
+                  <span v-else-if="isSkipped(order)" class="badge-status skipped">
+                    <i class="bi bi-pause-circle"></i> Відкладено
                   </span>
                   <span v-else-if="isPacked(order)" class="badge-status packed">
                     <i class="bi bi-check-lg"></i> Запаковано
@@ -128,6 +132,7 @@
                     <span v-if="order.packer?.name">• {{ order.packer.name }}</span>
                     <span v-if="order.active_packing_session?.started_at">• {{ formatTime(order.active_packing_session.started_at) }}</span>
                   </span>
+                  <span v-else-if="isSkipped(order)" class="text-skipped">Відкладено до готовності</span>
                   <span v-else class="text-waiting">{{ formatAge(order.created_at) }} очікує</span>
                 </div>
               </div>
@@ -281,6 +286,7 @@ let refreshInterval = null;
 // Packed = 12 (Запаковано)
 const isPending = (o) => o.packing_status === 'pending' || (!o.packing_status && o.status_id !== 12); 
 const isProcessing = (o) => o.packing_status === 'processing';
+const isSkipped = (o) => o.packing_status === 'skipped';
 const isPacked = (o) => o.packing_status === 'packed' || !!o.packed_at || o.status_id === 12;
 
 // Шукаємо замовлення, яке я вже почав, але не закінчив
@@ -337,8 +343,9 @@ const filteredOrders = computed(() => {
     const getStatusWeight = (o) => {
       if (isProcessing(o)) return 1;
       if (isPending(o)) return 2;
-      if (isPacked(o)) return 3;
-      return 4;
+      if (isSkipped(o)) return 3;
+      if (isPacked(o)) return 4;
+      return 5;
     };
     const wA = getStatusWeight(a);
     const wB = getStatusWeight(b);
@@ -355,6 +362,10 @@ const filteredOrders = computed(() => {
       // Черга: спочатку пріоритетні, потім старіші
       if (a.is_priority !== b.is_priority) return a.is_priority ? -1 : 1;
       return new Date(a.created_at) - new Date(b.created_at);
+    }
+    if (isSkipped(a)) {
+      // Відкладені залишаємо внизу активного списку, новіші вище.
+      return new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at);
     }
     return 0;
   });
@@ -606,6 +617,22 @@ onUnmounted(() => {
 .stat-card-modern.danger .stat-bg-icon { color: #dc2626; opacity: 0.15; }
 .pulse-icon { animation: pulse 2s infinite; }
 @keyframes pulse { 0% { transform: scale(1) rotate(-15deg); } 50% { transform: scale(1.1) rotate(-15deg); } 100% { transform: scale(1) rotate(-15deg); } }
+
+.order-row-modern.is-skipped {
+  border-style: dashed;
+  border-color: #f59e0b;
+  background: linear-gradient(135deg, #fffaf0 0%, #ffffff 100%);
+}
+
+.badge-status.skipped {
+  background: #fff3cd;
+  color: #9a6700;
+}
+
+.text-skipped {
+  color: #b45309;
+  font-weight: 600;
+}
 
 /* --- Control Panel --- */
 .control-panel {

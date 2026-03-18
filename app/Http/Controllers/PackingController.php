@@ -253,10 +253,12 @@ class PackingController extends Controller
 
             $packing->closeSession($locked, $userId, 'problem');
 
-            // Скидаємо пакувальника і ставимо проблемний статус
+            // Скидаємо пакувальника і переводимо замовлення у відкладений стан.
+            // Воно лишається доступним у списку для ручного запуску, але не має
+            // автоматично підхоплюватися як наступне замовлення.
             $locked->update([
                 'packer_id' => null,
-                'packing_status' => 'pending',
+                'packing_status' => 'skipped',
                 'status_id' => $problemStatusId,
             ]);
 
