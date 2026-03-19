@@ -209,6 +209,14 @@ class WebhookController extends Controller
             'sent_at' => $this->resolveEventTimestamp($event),
         ], $processedAttachments);
 
+        $originContext = $chatService->extractOriginContext($text, $platform);
+        if ($originContext) {
+            $chatService->syncMessageOrigin($storedMessage, $originContext);
+            $chatService->syncConversationOrigin($conversation, $originContext);
+            $storedMessage = $storedMessage->fresh(['parent', 'attachments']);
+            $conversation = $conversation->fresh();
+        }
+
         $chatService->updateConversationAfterMessage($conversation, $storedMessage, !$isEcho);
     }
 

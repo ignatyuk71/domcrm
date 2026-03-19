@@ -79,6 +79,29 @@
       </div>
     </header>
 
+    <div v-if="originContext || syncNotice" class="thread-context-stack">
+      <div v-if="originContext" class="thread-origin-card">
+        <div class="origin-copy">
+          <span class="origin-label">{{ originContext.summary }}</span>
+          <strong>{{ originTitle }}</strong>
+        </div>
+        <a
+          v-if="originContext.url"
+          :href="originContext.url"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="origin-link-btn"
+        >
+          Відкрити
+        </a>
+      </div>
+
+      <div v-if="syncNotice" class="thread-sync-notice" :class="`is-${syncNotice.type}`">
+        <i class="bi" :class="syncNotice.type === 'success' ? 'bi-check-circle-fill' : 'bi-exclamation-triangle-fill'"></i>
+        <span>{{ syncNotice.text }}</span>
+      </div>
+    </div>
+
     <div ref="threadBody" class="chat-thread-body">
       <div v-if="loading" class="chat-state-block">
         <div class="spinner"></div>
@@ -131,6 +154,7 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
   isSyncing: { type: Boolean, default: false },
   isArchiving: { type: Boolean, default: false },
+  syncNotice: { type: Object, default: null },
 });
 
 const emit = defineEmits(['send', 'force-sync', 'delete-conversation', 'open-list', 'open-profile', 'update-stage']);
@@ -169,6 +193,21 @@ const metaSubtitle = computed(() => {
   return props.activeChat?.platform === 'instagram'
     ? 'Instagram Direct'
     : 'Messenger чат';
+});
+
+const originContext = computed(() => props.activeChat?.origin_context || null);
+const originTitle = computed(() => {
+  if (!originContext.value) {
+    return '';
+  }
+
+  return originContext.value.object_type === 'ad'
+    ? 'Лід з реклами'
+    : originContext.value.object_type === 'story'
+      ? 'Відповідь на сторіс'
+      : originContext.value.object_type === 'reel'
+        ? 'Коментар до reels'
+        : 'Коментар до допису';
 });
 
 const groupedMessages = computed(() => {
@@ -261,6 +300,86 @@ watch(
   padding: 18px 20px;
   border-bottom: 1px solid #e5e7eb;
   background: #fff;
+}
+
+.thread-context-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 18px 0;
+  background: #ffffff;
+}
+
+.thread-origin-card,
+.thread-sync-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.origin-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.origin-label {
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.origin-copy strong {
+  font-size: 13px;
+  line-height: 1.3;
+  color: #0f172a;
+}
+
+.origin-link-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 10px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.thread-sync-notice {
+  justify-content: flex-start;
+  font-size: 12px;
+  color: #0f172a;
+}
+
+.thread-sync-notice i {
+  font-size: 14px;
+}
+
+.thread-sync-notice.is-success {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.thread-sync-notice.is-error {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
 }
 
 .thread-user-block {

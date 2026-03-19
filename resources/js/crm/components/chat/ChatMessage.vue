@@ -23,6 +23,22 @@
           </span>
         </div>
       </div>
+      <div v-if="originContext" class="origin-message-card">
+        <div class="origin-message-copy">
+          <span class="origin-message-label">{{ originSummary }}</span>
+          <strong>{{ originTitle }}</strong>
+        </div>
+        <a
+          v-if="originContext.url"
+          :href="originContext.url"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="origin-message-link"
+        >
+          Відкрити
+        </a>
+      </div>
+
       <div v-if="hasAttachments" class="message-attachments">
         <template v-for="(att, index) in normalizedAttachments" :key="index">
           
@@ -90,6 +106,22 @@ const fixUrl = (url) => {
 
 const hasAttachments = computed(() => {
   return Array.isArray(props.message.attachments) && props.message.attachments.length > 0;
+});
+
+const originContext = computed(() => props.message.origin_context || null);
+const originSummary = computed(() => originContext.value?.summary || 'Коментар');
+const originTitle = computed(() => {
+  if (!originContext.value) {
+    return '';
+  }
+
+  return originContext.value.object_type === 'ad'
+    ? 'Джерело: реклама'
+    : originContext.value.object_type === 'story'
+      ? 'Джерело: сторіс'
+      : originContext.value.object_type === 'reel'
+        ? 'Джерело: reels'
+        : 'Джерело: допис';
 });
 
 const normalizedAttachments = computed(() => {
@@ -205,6 +237,73 @@ const statusIcon = computed(() => {
   color: #fff;
   border-bottom-left-radius: 16px;
   border-bottom-right-radius: 4px;
+}
+
+.origin-message-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #0f172a;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+}
+
+.origin-message-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.origin-message-label {
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.origin-message-copy strong {
+  font-size: 13px;
+  line-height: 1.3;
+  color: #0f172a;
+}
+
+.origin-message-link {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.chat-message.mine .origin-message-card {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.chat-message.mine .origin-message-label,
+.chat-message.mine .origin-message-copy strong,
+.chat-message.mine .origin-message-link {
+  color: #ffffff;
+}
+
+.chat-message.mine .origin-message-link {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .reply-wrapper {

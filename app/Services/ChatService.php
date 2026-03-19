@@ -288,6 +288,114 @@ class ChatService
         return url(ltrim($contact->avatar_path, '/'));
     }
 
+    public function extractOriginContext(?string $text, ?string $platform = null): ?array
+    {
+        $text = trim((string) $text);
+        if ($text === '') {
+            return null;
+        }
+
+        $normalized = mb_strtolower($text);
+        $looksLikeComment = str_contains($normalized, 'коментар')
+            || str_contains($normalized, 'comment')
+            || str_contains($normalized, 'комментар')
+            || str_contains($normalized, 'comment_id=');
+
+        if (!$looksLikeComment) {
+            return null;
+        }
+
+        preg_match('~https?://[^\s)]+~u', $text, $matches);
+        $url = isset($matches[0]) ? rtrim($matches[0], '.,;') : null;
+        $urlLower = mb_strtolower((string) $url);
+
+        $resolvedPlatform = $platform;
+        if ($urlLower !== '') {
+            if (str_contains($urlLower, 'instagram.com')) {
+                $resolvedPlatform = 'instagram';
+            } elseif (str_contains($urlLower, 'facebook.com') || str_contains($urlLower, 'fb.com')) {
+                $resolvedPlatform = 'messenger';
+            }
+        }
+
+        $objectType = 'comment';
+        if (
+            str_contains($normalized, 'реклам')
+            || str_contains($urlLower, 'ad_id=')
+            || str_contains($urlLower, '/ads/')
+            || str_contains($urlLower, 'adsmanager')
+        ) {
+            $objectType = 'ad';
+        } elseif (
+            str_contains($normalized, 'сторіс')
+            || str_contains($normalized, 'сториз')
+            || str_contains($normalized, 'story')
+            || str_contains($urlLower, '/stories/')
+            || str_contains($urlLower, 'story_fbid=')
+        ) {
+            $objectType = 'story';
+        } elseif (
+            str_contains($normalized, 'reel')
+            || str_contains($urlLower, '/reel/')
+            || str_contains($urlLower, '/reels/')
+        ) {
+            $objectType = 'reel';
+        } elseif (
+            str_contains($normalized, 'публікаці')
+            || str_contains($normalized, 'допис')
+            || str_contains($normalized, 'post')
+            || str_contains($urlLower, '/posts/')
+            || str_contains($urlLower, 'pfbid')
+            || str_contains($urlLower, 'permalink.php')
+        ) {
+            $objectType = 'post';
+        }
+
+        $commentId = null;
+        if ($url) {
+            $query = parse_url($url, PHP_URL_QUERY);
+            if (is_string($query)) {
+                parse_str($query, $queryParams);
+                $commentId = $queryParams['comment_id'] ?? $queryParams['reply_comment_id'] ?? null;
+            }
+        }
+
+        $platformLabel = $resolvedPlatform === 'instagram' ? 'Instagram' : 'Facebook';
+        $objectLabel = match ($objectType) {
+            'ad' => 'реклами',
+            'story' => 'сторіс',
+            'reel' => 'reels',
+            'post' => 'допису',
+            default => 'коментаря',
+        };
+
+        return [
+            'kind' => 'comment',
+            'platform' => $resolvedPlatform,
+            'object_type' => $objectType,
+            'object_label' => $objectLabel,
+            'summary' => "Коментар до {$objectLabel} {$platformLabel}",
+            'url' => $url,
+            'comment_id' => $commentId,
+        ];
+    }
+
+    public function syncConversationOrigin(ChatConversation $conversation, array $originContext): void
+    {
+        $meta = $conversation->meta ?: [];
+        $meta['origin_context'] = $originContext;
+        $conversation->meta = $meta;
+        $conversation->save();
+    }
+
+    public function syncMessageOrigin(ChatMessage $message, array $originContext): void
+    {
+        $meta = $message->meta ?: [];
+        $meta['origin_context'] = $originContext;
+        $message->meta = $meta;
+        $message->save();
+    }
+
     private function syncCustomerSnapshot(Customer $customer, ChatContact $contact, array $profile): void
     {
         $payload = [];
@@ -384,6 +492,13 @@ class ChatService
 
     private function buildPreview(ChatMessage $message): string
     {
+        $originContext = data_get($message->meta, 'origin_context')
+            ?: $this->extractOriginContext($message->text, $message->conversation?->contact?->platform);
+
+        if (!empty($originContext['summary'])) {
+            return (string) $originContext['summary'];
+        }
+
         $text = trim((string) $message->text);
         if ($text !== '') {
             return Str::limit($text, 190);

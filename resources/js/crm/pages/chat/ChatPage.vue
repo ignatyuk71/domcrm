@@ -46,6 +46,7 @@
         :is-sending="isSending"
         :is-syncing="isSyncing"
         :is-archiving="isArchiving"
+        :sync-notice="syncNotice"
         :loading="isLoading"
         @send="handleSendMessage"
         @delete-conversation="handleDeleteConversation"
@@ -94,6 +95,7 @@ const {
   isSending,
   isSyncing,
   isArchiving,
+  syncNotice,
   currentPage,
   lastPage,
   fetchConversations,
@@ -144,12 +146,10 @@ function getPlatformCount(platform) {
   )).length;
 }
 
-function looksLikeCommentThread(chat) {
-  const preview = String(chat?.last_message || '').toLowerCase();
-  return preview.includes('коментар') || preview.includes('комментар') || preview.includes('comment');
-}
-
 function matchConversationByTab(chat, tab) {
+  const originPlatform = chat?.origin_context?.platform;
+  const isCommentThread = chat?.thread_kind === 'comment';
+
   if (tab === 'all') {
     return true;
   }
@@ -159,11 +159,11 @@ function matchConversationByTab(chat, tab) {
   }
 
   if (tab === 'facebook_comments') {
-    return chat.platform === 'messenger' && looksLikeCommentThread(chat);
+    return isCommentThread && originPlatform === 'messenger';
   }
 
   if (tab === 'instagram_comments') {
-    return chat.platform === 'instagram' && looksLikeCommentThread(chat);
+    return isCommentThread && originPlatform === 'instagram';
   }
 
   return true;

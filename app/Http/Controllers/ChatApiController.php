@@ -147,6 +147,36 @@ class ChatApiController extends Controller
                 $conversation = $conversation->fresh(['contact', 'customer', 'stage', 'lastMessage.attachments']);
             }
 
+            if (!data_get($conversation->meta, 'origin_context')) {
+                $originCandidate = ChatMessage::query()
+                    ->where('conversation_id', $conversation->id)
+                    ->whereNotNull('text')
+                    ->orderBy('id')
+                    ->get(['id', 'text'])
+                    ->first(function (ChatMessage $message) use ($conversation) {
+                        return (bool) $this->chatService->extractOriginContext(
+                            $message->text,
+                            $conversation->contact?->platform
+                        );
+                    });
+
+                if ($originCandidate) {
+                    $originContext = $this->chatService->extractOriginContext(
+                        $originCandidate->text,
+                        $conversation->contact?->platform
+                    );
+
+                    if ($originContext) {
+                        $this->chatService->syncConversationOrigin($conversation, $originContext);
+                        $originCandidateModel = ChatMessage::query()->find($originCandidate->id);
+                        if ($originCandidateModel) {
+                            $this->chatService->syncMessageOrigin($originCandidateModel, $originContext);
+                        }
+                        $conversation = $conversation->fresh(['contact', 'customer', 'stage', 'lastMessage.attachments']);
+                    }
+                }
+            }
+
             $messages = ChatMessage::query()
                 ->with(['parent.attachments', 'attachments'])
                 ->where('conversation_id', $conversation->id)
@@ -439,6 +469,8 @@ class ChatApiController extends Controller
     {
         $contact = $conversation->contact;
         $customer = $conversation->customer;
+        $originContext = data_get($conversation->meta, 'origin_context')
+            ?: $this->chatService->extractOriginContext($conversation->last_message_preview, $contact?->platform);
         $stageCode = $conversation->stage?->code;
         if ($stageCode === 'no_stage') {
             $stageCode = null;
@@ -468,6 +500,8 @@ class ChatApiController extends Controller
             'platform' => $contact?->platform,
             'status' => $conversation->status,
             'stage' => $stageCode,
+            'thread_kind' => $originContext ? ($originContext['kind'] ?? 'direct') : 'direct',
+            'origin_context' => $originContext,
             'tags' => [],
             'source' => $contact?->platform,
             'fb_user_id' => $contact?->platform === 'messenger'
@@ -483,10 +517,14 @@ class ChatApiController extends Controller
     private function formatMessage(ChatMessage $message): array
     {
         $parent = $message->parent;
+        $originContext = data_get($message->meta, 'origin_context')
+            ?: $this->chatService->extractOriginContext($message->text, $message->conversation?->contact?->platform);
+        $displayText = $this->formatMessageText($message->text, $originContext);
 
         return [
             'id' => $message->id,
-            'text' => $message->text ?? null,
+            'text' => $displayText,
+            'raw_text' => $message->text ?? null,
             'direction' => $message->direction,
             'created_at' => ($message->sent_at ?? $message->created_at)?->toDateTimeString(),
             'attachments' => $message->attachments->map(fn ($attachment) => [
@@ -496,6 +534,7 @@ class ChatApiController extends Controller
             'status' => $message->delivery_status,
             'is_read' => $message->read_at !== null || $message->delivery_status === 'read',
             'mid' => $message->external_message_id,
+            'origin_context' => $originContext,
             'reply_to' => $parent ? [
                 'text' => $parent->text ?? null,
                 'direction' => $parent->direction,
@@ -505,6 +544,33 @@ class ChatApiController extends Controller
                 ])->filter(fn ($attachment) => !empty($attachment['url']))->values()->all(),
             ] : null,
         ];
+    }
+
+    private function formatMessageText(?string $text, ?array $originContext): ?string
+    {
+        $text = trim((string) $text);
+        if ($text === '') {
+            return null;
+        }
+
+        if (!$originContext) {
+            return $text;
+        }
+
+        $cleaned = preg_replace('~https?://[^\s)]+~u', '', $text);
+        $cleaned = preg_replace('/\(\s*\)$/u', '', (string) $cleaned);
+        $cleaned = trim(preg_replace('/\s+/u', ' ', (string) $cleaned));
+
+        $lower = mb_strtolower($cleaned);
+        if (
+            $cleaned === ''
+            || str_contains($lower, 'ви відповідаєте на коментар')
+            || str_contains($lower, 'you are replying to a comment')
+        ) {
+            return null;
+        }
+
+        return $cleaned;
     }
 
     private function ensureConversationForCustomer(

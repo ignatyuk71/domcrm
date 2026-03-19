@@ -29,7 +29,10 @@
       </div>
 
       <div class="content-bottom">
-        <p class="preview-text">{{ previewText }}</p>
+        <div class="preview-stack">
+          <span v-if="originLabel" class="origin-chip" :class="originClass">{{ originLabel }}</span>
+          <p class="preview-text">{{ previewText }}</p>
+        </div>
         <div class="meta-right">
           <span v-if="stageLabel" class="stage-chip" :class="stageClass">
             {{ stageLabel }}
@@ -86,7 +89,31 @@ const stageClass = computed(() => (
   props.item.stage ? `stage-${props.item.stage}` : ''
 ));
 
-const previewText = computed(() => props.item.last_message || 'Вкладення');
+const originContext = computed(() => props.item.origin_context || null);
+const originLabel = computed(() => {
+  if (!originContext.value) {
+    return '';
+  }
+
+  return originContext.value.object_type === 'ad'
+    ? 'Реклама'
+    : originContext.value.object_type === 'story'
+      ? 'Сторіс'
+      : originContext.value.object_type === 'reel'
+        ? 'Reels'
+        : 'Пост';
+});
+const originClass = computed(() => (
+  originContext.value ? `origin-${originContext.value.object_type || 'comment'}` : ''
+));
+
+const previewText = computed(() => {
+  if (originContext.value?.summary && (!props.item.last_message || props.item.last_message === originContext.value.summary)) {
+    return originContext.value.summary;
+  }
+
+  return props.item.last_message || 'Вкладення';
+});
 
 const formattedTime = computed(() => {
   if (!props.item.last_message_time) {
@@ -205,6 +232,13 @@ watch(
   gap: 10px;
 }
 
+.preview-stack {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .content-top h4 {
   margin: 0;
   color: #0f172a;
@@ -233,6 +267,39 @@ watch(
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.origin-chip {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.origin-chip.origin-post {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.origin-chip.origin-story {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.origin-chip.origin-ad {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.origin-chip.origin-reel {
+  background: #f5f3ff;
+  color: #7c3aed;
 }
 
 .meta-right {

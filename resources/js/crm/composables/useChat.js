@@ -32,11 +32,13 @@ export function useChat() {
   const isSending = ref(false);
   const isSyncing = ref(false);
   const isArchiving = ref(false);
+  const syncNotice = ref(null);
   const error = ref('');
   const currentPage = ref(1);
   const lastPage = ref(1);
 
   let pollingTimer = null;
+  let syncNoticeTimer = null;
 
   const activeChat = computed(() =>
     conversations.value.find((chat) => chat.conversation_id === activeConversationId.value) || null
@@ -305,17 +307,34 @@ export function useChat() {
     }
 
     isSyncing.value = true;
+    syncNotice.value = null;
 
     try {
-      await apiForceSync(chat.customer_id, chat.platform);
+      const { data: syncData } = await apiForceSync(chat.customer_id, chat.platform);
       const { data } = await getMessages(chat.customer_id, chat.platform);
       messages.value = normalizeCollection(data);
       await fetchConversations(1);
+      syncNotice.value = {
+        type: 'success',
+        text: Number(syncData?.count || 0) > 0
+          ? `Історію оновлено: додано ${syncData.count} повідомлень.`
+          : 'Історію оновлено, нових повідомлень не знайдено.',
+      };
     } catch (e) {
       console.error('Не вдалося синхронізувати чат', e);
       error.value = 'Не вдалося синхронізувати чат';
+      syncNotice.value = {
+        type: 'error',
+        text: 'Не вдалося оновити історію чату.',
+      };
     } finally {
       isSyncing.value = false;
+      if (syncNoticeTimer) {
+        clearTimeout(syncNoticeTimer);
+      }
+      syncNoticeTimer = setTimeout(() => {
+        syncNotice.value = null;
+      }, 3500);
     }
   }
 
@@ -450,6 +469,7 @@ export function useChat() {
     isSending,
     isSyncing,
     isArchiving,
+    syncNotice,
     error,
     currentPage,
     lastPage,

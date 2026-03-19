@@ -142,6 +142,14 @@ class MetaService
                 'sent_at' => $sentAt,
             ], $processedAttachments);
 
+            $originContext = $chatService->extractOriginContext($text, $platform);
+            if ($originContext) {
+                $chatService->syncMessageOrigin($message, $originContext);
+                $chatService->syncConversationOrigin($conversation, $originContext);
+                $message = $message->fresh(['parent', 'attachments']);
+                $conversation = $conversation->fresh();
+            }
+
             $conversation = $chatService->updateConversationAfterMessage(
                 $conversation,
                 $message,
