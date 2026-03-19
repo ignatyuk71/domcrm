@@ -2,9 +2,7 @@
 
 namespace App\Services;
 
-use App\Models\FacebookMessage;
-use App\Models\Conversation;
-use App\Models\ConversationMeta;
+use App\Models\ChatMessage;
 use App\Models\Customer;
 use App\Models\MetaConnection;
 use Carbon\Carbon;
@@ -16,29 +14,21 @@ use Illuminate\Support\Str;
 class MetaService
 {
     /**
-     * Відправка повідомлення (текст або вкладення)
+     * Відправка повідомлення в Meta.
      */
     public function sendMessage(
         Customer $customer,
         string $text,
         array $attachments = [],
-        string $platform = 'messenger'
-    ): ?array // Повертаємо null при помилці, array при успіху
-    {
+        string $platform = 'messenger',
+        ?string $recipientId = null
+    ): ?array {
         $settings = $this->getSettings();
-        
-        // Вибираємо правильний ID
-        $recipientId = $platform === 'instagram' 
-            ? $customer->instagram_user_id 
-            : $customer->fb_user_id;
-
-        // Fallback: якщо не знайшли по платформі, спробуємо хоч якийсь
-        if (!$recipientId) {
-            $recipientId = $customer->instagram_user_id ?: $customer->fb_user_id;
-        }
+        $recipientId = $recipientId ?: $this->resolveRecipientId($customer, $platform);
 
         if (!$recipientId) {
             Log::error("Спроба відправки повідомлення клієнту {$customer->id} без ID соцмережі");
+
             return null;
         }
 
@@ -51,7 +41,7 @@ class MetaService
             'messaging_type' => 'RESPONSE',
         ];
 
-        if (!empty($validAttachments)) {
+        if ($validAttachments !== []) {
             $attachment = $validAttachments[0];
             $attachmentUrl = $attachment['url'] ?? '';
             if ($attachmentUrl !== '' && !str_starts_with($attachmentUrl, 'http')) {
@@ -67,8 +57,7 @@ class MetaService
                 ],
             ];
         } else {
-            // Meta API не дозволяє пусті повідомлення
-            if (empty($text)) {
+            if (trim($text) === '') {
                 return null;
             }
             $payload['message'] = ['text' => $text];
@@ -79,6 +68,7 @@ class MetaService
 
         if ($response->failed()) {
             Log::error('Meta API Send Error', $response->json());
+
             return null;
         }
 
@@ -86,94 +76,75 @@ class MetaService
     }
 
     /**
-     * Стягування історії при відкритті чату
+     * Стягування історії для конкретного каналу клієнта.
      */
-    public function syncHistory(Customer $customer): int
+    public function syncHistory(Customer $customer, ?string $platform = null): int
     {
         $settings = $this->getSettings();
-        $recipientId = $customer->instagram_user_id ?: $customer->fb_user_id;
-        $platform = $customer->instagram_user_id ? 'instagram' : 'messenger';
+        $platform = $platform ?: ($customer->instagram_user_id ? 'instagram' : 'messenger');
+        $recipientId = $this->resolveRecipientId($customer, $platform);
 
         if (!$recipientId) {
             return 0;
         }
 
+        $chatService = app(ChatService::class);
+        $profile = $this->getContactProfile($recipientId, $platform);
+        $contact = $chatService->findOrCreateContact($settings, $platform, $recipientId, $customer, $profile);
+        if ($profile !== []) {
+            $contact = $chatService->syncContactProfile($contact, $this, $customer);
+        }
+
         $threadId = $this->findThreadId($settings->access_token, $recipientId, $platform);
+        $conversation = $chatService->getOrCreateConversation($contact, $customer, $threadId);
+
         if (!$threadId) {
             return 0;
         }
 
-        $messagesUrl = $this->graphUrl("/{$threadId}/messages");
-        $response = Http::withToken($settings->access_token)->get($messagesUrl, [
+        $response = Http::withToken($settings->access_token)->get($this->graphUrl("/{$threadId}/messages"), [
             'fields' => 'message,created_time,from,attachments,reply_to,id',
             'limit' => 50,
         ]);
 
         if ($response->failed()) {
             Log::error('Meta API Sync Error', $response->json());
+
             return 0;
         }
 
-        $remoteMessages = $response->json()['data'] ?? [];
         $addedCount = 0;
-
-        foreach (array_reverse($remoteMessages) as $msgData) {
-            $mid = $msgData['id'] ?? null;
-            if (!$mid) {
+        foreach (array_reverse($response->json()['data'] ?? []) as $msgData) {
+            $externalMessageId = $msgData['id'] ?? null;
+            if (!$externalMessageId || $chatService->resolveMessageByExternalId($externalMessageId)) {
                 continue;
             }
 
-            $existing = FacebookMessage::where('mid', $mid)->first();
-            $replyToMid = $msgData['reply_to']['mid'] ?? null;
-            $parentId = $replyToMid ? FacebookMessage::where('mid', $replyToMid)->value('id') : null;
+            $externalParentId = $msgData['reply_to']['mid'] ?? null;
+            $parentMessageId = $chatService->resolveMessageByExternalId($externalParentId)?->id;
+            $isFromCustomer = isset($msgData['from']['id']) && (string) $msgData['from']['id'] === (string) $recipientId;
+            $sentAt = $this->normalizeTimestamp($msgData['created_time'] ?? null) ?: now();
 
-            // Визначення від кого
-            $isFromCustomer = isset($msgData['from']['id']) && $msgData['from']['id'] == $recipientId;
-            $sentAt = $this->normalizeTimestamp($msgData['created_time'] ?? null);
-
-            $text = $msgData['message'] ?? '';
-
-            // Обробляємо вкладення так само, як у вебхуку, щоб зберегти їх локально
-            $rawAttachments = $msgData['attachments']['data'] ?? [];
             $processedAttachments = [];
-            $shouldRefreshAttachments = !empty($rawAttachments)
-                && (!$existing || empty($existing->attachments) || $this->attachmentsNeedRefresh($existing->attachments));
-
-            if ($shouldRefreshAttachments) {
-                foreach ($rawAttachments as $att) {
-                    // Використовуємо наш метод завантаження
-                    $processedAttachments[] = $this->processAttachment($att);
-                }
+            foreach (($msgData['attachments']['data'] ?? []) as $attachment) {
+                $processedAttachments[] = $this->processAttachment($attachment);
             }
-            $storedAttachments = ($existing && !empty($existing->attachments) && !$shouldRefreshAttachments)
-                ? $existing->attachments
-                : (!empty($processedAttachments) ? $processedAttachments : null);
-            $hasAttachments = !empty($storedAttachments);
 
-            $message = FacebookMessage::updateOrCreate(
-                ['mid' => $mid],
-                [
-                    'customer_id' => $customer->id,
-                    'parent_id' => $parentId,
-                    'text' => $text !== '' ? $text : ($hasAttachments ? 'Вкладення' : ''),
-                    'attachments' => $storedAttachments,
-                    'is_from_customer' => $isFromCustomer,
-                    'platform' => $platform,
-                    'is_private' => true,
-                    'sent_at' => $sentAt,
-                    'status' => $isFromCustomer ? 'received' : 'sent',
-                    'is_read' => !$isFromCustomer,
-                    'created_at' => $sentAt ?? now(),
-                    'updated_at' => $sentAt ?? now(),
-                ]
-            );
+            $text = trim((string) ($msgData['message'] ?? ''));
+            $message = $chatService->storeMessage($conversation, [
+                'parent_message_id' => $parentMessageId,
+                'external_message_id' => $externalMessageId,
+                'external_parent_message_id' => $externalParentId,
+                'direction' => $isFromCustomer ? 'inbound' : 'outbound',
+                'delivery_status' => $isFromCustomer ? 'delivered' : 'sent',
+                'source' => 'sync',
+                'text' => $text !== '' ? $text : null,
+                'sent_at' => $sentAt,
+            ], $processedAttachments);
 
-            // Оновлюємо conversation
-            $this->touchConversation(
-                $customer->id,
-                $platform,
-                $message->text ?? ($hasAttachments ? 'Вкладення' : ''),
-                $message->sent_at,
+            $conversation = $chatService->updateConversationAfterMessage(
+                $conversation,
+                $message,
                 $isFromCustomer
             );
             $addedCount++;
@@ -182,78 +153,48 @@ class MetaService
         return $addedCount;
     }
 
-    public function getUserProfile(string $psid): array
+    public function getContactProfile(string $externalUserId, string $platform = 'messenger'): array
     {
-        $settings = $this->getSettings();
-        $response = Http::withToken($settings->access_token)->get($this->graphUrl("/{$psid}"), [
-            'fields' => 'name,profile_pic',
-        ]);
+        $fields = $platform === 'instagram'
+            ? 'name,username,profile_pic'
+            : 'first_name,last_name,profile_pic';
+
+        $response = Http::withToken($this->getSettings()->access_token)
+            ->get($this->graphUrl("/{$externalUserId}"), ['fields' => $fields]);
 
         return $response->ok() ? $response->json() : [];
     }
 
     /**
-     * Отримує та оновлює дані профілю (Ім'я, Фото) через Graph API.
+     * Оновлює знімок профілю в customers і chat_contacts.
      */
     public function updateCustomerProfile(Customer $customer): void
     {
-        $settings = $this->getSettings();
-        $socialId = $customer->instagram_user_id ?: $customer->fb_user_id;
-        $isInsta = (bool) $customer->instagram_user_id;
+        $chatService = app(ChatService::class);
+        $connection = $this->getSettings();
 
-        if (!$socialId) {
-            return;
+        $platforms = [];
+        if ($customer->fb_user_id) {
+            $platforms['messenger'] = (string) $customer->fb_user_id;
+        }
+        if ($customer->instagram_user_id) {
+            $platforms['instagram'] = (string) $customer->instagram_user_id;
         }
 
-        try {
-            $fields = $isInsta ? 'name,profile_pic' : 'first_name,last_name,profile_pic';
+        foreach ($platforms as $platform => $externalUserId) {
+            $contact = $chatService->findOrCreateContact(
+                $connection,
+                $platform,
+                $externalUserId,
+                $customer
+            );
 
-            $response = Http::withToken($settings->access_token)
-                ->get($this->graphUrl("/{$socialId}"), ['fields' => $fields]);
-
-            if (!$response->successful()) {
-                return;
-            }
-
-            $data = $response->json();
-            $updateData = [];
-
-            if ($isInsta) {
-                $fullName = trim((string) ($data['name'] ?? ''));
-                if ($fullName !== '') {
-                    $parts = preg_split('/\s+/', $fullName, 2);
-                    $updateData['first_name'] = $parts[0] ?? $customer->first_name;
-                    $updateData['last_name'] = $parts[1] ?? $customer->last_name;
-                }
-            } else {
-                if (!empty($data['first_name'])) {
-                    $updateData['first_name'] = $data['first_name'];
-                }
-                if (!empty($data['last_name'])) {
-                    $updateData['last_name'] = $data['last_name'];
-                }
-            }
-
-            if (!empty($data['profile_pic'])) {
-                $updateData['fb_profile_pic'] = $this->cacheProfileAvatar(
-                    $customer,
-                    (string) $data['profile_pic']
-                ) ?: $data['profile_pic'];
-            }
-
-            if (!empty($updateData)) {
-                $customer->update($updateData);
-            }
-        } catch (\Throwable $e) {
-            Log::warning('Meta profile sync failed', [
-                'customer_id' => $customer->id,
-                'error' => $e->getMessage(),
-            ]);
+            $chatService->syncContactProfile($contact, $this, $customer);
         }
     }
 
     /**
-     * Завантажує файл з URL Meta та зберігає напряму у public/chat/attachments.
+     * Завантажує вкладення Meta і зберігає його локально.
      */
     public function processAttachment(array $attachment): array
     {
@@ -291,35 +232,34 @@ class MetaService
                     'status' => $response->status(),
                     'body' => Str::limit($response->body(), 200),
                 ]);
+
                 return [
                     'type' => $type,
                     'url' => $remoteUrl,
                 ];
             }
 
-            $fileContent = $response->body();
-
             $mimeType = data_get($attachment, 'mime_type')
                 ?? data_get($attachment, 'payload.mime_type');
             $extension = $this->guessExtension($remoteUrl, $mimeType);
-
-            $fileName = time().'_'.bin2hex(random_bytes(4)).'.'.strtolower($extension);
+            $fileName = time() . '_' . bin2hex(random_bytes(4)) . '.' . strtolower($extension);
             $relativePath = 'attachments/' . date('Y/m/d') . '/' . $fileName;
 
-            Storage::disk('chat_uploads')->put($relativePath, $fileContent);
-            @chmod(public_path('chat/'.$relativePath), 0644);
+            Storage::disk('chat_uploads')->put($relativePath, $response->body());
+            @chmod(public_path('chat/' . $relativePath), 0644);
 
             return [
                 'type' => $type,
                 'url' => 'chat/' . $relativePath,
                 'original_url' => $remoteUrl,
+                'mime_type' => $mimeType,
             ];
-
         } catch (\Throwable $e) {
             Log::warning('Attachment download failed', [
                 'url' => $remoteUrl,
                 'error' => $e->getMessage(),
             ]);
+
             return [
                 'type' => $type,
                 'url' => $remoteUrl,
@@ -366,6 +306,9 @@ class MetaService
             if (str_starts_with($mimeType, 'video/')) {
                 return 'video';
             }
+            if (str_starts_with($mimeType, 'audio/')) {
+                return 'audio';
+            }
         }
 
         return 'file';
@@ -393,114 +336,14 @@ class MetaService
                 'video/mp4' => 'mp4',
                 'video/quicktime' => 'mov',
                 'video/webm' => 'webm',
+                'audio/mpeg' => 'mp3',
+                'audio/wav' => 'wav',
                 'application/pdf' => 'pdf',
             ];
             $extension = $map[$mimeType] ?? '';
         }
 
         return $extension !== '' ? $extension : 'jpg';
-    }
-
-    private function attachmentsNeedRefresh($attachments): bool
-    {
-        if (!is_array($attachments) || $attachments === []) {
-            return true;
-        }
-
-        foreach ($attachments as $attachment) {
-            if (!is_array($attachment)) {
-                return true;
-            }
-            $url = $attachment['url'] ?? $this->extractAttachmentUrl($attachment);
-            if (!$url || !$this->isLocalAttachmentUrl($url)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private function isLocalAttachmentUrl(string $url): bool
-    {
-        $trimmed = ltrim($url, '/');
-        if (str_starts_with($trimmed, 'chat/')) {
-            return true;
-        }
-
-        $appUrl = rtrim((string) config('app.url'), '/');
-        if ($appUrl !== '' && str_starts_with($url, $appUrl . '/chat/')) {
-            return true;
-        }
-
-        return false;
-    }
-
-    public function resolveCustomerAvatarUrl(?Customer $customer): ?string
-    {
-        $avatar = $customer?->fb_profile_pic;
-        if (!is_string($avatar) || $avatar === '') {
-            return null;
-        }
-
-        return $this->toPublicAssetUrl($avatar);
-    }
-
-    public function touchConversation(
-        int $customerId,
-        string $platform,
-        string $text,
-        ?Carbon $sentAt,
-        bool $isInbound
-    ): void {
-        // Використовуємо updateOrCreate, щоб отримати об'єкт
-        $conversation = Conversation::updateOrCreate(
-            ['customer_id' => $customerId, 'platform' => $platform],
-            [
-                'last_message_text' => mb_strimwidth($text, 0, 190, '...'),
-                'last_message_at' => $sentAt,
-                'status' => 'open',
-                'updated_at' => now(), // Оновлюємо час редагування запису
-            ]
-        );
-
-        if ($isInbound) {
-            $conversation->increment('unread_count');
-        } else {
-            // Якщо це вихідне повідомлення — скидаємо лічильник непрочитаних
-            $conversation->update(['unread_count' => 0]);
-        }
-
-        // Мінімальний мета-стан для діалогу (без втручання в основну логіку чату)
-        $meta = ConversationMeta::firstOrCreate(['conversation_id' => $conversation->id]);
-        $stamp = $sentAt ?? now();
-        if ($isInbound) {
-            $meta->last_inbound_at = $stamp;
-            if ($meta->stage === null || $meta->stage === 'waiting_reply') {
-                $meta->stage = 'new';
-            }
-        } else {
-            $meta->last_outbound_at = $stamp;
-            if ($meta->stage === null) {
-                $meta->stage = 'waiting_reply';
-            }
-        }
-        $meta->save();
-    }
-
-    private function getSettings()
-    {
-        $settings = MetaConnection::query()
-            ->where('provider', 'meta')
-            ->where('is_active', true)
-            ->whereNotNull('access_token')
-            ->latest('id')
-            ->first();
-
-        if ($settings?->access_token) {
-            return $settings;
-        }
-
-        throw new \RuntimeException('Meta token is missing in meta_connections.');
     }
 
     private function findThreadId(string $accessToken, string $recipientId, string $platform): ?string
@@ -518,7 +361,7 @@ class MetaService
         foreach (($response->json()['data'] ?? []) as $conversation) {
             $participants = $conversation['participants']['data'] ?? [];
             foreach ($participants as $participant) {
-                if (($participant['id'] ?? null) == $recipientId) {
+                if ((string) ($participant['id'] ?? '') === (string) $recipientId) {
                     return $conversation['id'] ?? null;
                 }
             }
@@ -532,63 +375,37 @@ class MetaService
         if (!$timestamp) {
             return null;
         }
-        $timezone = config('app.timezone', 'Europe/Kyiv');
-        return Carbon::parse($timestamp)->timezone($timezone);
+
+        return Carbon::parse($timestamp)->timezone(config('app.timezone', 'Europe/Kyiv'));
+    }
+
+    private function resolveRecipientId(Customer $customer, string $platform): ?string
+    {
+        if ($platform === 'instagram') {
+            return $customer->instagram_user_id ?: $customer->fb_user_id;
+        }
+
+        return $customer->fb_user_id ?: $customer->instagram_user_id;
+    }
+
+    private function getSettings(): MetaConnection
+    {
+        $settings = MetaConnection::query()
+            ->where('provider', 'meta')
+            ->where('is_active', true)
+            ->whereNotNull('access_token')
+            ->latest('id')
+            ->first();
+
+        if ($settings?->access_token) {
+            return $settings;
+        }
+
+        throw new \RuntimeException('Meta token is missing in meta_connections.');
     }
 
     private function graphUrl(string $path): string
     {
         return 'https://graph.facebook.com/' . config('services.meta.graph_version', 'v19.0') . $path;
-    }
-
-    private function cacheProfileAvatar(Customer $customer, string $remoteUrl): ?string
-    {
-        if ($remoteUrl === '') {
-            return null;
-        }
-
-        if (!$this->looksLikeRemoteUrl($remoteUrl)) {
-            return ltrim($remoteUrl, '/');
-        }
-
-        try {
-            $response = Http::timeout(10)->get($remoteUrl);
-            if ($response->failed()) {
-                Log::warning('Profile avatar download failed', [
-                    'customer_id' => $customer->id,
-                    'url' => $remoteUrl,
-                    'status' => $response->status(),
-                ]);
-                return null;
-            }
-
-            $mimeType = $response->header('Content-Type');
-            $extension = $this->guessExtension($remoteUrl, $mimeType);
-            $relativePath = 'avatars/' . date('Y/m') . '/customer_' . $customer->id . '_' . md5($remoteUrl) . '.' . strtolower($extension);
-
-            Storage::disk('chat_uploads')->put($relativePath, $response->body());
-            @chmod(public_path('chat/' . $relativePath), 0644);
-
-            return 'chat/' . $relativePath;
-        } catch (\Throwable $e) {
-            Log::warning('Profile avatar download failed', [
-                'customer_id' => $customer->id,
-                'url' => $remoteUrl,
-                'error' => $e->getMessage(),
-            ]);
-            return null;
-        }
-    }
-
-    private function looksLikeRemoteUrl(string $value): bool
-    {
-        return str_starts_with($value, 'http://') || str_starts_with($value, 'https://');
-    }
-
-    private function toPublicAssetUrl(string $path): string
-    {
-        return $this->looksLikeRemoteUrl($path)
-            ? $path
-            : url(ltrim($path, '/'));
     }
 }

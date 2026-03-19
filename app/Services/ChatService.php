@@ -1,0 +1,498 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\ChatContact;
+use App\Models\ChatConversation;
+use App\Models\ChatMessage;
+use App\Models\ChatMessageAttachment;
+use App\Models\ChatStage;
+use App\Models\Customer;
+use App\Models\MetaConnection;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+
+class ChatService
+{
+    public function getCurrentConnection(): MetaConnection
+    {
+        $connection = MetaConnection::current();
+
+        if (!$connection) {
+            throw new \RuntimeException('Активне Meta-підключення не знайдено.');
+        }
+
+        return $connection;
+    }
+
+    public function resolveCustomer(string $platform, string $externalUserId, array $profile = []): Customer
+    {
+        $field = $platform === 'instagram' ? 'instagram_user_id' : 'fb_user_id';
+        $customer = Customer::query()->where($field, $externalUserId)->first();
+
+        if ($customer) {
+            return $customer;
+        }
+
+        $name = $this->extractDisplayName($platform, $profile);
+        [$firstName, $lastName] = $this->splitName($name);
+
+        return Customer::create([
+            $field => $externalUserId,
+            'first_name' => $firstName ?: ($platform === 'instagram' ? 'Instagram User' : 'Facebook User'),
+            'last_name' => $lastName,
+            'instagram_username' => $platform === 'instagram'
+                ? $this->extractUsername($profile)
+                : null,
+            'note' => $platform === 'instagram'
+                ? 'Auto-created via Instagram'
+                : 'Auto-created via Messenger',
+        ]);
+    }
+
+    public function findOrCreateContact(
+        MetaConnection $connection,
+        string $platform,
+        string $externalUserId,
+        ?Customer $customer = null,
+        array $profile = []
+    ): ChatContact {
+        $contact = ChatContact::query()->firstOrNew([
+            'meta_connection_id' => $connection->id,
+            'platform' => $platform,
+            'external_user_id' => $externalUserId,
+        ]);
+
+        if ($customer) {
+            $contact->customer_id = $customer->id;
+        }
+
+        $displayName = $this->extractDisplayName($platform, $profile);
+        [$firstName, $lastName] = $this->splitName($displayName);
+
+        $contact->external_username = $this->extractUsername($profile) ?: $contact->external_username;
+        $contact->display_name = $displayName ?: $contact->display_name;
+        $contact->first_name = $firstName ?: $contact->first_name;
+        $contact->last_name = $lastName ?: $contact->last_name;
+
+        if (!empty($profile)) {
+            $contact->profile_payload = $profile;
+            $contact->last_profile_sync_at = now();
+        }
+
+        $contact->save();
+
+        return $contact;
+    }
+
+    public function syncContactProfile(
+        ChatContact $contact,
+        MetaService $metaService,
+        ?Customer $customer = null
+    ): ChatContact {
+        try {
+            $profile = $metaService->getContactProfile($contact->external_user_id, $contact->platform);
+            if ($profile === []) {
+                return $contact;
+            }
+
+            $contact = $this->findOrCreateContact(
+                $contact->metaConnection,
+                $contact->platform,
+                $contact->external_user_id,
+                $customer ?: $contact->customer,
+                $profile
+            );
+
+            if (!empty($profile['profile_pic'])) {
+                $avatarPath = $this->cacheProfileAvatar(
+                    $contact->id,
+                    (string) $profile['profile_pic']
+                );
+
+                if ($avatarPath) {
+                    $contact->avatar_path = $avatarPath;
+                }
+                $contact->avatar_original_url = (string) $profile['profile_pic'];
+            }
+
+            $contact->save();
+
+            if ($customer || $contact->customer) {
+                $this->syncCustomerSnapshot($customer ?: $contact->customer, $contact, $profile);
+            }
+
+            return $contact->fresh();
+        } catch (\Throwable $e) {
+            Log::warning('Не вдалося синхронізувати профіль контакту чату', [
+                'contact_id' => $contact->id,
+                'platform' => $contact->platform,
+                'error' => $e->getMessage(),
+            ]);
+
+            return $contact;
+        }
+    }
+
+    public function getOrCreateConversation(
+        ChatContact $contact,
+        ?Customer $customer = null,
+        ?string $externalThreadId = null
+    ): ChatConversation {
+        $defaultStageId = ChatStage::query()
+            ->where('is_default', true)
+            ->value('id');
+
+        $conversation = ChatConversation::query()->firstOrNew([
+            'contact_id' => $contact->id,
+        ]);
+
+        $conversation->meta_connection_id = $contact->meta_connection_id;
+        $conversation->customer_id = $customer?->id ?: $contact->customer_id;
+        $conversation->stage_id = $conversation->stage_id ?: $defaultStageId;
+        $conversation->status = $conversation->status ?: 'open';
+        $conversation->external_thread_id = $externalThreadId ?: $conversation->external_thread_id;
+        $conversation->save();
+
+        return $conversation;
+    }
+
+    public function storeMessage(
+        ChatConversation $conversation,
+        array $attributes,
+        array $attachments = []
+    ): ChatMessage {
+        $externalMessageId = $attributes['external_message_id'] ?? null;
+        $message = null;
+
+        if ($externalMessageId) {
+            $message = ChatMessage::query()
+                ->where('external_message_id', $externalMessageId)
+                ->first();
+        }
+
+        if (!$message) {
+            $message = new ChatMessage();
+        }
+
+        $message->fill([
+            'conversation_id' => $conversation->id,
+            'parent_message_id' => $attributes['parent_message_id'] ?? null,
+            'external_message_id' => $externalMessageId,
+            'external_parent_message_id' => $attributes['external_parent_message_id'] ?? null,
+            'direction' => $attributes['direction'] ?? 'inbound',
+            'message_type' => $attributes['message_type']
+                ?? $this->resolveMessageType($attributes['text'] ?? null, $attachments),
+            'delivery_status' => $attributes['delivery_status']
+                ?? ($attributes['direction'] ?? 'inbound') === 'outbound' ? 'sent' : 'delivered',
+            'source' => $attributes['source'] ?? 'webhook',
+            'text' => $attributes['text'] ?? null,
+            'meta' => $attributes['meta'] ?? null,
+            'sent_at' => $attributes['sent_at'] ?? now(),
+            'delivered_at' => $attributes['delivered_at'] ?? null,
+            'read_at' => $attributes['read_at'] ?? null,
+            'failed_at' => $attributes['failed_at'] ?? null,
+            'error_message' => $attributes['error_message'] ?? null,
+        ]);
+        $message->save();
+
+        if ($attachments !== []) {
+            $this->syncAttachments($message, $attachments);
+        }
+
+        return $message->fresh(['parent', 'attachments']);
+    }
+
+    public function updateConversationAfterMessage(
+        ChatConversation $conversation,
+        ChatMessage $message,
+        bool $incrementUnread = true
+    ): ChatConversation {
+        $stamp = $message->sent_at ?: $message->created_at ?: now();
+        $preview = $this->buildPreview($message);
+
+        $conversation->last_message_id = $message->id;
+        $conversation->last_message_preview = $preview;
+        $conversation->last_message_at = $stamp;
+        $conversation->status = 'open';
+
+        if ($message->direction === 'inbound') {
+            $conversation->last_inbound_at = $stamp;
+            if ($incrementUnread) {
+                $conversation->unread_count = (int) $conversation->unread_count + 1;
+            }
+            $this->moveConversationStage($conversation, ['no_stage', 'waiting_reply'], 'new');
+        } else {
+            $conversation->last_outbound_at = $stamp;
+            $conversation->unread_count = 0;
+            $this->moveConversationStage($conversation, ['no_stage'], 'waiting_reply');
+        }
+
+        $conversation->save();
+
+        return $conversation->fresh(['contact', 'customer', 'stage', 'lastMessage']);
+    }
+
+    public function markConversationRead(ChatConversation $conversation): void
+    {
+        $conversation->update(['unread_count' => 0]);
+
+        ChatMessage::query()
+            ->where('conversation_id', $conversation->id)
+            ->where('direction', 'inbound')
+            ->whereNull('read_at')
+            ->update([
+                'read_at' => now(),
+                'delivery_status' => 'read',
+            ]);
+    }
+
+    public function resolveConversationByCustomer(int $customerId, ?string $platform = null): ?ChatConversation
+    {
+        return ChatConversation::query()
+            ->with(['contact', 'customer', 'stage', 'lastMessage', 'lastMessage.attachments'])
+            ->where('customer_id', $customerId)
+            ->when($platform, fn ($query) => $query->whereHas(
+                'contact',
+                fn ($contactQuery) => $contactQuery->where('platform', $platform)
+            ))
+            ->orderByDesc('last_message_at')
+            ->first();
+    }
+
+    public function resolveMessageByExternalId(?string $externalMessageId): ?ChatMessage
+    {
+        if (!$externalMessageId) {
+            return null;
+        }
+
+        return ChatMessage::query()
+            ->where('external_message_id', $externalMessageId)
+            ->first();
+    }
+
+    public function formatAvatarUrl(?ChatContact $contact): ?string
+    {
+        if (!$contact?->avatar_path) {
+            return null;
+        }
+
+        if (str_starts_with($contact->avatar_path, 'http://') || str_starts_with($contact->avatar_path, 'https://')) {
+            return $contact->avatar_path;
+        }
+
+        return url(ltrim($contact->avatar_path, '/'));
+    }
+
+    private function syncCustomerSnapshot(Customer $customer, ChatContact $contact, array $profile): void
+    {
+        $payload = [];
+
+        if ($contact->platform === 'instagram') {
+            $payload['instagram_user_id'] = $contact->external_user_id;
+            $payload['instagram_username'] = $contact->external_username ?: $customer->instagram_username;
+        } else {
+            $payload['fb_user_id'] = $contact->external_user_id;
+        }
+
+        if (!empty($contact->avatar_path)) {
+            $payload['fb_profile_pic'] = $contact->avatar_path;
+        }
+
+        if ($contact->first_name && ($customer->first_name === null || str_contains($customer->first_name, 'User'))) {
+            $payload['first_name'] = $contact->first_name;
+        }
+
+        if ($contact->last_name && ($customer->last_name === null || $customer->last_name === '')) {
+            $payload['last_name'] = $contact->last_name;
+        }
+
+        if ($payload !== []) {
+            $customer->update($payload);
+        }
+    }
+
+    private function syncAttachments(ChatMessage $message, array $attachments): void
+    {
+        $message->attachments()->delete();
+
+        foreach (array_values($attachments) as $index => $attachment) {
+            $url = (string) ($attachment['url'] ?? '');
+            $storagePath = null;
+            $publicUrl = null;
+            $originalUrl = $attachment['original_url'] ?? null;
+
+            if ($url !== '') {
+                if (str_starts_with($url, 'http://') || str_starts_with($url, 'https://')) {
+                    $publicUrl = $url;
+                } else {
+                    $storagePath = ltrim(preg_replace('#^chat/#', '', $url), '/');
+                    $publicUrl = url(ltrim($url, '/'));
+                }
+            }
+
+            ChatMessageAttachment::create([
+                'message_id' => $message->id,
+                'attachment_type' => $attachment['type'] ?? 'file',
+                'storage_disk' => $storagePath ? 'chat_uploads' : null,
+                'storage_path' => $storagePath,
+                'original_url' => $originalUrl,
+                'public_url' => $publicUrl,
+                'mime_type' => $attachment['mime_type'] ?? null,
+                'file_name' => $attachment['file_name'] ?? null,
+                'file_size' => $attachment['file_size'] ?? null,
+                'width' => $attachment['width'] ?? null,
+                'height' => $attachment['height'] ?? null,
+                'duration_seconds' => $attachment['duration_seconds'] ?? null,
+                'sort_order' => $index,
+                'meta' => $attachment['meta'] ?? null,
+            ]);
+        }
+    }
+
+    private function moveConversationStage(ChatConversation $conversation, array $fromCodes, string $toCode): void
+    {
+        $currentCode = $conversation->relationLoaded('stage')
+            ? $conversation->stage?->code
+            : ChatStage::query()->whereKey($conversation->stage_id)->value('code');
+        if (!in_array($currentCode, $fromCodes, true)) {
+            return;
+        }
+
+        $targetStageId = ChatStage::query()->where('code', $toCode)->value('id');
+        if ($targetStageId) {
+            $conversation->stage_id = $targetStageId;
+        }
+    }
+
+    private function resolveMessageType(?string $text, array $attachments): string
+    {
+        if ($attachments === []) {
+            return $text ? 'text' : 'system';
+        }
+
+        $firstType = $attachments[0]['type'] ?? 'file';
+
+        return in_array($firstType, ['image', 'video', 'audio', 'file'], true)
+            ? $firstType
+            : 'file';
+    }
+
+    private function buildPreview(ChatMessage $message): string
+    {
+        $text = trim((string) $message->text);
+        if ($text !== '') {
+            return Str::limit($text, 190);
+        }
+
+        $attachment = $message->attachments->first();
+        if (!$attachment) {
+            return 'Системне повідомлення';
+        }
+
+        return match ($attachment->attachment_type) {
+            'image' => 'Зображення',
+            'video' => 'Відео',
+            'audio' => 'Аудіо',
+            default => 'Файл',
+        };
+    }
+
+    private function extractDisplayName(string $platform, array $profile): string
+    {
+        if ($platform === 'instagram') {
+            return trim((string) ($profile['name'] ?? $profile['username'] ?? ''));
+        }
+
+        $first = trim((string) ($profile['first_name'] ?? ''));
+        $last = trim((string) ($profile['last_name'] ?? ''));
+        $full = trim($first . ' ' . $last);
+
+        return $full !== '' ? $full : trim((string) ($profile['name'] ?? ''));
+    }
+
+    private function extractUsername(array $profile): ?string
+    {
+        $username = trim((string) ($profile['username'] ?? ''));
+
+        return $username !== '' ? $username : null;
+    }
+
+    private function splitName(string $name): array
+    {
+        $trimmed = trim($name);
+        if ($trimmed === '') {
+            return [null, null];
+        }
+
+        $parts = preg_split('/\s+/', $trimmed, 2);
+
+        return [$parts[0] ?? null, $parts[1] ?? null];
+    }
+
+    private function cacheProfileAvatar(int $contactId, string $remoteUrl): ?string
+    {
+        if ($remoteUrl === '') {
+            return null;
+        }
+
+        if (!str_starts_with($remoteUrl, 'http://') && !str_starts_with($remoteUrl, 'https://')) {
+            return ltrim($remoteUrl, '/');
+        }
+
+        try {
+            $response = Http::timeout(10)->get($remoteUrl);
+            if ($response->failed()) {
+                return null;
+            }
+
+            $mimeType = $response->header('Content-Type');
+            $extension = $this->guessExtension($remoteUrl, $mimeType);
+            $relativePath = 'avatars/' . date('Y/m') . '/contact_' . $contactId . '_' . md5($remoteUrl) . '.' . strtolower($extension);
+
+            Storage::disk('chat_uploads')->put($relativePath, $response->body());
+            @chmod(public_path('chat/' . $relativePath), 0644);
+
+            return 'chat/' . $relativePath;
+        } catch (\Throwable $e) {
+            Log::warning('Не вдалося завантажити аватар контакту', [
+                'contact_id' => $contactId,
+                'url' => $remoteUrl,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    private function guessExtension(?string $remoteUrl, ?string $mimeType): string
+    {
+        $extension = '';
+
+        if ($remoteUrl) {
+            $path = parse_url($remoteUrl, PHP_URL_PATH);
+            if ($path) {
+                $pathInfo = pathinfo($path);
+                if (!empty($pathInfo['extension'])) {
+                    $extension = $pathInfo['extension'];
+                }
+            }
+        }
+
+        if ($extension === '' && is_string($mimeType)) {
+            $map = [
+                'image/jpeg' => 'jpg',
+                'image/png' => 'png',
+                'image/webp' => 'webp',
+                'image/gif' => 'gif',
+            ];
+
+            $extension = $map[$mimeType] ?? '';
+        }
+
+        return $extension !== '' ? $extension : 'jpg';
+    }
+}

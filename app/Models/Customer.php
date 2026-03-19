@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 class Customer extends Model
 {
@@ -37,16 +39,37 @@ class Customer extends Model
     /**
      * Замовлення цього клієнта.
      */
-    public function orders()
+    public function orders(): HasMany
     {
         return $this->hasMany(Order::class);
     }
 
     /**
-     * Повідомлення клієнта з Facebook.
+     * Контакти клієнта у чат-каналах.
      */
-    public function fbMessages(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function chatContacts(): HasMany
     {
-        return $this->hasMany(FacebookMessage::class)->orderBy('created_at', 'asc');
+        return $this->hasMany(ChatContact::class)->orderBy('id');
+    }
+
+    /**
+     * Діалоги клієнта в новому чат-ядрі.
+     */
+    public function chatConversations(): HasMany
+    {
+        return $this->hasMany(ChatConversation::class)->orderByDesc('last_message_at');
+    }
+
+    /**
+     * Повідомлення клієнта через нове ядро чату.
+     */
+    public function fbMessages(): HasManyThrough
+    {
+        return $this->hasManyThrough(
+            ChatMessage::class,
+            ChatConversation::class,
+            'customer_id',
+            'conversation_id'
+        )->orderBy('sent_at');
     }
 }
