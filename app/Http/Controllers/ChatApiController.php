@@ -192,7 +192,7 @@ class ChatApiController extends Controller
             return response()->json(['error' => 'Customer not found'], 404);
         }
 
-        $platform = $validated['platform']
+        $platform = ($validated['platform'] ?? null)
             ?: ($customer->instagram_user_id ? 'instagram' : 'messenger');
         $conversation = $this->ensureConversationForCustomer($customer, $platform, $metaService);
 
