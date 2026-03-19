@@ -26,6 +26,7 @@ class ChatApiController extends Controller
     {
         try {
             $conversations = ChatConversation::query()
+                ->where('status', '!=', 'archived')
                 ->with(['contact', 'customer', 'stage', 'lastMessage.attachments'])
                 ->orderByDesc('last_message_at')
                 ->paginate(20);
@@ -48,6 +49,7 @@ class ChatApiController extends Controller
     public function funnel(): JsonResponse
     {
         $conversations = ChatConversation::query()
+            ->where('status', '!=', 'archived')
             ->with(['contact', 'customer', 'stage', 'lastMessage.attachments'])
             ->orderByDesc('last_message_at')
             ->get();
@@ -96,6 +98,17 @@ class ChatApiController extends Controller
     public function updateTags(Request $request, ChatConversation $conversation): JsonResponse
     {
         return response()->json(['data' => []]);
+    }
+
+    public function archiveConversation(ChatConversation $conversation): JsonResponse
+    {
+        $conversation->update([
+            'status' => 'archived',
+            'closed_at' => now(),
+            'unread_count' => 0,
+        ]);
+
+        return response()->json(['success' => true]);
     }
 
     public function showByCustomer(Request $request, int $customerId): JsonResponse

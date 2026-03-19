@@ -1,13 +1,16 @@
 <template>
-  <div class="right-sidebar">
+  <div class="right-sidebar" :class="{ 'is-order-mode': showOrderPanel }">
     <transition name="toast">
       <div v-if="toast.show" class="toast-notification" :class="toast.type">
         <i class="bi" :class="toast.type === 'success' ? 'bi-check-circle-fill' : 'bi-exclamation-triangle-fill'"></i>
-        <span>{{ toast.message }}</span>
+        <div class="toast-copy">
+          <strong>{{ toast.type === 'success' ? 'Готово' : 'Помилка' }}</strong>
+          <span>{{ toast.message }}</span>
+        </div>
       </div>
     </transition>
 
-    <div v-if="customerId" class="profile-content custom-scrollbar" ref="profileContainer">
+    <div v-if="customerId" v-show="!showOrderPanel" class="profile-content custom-scrollbar" ref="profileContainer">
       <div class="profile-mobile-header">
         <button class="profile-back-btn" type="button" @click="emit('close')">
           <i class="bi bi-arrow-left"></i>
@@ -215,14 +218,14 @@
 
     </div>
 
-    <div v-else class="empty-state">
+    <div v-else-if="!showOrderPanel" class="empty-state">
       <i class="bi bi-person-bounding-box"></i>
       <p>Виберіть чат</p>
     </div>
 
     <ChatOrderPanel
-      v-show="showOrderPanel"
       :open="showOrderPanel"
+      :embedded="true"
       :customer="customer"
       :order-draft="orderDraft"
       :submit-state="orderSubmitState"
@@ -477,10 +480,10 @@ const saveData = async () => {
     }
 
     showNameInput.value = false;
-    showToast('Дані покупця успішно збережено!');
+    showToast('Покупця успішно збережено.');
   } catch (e) { 
     console.error(e); 
-    showToast('Помилка сервера. Дані не збережено.', 'error');
+    showToast('Не вдалося зберегти дані покупця.', 'error');
   } finally { 
     isLoading.value = false; 
   }
@@ -622,14 +625,88 @@ const handleOrderClose = () => {
 </script>
 
 <style scoped>
-.right-sidebar { width: 100%; height: 100%; background: #ffffff; border-left: 1px solid #edf2f7; display: flex; flex-direction: column; position: relative; overflow: hidden; font-family: 'Inter', sans-serif; color: #334155; }
-.profile-content { flex: 1; overflow-y: auto; padding: 16px; scroll-behavior: smooth; }
+.right-sidebar { width: 100%; height: 100%; background: #ffffff; border-left: 1px solid #e5e7eb; display: flex; flex-direction: column; position: relative; overflow: hidden; font-family: 'Segoe UI', sans-serif; color: #334155; }
+.right-sidebar.is-order-mode { background: #ffffff; }
+.profile-content { flex: 1; overflow-y: auto; padding: 0; scroll-behavior: smooth; }
 .custom-scrollbar::-webkit-scrollbar { width: 6px; } .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; } .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 
+.toast-notification {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 30;
+  min-width: 220px;
+  max-width: calc(100% - 28px);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid #d1fae5;
+  background: rgba(240, 253, 244, 0.98);
+  box-shadow: 0 14px 30px -20px rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(6px);
+}
+
+.toast-notification.success {
+  border-color: #bbf7d0;
+  background: rgba(240, 253, 244, 0.98);
+}
+
+.toast-notification.error {
+  border-color: #fecaca;
+  background: rgba(254, 242, 242, 0.98);
+}
+
+.toast-notification > i {
+  margin-top: 1px;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.toast-notification.success > i {
+  color: #16a34a;
+}
+
+.toast-notification.error > i {
+  color: #dc2626;
+}
+
+.toast-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.toast-copy strong {
+  font-size: 12px;
+  line-height: 1.2;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.toast-copy span {
+  font-size: 13px;
+  line-height: 1.35;
+  color: #334155;
+}
+
+.toast-enter-active,
+.toast-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
 /* ... (Інші стилі залишаються без змін) ... */
-.header-section { display: flex; align-items: flex-start; gap: 12px; }
-.avatar-wrap { position: relative; width: 52px; height: 52px; flex-shrink: 0; }
-.avatar-img, .avatar-placeholder { width: 100%; height: 100%; border-radius: 12px; object-fit: cover; background: #f1f5f9; }
+.header-section { display: flex; align-items: center; gap: 12px; padding: 16px; }
+.avatar-wrap { position: relative; width: 56px; height: 56px; flex-shrink: 0; }
+.avatar-img, .avatar-placeholder { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; background: #f1f5f9; }
 .avatar-placeholder { display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 700; color: #94a3b8; }
 .platform-icon-indicator { position: absolute; bottom: -4px; right: -4px; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid #fff; transition: all 0.4s ease; color: white; font-size: 11px; }
 .ig-bg { background: radial-gradient(circle at 30% 107%, #fdf497 0%, #fd5949 45%, #d6249f 60%, #285AEB 90%); }
@@ -641,19 +718,19 @@ const handleOrderClose = () => {
 .name-display-wrapper { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
 .name-text { font-size: 15px; font-weight: 700; color: #1a202c; }
 .text-error { color: #ef4444; }
-.btn-status-indicator { background: none; border: none; cursor: pointer; transition: all 0.4s ease; font-size: 24px; padding: 0; margin-left: auto; display: flex; align-items: center; }
+.btn-status-indicator { background: none; border: none; cursor: pointer; transition: all 0.2s ease; font-size: 20px; padding: 0; margin-left: auto; display: flex; align-items: center; }
 .status-attention { color: #ef4444; filter: drop-shadow(0 0 5px rgba(239, 68, 68, 0.4)); }
 .status-ready { color: #10b981; filter: drop-shadow(0 0 5px rgba(16, 185, 129, 0.4)); }
-.btn-edit-purple { background: #a78bfa; color: white; border: none; width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; cursor: pointer; transition: all 0.3s ease; margin-left: 10px; }
-.btn-edit-purple:hover { background: #8b5cf6; transform: scale(1.1); }
+.btn-edit-purple { background: #f3f4f6; color: #4b5563; border: 1px solid #d1d5db; width: 30px; height: 30px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: pointer; transition: all 0.2s ease; margin-left: 8px; }
+.btn-edit-purple:hover { background: #e5e7eb; }
 .name-edit-flow { display: flex; align-items: center; gap: 8px; }
 .inputs-stack { display: flex; flex-direction: column; gap: 4px; flex: 1; }
 .modern-input { border: none; border-bottom: 1.5px solid #e2e8f0; font-size: 13px; font-weight: 600; outline: none; transition: 0.3s; padding: 2px 0; }
 .modern-input:focus { border-color: #6366f1; }
 .btn-confirm-tick { background: #6366f1; color: white; border: none; width: 26px; height: 26px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .id-badge { font-size: 11px; color: #a0aec0; margin-top: 4px; display: inline-block; background: #f7fafc; padding: 2px 6px; border-radius: 4px; }
-.divider { border: 0; border-top: 1px solid #f3f4f6; margin: 16px 0; }
-.fields-section { display: flex; flex-direction: column; gap: 12px; }
+.divider { border: 0; border-top: 1px solid #e5e7eb; margin: 0; }
+.fields-section { display: flex; flex-direction: column; gap: 12px; padding: 16px; }
 .field-row { display: flex; align-items: flex-start; }
 .icon-col { width: 32px; color: #cbd5e0; font-size: 18px; padding-top: 18px; }
 .input-col label { font-size: 10px; font-weight: 700; color: #a0aec0; text-transform: uppercase; margin-bottom: 2px; display: block; }
@@ -662,7 +739,7 @@ const handleOrderClose = () => {
 .error-text { color: #ef4444; font-size: 10px; margin-top: 2px; }
 .add-btn { color: #6366f1; font-size: 13px; font-weight: 600; cursor: pointer; padding: 4px 0; }
 .action-row { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
-.history-container { margin-top: 24px; }
+.history-container { margin-top: 18px; }
 .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding: 0 4px; }
 .section-title { font-size: 12px; font-weight: 800; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.05em; }
 .counter-badge { background: #f1f5f9; color: #475569; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
@@ -708,11 +785,11 @@ const handleOrderClose = () => {
 .profile-back-btn { display: inline-flex; align-items: center; gap: 8px; border: 1px solid #e2e8f0; background: #f8fafc; color: #334155; border-radius: 10px; height: 40px; padding: 0 12px; font-size: 14px; font-weight: 600; cursor: pointer; }
 
 .btn-save-modern {
-  background: #A78BFB; 
+  background: #1877f2; 
   color: white;
   border: none;
   border-radius: 8px;
-  height: 60px; /* Збільшено з 40px до 60px */
+  height: 44px;
   display: flex; 
   align-items: center;
   justify-content: center;
@@ -724,7 +801,7 @@ const handleOrderClose = () => {
   transition: all 0.3s ease;
 }
 .btn-save-modern:hover:not(:disabled) {
-  background: #9061f9; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(167, 139, 251, 0.3);
+  background: #1664d9; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(24, 119, 242, 0.22);
 }
 .btn-save-modern:disabled { 
   background: #e2e8f0; 
@@ -736,9 +813,9 @@ const handleOrderClose = () => {
 /* ОНОВЛЕНО: Блокування і збільшення кнопки "Створити замовлення" */
 .btn-create-order {
   background: #fff;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #d1d5db;
   border-radius: 8px;
-  height: 60px; /* Збільшено з 40px до 60px */
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -751,8 +828,8 @@ const handleOrderClose = () => {
   transition: 0.2s;
 }
 .btn-create-order:hover:not(:disabled) {
-  background: #f8fafc;
-  border-color: #cbd5e0;
+  background: #f9fafb;
+  border-color: #9ca3af;
 }
 .btn-create-order:disabled {
   background: #f8fafc;

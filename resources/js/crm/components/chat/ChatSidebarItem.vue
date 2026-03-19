@@ -24,24 +24,20 @@
 
     <div class="content-shell">
       <div class="content-top">
-        <div class="name-stack">
-          <h4>{{ item.customer_name || 'Невідомий клієнт' }}</h4>
-          <p v-if="subtitle">{{ subtitle }}</p>
-        </div>
-
-        <div class="meta-stack">
-          <span v-if="stageLabel" class="stage-chip">
-            {{ stageLabel }}
-          </span>
-          <span class="time-label">{{ formattedTime }}</span>
-        </div>
+        <h4>{{ item.customer_name || 'Невідомий клієнт' }}</h4>
+        <span class="time-label">{{ formattedTime }}</span>
       </div>
 
       <div class="content-bottom">
         <p class="preview-text">{{ previewText }}</p>
-        <span v-if="item.unread_count > 0" class="unread-pill">
-          {{ item.unread_count > 99 ? '99+' : item.unread_count }}
-        </span>
+        <div class="meta-right">
+          <span v-if="stageLabel" class="stage-chip" :class="stageClass">
+            {{ stageLabel }}
+          </span>
+          <span v-if="item.unread_count > 0" class="unread-pill">
+            {{ item.unread_count > 99 ? '99+' : item.unread_count }}
+          </span>
+        </div>
       </div>
     </div>
   </button>
@@ -79,21 +75,16 @@ const platformIcon = computed(() => (
 
 const stageMap = {
   new: 'Новий',
-  waiting_reply: 'Чекаємо відповідь',
-  order_confirmed: 'Замовлення підтверджене',
+  waiting_reply: 'Чекаємо',
+  order_confirmed: 'Підтв.',
   done: 'Виконано',
   closed: 'Закрито',
 };
 
 const stageLabel = computed(() => stageMap[props.item.stage] || '');
-
-const subtitle = computed(() => {
-  if (props.item.external_username) {
-    return `@${String(props.item.external_username).replace(/^@/, '')}`;
-  }
-
-  return props.item.platform === 'instagram' ? 'Instagram Direct' : 'Messenger';
-});
+const stageClass = computed(() => (
+  props.item.stage ? `stage-${props.item.stage}` : ''
+));
 
 const previewText = computed(() => props.item.last_message || 'Вкладення');
 
@@ -125,43 +116,43 @@ watch(
 .chat-item {
   width: 100%;
   display: grid;
-  grid-template-columns: 52px minmax(0, 1fr);
+  grid-template-columns: 48px minmax(0, 1fr);
   gap: 12px;
-  padding: 14px 16px;
+  padding: 10px 12px;
   border: none;
   border-radius: 0;
   background: #fff;
   text-align: left;
-  border-bottom: 1px solid #f3f4f6;
-  transition: background 0.18s ease;
+  border-bottom: 1px solid #e5e7eb;
+  transition: background 0.18s ease, box-shadow 0.18s ease;
 }
 
 .chat-item:hover {
-  background: #f9fafb;
+  background: #f7f8fa;
 }
 
 .chat-item.is-active {
   background: #f3f4f6;
-  box-shadow: inset 3px 0 0 #6366f1;
+  box-shadow: inset 3px 0 0 #1877f2;
 }
 
 .avatar-shell {
   position: relative;
-  width: 52px;
-  height: 52px;
+  width: 48px;
+  height: 48px;
 }
 
 .avatar-img,
 .avatar-fallback {
-  width: 52px;
-  height: 52px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   object-fit: cover;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #fff;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 800;
 }
 
@@ -177,15 +168,14 @@ watch(
   position: absolute;
   right: -2px;
   bottom: -2px;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border: 2px solid #fff;
   color: #fff;
-  box-shadow: 0 10px 18px -14px rgba(15, 23, 42, 0.7);
 }
 
 .platform-badge.is-messenger {
@@ -197,54 +187,58 @@ watch(
 }
 
 .platform-badge i {
-  font-size: 10px;
+  font-size: 9px;
 }
 
 .content-shell {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 4px;
 }
 
 .content-top,
 .content-bottom {
   display: flex;
-  align-items: flex-start;
+  align-items: baseline;
   justify-content: space-between;
   gap: 10px;
 }
 
-.name-stack {
+.content-top h4 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   min-width: 0;
 }
 
-.name-stack h4 {
-  margin: 0;
-  color: #0f172a;
-  font-size: 15px;
-  font-weight: 700;
-  line-height: 1.2;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.name-stack p {
-  margin: 4px 0 0;
-  color: #4b5563;
-  font-size: 13px;
+.time-label {
+  color: #637381;
+  font-size: 12px;
   font-weight: 500;
+  flex-shrink: 0;
+}
+
+.preview-text {
+  margin: 0;
+  min-width: 0;
+  color: #5c6b7a;
+  font-size: 12px;
+  line-height: 1.25;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.meta-stack {
+.meta-right {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
+  align-items: center;
+  gap: 6px;
   flex-shrink: 0;
 }
 
@@ -252,42 +246,50 @@ watch(
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 3px 10px;
+  height: 20px;
+  padding: 0 7px;
   border-radius: 999px;
-  background: #eef2ff;
-  color: #4f46e5;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 700;
-}
-
-.time-label {
-  color: #6b7280;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.preview-text {
-  margin: 0;
-  min-width: 0;
-  color: #64748b;
-  font-size: 14px;
-  line-height: 1.45;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+.stage-chip.stage-new {
+  background: #eaf2ff;
+  color: #2563eb;
+}
+
+.stage-chip.stage-waiting_reply {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.stage-chip.stage-order_confirmed {
+  background: #ecfeff;
+  color: #0f766e;
+}
+
+.stage-chip.stage-done {
+  background: #ecfdf3;
+  color: #15803d;
+}
+
+.stage-chip.stage-closed {
+  background: #f3f4f6;
+  color: #4b5563;
 }
 
 .unread-pill {
-  min-width: 24px;
-  height: 24px;
-  padding: 0 8px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   background: #0f172a;
   color: #f8fafc;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   flex-shrink: 0;
 }

@@ -255,6 +255,7 @@ class ChatService
         return ChatConversation::query()
             ->with(['contact', 'customer', 'stage', 'lastMessage', 'lastMessage.attachments'])
             ->where('customer_id', $customerId)
+            ->where('status', '!=', 'archived')
             ->when($platform, fn ($query) => $query->whereHas(
                 'contact',
                 fn ($contactQuery) => $contactQuery->where('platform', $platform)

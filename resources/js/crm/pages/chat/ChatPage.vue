@@ -11,7 +11,7 @@
           @click="platformFilter = tab.value"
         >
           {{ tab.label }}
-          <span class="tab-count">{{ getPlatformCount(tab.value) }}</span>
+          <span v-if="getPlatformCount(tab.value) > 0" class="tab-count">{{ getPlatformCount(tab.value) }}</span>
         </button>
       </div>
     </template>
@@ -25,21 +25,6 @@
             type="text"
             placeholder="Пошук"
           >
-        </div>
-
-        <div class="sidebar-toolbar">
-          <button type="button" class="manage-btn">
-            <i class="bi bi-stack"></i>
-            Управляти
-          </button>
-        </div>
-
-        <div class="sidebar-filters">
-          <button type="button" class="filter-chip is-active">Непрочитані</button>
-          <button type="button" class="filter-chip">Контакти</button>
-          <button type="button" class="filter-chip">
-            <i class="bi bi-sliders"></i>
-          </button>
         </div>
 
         <ChatSidebar
@@ -60,8 +45,10 @@
         :messages="messages"
         :is-sending="isSending"
         :is-syncing="isSyncing"
+        :is-archiving="isArchiving"
         :loading="isLoading"
         @send="handleSendMessage"
+        @delete-conversation="handleDeleteConversation"
         @force-sync="handleForceSync"
         @open-list="openMobileList"
         @open-profile="openProfile"
@@ -106,12 +93,14 @@ const {
   isLoadingMore,
   isSending,
   isSyncing,
+  isArchiving,
   currentPage,
   lastPage,
   fetchConversations,
   loadMoreConversations,
   selectChat,
   sendMessage,
+  archiveConversation,
   forceSync,
   stopPolling,
   updateStage,
@@ -150,7 +139,9 @@ const filteredConversations = computed(() => {
 });
 
 function getPlatformCount(platform) {
-  return conversations.value.filter((chat) => matchConversationByTab(chat, platform)).length;
+  return conversations.value.filter((chat) => (
+    matchConversationByTab(chat, platform) && Number(chat.unread_count || 0) > 0
+  )).length;
 }
 
 function looksLikeCommentThread(chat) {
@@ -208,6 +199,19 @@ function handleForceSync() {
   forceSync(activeChat.value);
 }
 
+async function handleDeleteConversation() {
+  if (!activeChat.value?.conversation_id) {
+    return;
+  }
+
+  const confirmed = window.confirm('Прибрати цю переписку з інбоксу?');
+  if (!confirmed) {
+    return;
+  }
+
+  await archiveConversation(activeChat.value.conversation_id);
+}
+
 function handleUpdateStage({ conversationId, stage }) {
   updateStage(conversationId, stage);
 }
@@ -256,81 +260,60 @@ onUnmounted(stopPolling);
 
 .chat-sidebar-search {
   position: relative;
-  padding: 18px 16px 12px;
+  padding: 14px 12px 8px;
 }
 
 .chat-sidebar-search i {
   position: absolute;
   top: 50%;
-  left: 30px;
+  left: 24px;
   transform: translateY(-50%);
   color: #6b7280;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .chat-sidebar-search input {
   width: 100%;
-  height: 42px;
-  padding: 0 14px 0 40px;
-  border: 1px solid #d1d5db;
-  border-radius: 10px;
+  height: 40px;
+  padding: 0 12px 0 34px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
   background: #fff;
   color: #0f172a;
+  font-size: 14px;
   outline: none;
   transition: border-color 0.2s ease;
-}
-
-.sidebar-toolbar,
-.sidebar-filters {
-  display: flex;
-  gap: 8px;
-  padding: 0 16px 12px;
-}
-
-.manage-btn,
-.filter-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  border: 1px solid #d1d5db;
-  border-radius: 999px;
-  background: #fff;
-  color: #374151;
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.filter-chip.is-active {
-  background: #f3f4f6;
 }
 
 .inbox-tabs {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 18px;
+  gap: 0;
+  padding: 0 16px;
   overflow-x: auto;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .inbox-tab {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 16px;
+  height: 52px;
+  padding: 0 18px;
   border: none;
-  border-bottom: 2px solid transparent;
   background: transparent;
-  color: #374151;
+  color: #1f2937;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 400;
   white-space: nowrap;
+  border-radius: 8px 8px 0 0;
+  margin-top: 6px;
+  margin-right: 4px;
 }
 
 .inbox-tab.is-active {
-  color: #0ea5e9;
-  border-bottom-color: #0ea5e9;
+  color: #1877f2;
+  background: #e7f3ff;
 }
 
 .tab-count {
@@ -341,8 +324,8 @@ onUnmounted(stopPolling);
   height: 20px;
   padding: 0 6px;
   border-radius: 999px;
-  background: #e5e7eb;
-  color: #111827;
+  background: #b42318;
+  color: #fff;
   font-size: 11px;
   font-weight: 700;
 }

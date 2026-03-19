@@ -1,191 +1,201 @@
 <template>
-  <teleport to="body">
+  <teleport to="body" :disabled="embedded">
     <transition name="modal-fade">
-      <div v-if="open" class="modal-backdrop" @click.self="closeModal">
-        <transition name="modal-slide">
-          <div v-if="open" class="modal-window">
-            
-            <!-- HEADER -->
-            <div class="modal-header">
-              <div class="header-content">
-                <div class="icon-brand">
+      <div
+        v-if="open"
+        class="delivery-shell"
+        :class="{ 'is-embedded': embedded }"
+        @click.self="embedded ? null : closeModal()"
+      >
+        <transition :name="embedded ? 'sidebar-slide' : 'modal-slide'">
+          <div v-if="open" class="delivery-panel" :class="{ 'is-embedded': embedded }">
+            <header class="delivery-header">
+              <div class="delivery-header-main">
+                <div class="delivery-header-icon">
                   <i class="bi bi-box-seam-fill"></i>
                 </div>
-                <div class="title-group">
+                <div class="delivery-header-copy">
                   <h3>Налаштування доставки</h3>
-                  <span class="brand-tag">НОВА ПОШТА</span>
+                  <span>Нова пошта</span>
                 </div>
               </div>
-              <button class="btn-close" @click="closeModal">
-                <i class="bi bi-x-lg"></i>
-              </button>
-            </div>
 
-            <!-- BODY (SCROLLABLE) -->
-            <div class="modal-body custom-scrollbar">
-              
-              <!-- 1. ТИП ДОСТАВКИ -->
-              <section class="form-section">
-                <label class="section-label">Спосіб отримання</label>
-                <div class="grid-2">
-                  <div 
-                    class="option-card" 
+              <button class="delivery-close-btn" type="button" :title="embedded ? 'Назад' : 'Закрити'" @click="closeModal">
+                <i class="bi" :class="embedded ? 'bi-arrow-left' : 'bi-x-lg'"></i>
+              </button>
+            </header>
+
+            <div class="delivery-body custom-scrollbar">
+              <section class="delivery-section">
+                <div class="section-label">Спосіб отримання</div>
+                <div class="delivery-type-stack">
+                  <button
+                    type="button"
+                    class="delivery-type-btn"
                     :class="{ active: local.delivery_type === 'warehouse' }"
                     @click="setDeliveryType('warehouse')"
                   >
-                    <div class="card-icon"><i class="bi bi-building"></i></div>
-                    <span class="card-title">У відділення</span>
-                    <i class="bi bi-check-circle-fill check-icon"></i>
-                  </div>
-                  
-                  <div 
-                    class="option-card" 
+                    <span class="delivery-type-icon"><i class="bi bi-building"></i></span>
+                    <span class="delivery-type-copy">
+                      <strong>У відділення</strong>
+                      <small>Відділення або поштомат</small>
+                    </span>
+                    <i v-if="local.delivery_type === 'warehouse'" class="bi bi-check2-circle delivery-type-check"></i>
+                  </button>
+
+                  <button
+                    type="button"
+                    class="delivery-type-btn"
                     :class="{ active: local.delivery_type === 'courier' }"
                     @click="setDeliveryType('courier')"
                   >
-                    <div class="card-icon"><i class="bi bi-truck"></i></div>
-                    <span class="card-title">Кур'єром</span>
-                    <i class="bi bi-check-circle-fill check-icon"></i>
-                  </div>
+                    <span class="delivery-type-icon"><i class="bi bi-truck"></i></span>
+                    <span class="delivery-type-copy">
+                      <strong>Кур'єром</strong>
+                      <small>Адресна доставка</small>
+                    </span>
+                    <i v-if="local.delivery_type === 'courier'" class="bi bi-check2-circle delivery-type-check"></i>
+                  </button>
                 </div>
               </section>
 
-              <!-- 2. МІСТО -->
-              <section class="form-section">
-                <label class="section-label">Населений пункт</label>
-                <div class="input-group-modern">
-                  <i class="bi bi-geo-alt input-icon"></i>
-                  <input 
-                    type="text" 
-                    class="modern-input" 
+              <section class="delivery-section">
+                <div class="section-label">Населений пункт</div>
+                <div class="field-shell">
+                  <i class="bi bi-geo-alt field-icon"></i>
+                  <input
                     v-model="cityQuery"
+                    type="text"
+                    class="field-input"
+                    placeholder="Введіть назву міста..."
                     @focus="showCityDropdown = true"
                     @blur="scheduleCloseCity"
-                    placeholder="Введіть назву міста..."
                   >
                   <div v-if="cityLoading" class="spinner-input"></div>
-                  
-                  <!-- Dropdown -->
+
                   <transition name="fade">
-                    <div v-if="showCityDropdown && cityOptions.length" class="dropdown-menu-custom custom-scrollbar">
-                      <div 
-                        v-for="city in cityOptions" 
-                        :key="city.ref" 
-                        class="dropdown-item"
+                    <div v-if="showCityDropdown && cityOptions.length" class="field-dropdown custom-scrollbar">
+                      <button
+                        v-for="city in cityOptions"
+                        :key="city.ref"
+                        type="button"
+                        class="field-dropdown-item"
                         @mousedown.prevent="selectCity(city)"
                       >
-                        <div class="item-main">{{ city.name }}</div>
-                        <div class="item-sub">{{ city.area }}</div>
-                      </div>
+                        <span class="dropdown-title">{{ city.name }}</span>
+                        <span class="dropdown-subtitle">{{ city.area }}</span>
+                      </button>
                     </div>
                   </transition>
                 </div>
               </section>
 
-              <!-- 3. ВІДДІЛЕННЯ (АБО АДРЕСА) -->
               <transition name="slide-up" mode="out-in">
-                <section v-if="local.delivery_type === 'warehouse'" key="warehouse" class="form-section">
-                  <label class="section-label">Відділення або Поштомат</label>
-                  <div class="input-group-modern" :class="{ disabled: !local.city_ref }">
-                    <i class="bi bi-signpost-2 input-icon"></i>
-                    <input 
-                      type="text" 
-                      class="modern-input" 
+                <section v-if="local.delivery_type === 'warehouse'" key="warehouse" class="delivery-section">
+                  <div class="section-label">Відділення або поштомат</div>
+                  <div class="field-shell">
+                    <i class="bi bi-signpost-2 field-icon"></i>
+                    <input
                       v-model="warehouseQuery"
+                      type="text"
+                      class="field-input"
                       :disabled="!local.city_ref"
+                      placeholder="Введіть номер або адресу..."
                       @focus="onWarehouseFocus"
                       @blur="scheduleCloseWarehouse"
-                      placeholder="Введіть номер або адресу..."
                     >
                     <div v-if="warehouseLoading" class="spinner-input"></div>
 
                     <transition name="fade">
-                      <div v-if="showWarehouseDropdown && warehouseOptions.length" class="dropdown-menu-custom custom-scrollbar">
-                        <div 
-                          v-for="wh in warehouseOptions" 
-                          :key="wh.ref" 
-                          class="dropdown-item"
+                      <div v-if="showWarehouseDropdown && warehouseOptions.length" class="field-dropdown custom-scrollbar">
+                        <button
+                          v-for="wh in warehouseOptions"
+                          :key="wh.ref"
+                          type="button"
+                          class="field-dropdown-item"
                           @mousedown.prevent="selectWarehouse(wh)"
                         >
-                          <div class="item-main">{{ wh.name }}</div>
-                        </div>
+                          <span class="dropdown-title">{{ wh.name }}</span>
+                        </button>
                       </div>
                     </transition>
                   </div>
                 </section>
 
-                <section v-else key="courier" class="form-section">
-                  <label class="section-label">Адреса доставки</label>
-                  <div class="input-stack">
-                    <div class="input-group-modern mb-2">
-                      <i class="bi bi-map input-icon"></i>
-                      <input 
-                        type="text" 
-                        class="modern-input" 
+                <section v-else key="courier" class="delivery-section">
+                  <div class="section-label">Адреса доставки</div>
+                  <div class="courier-stack">
+                    <div class="field-shell">
+                      <i class="bi bi-map field-icon"></i>
+                      <input
                         v-model="streetQuery"
+                        type="text"
+                        class="field-input"
                         :disabled="!local.city_ref"
+                        placeholder="Вулиця (2+ символи)"
                         @focus="onStreetFocus"
                         @blur="scheduleCloseStreet"
-                        placeholder="Вулиця (2+ символи)"
                       >
                       <div v-if="streetLoading" class="spinner-input"></div>
-                      <div v-if="showStreetDropdown && (streetOptions.length || streetLoading)" class="dropdown-menu-custom">
-                         <div v-if="streetLoading" class="dropdown-item text-muted small">Пошук...</div>
-                         <div v-for="st in streetOptions" :key="st.ref" class="dropdown-item" @mousedown.prevent="selectStreet(st)">
-                            {{ st.name }}
-                         </div>
-                      </div>
+
+                      <transition name="fade">
+                        <div v-if="showStreetDropdown && (streetOptions.length || streetLoading)" class="field-dropdown custom-scrollbar">
+                          <div v-if="streetLoading" class="field-dropdown-state">Пошук...</div>
+                          <button
+                            v-for="st in streetOptions"
+                            v-else
+                            :key="st.ref"
+                            type="button"
+                            class="field-dropdown-item"
+                            @mousedown.prevent="selectStreet(st)"
+                          >
+                            <span class="dropdown-title">{{ st.name }}</span>
+                          </button>
+                        </div>
+                      </transition>
                     </div>
-                    
-                    <div class="grid-2 small-gap">
-                      <div class="input-group-modern">
-                        <input type="text" class="modern-input center-text" v-model="local.building" placeholder="Буд.">
+
+                    <div class="courier-meta-grid">
+                      <div class="field-shell compact-field">
+                        <input v-model="local.building" type="text" class="field-input compact-input" placeholder="Буд.">
                       </div>
-                      <div class="input-group-modern">
-                        <input type="text" class="modern-input center-text" v-model="local.apartment" placeholder="Кв.">
+                      <div class="field-shell compact-field">
+                        <input v-model="local.apartment" type="text" class="field-input compact-input" placeholder="Кв.">
                       </div>
                     </div>
                   </div>
                 </section>
               </transition>
 
-              <!-- 4. ПЛАТНИК -->
-              <section class="form-section">
-                <label class="section-label">Платник доставки</label>
-                <div class="toggle-switch">
-                  <div class="switch-bg" :style="{ left: local.payer === 'recipient' ? '4px' : '50%' }"></div>
-                  <button 
+              <section class="delivery-section">
+                <div class="section-label">Платник доставки</div>
+                <div class="payer-segmented">
+                  <button
                     type="button"
-                    class="switch-btn" 
-                    :class="{ active: local.payer === 'recipient' }" 
+                    class="payer-btn"
+                    :class="{ active: local.payer === 'recipient' }"
                     @click="local.payer = 'recipient'"
                   >
                     Отримувач
                   </button>
-                  <button 
+                  <button
                     type="button"
-                    class="switch-btn" 
-                    :class="{ active: local.payer === 'sender' }" 
+                    class="payer-btn"
+                    :class="{ active: local.payer === 'sender' }"
                     @click="local.payer = 'sender'"
                   >
                     Відправник
                   </button>
                 </div>
               </section>
-
-              <!-- SPACER ДЛЯ МОБІЛОК -->
-              <div class="mobile-spacer"></div>
-
             </div>
 
-            <!-- FOOTER -->
-            <div class="modal-footer">
-              <button class="btn-save-primary" :class="{ 'success': isSaved }" :disabled="isSaving" @click="handleSave">
+            <footer class="delivery-footer">
+              <button class="save-btn" :class="{ success: isSaved }" :disabled="isSaving" @click="handleSave">
                 <span v-if="!isSaved">Зберегти</span>
                 <span v-else><i class="bi bi-check-lg"></i> Готово</span>
               </button>
-            </div>
-
+            </footer>
           </div>
         </transition>
       </div>
@@ -199,6 +209,7 @@ import { fetchCities, fetchWarehouses, fetchStreets } from '@/crm/api/novaPoshta
 
 const props = defineProps({
   open: Boolean,
+  embedded: { type: Boolean, default: false },
   modelValue: { type: Object, default: () => ({}) },
 });
 const emit = defineEmits(['close', 'save', 'update:modelValue']);
@@ -389,127 +400,480 @@ const scheduleCloseStreet = () => setTimeout(() => showStreetDropdown.value = fa
 </script>
 
 <style scoped>
-/* Анімації */
-.modal-fade-enter-active, .modal-fade-leave-active { transition: opacity 0.3s ease; }
-.modal-fade-enter-from, .modal-fade-leave-to { opacity: 0; }
-.modal-slide-enter-active, .modal-slide-leave-active { transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
-.modal-slide-enter-from, .modal-slide-leave-to { transform: translateY(100%); }
-.slide-up-enter-active, .slide-up-leave-active { transition: all 0.2s ease; }
-.slide-up-enter-from, .slide-up-leave-to { opacity: 0; transform: translateY(10px); }
+.modal-fade-enter-active,
+.modal-fade-leave-active {
+  transition: opacity 0.2s ease;
+}
 
-/* LAYOUT */
-.modal-backdrop {
-  position: fixed; inset: 0; 
-  background: rgba(15, 23, 42, 0.65); 
-  backdrop-filter: blur(8px);
+.modal-fade-enter-from,
+.modal-fade-leave-to {
+  opacity: 0;
+}
+
+.modal-slide-enter-active,
+.modal-slide-leave-active,
+.sidebar-slide-enter-active,
+.sidebar-slide-leave-active {
+  transition: transform 0.24s ease, opacity 0.24s ease;
+}
+
+.modal-slide-enter-from,
+.modal-slide-leave-to {
+  opacity: 0;
+  transform: translateY(24px);
+}
+
+.sidebar-slide-enter-from,
+.sidebar-slide-leave-to {
+  opacity: 0;
+  transform: translateX(18px);
+}
+
+.slide-up-enter-active,
+.slide-up-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.slide-up-enter-from,
+.slide-up-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.delivery-shell {
+  position: fixed;
+  inset: 0;
   z-index: 999999;
-  display: flex; align-items: center; justify-content: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.58);
+  backdrop-filter: blur(8px);
 }
 
-.modal-window {
+.delivery-shell.is-embedded {
+  position: absolute;
+  z-index: 45;
+  padding: 0;
   background: #ffffff;
-  width: 500px;
-  max-width: 100%;
-  border-radius: 28px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-  display: flex; flex-direction: column;
-  max-height: 85vh;
-  position: relative;
+  backdrop-filter: none;
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+.delivery-panel {
+  width: min(100%, 500px);
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border-radius: 24px;
   overflow: hidden;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
 }
 
-/* HEADER */
-.modal-header {
-  padding: 20px 24px;
-  border-bottom: 1px solid #f1f5f9;
-  display: flex; align-items: center; justify-content: space-between;
-  background: #fff; flex-shrink: 0;
+.delivery-panel.is-embedded {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  border-radius: 0;
+  box-shadow: none;
 }
-.header-content { display: flex; align-items: center; gap: 14px; }
-.icon-brand {
-  width: 42px; height: 42px; background: #fff1f2; color: #dc2626; border-radius: 12px;
-  display: flex; align-items: center; justify-content: center; font-size: 20px;
+
+.delivery-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #ffffff;
 }
-.title-group h3 { font-size: 18px; font-weight: 800; color: #0f172a; margin: 0; line-height: 1.2; }
-.brand-tag { font-size: 11px; font-weight: 800; color: #dc2626; letter-spacing: 0.05em; text-transform: uppercase; }
 
-.btn-close {
-  width: 36px; height: 36px; border-radius: 50%; border: none; background: #f8fafc;
-  color: #64748b; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center;
-  transition: 0.2s;
+.delivery-header-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
 }
-.btn-close:hover { background: #fee2e2; color: #ef4444; }
 
-/* BODY */
-.modal-body { flex: 1; padding: 24px; overflow-y: auto; background: #ffffff; }
-.form-section { margin-bottom: 24px; }
-.section-label { font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 10px; display: block; }
-
-/* GRID CARDS */
-.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.option-card {
-  border: 2px solid #f1f5f9; border-radius: 16px; padding: 16px; cursor: pointer; position: relative;
-  transition: 0.2s ease; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px;
+.delivery-header-icon {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: #fff1f2;
+  color: #dc2626;
+  font-size: 18px;
 }
-.option-card.active { border-color: #a78bfb; background: #f5f3ff; color: #5b21b6; }
-.card-icon { font-size: 24px; color: #94a3b8; transition: 0.2s; }
-.option-card.active .card-icon { color: #7c3aed; }
-.card-title { font-weight: 700; font-size: 14px; }
-.check-icon { position: absolute; top: 10px; right: 10px; font-size: 18px; color: #a78bfb; opacity: 0; transform: scale(0.5); transition: 0.2s; }
-.option-card.active .check-icon { opacity: 1; transform: scale(1); }
 
-/* INPUTS */
-.input-group-modern { position: relative; }
-.input-icon { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: #94a3b8; font-size: 18px; pointer-events: none; }
-.modern-input {
-  width: 100%; padding: 14px 16px 14px 48px; border: 1px solid #e2e8f0; border-radius: 14px;
-  font-size: 15px; font-weight: 500; color: #0f172a; outline: none; transition: 0.2s; background: #fcfcfc;
+.delivery-header-copy {
+  min-width: 0;
 }
-.modern-input:focus { border-color: #a78bfb; background: #fff; box-shadow: 0 0 0 4px rgba(167, 139, 251, 0.1); }
-.modern-input:disabled { background: #f1f5f9; cursor: not-allowed; opacity: 0.7; }
-.center-text { text-align: center; padding-left: 10px; }
 
-/* DROPDOWN */
-.dropdown-menu-custom {
-  position: absolute; top: 105%; left: 0; right: 0; background: #fff; border: 1px solid #f1f5f9;
-  border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); max-height: 220px; overflow-y: auto; z-index: 50; padding: 6px;
+.delivery-header-copy h3 {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.2;
+  font-weight: 800;
+  color: #0f172a;
 }
-.dropdown-item { padding: 10px 12px; border-radius: 8px; cursor: pointer; transition: 0.1s; }
-.dropdown-item:hover { background: #f5f3ff; color: #7c3aed; }
-.item-main { font-weight: 600; font-size: 14px; }
-.item-sub { font-size: 11px; color: #94a3b8; margin-top: 2px; }
 
-/* TOGGLE */
-.toggle-switch { background: #f1f5f9; padding: 4px; border-radius: 14px; display: flex; position: relative; }
-.switch-btn { flex: 1; border: none; background: transparent; padding: 10px; font-weight: 700; font-size: 13px; color: #64748b; position: relative; z-index: 2; cursor: pointer; transition: 0.2s; }
-.switch-btn.active { color: #0f172a; }
-.switch-bg { position: absolute; top: 4px; bottom: 4px; width: calc(50% - 6px); background: #fff; border-radius: 11px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); transition: left 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); z-index: 1; }
-
-/* FOOTER */
-.modal-footer { padding: 20px 24px; border-top: 1px solid #f1f5f9; background: #fff; flex-shrink: 0; }
-.btn-save-primary {
-  width: 100%; height: 50px; background: #0f172a; color: #fff; border: none; border-radius: 14px;
-  font-weight: 700; font-size: 15px; cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px;
+.delivery-header-copy span {
+  display: inline-block;
+  margin-top: 3px;
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 800;
+  color: #dc2626;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
-.btn-save-primary:hover { background: #1e293b; transform: translateY(-1px); }
-.btn-save-primary.success { background: #10b981; }
 
-.spinner-input { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; border: 2px solid #e2e8f0; border-top-color: #a78bfb; border-radius: 50%; animation: spin 0.8s linear infinite; }
+.delivery-close-btn {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
 
-/* MOBILE FIX */
+.delivery-close-btn:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.delivery-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 16px;
+  background: #ffffff;
+}
+
+.delivery-section {
+  margin-bottom: 18px;
+}
+
+.delivery-section:last-child {
+  margin-bottom: 8px;
+}
+
+.section-label {
+  margin-bottom: 8px;
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 800;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.delivery-type-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.delivery-type-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #ffffff;
+  color: #0f172a;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.delivery-type-btn:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.delivery-type-btn.active {
+  border-color: #a78bfa;
+  background: #f5f3ff;
+  color: #6d28d9;
+}
+
+.delivery-type-icon {
+  width: 28px;
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 18px;
+  color: #94a3b8;
+}
+
+.delivery-type-btn.active .delivery-type-icon {
+  color: #7c3aed;
+}
+
+.delivery-type-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  text-align: left;
+}
+
+.delivery-type-copy strong {
+  font-size: 14px;
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.delivery-type-copy small {
+  font-size: 11px;
+  line-height: 1.2;
+  color: #64748b;
+}
+
+.delivery-type-check {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 18px;
+  color: #7c3aed;
+}
+
+.field-shell {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+
+.field-icon {
+  position: absolute;
+  top: 50%;
+  left: 14px;
+  transform: translateY(-50%);
+  font-size: 17px;
+  color: #94a3b8;
+  pointer-events: none;
+}
+
+.field-input {
+  width: 100%;
+  min-height: 44px;
+  padding: 11px 14px 11px 42px;
+  border: 1px solid #dbe3ef;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 14px;
+  line-height: 1.2;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+.field-input:focus {
+  border-color: #a78bfa;
+  box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.12);
+}
+
+.field-input:disabled {
+  background: #f8fafc;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.compact-field .field-input {
+  padding-left: 14px;
+  text-align: center;
+}
+
+.field-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 55;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 190px;
+  padding: 6px;
+  overflow-y: auto;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.14);
+  box-sizing: border-box;
+}
+
+.field-dropdown-item {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.18s ease;
+}
+
+.field-dropdown-item:hover {
+  background: #f8fafc;
+}
+
+.field-dropdown-state {
+  padding: 10px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.dropdown-title {
+  font-size: 13px;
+  line-height: 1.35;
+  font-weight: 600;
+  color: #0f172a;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.dropdown-subtitle {
+  font-size: 11px;
+  line-height: 1.2;
+  color: #94a3b8;
+}
+
+.spinner-input {
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  width: 16px;
+  height: 16px;
+  transform: translateY(-50%);
+  border: 2px solid #e2e8f0;
+  border-top-color: #7c3aed;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.courier-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.courier-meta-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.payer-segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.payer-btn {
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid #dbe3ef;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.payer-btn:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.payer-btn.active {
+  border-color: #a78bfa;
+  background: #f5f3ff;
+  color: #6d28d9;
+}
+
+.delivery-footer {
+  padding: 14px 16px;
+  border-top: 1px solid #e5e7eb;
+  background: #ffffff;
+}
+
+.save-btn {
+  width: 100%;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: none;
+  border-radius: 12px;
+  background: #0f172a;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.18s ease, background-color 0.18s ease;
+}
+
+.save-btn:hover {
+  background: #1e293b;
+}
+
+.save-btn.success {
+  background: #10b981;
+}
+
+.save-btn:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+
+@keyframes spin {
+  to {
+    transform: translateY(-50%) rotate(360deg);
+  }
+}
+
 @media (max-width: 768px) {
-  .modal-window { width: 100%; height: 100dvh; max-height: 100dvh; border-radius: 0; }
-  .modal-fade-enter-active, .modal-fade-leave-active { transition: none; }
-  .modal-slide-enter-active, .modal-slide-leave-active { transition: transform 0.3s ease-out; }
-  .modal-slide-enter-from, .modal-slide-leave-to { transform: translateY(100%); }
-  
-  .mobile-spacer { height: 80px; }
-  
-  /* Піднімаємо кнопку вище системної зони */
-  .modal-footer { padding-bottom: calc(30px + env(safe-area-inset-bottom)); }
-}
+  .delivery-shell {
+    padding: 0;
+  }
 
-.custom-scrollbar::-webkit-scrollbar { width: 5px; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 4px; }
-@keyframes spin { to { transform: rotate(360deg); } }
+  .delivery-panel {
+    width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+}
 </style>

@@ -26,26 +26,42 @@
             <h2>{{ activeChat?.customer_name || 'Чат' }}</h2>
           </div>
 
-          <div class="subtitle-row">
-            <span class="assignment-label">Призначити цю переписку</span>
-            <i class="bi bi-caret-down-fill"></i>
+          <div v-if="metaSubtitle" class="subtitle-row">
+            <span class="platform-pill">{{ platformLabel }}</span>
+            <span class="meta-subtitle-text">{{ metaSubtitle }}</span>
           </div>
         </div>
       </div>
 
       <div class="thread-actions">
+        <label class="stage-picker">
+          <span>Етап</span>
+          <select
+            v-model="localStage"
+            :disabled="!activeChat?.conversation_id"
+            @change="commitStage"
+          >
+            <option v-for="option in stageOptions" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+        </label>
+
         <button
           type="button"
-          class="thread-action-btn"
-          title="Позначка"
+          class="thread-action-btn profile-open-btn"
+          title="Профіль клієнта"
+          @click="$emit('open-profile')"
         >
-          <i class="bi bi-bookmark-fill"></i>
+          <i class="bi bi-person-lines-fill"></i>
         </button>
 
         <button
           type="button"
           class="thread-action-btn"
-          title="Видалити"
+          :disabled="isArchiving"
+          title="Прибрати з інбоксу"
+          @click="$emit('delete-conversation')"
         >
           <i class="bi bi-trash"></i>
         </button>
@@ -53,55 +69,15 @@
         <button
           type="button"
           class="thread-action-btn"
-          title="Обране"
-        >
-          <i class="bi bi-star-fill"></i>
-        </button>
-
-        <button
-          type="button"
-          class="thread-action-btn"
-          title="Позначити непрочитаним"
-        >
-          <i class="bi bi-envelope-fill"></i>
-        </button>
-
-        <button
-          type="button"
-          class="thread-action-btn"
           :class="{ 'is-syncing': isSyncing }"
           :disabled="isSyncing || loading"
-          title="Оновити"
+          title="Оновити історію переписки"
           @click="$emit('force-sync')"
         >
-          <i class="bi bi-check-lg"></i>
+          <i class="bi bi-arrow-repeat"></i>
         </button>
       </div>
     </header>
-
-    <div class="thread-stage-row">
-      <label class="stage-picker">
-        <span>Етап</span>
-        <select
-          v-model="localStage"
-          :disabled="!activeChat?.conversation_id"
-          @change="commitStage"
-        >
-          <option v-for="option in stageOptions" :key="option.value" :value="option.value">
-            {{ option.label }}
-          </option>
-        </select>
-      </label>
-
-      <button
-        type="button"
-        class="profile-open-btn"
-        title="Профіль клієнта"
-        @click="$emit('open-profile')"
-      >
-        <i class="bi bi-person-lines-fill"></i>
-      </button>
-    </div>
 
     <div ref="threadBody" class="chat-thread-body">
       <div v-if="loading" class="chat-state-block">
@@ -154,9 +130,10 @@ const props = defineProps({
   isSending: { type: Boolean, default: false },
   loading: { type: Boolean, default: false },
   isSyncing: { type: Boolean, default: false },
+  isArchiving: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(['send', 'force-sync', 'open-list', 'open-profile', 'update-stage']);
+const emit = defineEmits(['send', 'force-sync', 'delete-conversation', 'open-list', 'open-profile', 'update-stage']);
 
 const threadBody = ref(null);
 const localStage = ref('');
@@ -180,6 +157,19 @@ const safeAvatarUrl = computed(() => {
 });
 
 const displayInitial = computed(() => (props.activeChat?.customer_name || '?').charAt(0).toUpperCase());
+const platformLabel = computed(() => (
+  props.activeChat?.platform === 'instagram' ? 'Instagram' : 'Messenger'
+));
+const metaSubtitle = computed(() => {
+  const username = String(props.activeChat?.external_username || '').trim();
+  if (username) {
+    return `@${username.replace(/^@/, '')}`;
+  }
+
+  return props.activeChat?.platform === 'instagram'
+    ? 'Instagram Direct'
+    : 'Messenger чат';
+});
 
 const groupedMessages = computed(() => {
   const groups = [];
@@ -268,7 +258,7 @@ watch(
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  padding: 14px 18px;
+  padding: 18px 20px;
   border-bottom: 1px solid #e5e7eb;
   background: #fff;
 }
@@ -291,8 +281,8 @@ watch(
 }
 
 .thread-avatar {
-  width: 48px;
-  height: 48px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
   overflow: hidden;
   flex-shrink: 0;
@@ -315,7 +305,7 @@ watch(
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .title-row,
@@ -328,86 +318,85 @@ watch(
 
 .title-row h2 {
   margin: 0;
-  font-size: 16px;
+  font-size: 18px;
   line-height: 1.1;
-  font-weight: 700;
+  font-weight: 600;
   color: #0f172a;
 }
 
 .subtitle-row {
-  color: #4b5563;
+  color: #64748b;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
 }
 
-.assignment-label {
-  color: #4b5563;
+.platform-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #3b82f6;
+  font-size: 12px;
+  font-weight: 700;
 }
 
-.subtitle-row i {
-  font-size: 11px;
+.meta-subtitle-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .thread-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
-}
-
-.thread-stage-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 18px;
-  border-bottom: 1px solid #e5e7eb;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .stage-picker {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
+  gap: 8px;
+  padding: 0 10px;
+  height: 34px;
   border: 1px solid #d1d5db;
-  border-radius: 10px;
+  border-radius: 6px;
   background: #fff;
 }
 
 .stage-picker span {
-  font-size: 12px;
-  font-weight: 800;
+  font-size: 11px;
+  font-weight: 700;
   color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
 }
 
 .stage-picker select {
-  min-width: 170px;
+  min-width: 156px;
   border: none;
   background: transparent;
   color: #0f172a;
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 600;
   outline: none;
 }
 
 .thread-action-btn {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border: 1px solid #d1d5db;
-  border-radius: 10px;
+  border-radius: 6px;
   background: #fff;
-  color: #0f172a;
+  color: #4b5563;
   transition: background 0.18s ease, border-color 0.18s ease;
 }
 
 .profile-open-btn {
-  width: 40px;
-  height: 40px;
-  border: 1px solid #d1d5db;
-  border-radius: 10px;
-  background: #fff;
-  color: #111827;
+  width: 44px;
+  height: 44px;
 }
 
 .thread-action-btn:hover {
@@ -423,7 +412,7 @@ watch(
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 12px 18px 24px;
+  padding: 14px 20px 24px;
   background: #fff;
 }
 
@@ -514,12 +503,9 @@ watch(
     justify-content: space-between;
   }
 
-  .thread-stage-row {
-    padding: 10px 16px;
-  }
-
   .stage-picker {
-    flex: 1;
+    width: 100%;
+    justify-content: space-between;
   }
 
   .stage-picker select {

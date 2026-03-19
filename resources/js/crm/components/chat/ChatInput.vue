@@ -14,7 +14,6 @@
     </div>
 
     <form class="chat-input-bar-container" @submit.prevent="handleSend" :class="{ 'has-error': fileError }">
-      
       <div class="chat-input-main-row">
         <div class="input-area">
           <textarea
@@ -23,15 +22,72 @@
             rows="1"
             :placeholder="composerPlaceholder"
             :disabled="disabled"
-            @keydown.ctrl.enter.prevent="handleSend"
+            @keydown.enter.exact.prevent="handleSend"
             @input="autoResize"
             ref="textareaRef"
           ></textarea>
         </div>
+      </div>
+
+      <div class="chat-actions-row">
+        <div class="chat-tools">
+          <div class="relative-container">
+            <ChatGallery
+              v-if="showGallery"
+              @confirm="handleGallerySelect"
+              @close="showGallery = false"
+            />
+            <button
+              type="button"
+              class="tool-btn"
+              :class="{ active: showGallery }"
+              title="Галерея"
+              @click="showGallery = !showGallery"
+            >
+              <i class="bi bi-handbag"></i>
+            </button>
+          </div>
+
+          <button
+            type="button"
+            class="tool-btn"
+            :class="{ active: selectedFiles.length }"
+            @click="triggerFileInput"
+            title="Прикріпити файл"
+          >
+            <i class="bi bi-paperclip"></i>
+          </button>
+          <input
+            type="file"
+            ref="fileInputRef"
+            style="display: none"
+            @change="onFileChange"
+            accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+            multiple
+          />
+
+          <div class="relative-container">
+            <ChatTemplates 
+              v-if="showTemplates" 
+              @select="handleTemplateSelect"
+              @close="showTemplates = false"
+              v-click-outside="() => showTemplates = false"
+            />
+            <button
+              type="button"
+              class="tool-btn"
+              :class="{ active: showTemplates }"
+              title="Шаблони відповідей"
+              @click="showTemplates = !showTemplates"
+            >
+              <i class="bi bi-chat-square-dots"></i>
+            </button>
+          </div>
+        </div>
 
         <button
-          class="action-btn"
           type="button"
+          class="action-btn"
           :disabled="disabled"
           :title="hasContent ? 'Надіслати' : 'Надіслати лайк'"
           @click="handleSendClick"
@@ -40,67 +96,11 @@
           <i v-else class="bi bi-hand-thumbs-up-fill like-icon"></i>
         </button>
       </div>
-
-      <div class="chat-tools">
-        <div class="relative-container">
-          <ChatGallery
-            v-if="showGallery"
-            @confirm="handleGallerySelect"
-            @close="showGallery = false"
-          />
-          <button
-            type="button"
-            class="tool-btn"
-            :class="{ active: showGallery }"
-            title="Галерея"
-            @click="showGallery = !showGallery"
-          >
-            <i class="bi bi-handbag"></i>
-          </button>
-        </div>
-
-        <button
-          type="button"
-          class="tool-btn"
-          :class="{ active: selectedFiles.length }"
-          @click="triggerFileInput"
-          title="Прикріпити файл"
-        >
-          <i class="bi bi-paperclip"></i>
-        </button>
-        <input
-          type="file"
-          ref="fileInputRef"
-          style="display: none"
-          @change="onFileChange"
-          accept="image/*"
-          multiple
-        />
-
-        <div class="relative-container">
-          <ChatTemplates 
-            v-if="showTemplates" 
-            @select="handleTemplateSelect"
-            @close="showTemplates = false"
-            v-click-outside="() => showTemplates = false"
-          />
-          <button
-            type="button"
-            class="tool-btn"
-            :class="{ active: showTemplates }"
-            title="Шаблони відповідей"
-            @click="showTemplates = !showTemplates"
-          >
-            <i class="bi bi-chat-square-dots"></i>
-          </button>
-        </div>
-      </div>
-
     </form>
 
     <div class="input-footer">
       <span v-if="fileError" class="error-text">{{ fileError }}</span>
-      <span v-else class="hint-text mobile-hide">Enter — новий рядок, Ctrl+Enter — надіслати</span>
+      <span v-else class="hint-text mobile-hide">Enter — надіслати, Shift+Enter — новий рядок</span>
     </div>
 
   </div>
@@ -218,6 +218,7 @@ function handleSendClick() {
 }
 
 function handleSend() {
+  if (props.disabled) return;
   if (!hasContent.value) return;
 
   const filesToUpload = selectedFiles.value
@@ -252,20 +253,20 @@ function handleSend() {
 
 <style scoped>
 .chat-input-wrapper {
-  padding: 12px 20px;
+  padding: 8px 20px;
   background: #ffffff;
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px solid #e5e7eb;
 }
 
-/* Контейнер форми */
 .chat-input-bar-container {
   display: flex;
-  flex-direction: column; /* Мобільний вигляд за замовчуванням: інструменти під текстом */
-  gap: 8px;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 56px;
   background: #ffffff;
-  border: 1px solid #cbd5e1;
-  border-radius: 20px;
-  padding: 8px 12px;
+  border: 1px solid #d0d7de;
+  border-radius: 10px;
+  padding: 8px 14px 6px;
   transition: border-color 0.2s;
 }
 
@@ -278,15 +279,8 @@ function handleSend() {
 }
 
 /* Рядок: Текст + Відправити */
-.chat-input-main-row {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-}
-
 .input-area {
-  flex: 1;
-  min-height: 24px;
+  min-height: 22px;
 }
 
 .chat-textarea {
@@ -295,21 +289,26 @@ function handleSend() {
   outline: none;
   resize: none;
   background: transparent;
-  font-size: 0.95rem;
-  color: #1e293b;
-  line-height: 1.5;
-  max-height: 150px;
-  padding: 4px 0;
+  font-size: 15px;
+  color: #32465a;
+  line-height: 1.25;
+  max-height: 72px;
+  min-height: 22px;
+  padding: 0;
   margin: 0;
 }
 
-/* Панель інструментів (кнопки) */
+.chat-actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .chat-tools {
   display: flex;
   align-items: center;
-  gap: 18px;
-  padding-top: 4px;
-  border-top: 1px solid #f1f5f9;
+  gap: 12px;
 }
 
 .relative-container {
@@ -320,9 +319,9 @@ function handleSend() {
 .tool-btn {
   background: none;
   border: none;
-  padding: 4px 0;
-  color: #64748b;
-  font-size: 1.25rem;
+  padding: 0;
+  color: #4b5563;
+  font-size: 1.2rem;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -330,14 +329,14 @@ function handleSend() {
 }
 
 .tool-btn:hover, .tool-btn.active {
-  color: #3b82f6;
+  color: #1877f2;
 }
 
 /* Кнопка відправки */
 .action-btn {
   background: none;
   border: none;
-  padding: 0 0 4px 0;
+  padding: 0;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -345,8 +344,8 @@ function handleSend() {
 }
 
 .send-icon, .like-icon {
-  font-size: 1.35rem;
-  color: #3b82f6;
+  font-size: 1.3rem;
+  color: #1877f2;
 }
 
 .action-btn:disabled {
@@ -354,34 +353,6 @@ function handleSend() {
   cursor: not-allowed;
 }
 
-/* --- АДАПТАЦІЯ ДЛЯ ДЕСКТОПА --- */
-@media (min-width: 769px) {
-  .chat-input-bar-container {
-    flex-direction: row; /* Все в один рядок */
-    align-items: flex-end;
-    border-radius: 24px;
-    padding: 10px 16px;
-  }
-
-  .chat-input-main-row {
-    flex: 1;
-    order: 1; /* Текст спочатку */
-  }
-
-  .chat-tools {
-    order: 2; /* Кнопки посередині */
-    border-top: none;
-    padding-top: 0;
-    padding-bottom: 2px;
-  }
-
-  .action-btn {
-    order: 3; /* Відправити в кінці */
-    margin-left: 4px;
-  }
-}
-
-/* --- АДАПТАЦІЯ ДЛЯ МОБІЛОК --- */
 @media (max-width: 768px) {
   .chat-input-wrapper {
     padding: 8px 10px;
@@ -395,9 +366,16 @@ function handleSend() {
     display: none;
   }
 
+  .chat-input-bar-container {
+    min-height: 54px;
+  }
+
+  .chat-actions-row {
+    justify-content: space-between;
+  }
+
   .chat-tools {
-    justify-content: flex-start;
-    gap: 25px; /* Збільшена відстань для зручності пальців */
+    gap: 18px;
   }
 }
 
@@ -407,8 +385,8 @@ function handleSend() {
 .file-thumb { width: 60px; height: 60px; border-radius: 4px; object-fit: cover; }
 .file-icon { font-size: 1.2rem; color: #64748b; margin: 0 4px; }
 .remove-btn { background: none; border: none; color: #94a3b8; cursor: pointer; margin-left: 4px; font-size: 1.1rem; }
-.input-footer { display: flex; justify-content: flex-end; margin-top: 4px; padding: 0 10px; }
-.hint-text { font-size: 0.7rem; color: #cbd5e1; }
+.input-footer { display: flex; justify-content: flex-end; margin-top: 3px; padding: 0 8px; }
+.hint-text { font-size: 0.66rem; color: #cbd5e1; }
 .error-text { font-size: 0.75rem; color: #ef4444; }
 
 .custom-scrollbar::-webkit-scrollbar { width: 4px; }

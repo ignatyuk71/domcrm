@@ -28,29 +28,31 @@ defineProps({
 
 <style scoped>
 .chat-wrapper {
-  --chat-shell: #f3f4f6;
+  --chat-shell: #eef2f6;
   min-height: calc(100vh - 96px);
-  padding: 12px 16px 16px;
+  padding: 8px 14px 14px;
   background: var(--chat-shell);
   font-family: "Segoe UI", sans-serif;
 }
 
 .chat-topbar {
-  margin-bottom: 10px;
-  border-radius: 18px;
+  margin-bottom: 0;
+  border-radius: 8px 8px 0 0;
   border: 1px solid #e5e7eb;
+  border-bottom: none;
   background: #fff;
   overflow: hidden;
 }
 
 .chat-container {
-  height: calc(100vh - 132px);
+  height: calc(100vh - 126px);
   display: grid;
-  grid-template-columns: 360px minmax(0, 1fr) 350px;
+  grid-template-columns: 290px minmax(0, 1fr) 360px;
   gap: 0;
-  border-radius: 18px;
+  border-radius: 0 0 8px 8px;
   overflow: hidden;
   border: 1px solid #e5e7eb;
+  border-top: none;
   background: #fff;
 }
 
@@ -69,7 +71,7 @@ defineProps({
 
 @media (max-width: 1320px) {
   .chat-container {
-    grid-template-columns: 330px minmax(0, 1fr);
+    grid-template-columns: 290px minmax(0, 1fr);
   }
 
   .chat-profile {

@@ -1,5 +1,6 @@
 import { computed, ref } from 'vue';
 import {
+  archiveConversation as apiArchiveConversation,
   fetchNewMessages,
   forceSync as apiForceSync,
   getConversations,
@@ -30,6 +31,7 @@ export function useChat() {
   const isLoadingMore = ref(false);
   const isSending = ref(false);
   const isSyncing = ref(false);
+  const isArchiving = ref(false);
   const error = ref('');
   const currentPage = ref(1);
   const lastPage = ref(1);
@@ -70,6 +72,16 @@ export function useChat() {
 
     const [chat] = conversations.value.splice(index, 1);
     conversations.value.unshift(chat);
+  }
+
+  function removeConversation(conversationId) {
+    conversations.value = conversations.value.filter((chat) => chat.conversation_id !== conversationId);
+
+    if (activeConversationId.value === conversationId) {
+      activeConversationId.value = null;
+      messages.value = [];
+      stopPolling();
+    }
   }
 
   async function fetchConversations(page = 1) {
@@ -267,6 +279,26 @@ export function useChat() {
     }
   }
 
+  async function archiveConversation(conversationId) {
+    if (!conversationId || isArchiving.value) {
+      return;
+    }
+
+    isArchiving.value = true;
+    error.value = '';
+
+    try {
+      await apiArchiveConversation(conversationId);
+      removeConversation(conversationId);
+    } catch (e) {
+      console.error('Не вдалося прибрати чат з інбоксу', e);
+      error.value = 'Не вдалося прибрати чат з інбоксу';
+      throw e;
+    } finally {
+      isArchiving.value = false;
+    }
+  }
+
   async function forceSync(chat = activeChat.value) {
     if (!chat?.customer_id) {
       return;
@@ -417,6 +449,7 @@ export function useChat() {
     isLoadingMore,
     isSending,
     isSyncing,
+    isArchiving,
     error,
     currentPage,
     lastPage,
@@ -424,6 +457,7 @@ export function useChat() {
     loadMoreConversations,
     selectChat,
     sendMessage,
+    archiveConversation,
     forceSync,
     startPolling,
     stopPolling,

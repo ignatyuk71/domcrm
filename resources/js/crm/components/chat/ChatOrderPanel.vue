@@ -1,11 +1,11 @@
 <template>
-  <teleport to="body">
+  <teleport to="body" :disabled="embedded">
     <transition name="fade-overlay">
-      <div v-show="open" class="ultra-backdrop" @click="handleMinimize"></div>
+      <div v-if="!embedded" v-show="open" class="ultra-backdrop" @click="handleMinimize"></div>
     </transition>
 
     <transition name="slide-premium-elastic">
-      <div v-show="open" class="order-panel-elite">
+      <div v-show="open" class="order-panel-elite" :class="{ 'is-embedded': embedded }">
         
         <header class="elite-header">
           <div class="header-left-group">
@@ -235,12 +235,14 @@
 
     <ChatOrderDeliveryModal
       :open="deliveryModalOpen"
+      :embedded="embedded"
       v-model="orderDraft.delivery"
       @close="deliveryModalOpen = false"
     />
 
     <ChatOrderPaymentModal
       :open="paymentModalOpen"
+      :embedded="embedded"
       v-model="orderDraft.payment"
       @close="paymentModalOpen = false"
     />
@@ -255,6 +257,7 @@ import ChatOrderPaymentModal from '@/crm/components/chat/ChatOrderPaymentModal.v
 
 const props = defineProps({
   open: { type: Boolean, default: false },
+  embedded: { type: Boolean, default: false },
   customer: { type: Object, default: null },
   orderDraft: { type: Object, required: true },
   submitState: { type: Object, default: () => ({ status: 'idle' }) },
@@ -486,6 +489,10 @@ const groupedProducts = computed(() => {
 /* Решта стилів з Ultra V2 */
 .ultra-backdrop { position: fixed; inset: 0; background: rgba(10, 15, 30, 0.4); z-index: 99998; backdrop-filter: blur(12px); }
 .order-panel-elite { position: fixed; top: 0; right: 0; width: 480px; max-width: 100%; height: 100vh; background: #ffffff; z-index: 99999; display: flex; flex-direction: column; box-shadow: -20px 0 80px rgba(0, 0, 0, 0.2); }
+.order-panel-elite.is-embedded { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 20; box-shadow: none; border-left: 1px solid #e5e7eb; }
+.order-panel-elite.is-embedded .elite-header { padding: 16px; }
+.order-panel-elite.is-embedded .panel-scroller { padding: 16px; background: #fff; }
+.order-panel-elite.is-embedded .elite-footer { padding: 16px; }
 .elite-header { padding: 20px 24px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between; }
 .header-left-group { display: flex; align-items: center; gap: 14px; }
 .status-icon-glow { width: 44px; height: 44px; background: #f1f5f9; color: #cbd5e1; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px; }

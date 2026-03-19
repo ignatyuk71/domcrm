@@ -184,6 +184,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/api/chat/tags', [ChatApiController::class, 'listConversationTags'])->name('chat.tags');
     Route::patch('/api/chat/conversations/{conversation}/stage', [ChatApiController::class, 'updateStage'])
         ->name('chat.stage');
+    Route::delete('/api/chat/conversations/{conversation}', [ChatApiController::class, 'archiveConversation'])
+        ->name('chat.archive');
     Route::patch('/api/chat/conversations/{conversation}/tags', [ChatApiController::class, 'updateTags'])
         ->name('chat.updateTags');
     Route::get('/api/chat/unread-count', [ChatApiController::class, 'getUnreadCount'])->name('chat.unreadCount');
