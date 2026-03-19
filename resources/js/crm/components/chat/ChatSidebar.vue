@@ -51,10 +51,10 @@ function handleScroll(event) {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 0 14px 18px;
+  padding: 0 0 18px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0;
   scrollbar-width: thin;
   scrollbar-color: rgba(148, 163, 184, 0.32) transparent;
 }
@@ -78,7 +78,7 @@ function handleScroll(event) {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 56px 20px;
+  padding: 80px 20px;
   text-align: center;
   color: #64748b;
 }

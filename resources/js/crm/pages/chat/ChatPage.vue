@@ -1,36 +1,44 @@
 <template>
   <ChatLayout :view-mode="viewMode">
+    <template #topbar>
+      <div class="inbox-tabs">
+        <button
+          v-for="tab in platformTabs"
+          :key="tab.value"
+          type="button"
+          class="inbox-tab"
+          :class="{ 'is-active': platformFilter === tab.value }"
+          @click="platformFilter = tab.value"
+        >
+          {{ tab.label }}
+          <span class="tab-count">{{ getPlatformCount(tab.value) }}</span>
+        </button>
+      </div>
+    </template>
+
     <template #sidebar>
       <div class="chat-sidebar-shell">
-        <div class="chat-sidebar-topbar">
-          <div>
-            <p class="sidebar-eyebrow">Meta Inbox</p>
-            <h1 class="sidebar-title">Переписки</h1>
-          </div>
-
-          <span class="sidebar-total">{{ filteredConversations.length }}</span>
-        </div>
-
         <div class="chat-sidebar-search">
           <i class="bi bi-search"></i>
           <input
             v-model="searchQuery"
             type="text"
-            placeholder="Пошук по імені або повідомленню"
+            placeholder="Пошук"
           >
         </div>
 
-        <div class="platform-tabs">
-          <button
-            v-for="tab in platformTabs"
-            :key="tab.value"
-            type="button"
-            class="platform-tab"
-            :class="{ 'is-active': platformFilter === tab.value }"
-            @click="platformFilter = tab.value"
-          >
-            {{ tab.label }}
-            <span class="platform-count">{{ getPlatformCount(tab.value) }}</span>
+        <div class="sidebar-toolbar">
+          <button type="button" class="manage-btn">
+            <i class="bi bi-stack"></i>
+            Управляти
+          </button>
+        </div>
+
+        <div class="sidebar-filters">
+          <button type="button" class="filter-chip is-active">Непрочитані</button>
+          <button type="button" class="filter-chip">Контакти</button>
+          <button type="button" class="filter-chip">
+            <i class="bi bi-sliders"></i>
           </button>
         </div>
 
@@ -82,9 +90,11 @@ import ChatEmpty from '@/crm/components/chat/ChatEmptyState.vue';
 import ChatProfile from '@/crm/components/chat/ChatCustomerProfile.vue';
 
 const platformTabs = [
-  { value: 'all', label: 'Усі' },
+  { value: 'all', label: 'Усі повідомлення' },
   { value: 'messenger', label: 'Messenger' },
   { value: 'instagram', label: 'Instagram' },
+  { value: 'facebook_comments', label: 'Коментарі на Facebook' },
+  { value: 'instagram_comments', label: 'Коментарі в Instagram' },
 ];
 
 const {
@@ -116,7 +126,7 @@ const filteredConversations = computed(() => {
   const query = searchQuery.value.trim().toLowerCase();
 
   return conversations.value.filter((chat) => {
-    const matchesPlatform = platformFilter.value === 'all' || chat.platform === platformFilter.value;
+    const matchesPlatform = matchConversationByTab(chat, platformFilter.value);
     if (!matchesPlatform) {
       return false;
     }
@@ -140,11 +150,32 @@ const filteredConversations = computed(() => {
 });
 
 function getPlatformCount(platform) {
-  if (platform === 'all') {
-    return conversations.value.length;
+  return conversations.value.filter((chat) => matchConversationByTab(chat, platform)).length;
+}
+
+function looksLikeCommentThread(chat) {
+  const preview = String(chat?.last_message || '').toLowerCase();
+  return preview.includes('коментар') || preview.includes('комментар') || preview.includes('comment');
+}
+
+function matchConversationByTab(chat, tab) {
+  if (tab === 'all') {
+    return true;
   }
 
-  return conversations.value.filter((chat) => chat.platform === platform).length;
+  if (tab === 'messenger' || tab === 'instagram') {
+    return chat.platform === tab;
+  }
+
+  if (tab === 'facebook_comments') {
+    return chat.platform === 'messenger' && looksLikeCommentThread(chat);
+  }
+
+  if (tab === 'instagram_comments') {
+    return chat.platform === 'instagram' && looksLikeCommentThread(chat);
+  }
+
+  return true;
 }
 
 function handleSelectChat(chat) {
@@ -220,116 +251,89 @@ onUnmounted(stopPolling);
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  background:
-    radial-gradient(circle at top left, rgba(14, 165, 233, 0.12), transparent 34%),
-    linear-gradient(180deg, rgba(248, 250, 252, 0.98), #ffffff 24%);
-}
-
-.chat-sidebar-topbar {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 22px 20px 16px;
-}
-
-.sidebar-eyebrow {
-  margin: 0 0 4px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: #64748b;
-}
-
-.sidebar-title {
-  margin: 0;
-  font-size: 28px;
-  line-height: 1;
-  font-weight: 800;
-  color: #0f172a;
-}
-
-.sidebar-total {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 38px;
-  height: 38px;
-  padding: 0 12px;
-  border-radius: 999px;
-  background: #0f172a;
-  color: #f8fafc;
-  font-size: 14px;
-  font-weight: 700;
+  background: #fff;
 }
 
 .chat-sidebar-search {
   position: relative;
-  padding: 0 20px;
+  padding: 18px 16px 12px;
 }
 
 .chat-sidebar-search i {
   position: absolute;
   top: 50%;
-  left: 34px;
+  left: 30px;
   transform: translateY(-50%);
-  color: #94a3b8;
+  color: #6b7280;
   font-size: 14px;
 }
 
 .chat-sidebar-search input {
   width: 100%;
-  height: 44px;
+  height: 42px;
   padding: 0 14px 0 40px;
-  border: 1px solid rgba(148, 163, 184, 0.25);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background: #fff;
   color: #0f172a;
   outline: none;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.2s ease;
 }
 
-.chat-sidebar-search input:focus {
-  border-color: rgba(14, 165, 233, 0.5);
-  box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.08);
-}
-
-.platform-tabs {
+.sidebar-toolbar,
+.sidebar-filters {
   display: flex;
   gap: 8px;
-  padding: 14px 20px 18px;
-  overflow-x: auto;
+  padding: 0 16px 12px;
 }
 
-.platform-tab {
+.manage-btn,
+.filter-chip {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 9px 14px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
+  padding: 8px 14px;
+  border: 1px solid #d1d5db;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.76);
-  color: #334155;
+  background: #fff;
+  color: #374151;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
   white-space: nowrap;
-  transition: all 0.2s ease;
 }
 
-.platform-tab:hover {
-  border-color: rgba(14, 165, 233, 0.35);
-  color: #0f172a;
+.filter-chip.is-active {
+  background: #f3f4f6;
 }
 
-.platform-tab.is-active {
-  background: linear-gradient(135deg, #0f172a, #1e293b);
-  border-color: transparent;
-  color: #f8fafc;
-  box-shadow: 0 12px 26px -18px rgba(15, 23, 42, 0.7);
+.inbox-tabs {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  overflow-x: auto;
 }
 
-.platform-count {
+.inbox-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.inbox-tab.is-active {
+  color: #0ea5e9;
+  border-bottom-color: #0ea5e9;
+}
+
+.tab-count {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -337,22 +341,15 @@ onUnmounted(stopPolling);
   height: 20px;
   padding: 0 6px;
   border-radius: 999px;
-  background: rgba(148, 163, 184, 0.16);
+  background: #e5e7eb;
+  color: #111827;
   font-size: 11px;
-  font-weight: 800;
-}
-
-.platform-tab.is-active .platform-count {
-  background: rgba(255, 255, 255, 0.18);
+  font-weight: 700;
 }
 
 @media (max-width: 768px) {
-  .chat-sidebar-topbar {
-    padding-top: 18px;
-  }
-
-  .sidebar-title {
-    font-size: 24px;
+  .inbox-tabs {
+    padding: 10px 12px;
   }
 }
 </style>

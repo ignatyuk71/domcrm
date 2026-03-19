@@ -125,42 +125,37 @@ watch(
 .chat-item {
   width: 100%;
   display: grid;
-  grid-template-columns: 56px minmax(0, 1fr);
+  grid-template-columns: 52px minmax(0, 1fr);
   gap: 12px;
-  padding: 14px 12px;
-  border: 1px solid transparent;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.72);
+  padding: 14px 16px;
+  border: none;
+  border-radius: 0;
+  background: #fff;
   text-align: left;
-  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+  border-bottom: 1px solid #f3f4f6;
+  transition: background 0.18s ease;
 }
 
 .chat-item:hover {
-  transform: translateY(-1px);
-  border-color: rgba(148, 163, 184, 0.18);
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 14px 28px -24px rgba(15, 23, 42, 0.48);
+  background: #f9fafb;
 }
 
 .chat-item.is-active {
-  border-color: rgba(14, 165, 233, 0.24);
-  background:
-    radial-gradient(circle at top left, rgba(14, 165, 233, 0.12), transparent 38%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.94));
-  box-shadow: 0 20px 36px -30px rgba(14, 165, 233, 0.48);
+  background: #f3f4f6;
+  box-shadow: inset 3px 0 0 #6366f1;
 }
 
 .avatar-shell {
   position: relative;
-  width: 56px;
-  height: 56px;
+  width: 52px;
+  height: 52px;
 }
 
 .avatar-img,
 .avatar-fallback {
-  width: 56px;
-  height: 56px;
-  border-radius: 18px;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
   object-fit: cover;
   display: flex;
   align-items: center;
@@ -180,10 +175,10 @@ watch(
 
 .platform-badge {
   position: absolute;
-  right: -4px;
-  bottom: -4px;
-  width: 22px;
-  height: 22px;
+  right: -2px;
+  bottom: -2px;
+  width: 20px;
+  height: 20px;
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
@@ -228,7 +223,7 @@ watch(
   margin: 0;
   color: #0f172a;
   font-size: 15px;
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
@@ -237,9 +232,9 @@ watch(
 
 .name-stack p {
   margin: 4px 0 0;
-  color: #64748b;
-  font-size: 12px;
-  font-weight: 600;
+  color: #4b5563;
+  font-size: 13px;
+  font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -249,7 +244,7 @@ watch(
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 6px;
+  gap: 4px;
   flex-shrink: 0;
 }
 
@@ -257,30 +252,29 @@ watch(
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 5px 10px;
+  padding: 3px 10px;
   border-radius: 999px;
-  background: rgba(14, 165, 233, 0.12);
-  color: #0369a1;
-  font-size: 11px;
-  font-weight: 800;
+  background: #eef2ff;
+  color: #4f46e5;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .time-label {
-  color: #94a3b8;
-  font-size: 12px;
-  font-weight: 700;
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .preview-text {
   margin: 0;
   min-width: 0;
-  color: #334155;
-  font-size: 13px;
+  color: #64748b;
+  font-size: 14px;
   line-height: 1.45;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .unread-pill {

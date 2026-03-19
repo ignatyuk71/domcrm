@@ -24,56 +24,84 @@
         <div class="thread-meta">
           <div class="title-row">
             <h2>{{ activeChat?.customer_name || 'Чат' }}</h2>
-            <span class="platform-pill" :class="platformClass">
-              <i :class="platformIcon"></i>
-              {{ platformLabel }}
-            </span>
           </div>
 
           <div class="subtitle-row">
-            <span v-if="activeChat?.external_username">@{{ sanitizedUsername }}</span>
-            <span v-if="activeChat?.last_message_time">
-              Оновлено {{ formattedLastActivity }}
-            </span>
+            <span class="assignment-label">Призначити цю переписку</span>
+            <i class="bi bi-caret-down-fill"></i>
           </div>
         </div>
       </div>
 
       <div class="thread-actions">
-        <label class="stage-picker">
-          <span>Етап</span>
-          <select
-            v-model="localStage"
-            :disabled="!activeChat?.conversation_id"
-            @change="commitStage"
-          >
-            <option v-for="option in stageOptions" :key="option.value" :value="option.value">
-              {{ option.label }}
-            </option>
-          </select>
-        </label>
+        <button
+          type="button"
+          class="thread-action-btn"
+          title="Позначка"
+        >
+          <i class="bi bi-bookmark-fill"></i>
+        </button>
+
+        <button
+          type="button"
+          class="thread-action-btn"
+          title="Видалити"
+        >
+          <i class="bi bi-trash"></i>
+        </button>
+
+        <button
+          type="button"
+          class="thread-action-btn"
+          title="Обране"
+        >
+          <i class="bi bi-star-fill"></i>
+        </button>
+
+        <button
+          type="button"
+          class="thread-action-btn"
+          title="Позначити непрочитаним"
+        >
+          <i class="bi bi-envelope-fill"></i>
+        </button>
 
         <button
           type="button"
           class="thread-action-btn"
           :class="{ 'is-syncing': isSyncing }"
           :disabled="isSyncing || loading"
-          title="Синхронізувати"
+          title="Оновити"
           @click="$emit('force-sync')"
         >
-          <i class="bi bi-arrow-clockwise"></i>
-        </button>
-
-        <button
-          type="button"
-          class="thread-action-btn"
-          title="Профіль клієнта"
-          @click="$emit('open-profile')"
-        >
-          <i class="bi bi-layout-text-sidebar-reverse"></i>
+          <i class="bi bi-check-lg"></i>
         </button>
       </div>
     </header>
+
+    <div class="thread-stage-row">
+      <label class="stage-picker">
+        <span>Етап</span>
+        <select
+          v-model="localStage"
+          :disabled="!activeChat?.conversation_id"
+          @change="commitStage"
+        >
+          <option v-for="option in stageOptions" :key="option.value" :value="option.value">
+            {{ option.label }}
+          </option>
+        </select>
+      </label>
+
+      <button
+        type="button"
+        class="profile-open-btn"
+        title="Профіль клієнта"
+        @click="$emit('open-profile')"
+      >
+        <i class="bi bi-person-lines-fill"></i>
+      </button>
+    </div>
 
     <div ref="threadBody" class="chat-thread-body">
       <div v-if="loading" class="chat-state-block">
@@ -152,34 +180,6 @@ const safeAvatarUrl = computed(() => {
 });
 
 const displayInitial = computed(() => (props.activeChat?.customer_name || '?').charAt(0).toUpperCase());
-
-const platformClass = computed(() => (
-  props.activeChat?.platform === 'instagram' ? 'is-instagram' : 'is-messenger'
-));
-
-const platformIcon = computed(() => (
-  props.activeChat?.platform === 'instagram' ? 'bi bi-instagram' : 'bi bi-messenger'
-));
-
-const platformLabel = computed(() => (
-  props.activeChat?.platform === 'instagram' ? 'Instagram' : 'Messenger'
-));
-
-const sanitizedUsername = computed(() => String(props.activeChat?.external_username || '').replace(/^@/, ''));
-
-const formattedLastActivity = computed(() => {
-  if (!props.activeChat?.last_message_time) {
-    return '';
-  }
-
-  const date = new Date(props.activeChat.last_message_time);
-  return date.toLocaleString('uk-UA', {
-    day: '2-digit',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-});
 
 const groupedMessages = computed(() => {
   const groups = [];
@@ -260,9 +260,7 @@ watch(
   flex-direction: column;
   min-height: 0;
   height: 100%;
-  background:
-    radial-gradient(circle at top right, rgba(14, 165, 233, 0.08), transparent 28%),
-    linear-gradient(180deg, #ffffff, #f8fafc 100%);
+  background: #fff;
 }
 
 .chat-thread-header {
@@ -270,10 +268,9 @@ watch(
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  padding: 18px 24px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
-  background: rgba(255, 255, 255, 0.84);
-  backdrop-filter: blur(10px);
+  padding: 14px 18px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #fff;
 }
 
 .thread-user-block {
@@ -285,18 +282,18 @@ watch(
 
 .thread-mobile-btn {
   display: none;
-  width: 42px;
-  height: 42px;
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  border-radius: 14px;
+  width: 40px;
+  height: 40px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
   background: #fff;
   color: #0f172a;
 }
 
 .thread-avatar {
-  width: 52px;
-  height: 52px;
-  border-radius: 18px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
   overflow: hidden;
   flex-shrink: 0;
   background: linear-gradient(135deg, #e2e8f0, #cbd5e1);
@@ -331,35 +328,24 @@ watch(
 
 .title-row h2 {
   margin: 0;
-  font-size: 20px;
+  font-size: 16px;
   line-height: 1.1;
-  font-weight: 800;
+  font-weight: 700;
   color: #0f172a;
 }
 
 .subtitle-row {
-  color: #64748b;
+  color: #4b5563;
   font-size: 13px;
   font-weight: 600;
 }
 
-.platform-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  color: #fff;
-  font-size: 12px;
-  font-weight: 800;
+.assignment-label {
+  color: #4b5563;
 }
 
-.platform-pill.is-messenger {
-  background: linear-gradient(135deg, #0ea5e9, #2563eb);
-}
-
-.platform-pill.is-instagram {
-  background: linear-gradient(135deg, #e11d48, #f97316 55%, #9333ea);
+.subtitle-row i {
+  font-size: 11px;
 }
 
 .thread-actions {
@@ -368,14 +354,23 @@ watch(
   gap: 10px;
 }
 
+.thread-stage-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 18px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
 .stage-picker {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  border-radius: 16px;
-  background: rgba(248, 250, 252, 0.86);
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background: #fff;
 }
 
 .stage-picker span {
@@ -397,19 +392,27 @@ watch(
 }
 
 .thread-action-btn {
-  width: 44px;
-  height: 44px;
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.88);
+  width: 40px;
+  height: 40px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background: #fff;
   color: #0f172a;
-  transition: transform 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.profile-open-btn {
+  width: 40px;
+  height: 40px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background: #fff;
+  color: #111827;
 }
 
 .thread-action-btn:hover {
-  transform: translateY(-1px);
-  border-color: rgba(14, 165, 233, 0.32);
-  color: #0284c7;
+  background: #f9fafb;
+  border-color: #9ca3af;
 }
 
 .thread-action-btn.is-syncing i {
@@ -420,10 +423,8 @@ watch(
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 22px 24px;
-  background:
-    linear-gradient(180deg, rgba(248, 250, 252, 0.78), rgba(255, 255, 255, 0.92)),
-    radial-gradient(circle at center, rgba(226, 232, 240, 0.4), transparent 55%);
+  padding: 12px 18px 24px;
+  background: #fff;
 }
 
 .message-group {
@@ -440,11 +441,11 @@ watch(
 .date-separator span {
   padding: 6px 12px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.86);
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
   color: #64748b;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .chat-state-block {
@@ -511,6 +512,10 @@ watch(
 
   .thread-actions {
     justify-content: space-between;
+  }
+
+  .thread-stage-row {
+    padding: 10px 16px;
   }
 
   .stage-picker {
