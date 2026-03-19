@@ -121,7 +121,7 @@ const originTitle = computed(() => {
       ? 'Джерело: сторіс'
       : originContext.value.object_type === 'reel'
         ? 'Джерело: reels'
-        : 'Джерело: допис';
+        : 'Джерело: пост';
 });
 
 const normalizedAttachments = computed(() => {

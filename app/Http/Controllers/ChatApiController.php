@@ -565,7 +565,10 @@ class ChatApiController extends Controller
         if (
             $cleaned === ''
             || str_contains($lower, 'ви відповідаєте на коментар')
+            || str_contains($lower, 'вы отвечаете на комментарий')
             || str_contains($lower, 'you are replying to a comment')
+            || str_contains($lower, 'посмотреть комментарий')
+            || str_contains($lower, 'view comment')
         ) {
             return null;
         }

@@ -28,7 +28,19 @@
 
           <div v-if="metaSubtitle" class="subtitle-row">
             <span class="platform-pill">{{ platformLabel }}</span>
+            <span v-if="originBadgeLabel" class="source-pill" :class="originBadgeClass">
+              {{ originBadgeLabel }}
+            </span>
             <span class="meta-subtitle-text">{{ metaSubtitle }}</span>
+            <a
+              v-if="originContext?.url"
+              :href="originContext.url"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="source-link-inline"
+            >
+              Джерело
+            </a>
           </div>
         </div>
       </div>
@@ -202,13 +214,29 @@ const originTitle = computed(() => {
   }
 
   return originContext.value.object_type === 'ad'
-    ? 'Лід з реклами'
+    ? 'Коментар до реклами'
     : originContext.value.object_type === 'story'
       ? 'Відповідь на сторіс'
       : originContext.value.object_type === 'reel'
         ? 'Коментар до reels'
-        : 'Коментар до допису';
+        : 'Коментар до поста';
 });
+const originBadgeLabel = computed(() => {
+  if (!originContext.value) {
+    return '';
+  }
+
+  return originContext.value.object_type === 'ad'
+    ? 'Реклама'
+    : originContext.value.object_type === 'story'
+      ? 'Сторіс'
+      : originContext.value.object_type === 'reel'
+        ? 'Reels'
+        : 'Пост';
+});
+const originBadgeClass = computed(() => (
+  originContext.value ? `source-${originContext.value.object_type || 'comment'}` : ''
+));
 
 const groupedMessages = computed(() => {
   const groups = [];
@@ -462,10 +490,48 @@ watch(
   font-weight: 700;
 }
 
+.source-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.source-pill.source-post {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.source-pill.source-story {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.source-pill.source-ad {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.source-pill.source-reel {
+  background: #f5f3ff;
+  color: #7c3aed;
+}
+
 .meta-subtitle-text {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.source-link-inline {
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
 }
 
 .thread-actions {
