@@ -157,7 +157,8 @@ const formattedTime = computed(() => {
 const statusIcon = computed(() => {
   if (props.message.status === 'sending') return 'bi-clock'; // Годинник (відправляється)
   if (props.message.is_read || props.message.status === 'read') return 'bi-check2-all'; // Дві галочки (прочитано)
-  return 'bi-check2'; // Одна галочка (доставлено)
+  if (props.message.status === 'delivered') return 'bi-check2-all'; // Дві галочки (доставлено)
+  return 'bi-check2'; // Одна галочка (відправлено)
 });
 </script>
 

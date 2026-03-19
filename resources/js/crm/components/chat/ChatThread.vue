@@ -1,51 +1,49 @@
 <template>
-  <div class="chat-thread-wrapper">
+  <div class="chat-thread-shell">
     <header class="chat-thread-header">
-      <!-- ЛІВА ЧАСТИНА: Меню (моб) + Аватар + Інфо -->
-      <div class="header-left-group">
+      <div class="thread-user-block">
         <button
           type="button"
-          class="chat-thread-list-btn"
+          class="thread-mobile-btn"
           title="Список чатів"
           @click="$emit('open-list')"
         >
           <i class="bi bi-list"></i>
         </button>
 
-        <div class="chat-thread-user">
-          <div class="chat-thread-avatar">
-            <img
-              v-if="safeAvatarUrl"
-              :src="safeAvatarUrl"
-              alt="avatar"
-              @error="avatarFailed = true"
-            />
-            <span v-else class="chat-thread-avatar-fallback">
-              {{ (activeChat?.customer_name || '?').charAt(0).toUpperCase() }}
+        <div class="thread-avatar">
+          <img
+            v-if="safeAvatarUrl"
+            :src="safeAvatarUrl"
+            alt="Клієнт"
+            @error="avatarFailed = true"
+          >
+          <span v-else>{{ displayInitial }}</span>
+        </div>
+
+        <div class="thread-meta">
+          <div class="title-row">
+            <h2>{{ activeChat?.customer_name || 'Чат' }}</h2>
+            <span class="platform-pill" :class="platformClass">
+              <i :class="platformIcon"></i>
+              {{ platformLabel }}
             </span>
           </div>
-          
-          <div class="chat-thread-meta">
-            <h2 class="chat-thread-title">{{ activeChat?.customer_name || 'Чат' }}</h2>
-            
-            <div class="meta-row">
-              <div class="chat-thread-platform" v-if="activeChat?.platform">
-                <i :class="activeChat.platform === 'instagram' ? 'bi bi-instagram' : 'bi bi-messenger'"></i>
-                <span>{{ activeChat.platform === 'instagram' ? 'Instagram' : 'Facebook' }}</span>
-              </div>
-              <span v-if="activeChat?.last_message_time" class="chat-time-separator">• {{ activeChat.last_message_time }}</span>
-            </div>
+
+          <div class="subtitle-row">
+            <span v-if="activeChat?.external_username">@{{ sanitizedUsername }}</span>
+            <span v-if="activeChat?.last_message_time">
+              Оновлено {{ formattedLastActivity }}
+            </span>
           </div>
         </div>
       </div>
 
-      <!-- ПРАВА ЧАСТИНА: Кнопки дій (Оновити + Профіль) -->
-      <div class="chat-thread-actions">
-        <div class="stage-control">
-          <span class="stage-label">Етап</span>
+      <div class="thread-actions">
+        <label class="stage-picker">
+          <span>Етап</span>
           <select
             v-model="localStage"
-            class="stage-select"
             :disabled="!activeChat?.conversation_id"
             @change="commitStage"
           >
@@ -53,24 +51,14 @@
               {{ option.label }}
             </option>
           </select>
-        </div>
+        </label>
 
         <button
           type="button"
-          class="action-btn-pill"
-          :disabled="tagsLoading || !activeChat?.conversation_id"
-          @click="openTags"
-        >
-          Теги
-          <span v-if="activeChat?.tags?.length" class="tag-count">({{ activeChat.tags.length }})</span>
-        </button>
-
-        <button
-          type="button"
-          class="action-btn-icon"
+          class="thread-action-btn"
           :class="{ 'is-syncing': isSyncing }"
           :disabled="isSyncing || loading"
-          title="Оновити історію"
+          title="Синхронізувати"
           @click="$emit('force-sync')"
         >
           <i class="bi bi-arrow-clockwise"></i>
@@ -78,117 +66,74 @@
 
         <button
           type="button"
-          class="action-btn-icon"
+          class="thread-action-btn"
           title="Профіль клієнта"
           @click="$emit('open-profile')"
         >
-          <i class="bi bi-person-circle"></i>
+          <i class="bi bi-layout-text-sidebar-reverse"></i>
         </button>
       </div>
     </header>
 
     <div ref="threadBody" class="chat-thread-body">
-      
-      <div v-if="loading" class="chat-loading">
+      <div v-if="loading" class="chat-state-block">
         <div class="spinner"></div>
-        <span>Завантаження історії...</span>
+        <span>Завантаження історії…</span>
       </div>
 
-      <div v-else-if="!messages.length" class="chat-thread-empty">
-        Немає повідомлень
+      <div v-else-if="!messages.length" class="chat-state-block is-empty">
+        <i class="bi bi-chat-square"></i>
+        <strong>Поки що без повідомлень</strong>
+        <p>Почни діалог або підтягни історію через синхронізацію.</p>
       </div>
 
       <template v-else>
-        <ChatMessage
-          v-for="message in messages"
-          :key="message.id"
-          :message="message"
-          :is-mine="message.direction === 'outbound'"
-        />
+        <div
+          v-for="(group, index) in groupedMessages"
+          :key="`${group.label}-${index}`"
+          class="message-group"
+        >
+          <div class="date-separator">
+            <span>{{ group.label }}</span>
+          </div>
+
+          <ChatMessage
+            v-for="message in group.items"
+            :key="message.id"
+            :message="message"
+            :is-mine="message.direction === 'outbound'"
+          />
+        </div>
       </template>
     </div>
 
     <ChatInput
-      :disabled="isSending || loading"
-      @send="$emit('send', { ...$event, customer_id: activeChat?.customer_id })"
+      :disabled="isSending"
+      :platform="activeChat?.platform"
+      @send="$emit('send', $event)"
     />
-
-    <Teleport to="body">
-      <div v-if="isTagsOpen">
-        <div class="modal-backdrop fade show bg-dark bg-opacity-25"></div>
-        <div class="modal fade show d-block" tabindex="-1" @click.self="closeTags">
-          <div class="modal-dialog modal-dialog-centered modal-sm">
-            <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
-              <div class="modal-header border-bottom-0 pb-0 px-4 pt-4">
-                <h5 class="modal-title fw-bold text-dark fs-5">Теги чату</h5>
-                <button type="button" class="btn-close shadow-none" @click="closeTags"></button>
-              </div>
-
-              <div class="modal-body px-4 py-3">
-                <div v-if="tagsLoading" class="text-center py-4">
-                  <div class="spinner-border text-primary" role="status"></div>
-                </div>
-
-                <div v-else class="d-flex flex-column gap-2">
-                  <div
-                    v-for="tag in conversationTags"
-                    :key="tag.id"
-                    class="tag-option"
-                    :class="{ selected: tempTagIds.includes(tag.id) }"
-                    @click="toggleTag(tag.id)"
-                  >
-                    <span class="tag-chip" :style="getTagStyle(tag.color)">
-                      <i v-if="tag.icon" :class="['bi', tag.icon]"></i>
-                      {{ tag.name }}
-                    </span>
-                    <i v-if="tempTagIds.includes(tag.id)" class="bi bi-check-lg text-primary"></i>
-                  </div>
-
-                  <div v-if="!conversationTags.length" class="text-muted small fst-italic">
-                    Тегів ще немає
-                  </div>
-                </div>
-              </div>
-
-              <div class="modal-footer border-top-0 px-4 pb-4 pt-2">
-                <div class="d-grid gap-2 w-100">
-                  <button type="button" class="btn btn-primary fw-bold rounded-3" @click="saveTags">
-                    Зберегти
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </Teleport>
   </div>
 </template>
 
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
-import ChatMessage from './ChatMessage.vue';
 import ChatInput from './ChatInput.vue';
+import ChatMessage from './ChatMessage.vue';
 
 const props = defineProps({
   activeChat: { type: Object, default: null },
-  conversationTags: { type: Array, default: () => [] },
-  tagsLoading: { type: Boolean, default: false },
   messages: { type: Array, default: () => [] },
   isSending: { type: Boolean, default: false },
   loading: { type: Boolean, default: false },
   isSyncing: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(['send', 'force-sync', 'open-list', 'open-profile', 'update-stage', 'update-tags']);
+const emit = defineEmits(['send', 'force-sync', 'open-list', 'open-profile', 'update-stage']);
 
 const threadBody = ref(null);
-const isTagsOpen = ref(false);
-const tempTagIds = ref([]);
 const localStage = ref('');
 const avatarFailed = ref(false);
 
-// Узгоджені етапи для чату (UI + backend)
 const stageOptions = [
   { value: '', label: 'Без етапу' },
   { value: 'new', label: 'Новий' },
@@ -198,70 +143,82 @@ const stageOptions = [
   { value: 'closed', label: 'Закрито' },
 ];
 
-const activeTagIds = computed(() => {
-  return (props.activeChat?.tags || []).map((tag) => tag.id);
-});
 const safeAvatarUrl = computed(() => {
   if (avatarFailed.value) {
     return '';
   }
 
-  return props.activeChat?.customer_avatar || '';
+  return props.activeChat?.customer_avatar || props.activeChat?.fb_profile_pic || '';
 });
 
-function scrollToBottom() {
-  if (!threadBody.value) return;
-  threadBody.value.scrollTop = threadBody.value.scrollHeight;
-}
+const displayInitial = computed(() => (props.activeChat?.customer_name || '?').charAt(0).toUpperCase());
 
-const openTags = () => {
-  tempTagIds.value = [...activeTagIds.value];
-  isTagsOpen.value = true;
-};
+const platformClass = computed(() => (
+  props.activeChat?.platform === 'instagram' ? 'is-instagram' : 'is-messenger'
+));
 
-const closeTags = () => {
-  isTagsOpen.value = false;
-};
+const platformIcon = computed(() => (
+  props.activeChat?.platform === 'instagram' ? 'bi bi-instagram' : 'bi bi-messenger'
+));
 
-const toggleTag = (id) => {
-  const idx = tempTagIds.value.indexOf(id);
-  if (idx === -1) tempTagIds.value.push(id);
-  else tempTagIds.value.splice(idx, 1);
-};
+const platformLabel = computed(() => (
+  props.activeChat?.platform === 'instagram' ? 'Instagram' : 'Messenger'
+));
 
-const saveTags = () => {
-  emit('update-tags', {
-    conversationId: props.activeChat?.conversation_id,
-    tagIds: [...tempTagIds.value],
+const sanitizedUsername = computed(() => String(props.activeChat?.external_username || '').replace(/^@/, ''));
+
+const formattedLastActivity = computed(() => {
+  if (!props.activeChat?.last_message_time) {
+    return '';
+  }
+
+  const date = new Date(props.activeChat.last_message_time);
+  return date.toLocaleString('uk-UA', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
   });
-  closeTags();
-};
+});
 
-const commitStage = () => {
+const groupedMessages = computed(() => {
+  const groups = [];
+
+  props.messages.forEach((message) => {
+    const date = new Date(message.created_at || Date.now());
+    const label = date.toLocaleDateString('uk-UA', {
+      day: '2-digit',
+      month: 'long',
+    });
+
+    const lastGroup = groups[groups.length - 1];
+    if (lastGroup?.label === label) {
+      lastGroup.items.push(message);
+      return;
+    }
+
+    groups.push({ label, items: [message] });
+  });
+
+  return groups;
+});
+
+function commitStage() {
   emit('update-stage', {
     conversationId: props.activeChat?.conversation_id,
     stage: localStage.value || null,
   });
-};
+}
 
-const getTagStyle = (color) => {
-  if (!color) return {};
-  const hex = color.startsWith('#') && color.length === 4
-    ? `#${color.slice(1).split('').map((c) => c + c).join('')}`
-    : color;
-  if (hex.startsWith('#') && hex.length === 7) {
-    return {
-      backgroundColor: `${hex}1a`,
-      color: hex,
-      borderColor: `${hex}33`,
-    };
+function scrollToBottom() {
+  if (!threadBody.value) {
+    return;
   }
-  return { color: hex, borderColor: hex };
-};
 
-onMounted(() => {
-  scrollToBottom();
-});
+  threadBody.value.scrollTop = threadBody.value.scrollHeight;
+}
+
+onMounted(scrollToBottom);
 
 watch(
   () => props.messages.length,
@@ -272,9 +229,12 @@ watch(
 );
 
 watch(
-  () => props.activeChat?.customer_avatar,
-  () => {
-    avatarFailed.value = false;
+  () => props.loading,
+  async (value) => {
+    if (!value) {
+      await nextTick();
+      scrollToBottom();
+    }
   }
 );
 
@@ -287,368 +247,283 @@ watch(
 );
 
 watch(
-  () => props.loading,
-  async (newVal) => {
-    if (!newVal) {
-      await nextTick();
-      scrollToBottom();
-    }
+  () => [props.activeChat?.customer_avatar, props.activeChat?.fb_profile_pic],
+  () => {
+    avatarFailed.value = false;
   }
 );
 </script>
 
 <style scoped>
-.chat-thread-wrapper {
+.chat-thread-shell {
   display: flex;
   flex-direction: column;
-  height: 100%;
   min-height: 0;
-  background: #fff;
-  position: relative;
+  height: 100%;
+  background:
+    radial-gradient(circle at top right, rgba(14, 165, 233, 0.08), transparent 28%),
+    linear-gradient(180deg, #ffffff, #f8fafc 100%);
 }
 
-/* --- HEADER --- */
 .chat-thread-header {
-  padding: 12px 20px;
-  border-bottom: 1px solid #e2e8f0;
   display: flex;
   align-items: center;
-  justify-content: space-between; /* Розносить ліву і праву групи по краях */
-  gap: 8px;
-  background: #ffffff;
-  height: 64px;
-  flex-shrink: 0;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 24px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(255, 255, 255, 0.84);
+  backdrop-filter: blur(10px);
 }
 
-/* Ліва група (Меню + Аватар + Текст) */
-.header-left-group {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex: 1; /* Займає весь вільний простір зліва */
-  min-width: 0; /* Для обрізки тексту */
-  overflow: hidden;
-}
-
-.chat-thread-user {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex: 1;
+.thread-user-block {
   min-width: 0;
-  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 14px;
 }
 
-.chat-thread-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
+.thread-mobile-btn {
+  display: none;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 14px;
+  background: #fff;
+  color: #0f172a;
+}
+
+.thread-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 18px;
   overflow: hidden;
-  background: #f1f5f9;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, #e2e8f0, #cbd5e1);
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
+  color: #0f172a;
+  font-size: 18px;
+  font-weight: 800;
 }
 
-.chat-thread-avatar img {
+.thread-avatar img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.chat-thread-avatar-fallback {
-  font-weight: 700;
-  color: #64748b;
-  font-size: 1rem;
-}
-
-.chat-thread-meta {
+.thread-meta {
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  min-width: 0; /* Важливо для обрізки */
-  overflow: hidden;
-}
-
-.chat-thread-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: #0f172a;
-  margin: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.meta-row {
-  display: flex;
-  align-items: center;
   gap: 6px;
-  font-size: 12px;
-  color: #64748b;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-.chat-thread-platform {
+.title-row,
+.subtitle-row {
   display: flex;
   align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
-}
-
-.chat-time-separator {
-  white-space: nowrap;
-  opacity: 0.7;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Кнопка списку (мобільна) */
-.chat-thread-list-btn {
-  display: none; /* Прихована на десктопі */
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  border: 1px solid #e2e8f0;
-  background: #fff;
-  color: #475569;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.chat-thread-list-btn:hover { background: #f8fafc; }
-
-/* ПРАВА ЧАСТИНА: Кнопки дій */
-.chat-thread-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px; /* Відступ між кнопками */
+  gap: 10px;
   flex-wrap: wrap;
-  row-gap: 6px;
-  flex-shrink: 0;
-  margin-left: auto; /* Притискає праву частину вправо */
 }
 
-.stage-control {
-  display: flex;
+.title-row h2 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.1;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.subtitle-row {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.platform-pill {
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 8px;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  background: #fff;
+  padding: 6px 10px;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
 }
 
-.stage-label {
-  font-size: 11px;
-  color: #94a3b8;
+.platform-pill.is-messenger {
+  background: linear-gradient(135deg, #0ea5e9, #2563eb);
 }
 
-.stage-select {
+.platform-pill.is-instagram {
+  background: linear-gradient(135deg, #e11d48, #f97316 55%, #9333ea);
+}
+
+.thread-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.stage-picker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 16px;
+  background: rgba(248, 250, 252, 0.86);
+}
+
+.stage-picker span {
+  font-size: 12px;
+  font-weight: 800;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.stage-picker select {
+  min-width: 170px;
   border: none;
   background: transparent;
-  font-size: 12px;
-  color: #334155;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 700;
   outline: none;
-  cursor: pointer;
 }
 
-.action-btn-pill {
-  padding: 6px 10px;
-  border-radius: 10px;
-  border: 1px solid #e2e8f0;
-  background: #fff;
-  color: #475569;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
+.thread-action-btn {
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.88);
+  color: #0f172a;
+  transition: transform 0.18s ease, border-color 0.18s ease, color 0.18s ease;
 }
 
-.action-btn-pill:hover {
-  background: #f8fafc;
-  border-color: #cbd5e1;
+.thread-action-btn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(14, 165, 233, 0.32);
+  color: #0284c7;
 }
 
-.tag-count {
-  margin-left: 4px;
-  font-weight: 600;
-  color: #64748b;
+.thread-action-btn.is-syncing i {
+  animation: spin 0.8s linear infinite;
 }
 
-.action-btn-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  border: 1px solid #e2e8f0; /* Легка рамка */
-  background: #fff;
-  color: #64748b;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.action-btn-icon:hover {
-  background: #f1f5f9;
-  color: #3b82f6;
-  border-color: #cbd5e1;
-}
-
-.action-btn-icon:active {
-  transform: scale(0.96);
-}
-
-.action-btn-icon.is-syncing i {
-  animation: spin 1s linear infinite;
-}
-
-.tag-option {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  border: 1px solid transparent;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.tag-option:hover {
-  background: #f8fafc;
-}
-
-.tag-option.selected {
-  background: #f0f7ff;
-  border-color: #dbeafe;
-}
-
-.tag-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 8px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  border: 1px solid #e2e8f0;
-  background: #f8fafc;
-  color: #64748b;
-}
-
-/* --- BODY --- */
 .chat-thread-body {
   flex: 1;
-  padding: 16px 20px;
+  min-height: 0;
   overflow-y: auto;
+  padding: 22px 24px;
+  background:
+    linear-gradient(180deg, rgba(248, 250, 252, 0.78), rgba(255, 255, 255, 0.92)),
+    radial-gradient(circle at center, rgba(226, 232, 240, 0.4), transparent 55%);
+}
+
+.message-group {
   display: flex;
   flex-direction: column;
-  background: #f8fafc; /* Трохи світліший фон для чату */
 }
 
-.chat-thread-empty {
-  color: #94a3b8;
-  text-align: center;
-  margin-top: 40px;
-  font-size: 0.9rem;
+.date-separator {
+  display: flex;
+  justify-content: center;
+  margin: 10px 0 18px;
 }
 
-/* LOADING */
-.chat-loading {
+.date-separator span {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.chat-state-block {
+  height: 100%;
+  min-height: 260px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 100%;
-  color: #94a3b8;
   gap: 12px;
-  font-size: 0.9rem;
+  color: #64748b;
+  text-align: center;
+}
+
+.chat-state-block.is-empty i {
+  font-size: 38px;
+  color: #94a3b8;
+}
+
+.chat-state-block strong {
+  font-size: 16px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.chat-state-block p {
+  margin: 0;
+  max-width: 280px;
+  line-height: 1.5;
 }
 
 .spinner {
-  width: 32px;
-  height: 32px;
-  border: 3px solid #e2e8f0;
-  border-top-color: #3b82f6;
+  width: 22px;
+  height: 22px;
+  border: 2px solid rgba(148, 163, 184, 0.22);
+  border-top-color: #0ea5e9;
   border-radius: 50%;
-  animation: spin 1s linear infinite;
+  animation: spin 0.8s linear infinite;
 }
 
-@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 
-/* --- MOBILE ADAPTATION --- */
 @media (max-width: 768px) {
   .chat-thread-header {
-    padding: 8px 12px; /* Зменшені відступи по краях */
-    height: auto;
-    gap: 8px;
+    padding: 16px;
+    align-items: flex-start;
     flex-direction: column;
-    align-items: stretch;
   }
 
-  .chat-thread-list-btn {
-    display: inline-flex; /* Показуємо кнопку меню */
-    width: 32px;
-    height: 32px;
+  .thread-mobile-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
-  
-  .header-left-group {
-    gap: 8px;
+
+  .thread-user-block,
+  .thread-actions {
     width: 100%;
   }
 
-  .chat-thread-user {
-    gap: 8px;
-  }
-
-  .chat-thread-avatar {
-    width: 36px;
-    height: 36px;
-  }
-
-  .chat-thread-title {
-    font-size: 14px;
-    max-width: 140px; /* Обмеження ширини імені на малих екранах */
-  }
-
-  .action-btn-icon {
-    width: 32px;
-    height: 32px;
-  }
-
-  .action-btn-pill {
-    padding: 4px 8px;
-    font-size: 11px;
-  }
-
-  .stage-control {
-    padding: 2px 6px;
-  }
-
-  .chat-thread-actions {
-    width: 100%;
+  .thread-actions {
     justify-content: space-between;
   }
 
-  .stage-label {
-    display: none;
+  .stage-picker {
+    flex: 1;
   }
 
-  .stage-select {
-    font-size: 11px;
+  .stage-picker select {
+    min-width: 0;
+    width: 100%;
   }
 
-  /* Ховаємо час на дуже вузьких екранах */
-  .chat-time-separator {
-    display: none; 
-  }
-  @media (min-width: 360px) {
-    .chat-time-separator { display: inline; }
+  .chat-thread-body {
+    padding: 18px 14px;
   }
 }
 </style>

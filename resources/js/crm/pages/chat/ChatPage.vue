@@ -1,37 +1,54 @@
 <template>
   <ChatLayout :view-mode="viewMode">
     <template #sidebar>
-      <div class="p-3 border-b border-gray-200 bg-white">
-        <input 
-          v-model="searchQuery" 
-          type="text" 
-          placeholder="Пошук чату..." 
-          class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-blue-400"
-        >
-      </div>
-      
-      <div v-if="isLoading && !conversations.length" class="p-4 text-center text-gray-400">
-        <i class="bi bi-arrow-clockwise animate-spin text-2xl"></i>
-      </div>
+      <div class="chat-sidebar-shell">
+        <div class="chat-sidebar-topbar">
+          <div>
+            <p class="sidebar-eyebrow">Meta Inbox</p>
+            <h1 class="sidebar-title">Переписки</h1>
+          </div>
 
-      <ChatSidebar
-        v-else
-        :conversations="filteredConversations"
-        :active-chat-id="activeChatId"
-        :is-loading-more="isLoadingMore"
-        :has-more="currentPage < lastPage"
-        :disable-scroll="searchQuery.length > 0"
-        @select="handleSelectChat"
-        @load-more="handleLoadMore"
-      />
+          <span class="sidebar-total">{{ filteredConversations.length }}</span>
+        </div>
+
+        <div class="chat-sidebar-search">
+          <i class="bi bi-search"></i>
+          <input
+            v-model="searchQuery"
+            type="text"
+            placeholder="Пошук по імені або повідомленню"
+          >
+        </div>
+
+        <div class="platform-tabs">
+          <button
+            v-for="tab in platformTabs"
+            :key="tab.value"
+            type="button"
+            class="platform-tab"
+            :class="{ 'is-active': platformFilter === tab.value }"
+            @click="platformFilter = tab.value"
+          >
+            {{ tab.label }}
+            <span class="platform-count">{{ getPlatformCount(tab.value) }}</span>
+          </button>
+        </div>
+
+        <ChatSidebar
+          :conversations="filteredConversations"
+          :active-conversation-id="activeConversationId"
+          :is-loading-more="isLoadingMore"
+          :has-more="currentPage < lastPage && !searchQuery && platformFilter === 'all'"
+          @select="handleSelectChat"
+          @load-more="handleLoadMore"
+        />
+      </div>
     </template>
 
     <template #thread>
       <ChatThread
         v-if="activeChat"
         :active-chat="activeChat"
-        :conversation-tags="conversationTags"
-        :tags-loading="isTagsLoading"
         :messages="messages"
         :is-sending="isSending"
         :is-syncing="isSyncing"
@@ -41,7 +58,6 @@
         @open-list="openMobileList"
         @open-profile="openProfile"
         @update-stage="handleUpdateStage"
-        @update-tags="handleUpdateTags"
       />
       <ChatEmpty v-else @open-list="openMobileList" />
     </template>
@@ -57,23 +73,26 @@
 </template>
 
 <script setup>
-import { onMounted, onUnmounted, ref, computed } from 'vue';
-import { useChat } from '@/crm/composables/useChat'; 
-
-// Імпорт компонентів UI
+import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { useChat } from '@/crm/composables/useChat';
 import ChatLayout from '@/crm/components/chat/ChatLayout.vue';
 import ChatSidebar from '@/crm/components/chat/ChatSidebar.vue';
 import ChatThread from '@/crm/components/chat/ChatThread.vue';
 import ChatEmpty from '@/crm/components/chat/ChatEmptyState.vue';
-// Імпортуємо наш новий профіль (який ми щойно зробили)
 import ChatProfile from '@/crm/components/chat/ChatCustomerProfile.vue';
+
+const platformTabs = [
+  { value: 'all', label: 'Усі' },
+  { value: 'messenger', label: 'Messenger' },
+  { value: 'instagram', label: 'Instagram' },
+];
 
 const {
   conversations,
   activeChat,
-  activeChatId,
+  activeConversationId,
   messages,
-  isLoading, 
+  isLoading,
   isLoadingMore,
   isSending,
   isSyncing,
@@ -85,106 +104,255 @@ const {
   sendMessage,
   forceSync,
   stopPolling,
-  getConversationTags,
   updateStage,
-  updateTags,
-  ensureConversation
+  ensureConversation,
 } = useChat();
 
 const searchQuery = ref('');
+const platformFilter = ref('all');
 const viewMode = ref('list');
-const conversationTags = ref([]);
-const isTagsLoading = ref(false);
 
-// Фільтрація списку чатів
 const filteredConversations = computed(() => {
-  if (!searchQuery.value) return conversations.value;
-  const q = searchQuery.value.toLowerCase();
-  return conversations.value.filter(c => 
-    (c.customer_name || '').toLowerCase().includes(q) ||
-    (c.last_message || '').toLowerCase().includes(q)
-  );
+  const query = searchQuery.value.trim().toLowerCase();
+
+  return conversations.value.filter((chat) => {
+    const matchesPlatform = platformFilter.value === 'all' || chat.platform === platformFilter.value;
+    if (!matchesPlatform) {
+      return false;
+    }
+
+    if (!query) {
+      return true;
+    }
+
+    const haystack = [
+      chat.customer_name,
+      chat.last_message,
+      chat.external_username,
+      chat.platform === 'instagram' ? 'instagram' : 'messenger',
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+
+    return haystack.includes(query);
+  });
 });
 
-// Обробники подій
-const handleSelectChat = (chat) => {
-  selectChat(chat.customer_id);
+function getPlatformCount(platform) {
+  if (platform === 'all') {
+    return conversations.value.length;
+  }
+
+  return conversations.value.filter((chat) => chat.platform === platform).length;
+}
+
+function handleSelectChat(chat) {
+  selectChat(chat);
   viewMode.value = 'thread';
-};
+}
 
-const handleLoadMore = () => {
+function handleLoadMore() {
   loadMoreConversations();
-};
+}
 
-const handleSendMessage = (payload) => {
+function handleSendMessage(payload) {
+  if (!activeChat.value) {
+    return;
+  }
+
   sendMessage({
     ...payload,
-    customer_id: activeChatId.value
+    customer_id: activeChat.value.customer_id,
+    conversation_id: activeChat.value.conversation_id,
+    platform: activeChat.value.platform,
   });
-};
+}
 
-const handleForceSync = () => {
-  forceSync(activeChatId.value);
-};
-
-const openMobileList = () => {
-  viewMode.value = 'list';
-};
-
-const openProfile = () => {
-  viewMode.value = 'profile';
-};
-
-const closeProfile = () => {
-  viewMode.value = 'thread';
-};
-
-const handleUpdateStage = ({ conversationId, stage }) => {
-  updateStage(conversationId, stage);
-};
-
-const handleUpdateTags = ({ conversationId, tagIds }) => {
-  const optimisticTags = conversationTags.value.filter((tag) => tagIds.includes(tag.id));
-  updateTags(conversationId, tagIds, optimisticTags);
-};
-
-const loadConversationTags = async () => {
-  isTagsLoading.value = true;
-  try {
-    const { data } = await getConversationTags();
-    conversationTags.value = data?.data || data || [];
-  } catch (e) {
-    console.error('Не вдалося завантажити теги чатів', e);
-  } finally {
-    isTagsLoading.value = false;
+function handleForceSync() {
+  if (!activeChat.value) {
+    return;
   }
-};
 
-// Lifecycle
-onMounted(() => {
-  initChat();
-});
+  forceSync(activeChat.value);
+}
 
-onUnmounted(() => {
-  stopPolling();
-});
+function handleUpdateStage({ conversationId, stage }) {
+  updateStage(conversationId, stage);
+}
 
-const initChat = async () => {
+function openMobileList() {
+  viewMode.value = 'list';
+}
+
+function openProfile() {
+  viewMode.value = 'profile';
+}
+
+function closeProfile() {
+  viewMode.value = 'thread';
+}
+
+async function initChat() {
   await fetchConversations(1);
-  loadConversationTags();
 
   const params = new URLSearchParams(window.location.search);
   const customerId = Number(params.get('customer_id'));
-  if (!customerId) return;
-
   const platform = params.get('platform') || null;
+
+  if (!customerId) {
+    return;
+  }
+
   const conversation = await ensureConversation(customerId, platform);
   if (conversation) {
-    selectChat(customerId);
-    viewMode.value = 'thread';
+    handleSelectChat(conversation);
   }
-};
+}
+
+onMounted(initChat);
+onUnmounted(stopPolling);
 </script>
 
 <style scoped>
+.chat-sidebar-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background:
+    radial-gradient(circle at top left, rgba(14, 165, 233, 0.12), transparent 34%),
+    linear-gradient(180deg, rgba(248, 250, 252, 0.98), #ffffff 24%);
+}
+
+.chat-sidebar-topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 22px 20px 16px;
+}
+
+.sidebar-eyebrow {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.sidebar-title {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.sidebar-total {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 38px;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: #0f172a;
+  color: #f8fafc;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.chat-sidebar-search {
+  position: relative;
+  padding: 0 20px;
+}
+
+.chat-sidebar-search i {
+  position: absolute;
+  top: 50%;
+  left: 34px;
+  transform: translateY(-50%);
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.chat-sidebar-search input {
+  width: 100%;
+  height: 44px;
+  padding: 0 14px 0 40px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #0f172a;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.chat-sidebar-search input:focus {
+  border-color: rgba(14, 165, 233, 0.5);
+  box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.08);
+}
+
+.platform-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 14px 20px 18px;
+  overflow-x: auto;
+}
+
+.platform-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.76);
+  color: #334155;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.platform-tab:hover {
+  border-color: rgba(14, 165, 233, 0.35);
+  color: #0f172a;
+}
+
+.platform-tab.is-active {
+  background: linear-gradient(135deg, #0f172a, #1e293b);
+  border-color: transparent;
+  color: #f8fafc;
+  box-shadow: 0 12px 26px -18px rgba(15, 23, 42, 0.7);
+}
+
+.platform-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.16);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.platform-tab.is-active .platform-count {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+@media (max-width: 768px) {
+  .chat-sidebar-topbar {
+    padding-top: 18px;
+  }
+
+  .sidebar-title {
+    font-size: 24px;
+  }
+}
 </style>

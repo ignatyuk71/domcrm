@@ -5,55 +5,42 @@
     :class="{ 'is-active': isActive, 'is-unread': item.unread_count > 0 }"
     @click="$emit('select', item)"
   >
-    <div class="avatar-container">
-      <img 
-        v-if="safeAvatarUrl" 
-        :src="safeAvatarUrl" 
-        class="avatar-img" 
-        alt="User" 
+    <div class="avatar-shell">
+      <img
+        v-if="safeAvatarUrl"
+        :src="safeAvatarUrl"
+        class="avatar-img"
+        alt="Клієнт"
         @error="avatarFailed = true"
-      />
-      <div v-else class="avatar-placeholder" :class="platformColorClass">
-        {{ (item.customer_name || '?').charAt(0).toUpperCase() }}
+      >
+      <div v-else class="avatar-fallback" :class="platformClass">
+        {{ displayInitial }}
       </div>
 
-      <div class="platform-badge">
-        <i :class="platformIconClass"></i>
-      </div>
+      <span class="platform-badge" :class="platformClass">
+        <i :class="platformIcon"></i>
+      </span>
     </div>
 
-    <div class="info-container">
-      <div class="info-row-top">
-        <h4 class="chat-name">{{ item.customer_name || 'Невідомий клієнт' }}</h4>
-        <div class="meta-right">
-          <span v-if="stageLabel" class="stage-badge" :class="stageClass">
+    <div class="content-shell">
+      <div class="content-top">
+        <div class="name-stack">
+          <h4>{{ item.customer_name || 'Невідомий клієнт' }}</h4>
+          <p v-if="subtitle">{{ subtitle }}</p>
+        </div>
+
+        <div class="meta-stack">
+          <span v-if="stageLabel" class="stage-chip">
             {{ stageLabel }}
           </span>
-          <span class="chat-time">{{ formattedTime }}</span>
+          <span class="time-label">{{ formattedTime }}</span>
         </div>
       </div>
 
-      <div class="info-row-bottom">
-        <p class="chat-preview">
-          {{ item.last_message || 'Вкладення' }}
-        </p>
-        
-        <span v-if="item.unread_count > 0" class="unread-count">
+      <div class="content-bottom">
+        <p class="preview-text">{{ previewText }}</p>
+        <span v-if="item.unread_count > 0" class="unread-pill">
           {{ item.unread_count > 99 ? '99+' : item.unread_count }}
-        </span>
-      </div>
-
-      <div v-if="visibleTags.length" class="info-row-tags">
-        <span
-          v-for="tag in visibleTags"
-          :key="tag.id"
-          class="tag-chip"
-          :style="getTagStyle(tag.color)"
-        >
-          {{ tag.name }}
-        </span>
-        <span v-if="extraTagsCount" class="tag-chip tag-chip-more">
-          +{{ extraTagsCount }}
         </span>
       </div>
     </div>
@@ -72,290 +59,242 @@ defineEmits(['select']);
 
 const avatarFailed = ref(false);
 
-// --- Логіка іконок та кольорів ---
-const platformIconClass = computed(() => {
-  return props.item.platform === 'instagram' 
-    ? 'bi bi-instagram instagram-icon' 
-    : 'bi bi-messenger messenger-icon';
-});
-
-const platformColorClass = computed(() => {
-  return props.item.platform === 'instagram' ? 'bg-instagram' : 'bg-messenger';
-});
-
-const stageLabel = computed(() => {
-  const stage = props.item.stage || '';
-  const map = {
-    new: 'Новий',
-    waiting_reply: 'Чекаємо',
-    order_confirmed: 'Підтверджено',
-    done: 'Виконано',
-    closed: 'Закрито',
-  };
-  return map[stage] || '';
-});
-
-const stageClass = computed(() => {
-  const stage = props.item.stage || '';
-  return stage ? `stage-${stage}` : '';
-});
-
-const tagList = computed(() => props.item.tags || []);
-const visibleTags = computed(() => tagList.value.slice(0, 2));
-const extraTagsCount = computed(() => Math.max(0, tagList.value.length - 2));
 const safeAvatarUrl = computed(() => {
   if (avatarFailed.value) {
     return '';
   }
 
-  return props.item.customer_avatar || '';
+  return props.item.customer_avatar || props.item.fb_profile_pic || '';
+});
+
+const displayInitial = computed(() => (props.item.customer_name || '?').charAt(0).toUpperCase());
+
+const platformClass = computed(() => (
+  props.item.platform === 'instagram' ? 'is-instagram' : 'is-messenger'
+));
+
+const platformIcon = computed(() => (
+  props.item.platform === 'instagram' ? 'bi bi-instagram' : 'bi bi-messenger'
+));
+
+const stageMap = {
+  new: 'Новий',
+  waiting_reply: 'Чекаємо відповідь',
+  order_confirmed: 'Замовлення підтверджене',
+  done: 'Виконано',
+  closed: 'Закрито',
+};
+
+const stageLabel = computed(() => stageMap[props.item.stage] || '');
+
+const subtitle = computed(() => {
+  if (props.item.external_username) {
+    return `@${String(props.item.external_username).replace(/^@/, '')}`;
+  }
+
+  return props.item.platform === 'instagram' ? 'Instagram Direct' : 'Messenger';
+});
+
+const previewText = computed(() => props.item.last_message || 'Вкладення');
+
+const formattedTime = computed(() => {
+  if (!props.item.last_message_time) {
+    return '';
+  }
+
+  const date = new Date(props.item.last_message_time);
+  const now = new Date();
+  const sameDay = date.toDateString() === now.toDateString();
+
+  if (sameDay) {
+    return date.toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  return date.toLocaleDateString('uk-UA', { day: '2-digit', month: 'short' });
 });
 
 watch(
-  () => props.item.customer_avatar,
+  () => [props.item.customer_avatar, props.item.fb_profile_pic],
   () => {
     avatarFailed.value = false;
   }
 );
-
-const getTagStyle = (color) => {
-  if (!color) return {};
-  const hex = color.startsWith('#') && color.length === 4
-    ? `#${color.slice(1).split('').map((c) => c + c).join('')}`
-    : color;
-  if (hex.startsWith('#') && hex.length === 7) {
-    return {
-      backgroundColor: `${hex}1a`,
-      color: hex,
-      borderColor: `${hex}33`,
-    };
-  }
-  return { color: hex, borderColor: hex };
-};
-
-// --- Розумне форматування часу ---
-// Замість "2026-01-16 15:09:04" покаже "15:09" або "16 січ"
-const formattedTime = computed(() => {
-  if (!props.item.last_message_time) return '';
-  
-  const date = new Date(props.item.last_message_time);
-  const now = new Date();
-  
-  const isToday = date.getDate() === now.getDate() && 
-                  date.getMonth() === now.getMonth() && 
-                  date.getFullYear() === now.getFullYear();
-
-  return isToday
-    ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    : date.toLocaleDateString('uk-UA', { day: '2-digit', month: 'short' });
-});
 </script>
 
 <style scoped>
-/* Основний контейнер картки */
 .chat-item {
   width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 10px; /* Відступ між аватаром і текстом */
-  padding: 8px 10px;
-  background: transparent;
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 12px;
+  padding: 14px 12px;
   border: 1px solid transparent;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.2s ease;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
   text-align: left;
-  outline: none;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
 }
 
 .chat-item:hover {
-  background-color: #f1f5f9;
+  transform: translateY(-1px);
+  border-color: rgba(148, 163, 184, 0.18);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 14px 28px -24px rgba(15, 23, 42, 0.48);
 }
 
 .chat-item.is-active {
-  background-color: #eff6ff; /* Світло-блакитний фон */
-  border-color: #bfdbfe;     /* Легка рамка */
+  border-color: rgba(14, 165, 233, 0.24);
+  background:
+    radial-gradient(circle at top left, rgba(14, 165, 233, 0.12), transparent 38%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.94));
+  box-shadow: 0 20px 36px -30px rgba(14, 165, 233, 0.48);
 }
 
-/* --- АВАТАР --- */
-.avatar-container {
+.avatar-shell {
   position: relative;
-  flex-shrink: 0;
-  width: 48px;
-  height: 48px;
+  width: 56px;
+  height: 56px;
 }
 
-.avatar-img, 
-.avatar-placeholder {
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
+.avatar-img,
+.avatar-fallback {
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
   object-fit: cover;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.2rem;
-  font-weight: 600;
-  color: white;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 800;
 }
 
-.bg-instagram { background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888); }
-.bg-messenger { background: linear-gradient(45deg, #00c6ff, #0072ff); }
+.avatar-fallback.is-messenger {
+  background: linear-gradient(135deg, #0ea5e9, #2563eb);
+}
 
-/* Значок платформи (маленький кружечок) */
+.avatar-fallback.is-instagram {
+  background: linear-gradient(135deg, #fb7185, #f97316 55%, #9333ea);
+}
+
 .platform-badge {
   position: absolute;
-  bottom: -1px;
-  right: -1px;
-  width: 18px;
-  height: 18px;
-  background: white;
-  border-radius: 50%;
-  display: flex;
+  right: -4px;
+  bottom: -4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.15);
-  border: 2px solid white;
+  border: 2px solid #fff;
+  color: #fff;
+  box-shadow: 0 10px 18px -14px rgba(15, 23, 42, 0.7);
 }
 
-.instagram-icon { color: #d62976; font-size: 10px; }
-.messenger-icon { color: #0072ff; font-size: 10px; }
+.platform-badge.is-messenger {
+  background: linear-gradient(135deg, #0ea5e9, #2563eb);
+}
 
-/* --- ТЕКСТОВА ЧАСТИНА --- */
-.info-container {
-  flex: 1;
-  min-width: 0; /* Магія CSS: дозволяє text-overflow працювати всередині flex */
+.platform-badge.is-instagram {
+  background: linear-gradient(135deg, #e11d48, #f97316 60%, #9333ea);
+}
+
+.platform-badge i {
+  font-size: 10px;
+}
+
+.content-shell {
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 7px;
 }
 
-.info-row-top {
+.content-top,
+.content-bottom {
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
-  align-items: center;
+  gap: 10px;
 }
 
-.meta-right {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
+.name-stack {
+  min-width: 0;
 }
 
-.chat-name {
+.name-stack h4 {
   margin: 0;
-  font-size: 15px;
-  font-weight: 700;
-  color: #1e293b;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin-right: 8px;
-}
-
-.chat-time {
-  font-size: 12px;
-  color: #94a3b8;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.info-row-bottom {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  height: 20px; /* Фіксуємо висоту рядка */
-}
-
-.info-row-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 4px;
-}
-
-.tag-chip {
-  font-size: 11px;
-  font-weight: 600;
-  padding: 2px 6px;
-  border-radius: 6px;
-  background: #f8fafc;
-  color: #64748b;
-  border: 1px solid #e2e8f0;
-}
-
-.tag-chip-more {
-  background: #f1f5f9;
-}
-
-.stage-badge {
-  font-size: 10px;
-  font-weight: 700;
-  padding: 2px 6px;
-  border-radius: 999px;
-  background: #eef2ff;
-  color: #4f46e5;
-}
-
-.stage-new { background: #eef2ff; color: #4f46e5; }
-.stage-waiting_reply { background: #fef3c7; color: #92400e; }
-.stage-order_confirmed { background: #dbeafe; color: #1d4ed8; }
-.stage-done { background: #dcfce7; color: #166534; }
-.stage-closed { background: #f1f5f9; color: #475569; }
-
-.chat-preview {
-  margin: 0;
-  font-size: 13px;
-  color: #64748b;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex: 1; /* Займає все доступне місце */
-  margin-right: 8px;
-}
-
-/* Якщо чат активний або непрочитаний - текст темніший */
-.chat-item.is-unread .chat-name,
-.chat-item.is-unread .chat-preview {
   color: #0f172a;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* Лічильник непрочитаних */
-.unread-count {
-  background-color: #3b82f6;
-  color: white;
-  font-size: 0.7rem;
-  font-weight: 700;
-  padding: 0 6px;
-  border-radius: 10px;
-  min-width: 18px;
-  height: 18px;
+.name-stack p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.meta-stack {
   display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.stage-chip {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(14, 165, 233, 0.12);
+  color: #0369a1;
+  font-size: 11px;
+  font-weight: 800;
 }
 
-@media (max-width: 768px) {
-  .chat-item {
-    padding: 12px 12px;
-    min-height: 76px;
-  }
+.time-label {
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 700;
+}
 
-  .avatar-container {
-    width: 52px;
-    height: 52px;
-  }
+.preview-text {
+  margin: 0;
+  min-width: 0;
+  color: #334155;
+  font-size: 13px;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
 
-  .info-row-tags {
-    display: none;
-  }
-
-  .stage-badge {
-    font-size: 9px;
-    padding: 2px 4px;
-  }
+.unread-pill {
+  min-width: 24px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #0f172a;
+  color: #f8fafc;
+  font-size: 11px;
+  font-weight: 800;
+  flex-shrink: 0;
 }
 </style>

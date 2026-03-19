@@ -2,21 +2,15 @@
   <div class="chat-wrapper" :data-view="viewMode">
     <div class="chat-container">
       <aside class="chat-sidebar">
-        <div class="sidebar-inner">
-          <slot name="sidebar" />
-        </div>
+        <slot name="sidebar" />
       </aside>
 
       <main class="chat-thread">
-        <div class="thread-inner">
-          <slot name="thread" />
-        </div>
+        <slot name="thread" />
       </main>
 
       <aside class="chat-profile">
-        <div class="profile-inner">
-          <slot name="profile" />
-        </div>
+        <slot name="profile" />
       </aside>
     </div>
   </div>
@@ -29,65 +23,59 @@ defineProps({
 </script>
 
 <style scoped>
-/* Обгортка для всього чату, щоб він займав доступну висоту */
 .chat-wrapper {
-  height: calc(100vh - 100px); /* Висота мінус хедер CRM */
-
-  background-color: #f1f5f9; /* Світло-сірий фон сторінки */
+  --chat-shell: #f5f7fb;
+  min-height: calc(100vh - 96px);
+  padding: 18px;
+  background:
+    radial-gradient(circle at top left, rgba(14, 165, 233, 0.1), transparent 22%),
+    radial-gradient(circle at right bottom, rgba(15, 23, 42, 0.08), transparent 28%),
+    var(--chat-shell);
+  font-family: "Manrope", "Segoe UI", sans-serif;
 }
 
 .chat-container {
+  height: calc(100vh - 132px);
   display: grid;
-  /* Три колонки: Список (320px), Чат (гнучкий), Профіль (300px) */
-  grid-template-columns: 320px 1fr 400px;
-  height: 100%;
-  gap: 10px;
-  max-width: 1600px;
-  margin: 0 auto;
+  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr) minmax(320px, 400px);
+  gap: 16px;
 }
 
-/* Спільні стилі для всіх колонок */
 .chat-sidebar,
 .chat-thread,
 .chat-profile {
-  background: #fff;
-  border-radius: 10px;
-  border: 1px solid #818cf8;
-  overflow: hidden; /* Щоб внутрішні скроли працювали правильно */
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 28px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow:
+    0 18px 40px -30px rgba(15, 23, 42, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(12px);
 }
 
-.sidebar-inner,
-.thread-inner,
-.profile-inner {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0; /* Важливо для роботи скролу всередині */
-}
-
-/* Адаптивність: на середніх екранах ховаємо профіль */
-@media (max-width: 1200px) {
+@media (max-width: 1320px) {
   .chat-container {
-    grid-template-columns: 300px 1fr;
+    grid-template-columns: minmax(280px, 330px) minmax(0, 1fr);
   }
+
   .chat-profile {
     display: none;
   }
 }
 
-/* Адаптивність: на мобільних залишаємо тільки чат або список (логіка перемикання зазвичай на рівні сторінки) */
 @media (max-width: 768px) {
   .chat-wrapper {
-    padding: 0;
+    min-height: 100vh;
     height: 100vh;
+    padding: 0;
+    background: #fff;
   }
 
   .chat-container {
+    height: 100vh;
     display: block;
-    height: 100%;
   }
 
   .chat-sidebar,
@@ -98,6 +86,7 @@ defineProps({
     border-radius: 0;
     border: none;
     box-shadow: none;
+    backdrop-filter: none;
   }
 
   .chat-wrapper[data-view="list"] .chat-thread,
@@ -110,24 +99,9 @@ defineProps({
     display: none;
   }
 
-  .chat-profile {
-    position: fixed;
-    top: 0;
-    right: 0;
-    z-index: 30;
-    transform: translateX(100%);
-    transition: transform 0.3s ease;
-    background: #ffffff;
-  }
-
   .chat-wrapper[data-view="profile"] .chat-sidebar,
   .chat-wrapper[data-view="profile"] .chat-thread {
     display: none;
-  }
-
-  .chat-wrapper[data-view="profile"] .chat-profile {
-    display: flex;
-    transform: translateX(0);
   }
 }
 </style>

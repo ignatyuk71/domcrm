@@ -21,7 +21,7 @@
             v-model="text"
             class="chat-textarea custom-scrollbar"
             rows="1"
-            placeholder="Напишіть повідомлення..."
+            :placeholder="composerPlaceholder"
             :disabled="disabled"
             @keydown.ctrl.enter.prevent="handleSend"
             @input="autoResize"
@@ -113,6 +113,7 @@ import ChatGallery from './ChatGallery.vue';
 
 const props = defineProps({
   disabled: { type: Boolean, default: false },
+  platform: { type: String, default: 'messenger' },
 });
 
 const emit = defineEmits(['send']);
@@ -128,6 +129,11 @@ const showGallery = ref(false);
 const maxFileSize = 5 * 1024 * 1024; // 5 MB
 
 const hasContent = computed(() => text.value.trim().length > 0 || selectedFiles.value.length > 0);
+const composerPlaceholder = computed(() => (
+  props.platform === 'instagram'
+    ? 'Відповідь в Instagram Direct...'
+    : 'Відповідь у Messenger...'
+));
 
 function triggerFileInput() {
   fileInputRef.value.click();

@@ -26,8 +26,10 @@ export function updateConversationTags(conversationId, tagIds) {
   return axios.patch(`/api/chat/conversations/${conversationId}/tags`, { tag_ids: tagIds });
 }
 
-export function getMessages(customerId) {
-  return axios.get(`/api/chat/${customerId}/messages`);
+export function getMessages(customerId, platform = null) {
+  return axios.get(`/api/chat/${customerId}/messages`, {
+    params: platform ? { platform } : {},
+  });
 }
 
 export function sendMessage(payload) {
@@ -39,18 +41,26 @@ export function sendMessage(payload) {
   return axios.post('/api/chat/send', payload);
 }
 
-export function markRead(customerId) {
-  return axios.post('/api/chat/mark-read', { customer_id: customerId });
+export function markRead(customerId, platform = null) {
+  return axios.post('/api/chat/mark-read', {
+    customer_id: customerId,
+    ...(platform ? { platform } : {}),
+  });
 }
 
-export function forceSync(customerId) {
-  return axios.post(`/api/chat/${customerId}/sync`);
+export function forceSync(customerId, platform = null) {
+  return axios.post(`/api/chat/${customerId}/sync`, {}, {
+    params: platform ? { platform } : {},
+  });
 }
 
-export function fetchNewMessages(threadId, sinceId) {
+export function fetchNewMessages(threadId, sinceId, platform = null) {
   return axios
     .get(`/api/chat/threads/${threadId}/messages/updates`, {
-      params: { since_id: sinceId },
+      params: {
+        since_id: sinceId,
+        ...(platform ? { platform } : {}),
+      },
     })
     .then((res) => res.data);
 }
