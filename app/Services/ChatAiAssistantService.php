@@ -856,6 +856,7 @@ class ChatAiAssistantService
         $attachments = $this->resolveProductPhotoAttachment($product);
         $price = $this->formatProductPrice($product);
         $sizes = $this->formatAvailableSizes($product);
+        $sizePrompt = $this->buildSizePrompt($product);
         $variant = $requestedSize ? $this->resolveVariantForSize($product, $requestedSize) : null;
 
         if ($requestedSize !== null) {
@@ -873,7 +874,9 @@ class ChatAiAssistantService
             if ($sizes !== '') {
                 $replyText .= ' Доступні розміри: ' . $sizes . '.';
             }
-            $replyText .= ' Якщо потрібен конкретний розмір, напишіть, наприклад, 40.';
+            if ($sizePrompt !== '') {
+                $replyText .= ' ' . $sizePrompt;
+            }
         }
 
         return [
@@ -1002,8 +1005,11 @@ class ChatAiAssistantService
     {
         $price = $this->formatProductPrice($product);
         $inStock = (bool) $variant->is_active && (int) $variant->stock_qty > 0;
+        $variantLabel = $this->formatVariantLabel($variant);
 
-        $reply = 'На ' . $requestedSize . ' розмір ціна ' . $price . '.';
+        $reply = $variantLabel !== ''
+            ? 'На ' . $requestedSize . ' розмір підійде варіант ' . $variantLabel . '. Ціна ' . $price . '.'
+            : 'На ' . $requestedSize . ' розмір ціна ' . $price . '.';
         $reply .= $inStock
             ? ' Є в наявності.'
             : ' Зараз цього розміру не бачу в наявності.';
@@ -1487,22 +1493,61 @@ class ChatAiAssistantService
     {
         $sizes = $product->variants
             ->filter(fn (ProductVariant $variant) => $variant->is_active && (int) $variant->stock_qty > 0)
-            ->pluck('size')
+            ->map(fn (ProductVariant $variant) => $this->formatVariantLabel($variant))
             ->filter()
-            ->map(fn ($value) => trim((string) $value))
             ->unique()
             ->values();
 
         if ($sizes->isEmpty()) {
             $sizes = $product->variants
-                ->pluck('size')
+                ->map(fn (ProductVariant $variant) => $this->formatVariantLabel($variant))
                 ->filter()
-                ->map(fn ($value) => trim((string) $value))
                 ->unique()
                 ->values();
         }
 
         return $sizes->implode(', ');
+    }
+
+    private function formatVariantLabel(ProductVariant $variant): string
+    {
+        $raw = trim((string) $variant->size);
+        if ($raw === '') {
+            return '';
+        }
+
+        if (preg_match('/^(.+?)\s+-\s+(.+)$/u', $raw, $matches) === 1) {
+            $primary = trim((string) ($matches[1] ?? ''));
+            $secondary = trim((string) ($matches[2] ?? ''));
+
+            if ($primary !== '' && $secondary !== '' && preg_match('/см|cm/u', $secondary) === 1) {
+                return $primary . ' (' . $secondary . ')';
+            }
+
+            if ($primary !== '') {
+                return $primary;
+            }
+        }
+
+        return $raw;
+    }
+
+    private function buildSizePrompt(Product $product): string
+    {
+        $firstVariant = $product->variants
+            ->filter(fn (ProductVariant $variant) => trim((string) $variant->size) !== '')
+            ->first();
+
+        if (!$firstVariant) {
+            return '';
+        }
+
+        $variantLabel = $this->formatVariantLabel($firstVariant);
+        if ($variantLabel === '') {
+            return '';
+        }
+
+        return 'Напишіть свій розмір, і я підкажу, який варіант підійде.';
     }
 
     private function formatProductPrice(Product $product): string
