@@ -753,9 +753,15 @@ class ChatAiAssistantService
             return null;
         }
 
-        $matchedProduct = $this->matchProductFromText($text);
+        $selectedCandidate = $this->resolveSelectedCandidateProduct($text, $state);
+        if ($selectedCandidate) {
+            return $this->buildProductSelectionReply($selectedCandidate, $text, $state);
+        }
+
+        $candidates = $this->findProductCandidatesFromText($text);
+        $matchedProduct = $this->selectSingleProductMatch($candidates);
         $currentProduct = $matchedProduct
-            ?: $this->loadProductById($state['current_product_id'])
+            ?: $this->loadProductById((int) ($state['current_product_id'] ?? 0))
             ?: $this->matchProductFromText((string) ($state['lead']['product_interest'] ?? ''));
 
         if ($matchedProduct) {
@@ -764,6 +770,10 @@ class ChatAiAssistantService
 
         if ($currentProduct && $this->looksLikeProductFollowUp($text)) {
             return $this->buildCurrentProductReply($currentProduct, $text, $state);
+        }
+
+        if ($candidates->isNotEmpty()) {
+            return $this->buildProductOptionsReply($candidates, $state);
         }
 
         return null;
@@ -825,6 +835,8 @@ class ChatAiAssistantService
             'current_product_id' => $catalogReply['current_product_id'] ?? $currentState['current_product_id'],
             'current_product_title' => (string) ($catalogReply['current_product_title'] ?? $currentState['current_product_title']),
             'current_size' => (string) ($catalogReply['current_size'] ?? $currentState['current_size']),
+            'candidate_product_ids' => $catalogReply['candidate_product_ids'] ?? [],
+            'candidate_product_titles' => $catalogReply['candidate_product_titles'] ?? [],
         ]);
 
         if ($handoffRequired) {
@@ -878,6 +890,8 @@ class ChatAiAssistantService
             'current_product_id' => $product->id,
             'current_product_title' => $product->title,
             'current_size' => $requestedSize ?: '',
+            'candidate_product_ids' => [],
+            'candidate_product_titles' => [],
             'handoff_required' => false,
             'handoff_reason' => '',
         ];
@@ -939,6 +953,46 @@ class ChatAiAssistantService
             'current_product_id' => $product->id,
             'current_product_title' => $product->title,
             'current_size' => $requestedSize ?: ($state['current_size'] ?? ''),
+            'candidate_product_ids' => [],
+            'candidate_product_titles' => [],
+            'handoff_required' => false,
+            'handoff_reason' => '',
+        ];
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, array{product: Product, score: int}>  $candidates
+     * @param  array<string, mixed>  $state
+     * @return array<string, mixed>
+     */
+    private function buildProductOptionsReply($candidates, array $state): array
+    {
+        $products = $candidates
+            ->pluck('product')
+            ->take(3)
+            ->values();
+
+        $lines = $products
+            ->map(function (Product $product, int $index) {
+                return ($index + 1) . '. "' . $product->title . '" — ' . $this->formatProductPrice($product);
+            })
+            ->implode(' ');
+
+        return [
+            'reply_text' => $this->sanitizeReplyText(
+                'Знайшла кілька варіантів. ' . $lines . ' Напишіть назву моделі або просто номер 1, 2 чи 3.'
+            ),
+            'attachments' => [],
+            'summary' => 'Клієнту запропоновано кілька товарів на вибір.',
+            'lead_status' => 'qualifying',
+            'lead' => array_merge($state['lead'] ?? [], [
+                'notes' => 'Клієнту запропоновано кілька варіантів товару.',
+            ]),
+            'current_product_id' => null,
+            'current_product_title' => '',
+            'current_size' => '',
+            'candidate_product_ids' => $products->pluck('id')->all(),
+            'candidate_product_titles' => $products->pluck('title')->all(),
             'handoff_required' => false,
             'handoff_reason' => '',
         ];
@@ -1023,59 +1077,97 @@ class ChatAiAssistantService
         }
 
         return Product::query()
-            ->with(['variants' => fn ($query) => $query->orderBy('size')])
+            ->with([
+                'variants' => fn ($query) => $query->orderBy('size'),
+                'color',
+                'category',
+            ])
             ->find($productId);
     }
 
     private function matchProductFromText(string $text): ?Product
     {
+        return $this->selectSingleProductMatch($this->findProductCandidatesFromText($text));
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, array{product: Product, score: int}>
+     */
+    private function findProductCandidatesFromText(string $text)
+    {
         $normalizedText = $this->normalizeComparableText($text);
         $tokens = $this->extractSearchTokens($text);
+        $fragments = $this->buildSearchFragments($tokens);
 
-        if ($normalizedText === '' || $tokens === []) {
-            return null;
+        if ($normalizedText === '' || $fragments === []) {
+            return collect();
         }
 
         $products = Product::query()
-            ->with(['variants' => fn ($query) => $query->orderBy('size')])
+            ->with([
+                'variants' => fn ($query) => $query->orderBy('size'),
+                'color',
+                'category',
+            ])
             ->where('is_active', true)
-            ->where(function ($query) use ($tokens, $normalizedText) {
-                foreach ($tokens as $token) {
+            ->where(function ($query) use ($fragments, $normalizedText) {
+                foreach ($fragments as $fragment) {
                     $query
-                        ->orWhere('title', 'like', '%' . $token . '%')
-                        ->orWhere('description', 'like', '%' . $token . '%')
-                        ->orWhere('sku', 'like', '%' . $token . '%')
-                        ->orWhereHas('variants', function ($variantQuery) use ($token) {
-                            $variantQuery->where('sku', 'like', '%' . $token . '%');
+                        ->orWhere('title', 'like', '%' . $fragment . '%')
+                        ->orWhere('description', 'like', '%' . $fragment . '%')
+                        ->orWhere('sku', 'like', '%' . $fragment . '%')
+                        ->orWhereHas('variants', function ($variantQuery) use ($fragment) {
+                            $variantQuery->where('sku', 'like', '%' . $fragment . '%');
+                        })
+                        ->orWhereHas('color', function ($colorQuery) use ($fragment) {
+                            $colorQuery->where('name', 'like', '%' . $fragment . '%');
+                        })
+                        ->orWhereHas('category', function ($categoryQuery) use ($fragment) {
+                            $categoryQuery->where('name', 'like', '%' . $fragment . '%');
                         });
                 }
 
                 $query
                     ->orWhere('sku', 'like', '%' . $normalizedText . '%')
-                    ->orWhere('title', 'like', '%' . $normalizedText . '%');
+                    ->orWhere('title', 'like', '%' . $normalizedText . '%')
+                    ->orWhereHas('color', function ($colorQuery) use ($normalizedText) {
+                        $colorQuery->where('name', 'like', '%' . $normalizedText . '%');
+                    })
+                    ->orWhereHas('category', function ($categoryQuery) use ($normalizedText) {
+                        $categoryQuery->where('name', 'like', '%' . $normalizedText . '%');
+                    });
             })
-            ->limit(12)
+            ->limit(24)
             ->get();
 
         if ($products->isEmpty()) {
-            return null;
+            return collect();
         }
 
-        $scored = $products->map(function (Product $product) use ($normalizedText, $tokens) {
+        return $products->map(function (Product $product) use ($normalizedText, $tokens) {
             return [
                 'product' => $product,
                 'score' => $this->scoreProductMatch($product, $normalizedText, $tokens),
             ];
-        })->sortByDesc('score')->values();
+        })->filter(fn (array $item) => $item['score'] >= 40)
+            ->sortByDesc('score')
+            ->values()
+            ->take(3);
+    }
 
-        $top = $scored->first();
-        $second = $scored->get(1);
+    /**
+     * @param  \Illuminate\Support\Collection<int, array{product: Product, score: int}>  $candidates
+     */
+    private function selectSingleProductMatch($candidates): ?Product
+    {
+        $top = $candidates->first();
+        $second = $candidates->get(1);
 
-        if (!$top || $top['score'] < 45) {
+        if (!$top || $top['score'] < 60) {
             return null;
         }
 
-        if ($second && ($top['score'] - $second['score']) < 12) {
+        if ($second && ($top['score'] - $second['score']) < 14 && $top['score'] < 110) {
             return null;
         }
 
@@ -1090,11 +1182,23 @@ class ChatAiAssistantService
         $title = $this->normalizeComparableText($product->title);
         $sku = $this->normalizeComparableText((string) $product->sku);
         $description = $this->normalizeComparableText((string) $product->description);
+        $category = $this->normalizeComparableText((string) optional($product->category)->name);
+        $color = $this->normalizeComparableText((string) optional($product->color)->name);
         $variantSkus = $product->variants
             ->pluck('sku')
             ->filter()
             ->map(fn ($value) => $this->normalizeComparableText((string) $value))
             ->all();
+        $productLexemes = $this->buildComparableLexemes([
+            $product->title,
+            (string) $product->sku,
+            (string) $product->description,
+            (string) optional($product->category)->name,
+            (string) optional($product->color)->name,
+        ]);
+        $queryLexemes = $this->buildComparableLexemes($tokens);
+        $queryGroups = array_values(array_filter($queryLexemes, fn ($lexeme) => str_starts_with($lexeme, 'group:')));
+        $productGroups = array_values(array_filter($productLexemes, fn ($lexeme) => str_starts_with($lexeme, 'group:')));
 
         $score = 0;
 
@@ -1110,6 +1214,14 @@ class ChatAiAssistantService
             $score += 90;
         }
 
+        if ($category !== '' && str_contains($category, $normalizedText)) {
+            $score += 70;
+        }
+
+        if ($color !== '' && str_contains($color, $normalizedText)) {
+            $score += 70;
+        }
+
         foreach ($tokens as $token) {
             if (str_contains($title, $token)) {
                 $score += 28;
@@ -1123,12 +1235,42 @@ class ChatAiAssistantService
                 $score += 10;
             }
 
+            if ($category !== '' && str_contains($category, $token)) {
+                $score += 16;
+            }
+
+            if ($color !== '' && str_contains($color, $token)) {
+                $score += 20;
+            }
+
             foreach ($variantSkus as $variantSku) {
                 if ($variantSku !== '' && str_contains($variantSku, $token)) {
                     $score += 16;
                     break;
                 }
             }
+        }
+
+        foreach ($queryLexemes as $lexeme) {
+            if (!in_array($lexeme, $productLexemes, true)) {
+                continue;
+            }
+
+            $score += str_starts_with($lexeme, 'group:')
+                ? 34
+                : 18;
+        }
+
+        $colorGroups = ['group:red', 'group:burgundy', 'group:black', 'group:white', 'group:gray', 'group:pink', 'group:blue', 'group:beige', 'group:brown'];
+
+        foreach ($queryGroups as $group) {
+            if (in_array($group, $productGroups, true)) {
+                continue;
+            }
+
+            $score -= in_array($group, $colorGroups, true)
+                ? 70
+                : 22;
         }
 
         return $score;
@@ -1160,12 +1302,166 @@ class ChatAiAssistantService
         })));
     }
 
+    /**
+     * @param  array<int, string>  $tokens
+     * @return array<int, string>
+     */
+    private function buildSearchFragments(array $tokens): array
+    {
+        $fragments = [];
+
+        foreach ($tokens as $token) {
+            $fragments[] = $token;
+
+            $stem = $this->stemComparableToken($token);
+            if ($stem !== '' && mb_strlen($stem) >= 3) {
+                $fragments[] = $stem;
+            }
+
+            foreach ($this->detectComparableGroups($token) as $group) {
+                foreach ($this->comparableTokenGroups()[$group] ?? [] as $alias) {
+                    if (mb_strlen($alias) >= 3) {
+                        $fragments[] = $alias;
+                    }
+                }
+            }
+        }
+
+        return array_values(array_unique($fragments));
+    }
+
+    /**
+     * @param  array<int, string>  $parts
+     * @return array<int, string>
+     */
+    private function buildComparableLexemes(array $parts): array
+    {
+        $lexemes = [];
+
+        foreach ($parts as $part) {
+            $normalized = $this->normalizeComparableText((string) $part);
+            if ($normalized === '') {
+                continue;
+            }
+
+            foreach (preg_split('/\s+/u', $normalized, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $token) {
+                if (mb_strlen($token) < 2) {
+                    continue;
+                }
+
+                $lexemes[] = $token;
+
+                $stem = $this->stemComparableToken($token);
+                if ($stem !== '' && $stem !== $token) {
+                    $lexemes[] = $stem;
+                }
+
+                foreach ($this->detectComparableGroups($token) as $group) {
+                    $lexemes[] = 'group:' . $group;
+                }
+            }
+        }
+
+        return array_values(array_unique($lexemes));
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function detectComparableGroups(string $token): array
+    {
+        $normalized = $this->normalizeComparableText($token);
+        $groups = [];
+
+        foreach ($this->comparableTokenGroups() as $group => $aliases) {
+            foreach ($aliases as $alias) {
+                if (str_contains($normalized, $alias) || str_contains($alias, $normalized)) {
+                    $groups[] = $group;
+                    break;
+                }
+            }
+        }
+
+        return $groups;
+    }
+
+    /**
+     * @return array<string, array<int, string>>
+     */
+    private function comparableTokenGroups(): array
+    {
+        return [
+            'slippers' => ['тап', 'тапк', 'тапоч', 'тапул', 'капц', 'капчик'],
+            'red' => ['червон', 'красн'],
+            'burgundy' => ['бордов'],
+            'black' => ['чорн', 'black'],
+            'white' => ['біл', 'бiл', 'white'],
+            'gray' => ['сір', 'сiр', 'сер'],
+            'pink' => ['рож', 'pink'],
+            'blue' => ['син', 'голуб', 'blue'],
+            'beige' => ['беж', 'beige', 'крем'],
+            'brown' => ['коричн', 'шоколад', 'brown'],
+        ];
+    }
+
+    private function stemComparableToken(string $token): string
+    {
+        $token = $this->normalizeComparableText($token);
+        $suffixes = [
+            'ього', 'ого', 'ому', 'ими', 'ями', 'ами', 'ові', 'еві', 'ої', 'ий', 'ій', 'а', 'я',
+            'е', 'и', 'і', 'у', 'ю', 'ом', 'ою', 'ею', 'ок', 'ки', 'ка', 'ці', 'ць', 'улі', 'уля',
+            'ів', 'ев', 'ов',
+        ];
+
+        foreach ($suffixes as $suffix) {
+            if (!str_ends_with($token, $suffix)) {
+                continue;
+            }
+
+            $stem = mb_substr($token, 0, mb_strlen($token) - mb_strlen($suffix));
+            if (mb_strlen($stem) >= 3) {
+                return $stem;
+            }
+        }
+
+        return $token;
+    }
+
     private function normalizeComparableText(string $text): string
     {
         $text = mb_strtolower($text);
         $text = preg_replace('/[^\p{L}\p{N}\s]+/u', ' ', $text);
 
         return trim(preg_replace('/\s+/u', ' ', (string) $text));
+    }
+
+    private function extractCandidateSelectionIndex(string $text): ?int
+    {
+        if (!preg_match('/^\s*([1-3])\s*$/u', $text, $matches)) {
+            return null;
+        }
+
+        return max(0, ((int) ($matches[1] ?? 0)) - 1);
+    }
+
+    /**
+     * @param  array<string, mixed>  $state
+     */
+    private function resolveSelectedCandidateProduct(string $text, array $state): ?Product
+    {
+        $index = $this->extractCandidateSelectionIndex($text);
+        if ($index === null) {
+            return null;
+        }
+
+        $candidateIds = array_values(array_filter(
+            $state['candidate_product_ids'] ?? [],
+            fn ($value) => (int) $value > 0
+        ));
+
+        $productId = $candidateIds[$index] ?? null;
+
+        return $productId ? $this->loadProductById((int) $productId) : null;
     }
 
     private function resolveVariantForSize(Product $product, string $requestedSize): ?ProductVariant
