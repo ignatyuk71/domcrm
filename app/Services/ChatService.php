@@ -32,13 +32,35 @@ class ChatService
     {
         $field = $platform === 'instagram' ? 'instagram_user_id' : 'fb_user_id';
         $customer = Customer::query()->where($field, $externalUserId)->first();
-
-        if ($customer) {
-            return $customer;
-        }
-
         $name = $this->extractDisplayName($platform, $profile);
         [$firstName, $lastName] = $this->splitName($name);
+
+        if ($customer) {
+            $payload = [];
+
+            if ($firstName && $this->shouldReplaceCustomerName($customer->first_name)) {
+                $payload['first_name'] = $firstName;
+            }
+
+            if ($lastName && trim((string) $customer->last_name) === '') {
+                $payload['last_name'] = $lastName;
+            }
+
+            if (
+                $platform === 'instagram'
+                && ($username = $this->extractUsername($profile))
+                && trim((string) $customer->instagram_username) === ''
+            ) {
+                $payload['instagram_username'] = $username;
+            }
+
+            if ($payload !== []) {
+                $customer->update($payload);
+                $customer->refresh();
+            }
+
+            return $customer;
+        }
 
         return Customer::create([
             $field => $externalUserId,
@@ -275,7 +297,11 @@ class ChatService
             ->first();
     }
 
-    public function formatAvatarUrl(?ChatContact $contact, ?Customer $customer = null): ?string
+    public function formatAvatarUrl(
+        ?ChatContact $contact,
+        ?Customer $customer = null,
+        bool $allowRecovery = false
+    ): ?string
     {
         $contactAvatar = $this->normalizeAvatarPath($contact?->avatar_path);
         if ($contactAvatar) {
@@ -288,7 +314,8 @@ class ChatService
         }
 
         if (
-            $contact
+            $allowRecovery
+            && $contact
             && (str_starts_with($customerAvatar, 'http://') || str_starts_with($customerAvatar, 'https://'))
         ) {
             $cachedAvatar = $this->cacheProfileAvatar($contact->id, $customerAvatar);
@@ -300,7 +327,7 @@ class ChatService
             }
         }
 
-        if ($contact && $this->shouldRefreshContactAvatar($contact)) {
+        if ($allowRecovery && $contact && $this->shouldRefreshContactAvatar($contact)) {
             try {
                 $refreshedContact = $this->syncContactProfile($contact, app(MetaService::class), $customer);
                 $refreshedAvatar = $this->normalizeAvatarPath($refreshedContact->avatar_path);
@@ -330,6 +357,15 @@ class ChatService
         }
 
         return $contact->last_profile_sync_at->lt(now()->subHours(6));
+    }
+
+    private function shouldReplaceCustomerName(?string $firstName): bool
+    {
+        $firstName = trim((string) $firstName);
+
+        return $firstName === ''
+            || str_contains($firstName, 'Facebook User')
+            || str_contains($firstName, 'Instagram User');
     }
 
     private function normalizeAvatarPath(?string $path): ?string

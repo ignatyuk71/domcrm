@@ -171,7 +171,11 @@ class MetaService
         $response = Http::withToken($this->getSettings()->access_token)
             ->get($this->graphUrl("/{$externalUserId}"), ['fields' => $fields]);
 
-        return $response->ok() ? $response->json() : [];
+        if ($response->ok() && $response->json() !== []) {
+            return $response->json();
+        }
+
+        return $this->getParticipantProfileSnapshot($externalUserId, $platform);
     }
 
     /**
@@ -377,6 +381,58 @@ class MetaService
         }
 
         return null;
+    }
+
+    private function getParticipantProfileSnapshot(string $externalUserId, string $platform): array
+    {
+        if ($platform !== 'messenger') {
+            return [];
+        }
+
+        $settings = $this->getSettings();
+        $threadId = $this->findThreadId($settings->access_token, $externalUserId, $platform);
+        if (!$threadId) {
+            return [];
+        }
+
+        $response = Http::withToken($settings->access_token)
+            ->get($this->graphUrl("/{$threadId}"), ['fields' => 'participants']);
+
+        if ($response->failed()) {
+            return [];
+        }
+
+        foreach (($response->json()['participants']['data'] ?? []) as $participant) {
+            if ((string) ($participant['id'] ?? '') !== (string) $externalUserId) {
+                continue;
+            }
+
+            $name = trim((string) ($participant['name'] ?? ''));
+            if ($name === '') {
+                return [];
+            }
+
+            [$firstName, $lastName] = $this->splitDisplayName($name);
+
+            return array_filter([
+                'id' => (string) ($participant['id'] ?? ''),
+                'name' => $name,
+                'first_name' => $firstName,
+                'last_name' => $lastName,
+            ], static fn ($value) => $value !== null && $value !== '');
+        }
+
+        return [];
+    }
+
+    private function splitDisplayName(string $name): array
+    {
+        $parts = preg_split('/\s+/u', trim($name), 2) ?: [];
+
+        return [
+            $parts[0] ?? null,
+            $parts[1] ?? null,
+        ];
     }
 
     private function normalizeTimestamp(?string $timestamp): ?Carbon

@@ -27,7 +27,7 @@ class ChatApiController extends Controller
         try {
             $conversations = ChatConversation::query()
                 ->where('status', '!=', 'archived')
-                ->with(['contact', 'customer', 'stage', 'lastMessage.attachments'])
+                ->with(['contact', 'customer', 'stage'])
                 ->orderByDesc('last_message_at')
                 ->paginate(20);
 
@@ -50,7 +50,7 @@ class ChatApiController extends Controller
     {
         $conversations = ChatConversation::query()
             ->where('status', '!=', 'archived')
-            ->with(['contact', 'customer', 'stage', 'lastMessage.attachments'])
+            ->with(['contact', 'customer', 'stage'])
             ->orderByDesc('last_message_at')
             ->get();
 
@@ -448,7 +448,7 @@ class ChatApiController extends Controller
                 'id' => $customer->id,
                 'first_name' => $customer->first_name ?: $contact->first_name,
                 'last_name' => $customer->last_name ?: $contact->last_name,
-                'fb_profile_pic' => $this->chatService->formatAvatarUrl($contact, $customer),
+                'fb_profile_pic' => $this->chatService->formatAvatarUrl($contact, $customer, true),
                 'fb_user_id' => $contact->platform === 'messenger' ? $contact->external_user_id : $customer->fb_user_id,
                 'instagram_user_id' => $contact->platform === 'instagram' ? $contact->external_user_id : $customer->instagram_user_id,
             ],
@@ -470,6 +470,7 @@ class ChatApiController extends Controller
     {
         $contact = $conversation->contact;
         $customer = $conversation->customer;
+        $avatarUrl = $this->chatService->formatAvatarUrl($contact, $customer);
         $originContext = $this->resolveOriginContext(
             data_get($conversation->meta, 'origin_context'),
             $conversation->last_message_preview,
@@ -484,7 +485,11 @@ class ChatApiController extends Controller
         }
 
         $customerName = trim((string) ($customer?->full_name ?: ''));
-        if ($customerName === '') {
+        if (
+            $customerName === ''
+            || str_contains($customerName, 'Facebook User')
+            || str_contains($customerName, 'Instagram User')
+        ) {
             $customerName = $contact?->display_name ?: trim((string) (($contact?->first_name ?? '') . ' ' . ($contact?->last_name ?? '')));
         }
         if ($customerName === '') {
@@ -495,8 +500,8 @@ class ChatApiController extends Controller
             'conversation_id' => $conversation->id,
             'customer_id' => $conversation->customer_id,
             'customer_name' => $customerName,
-            'customer_avatar' => $this->chatService->formatAvatarUrl($contact, $customer),
-            'fb_profile_pic' => $this->chatService->formatAvatarUrl($contact, $customer),
+            'customer_avatar' => $avatarUrl,
+            'fb_profile_pic' => $avatarUrl,
             'first_name' => $customer?->first_name ?: $contact?->first_name,
             'last_name' => $customer?->last_name ?: $contact?->last_name,
             'phone' => $customer?->phone,
@@ -643,7 +648,9 @@ class ChatApiController extends Controller
             ],
             [
                 'customer_id' => $customer->id,
-                'display_name' => trim($customer->full_name) ?: $customer->instagram_username ?: null,
+                'display_name' => str_contains((string) $customer->full_name, 'User')
+                    ? ($customer->instagram_username ?: null)
+                    : (trim($customer->full_name) ?: $customer->instagram_username ?: null),
             ]
         );
 

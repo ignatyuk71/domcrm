@@ -148,12 +148,14 @@ class WebhookController extends Controller
         }
 
         $connection = $chatService->getCurrentConnection();
-        $customer = $chatService->resolveCustomer($platform, (string) $externalUserId);
+        $profile = $metaService->getContactProfile((string) $externalUserId, $platform);
+        $customer = $chatService->resolveCustomer($platform, (string) $externalUserId, $profile);
         $contact = $chatService->findOrCreateContact(
             $connection,
             $platform,
             (string) $externalUserId,
-            $customer
+            $customer,
+            $profile
         );
 
         if (!$contact->display_name || !$contact->avatar_path) {
