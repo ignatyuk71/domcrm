@@ -1,154 +1,193 @@
 <template>
-  <div class="ai-settings-page">
-    <div class="ai-settings-shell">
+  <div class="container-fluid max-width-1400 py-3 py-md-4 ai-settings-page">
+    <div class="ai-page-stack">
       <section class="hero-card">
-        <div>
+        <div class="hero-copy">
           <div class="eyebrow">Система AI</div>
           <h1>AI first line</h1>
           <p class="subtitle">
-            Керує першою відповіддю, кваліфікацією ліда і передачею менеджеру.
+            Керує першою відповіддю, кваліфікацією ліда і передачею менеджеру. Тут задаються тільки робочі параметри без зайвого шуму.
           </p>
         </div>
 
-        <div class="hero-statuses">
-          <div class="status-card">
-            <span>Статус</span>
-            <strong :class="form.enabled ? 'is-good' : 'is-muted'">
-              {{ form.enabled ? 'Увімкнено' : 'Вимкнено' }}
-            </strong>
+        <div class="hero-side">
+          <div class="hero-statuses">
+            <div class="status-card">
+              <span class="status-label">Статус</span>
+              <strong class="status-value" :class="form.enabled ? 'is-good' : 'is-muted'">
+                {{ form.enabled ? 'Увімкнено' : 'Вимкнено' }}
+              </strong>
+            </div>
+            <div class="status-card">
+              <span class="status-label">OpenAI ключ</span>
+              <strong class="status-value" :class="meta.has_api_key ? 'is-good' : 'is-danger'">
+                {{ meta.has_api_key ? 'Додано' : 'Не додано' }}
+              </strong>
+            </div>
           </div>
-          <div class="status-card">
-            <span>OpenAI ключ</span>
-            <strong :class="meta.has_api_key ? 'is-good' : 'is-danger'">
-              {{ meta.has_api_key ? 'Додано' : 'Не додано' }}
-            </strong>
+
+          <div class="hero-actions">
+            <button class="btn btn-outline-secondary" :disabled="loading" @click="loadData">
+              Оновити
+            </button>
+            <button class="btn btn-dark" :disabled="saving" @click="saveSettings">
+              <span v-if="saving" class="spinner-border spinner-border-sm me-2"></span>
+              Зберегти
+            </button>
           </div>
         </div>
       </section>
 
-      <div v-if="flashMessage" class="alert" :class="flashType === 'error' ? 'alert-danger' : 'alert-success'">
+      <div v-if="flashMessage" class="alert mb-0" :class="flashType === 'error' ? 'alert-danger' : 'alert-success'">
         {{ flashMessage }}
       </div>
 
-      <div class="grid">
-        <section class="card-block">
-          <div class="section-head">
-            <h2>Основне</h2>
-            <span class="hint">Базові параметри запуску</span>
-          </div>
+      <section class="master-card">
+        <div class="master-copy">
+          <span class="section-kicker">Глобальний режим</span>
+          <h2>{{ form.enabled ? 'AI активний у чатах' : 'AI вимкнений у чатах' }}</h2>
+          <p>Коли вимкнено, нові діалоги не отримують автоматичну відповідь від AI.</p>
+        </div>
 
-          <div class="toggle-row">
-            <div class="toggle-copy">
-              <strong>Увімкнути AI у чаті</strong>
-              <span>Глобальний перемикач для першої лінії.</span>
+        <button
+          type="button"
+          class="ai-master-toggle"
+          :class="{ 'is-active': form.enabled }"
+          :aria-pressed="form.enabled ? 'true' : 'false'"
+          @click="form.enabled = !form.enabled"
+        >
+          <span class="ai-master-track">
+            <span class="ai-master-thumb"></span>
+          </span>
+          <span class="ai-master-text">
+            {{ form.enabled ? 'Увімкнено' : 'Вимкнено' }}
+          </span>
+        </button>
+      </section>
+
+      <div class="settings-grid">
+        <section class="settings-card">
+          <div class="card-head">
+            <div>
+              <h2>Основні параметри</h2>
+              <p>Імʼя асистента, модель, контекст і стиль відповіді.</p>
             </div>
-            <button
-              type="button"
-              class="ai-toggle"
-              :class="{ 'is-active': form.enabled }"
-              :aria-pressed="form.enabled ? 'true' : 'false'"
-              @click="form.enabled = !form.enabled"
-            >
-              <span class="ai-toggle-track">
-                <span class="ai-toggle-thumb"></span>
-              </span>
-              <span class="ai-toggle-text">
-                {{ form.enabled ? 'Увімкнено' : 'Вимкнено' }}
-              </span>
-            </button>
+            <span class="card-badge">База</span>
           </div>
 
           <div class="form-grid">
             <div class="field">
               <label>Назва асистента</label>
               <input v-model.trim="form.assistant_name" type="text" placeholder="DomCRM AI" />
+              <p class="field-help">Назва, яку бачить команда в системі.</p>
             </div>
 
             <div class="field">
               <label>Модель</label>
               <input v-model.trim="form.model" type="text" :placeholder="meta.default_model || 'gpt-4.1-mini'" />
+              <p class="field-help">Можна лишити стандартну модель або задати свою.</p>
             </div>
 
             <div class="field">
               <label>Повідомлень у контексті</label>
               <input v-model.number="form.max_messages" type="number" min="4" max="30" />
+              <p class="field-help">Скільки останніх повідомлень AI бере в аналіз.</p>
             </div>
 
             <div class="field full">
               <label>Стиль відповіді</label>
               <textarea
                 v-model.trim="form.reply_style"
-                rows="3"
-                placeholder="Коротко, по суті, українською, без зайвих обіцянок."
+                rows="4"
+                placeholder="Коротко, спокійно, українською, без зайвих обіцянок."
               ></textarea>
+              <p class="field-help">Задає тон відповіді: стриманий, продажний, дружній або формальний.</p>
             </div>
           </div>
         </section>
 
-        <section class="card-block">
-          <div class="section-head">
-            <h2>Кваліфікація</h2>
-            <span class="hint">Що AI має зібрати на старті</span>
-          </div>
-
-          <div class="chips-editor">
-            <button
-              v-for="(item, index) in form.qualification_fields"
-              :key="`${item}-${index}`"
-              type="button"
-              class="chip-item"
-              @click="removeField(index)"
-            >
-              {{ item }}
-              <i class="bi bi-x"></i>
-            </button>
-          </div>
-
-          <div class="inline-adder">
-            <input
-              v-model.trim="newQualificationField"
-              type="text"
-              placeholder="Додати поле"
-              @keydown.enter.prevent="addField"
-            />
-            <button type="button" class="btn btn-outline-secondary" @click="addField">
-              Додати
-            </button>
-          </div>
-
-          <div class="form-grid mt-3">
-            <div class="field full">
-              <label>Коли передавати менеджеру</label>
-              <textarea
-                v-model.trim="form.handoff_rules"
-                rows="5"
-                placeholder="Кожне правило з нового рядка"
-              ></textarea>
+        <section class="settings-card">
+          <div class="card-head">
+            <div>
+              <h2>Кваліфікація</h2>
+              <p>Що AI збирає на старті і в яких випадках віддає чат менеджеру.</p>
             </div>
+            <span class="card-badge">{{ form.qualification_fields.length }} полів</span>
+          </div>
+
+          <div class="field-block">
+            <label>Поля для збору</label>
+            <p class="field-help">Натисни на тег, щоб видалити його зі списку.</p>
+
+            <div class="chip-panel">
+              <div v-if="!form.qualification_fields.length" class="empty-state-inline">
+                Поля ще не додані.
+              </div>
+
+              <div v-else class="chips-editor">
+                <button
+                  v-for="(item, index) in form.qualification_fields"
+                  :key="`${item}-${index}`"
+                  type="button"
+                  class="chip-item"
+                  @click="removeField(index)"
+                >
+                  {{ item }}
+                  <i class="bi bi-x"></i>
+                </button>
+              </div>
+            </div>
+
+            <div class="inline-adder">
+              <input
+                v-model.trim="newQualificationField"
+                type="text"
+                placeholder="Додати нове поле"
+                @keydown.enter.prevent="addField"
+              />
+              <button type="button" class="btn btn-outline-secondary" @click="addField">
+                Додати
+              </button>
+            </div>
+          </div>
+
+          <div class="field-block">
+            <label>Коли передавати менеджеру</label>
+            <p class="field-help">Кожне правило з нового рядка. Це тригери для handoff.</p>
+            <textarea
+              v-model.trim="form.handoff_rules"
+              rows="8"
+              placeholder="Точна ціна&#10;Знижка&#10;Оплата&#10;Живий менеджер&#10;Нестандартний запит&#10;Скарга або конфлікт"
+            ></textarea>
           </div>
         </section>
 
-        <section class="card-block full-width">
-          <div class="section-head">
-            <h2>Контекст бізнесу</h2>
-            <span class="hint">Це йде в prompt для більш точних відповідей</span>
+        <section class="settings-card full-span">
+          <div class="card-head">
+            <div>
+              <h2>Контекст бізнесу</h2>
+              <p>Це підтягується в prompt, щоб відповіді були точнішими і без помилкових обіцянок.</p>
+            </div>
+            <span class="card-badge">Prompt</span>
           </div>
 
-          <div class="form-grid">
-            <div class="field full">
+          <div class="business-grid">
+            <div class="field-block">
               <label>Що продаємо і які є обмеження</label>
+              <p class="field-help">Товар, географія, доставка, оплата, що можна і не можна обіцяти.</p>
               <textarea
                 v-model.trim="form.company_context"
-                rows="5"
+                rows="7"
                 placeholder="Коротко опиши товар, географію, доставку, важливі правила продажу."
               ></textarea>
             </div>
 
-            <div class="field full">
+            <div class="field-block">
               <label>База знань / FAQ</label>
+              <p class="field-help">Типові питання, відповіді, скрипти, обмеження, заборонені формулювання.</p>
               <textarea
                 v-model.trim="form.knowledge_base"
-                rows="8"
+                rows="11"
                 placeholder="Типові питання, відповіді, заборонені обіцянки, рамки по ціні чи доставці."
               ></textarea>
             </div>
@@ -156,10 +195,10 @@
         </section>
       </div>
 
-      <div class="footer-bar">
-        <div class="footer-note">
+      <section class="save-bar">
+        <div class="save-bar-note">
           <strong>OpenAI API key</strong>
-          <span>Задається на сервері через `.env`, не через цю форму.</span>
+          <span>Ключ задається на сервері через `.env`. Ця форма керує лише поведінкою AI.</span>
         </div>
 
         <div class="footer-actions">
@@ -168,10 +207,10 @@
           </button>
           <button class="btn btn-dark" :disabled="saving" @click="saveSettings">
             <span v-if="saving" class="spinner-border spinner-border-sm me-2"></span>
-            Зберегти
+            Зберегти зміни
           </button>
         </div>
-      </div>
+      </section>
     </div>
   </div>
 </template>
@@ -281,359 +320,490 @@ onMounted(loadData);
 </script>
 
 <style scoped>
-.ai-settings-page {
-  --shell-bg: #f4f7fb;
-  --card-bg: #ffffff;
-  --card-border: #e2e8f0;
-  min-height: calc(100vh - 120px);
-  font-family: "Segoe UI", sans-serif;
+.max-width-1400 {
+  max-width: 1400px;
+  margin: 0 auto;
 }
 
-.ai-settings-shell {
+.ai-settings-page {
+  --page-bg: #f4f7fb;
+  --card-bg: #ffffff;
+  --card-border: #e2e8f0;
+  --card-border-strong: #d6deea;
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+  --soft-surface: #f8fafc;
+  min-height: calc(100vh - 120px);
+  color: var(--text-main);
+}
+
+.ai-page-stack {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 20px;
 }
 
 .hero-card,
-.card-block,
-.footer-bar {
-  border: 1px solid var(--card-border);
-  border-radius: 20px;
+.master-card,
+.settings-card,
+.save-bar {
   background: var(--card-bg);
-  box-shadow: 0 20px 50px -40px rgba(15, 23, 42, 0.3);
+  border: 1px solid var(--card-border);
+  border-radius: 24px;
+  box-shadow: 0 24px 60px -44px rgba(15, 23, 42, 0.32);
 }
 
 .hero-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 24px 26px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.9fr);
+  gap: 28px;
+  padding: 30px 32px;
   background:
-    radial-gradient(circle at top right, rgba(59, 130, 246, 0.12), transparent 32%),
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.12), transparent 34%),
     linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
 }
 
-.eyebrow {
-  margin-bottom: 8px;
-  font-size: 12px;
+.hero-copy h1 {
+  margin: 0;
+  font-size: 48px;
+  line-height: 0.98;
+  letter-spacing: -0.04em;
   font-weight: 800;
-  letter-spacing: 0.08em;
-  color: #2563eb;
-  text-transform: uppercase;
 }
 
-.hero-card h1 {
-  margin: 0;
-  font-size: 34px;
-  line-height: 1.05;
+.eyebrow {
+  display: inline-block;
+  margin-bottom: 12px;
+  font-size: 12px;
   font-weight: 800;
-  color: #0f172a;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #2563eb;
 }
 
 .subtitle {
-  margin: 10px 0 0;
-  max-width: 620px;
-  font-size: 15px;
-  line-height: 1.5;
+  max-width: 760px;
+  margin: 16px 0 0;
+  font-size: 16px;
+  line-height: 1.6;
   color: #475569;
+}
+
+.hero-side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: stretch;
 }
 
 .hero-statuses {
   display: grid;
-  grid-template-columns: repeat(2, minmax(150px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
 .status-card {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 150px;
-  padding: 14px 16px;
-  border-radius: 16px;
-  background: rgba(248, 250, 252, 0.92);
-  border: 1px solid #e2e8f0;
+  padding: 16px 18px;
+  border: 1px solid var(--card-border);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.92);
+  min-height: 96px;
 }
 
-.status-card span {
-  font-size: 12px;
-  font-weight: 700;
-  color: #64748b;
+.status-label {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+  color: var(--text-muted);
 }
 
-.status-card strong {
-  font-size: 18px;
-  color: #0f172a;
+.status-value {
+  display: block;
+  font-size: 24px;
+  line-height: 1.1;
+  font-weight: 800;
 }
 
-.status-card strong.is-good {
+.status-value.is-good {
   color: #15803d;
 }
 
-.status-card strong.is-danger {
+.status-value.is-danger {
   color: #b91c1c;
 }
 
-.status-card strong.is-muted {
+.status-value.is-muted {
   color: #475569;
 }
 
-.grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
-}
-
-.card-block {
-  padding: 22px;
-}
-
-.card-block.full-width {
-  grid-column: 1 / -1;
-}
-
-.section-head {
+.hero-actions {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
-  margin-bottom: 18px;
+  flex-wrap: wrap;
 }
 
-.section-head h2 {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 800;
-  color: #0f172a;
-}
-
-.hint {
-  font-size: 13px;
-  color: #64748b;
-}
-
-.toggle-row {
-  margin-bottom: 18px;
-  display: flex;
+.master-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 24px;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 14px 16px;
-  border-radius: 16px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  padding: 24px 28px;
 }
 
-.toggle-copy {
-  min-width: 0;
+.section-kicker {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #2563eb;
 }
 
-.toggle-row strong {
-  display: block;
+.master-copy h2 {
+  margin: 10px 0 10px;
+  font-size: 26px;
+  line-height: 1.1;
+  font-weight: 800;
+}
+
+.master-copy p {
+  margin: 0;
   font-size: 15px;
-  color: #0f172a;
+  line-height: 1.55;
+  color: var(--text-muted);
 }
 
-.toggle-row span {
-  display: block;
-  margin-top: 4px;
-  font-size: 13px;
-  color: #64748b;
-}
-
-.ai-toggle {
+.ai-master-toggle {
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  gap: 12px;
-  min-width: 150px;
-  padding: 10px 14px;
+  gap: 14px;
+  min-width: 220px;
+  justify-content: center;
+  padding: 12px 18px;
   border: 1px solid #cbd5e1;
   border-radius: 999px;
   background: #ffffff;
   color: #334155;
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 800;
   transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, color 0.2s ease;
 }
 
-.ai-toggle:hover {
+.ai-master-toggle:hover {
   border-color: #93c5fd;
-  box-shadow: 0 10px 24px -18px rgba(37, 99, 235, 0.45);
+  box-shadow: 0 14px 28px -22px rgba(37, 99, 235, 0.48);
 }
 
-.ai-toggle:focus-visible {
+.ai-master-toggle:focus-visible {
   outline: none;
   border-color: #60a5fa;
   box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.16);
 }
 
-.ai-toggle.is-active {
+.ai-master-toggle.is-active {
   border-color: #86efac;
   background: #f0fdf4;
   color: #166534;
 }
 
-.ai-toggle-track {
+.ai-master-track {
   position: relative;
-  width: 42px;
-  height: 24px;
+  width: 48px;
+  height: 28px;
   border-radius: 999px;
   background: #cbd5e1;
   transition: background-color 0.2s ease;
 }
 
-.ai-toggle-thumb {
+.ai-master-thumb {
   position: absolute;
   top: 3px;
   left: 3px;
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   background: #ffffff;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.22);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.22);
   transition: transform 0.22s ease;
 }
 
-.ai-toggle.is-active .ai-toggle-track {
+.ai-master-toggle.is-active .ai-master-track {
   background: #22c55e;
 }
 
-.ai-toggle.is-active .ai-toggle-thumb {
-  transform: translateX(18px);
+.ai-master-toggle.is-active .ai-master-thumb {
+  transform: translateX(20px);
 }
 
-.ai-toggle-text {
-  white-space: nowrap;
+.settings-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  gap: 20px;
+  align-items: start;
 }
 
-.form-grid {
+.settings-card {
+  padding: 26px 28px;
+}
+
+.settings-card.full-span {
+  grid-column: 1 / -1;
+}
+
+.card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.card-head h2 {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.08;
+  font-weight: 800;
+}
+
+.card-head p {
+  margin: 10px 0 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+.card-badge {
+  flex-shrink: 0;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  font-size: 12px;
+  font-weight: 800;
+  color: #1d4ed8;
+}
+
+.form-grid,
+.business-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: 18px;
 }
 
-.field {
+.field,
+.field-block {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .field.full {
   grid-column: 1 / -1;
 }
 
-.field label {
+.field label,
+.field-block label {
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 800;
+  letter-spacing: 0.01em;
   color: #334155;
 }
 
+.field-help {
+  margin: -2px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
 .field input,
-.field textarea {
+.field textarea,
+.field-block textarea,
+.inline-adder input {
   width: 100%;
   border: 1px solid #cbd5e1;
-  border-radius: 14px;
-  padding: 12px 14px;
-  font-size: 14px;
-  color: #0f172a;
+  border-radius: 16px;
+  padding: 14px 16px;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--text-main);
   background: #ffffff;
   outline: none;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.field textarea,
+.field-block textarea {
+  resize: vertical;
+}
+
+.field input::placeholder,
+.field textarea::placeholder,
+.field-block textarea::placeholder,
+.inline-adder input::placeholder {
+  color: #94a3b8;
 }
 
 .field input:focus,
 .field textarea:focus,
+.field-block textarea:focus,
 .inline-adder input:focus {
   border-color: #60a5fa;
   box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.14);
 }
 
+.chip-panel {
+  min-height: 74px;
+  padding: 14px;
+  border: 1px solid var(--card-border);
+  border-radius: 18px;
+  background: var(--soft-surface);
+}
+
+.empty-state-inline {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: 14px;
+  color: #94a3b8;
+}
+
 .chips-editor {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
 }
 
 .chip-item {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
+  gap: 8px;
+  padding: 10px 14px;
   border-radius: 999px;
   border: 1px solid #bfdbfe;
   background: #eff6ff;
   color: #1d4ed8;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+
+.chip-item:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px -18px rgba(29, 78, 216, 0.45);
+  border-color: #93c5fd;
 }
 
 .inline-adder {
-  margin-top: 14px;
-  display: flex;
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
 }
 
-.inline-adder input {
-  flex: 1 1 auto;
-  min-width: 0;
-  border: 1px solid #cbd5e1;
-  border-radius: 14px;
-  padding: 12px 14px;
-}
-
-.footer-bar {
+.save-bar {
+  position: sticky;
+  bottom: 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 18px;
   padding: 18px 22px;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(10px);
 }
 
-.footer-note {
+.save-bar-note {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-.footer-note strong {
+.save-bar-note strong {
   font-size: 14px;
-  color: #0f172a;
+  color: var(--text-main);
 }
 
-.footer-note span {
+.save-bar-note span {
   font-size: 13px;
-  color: #64748b;
+  color: var(--text-muted);
 }
 
 .footer-actions {
   display: flex;
   gap: 10px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 1199px) {
+  .hero-card,
+  .settings-grid,
+  .business-grid,
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 992px) {
   .hero-card,
-  .footer-bar,
-  .toggle-row {
-    flex-direction: column;
-    align-items: stretch;
+  .master-card,
+  .save-bar {
+    padding: 22px 20px;
   }
 
-  .hero-statuses,
-  .grid,
-  .form-grid {
+  .hero-copy h1 {
+    font-size: 38px;
+  }
+
+  .hero-actions,
+  .footer-actions {
+    width: 100%;
+  }
+
+  .hero-actions .btn,
+  .footer-actions .btn {
+    flex: 1 1 0;
+  }
+
+  .master-card,
+  .save-bar {
     grid-template-columns: 1fr;
   }
 
-  .footer-actions {
-    justify-content: stretch;
+  .card-head {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 767px) {
+  .ai-settings-page {
+    padding-left: 0.25rem;
+    padding-right: 0.25rem;
   }
 
-  .footer-actions .btn {
-    flex: 1 1 0;
+  .hero-card,
+  .settings-card,
+  .master-card,
+  .save-bar {
+    border-radius: 20px;
+  }
+
+  .hero-copy h1 {
+    font-size: 32px;
+  }
+
+  .hero-statuses,
+  .inline-adder {
+    grid-template-columns: 1fr;
+  }
+
+  .ai-master-toggle {
+    width: 100%;
   }
 }
 </style>
