@@ -469,8 +469,11 @@ class ChatApiController extends Controller
     {
         $contact = $conversation->contact;
         $customer = $conversation->customer;
-        $originContext = data_get($conversation->meta, 'origin_context')
-            ?: $this->chatService->extractOriginContext($conversation->last_message_preview, $contact?->platform);
+        $originContext = $this->resolveOriginContext(
+            data_get($conversation->meta, 'origin_context'),
+            $conversation->last_message_preview,
+            $contact?->platform
+        );
         $stageCode = $conversation->stage?->code;
         if ($stageCode === 'no_stage') {
             $stageCode = null;
@@ -517,8 +520,11 @@ class ChatApiController extends Controller
     private function formatMessage(ChatMessage $message): array
     {
         $parent = $message->parent;
-        $originContext = data_get($message->meta, 'origin_context')
-            ?: $this->chatService->extractOriginContext($message->text, $message->conversation?->contact?->platform);
+        $originContext = $this->resolveOriginContext(
+            data_get($message->meta, 'origin_context'),
+            $message->text,
+            $message->conversation?->contact?->platform
+        );
         $displayText = $this->formatMessageText($message->text, $originContext);
 
         return [
@@ -574,6 +580,21 @@ class ChatApiController extends Controller
         }
 
         return $cleaned;
+    }
+
+    private function resolveOriginContext(?array $storedOriginContext, ?string $text, ?string $platform): ?array
+    {
+        $derivedOriginContext = $this->chatService->extractOriginContext($text, $platform);
+
+        if (!$storedOriginContext) {
+            return $derivedOriginContext;
+        }
+
+        if (!$derivedOriginContext) {
+            return $storedOriginContext;
+        }
+
+        return array_merge($derivedOriginContext, $storedOriginContext);
     }
 
     private function ensureConversationForCustomer(
