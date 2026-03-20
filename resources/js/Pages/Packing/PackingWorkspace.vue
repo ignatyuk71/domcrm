@@ -53,8 +53,8 @@
         <div class="col-12 col-lg-8 product-section">
           <div class="section-header d-flex justify-content-between align-items-end">
             <div>
-              <h1 class="page-heading">Збір замовлення</h1>
-              <div class="text-muted fw-bold">Перевірте та відскануйте товари</div>
+              <h1 class="page-heading" :class="{ 'is-done': isAllChecked }">{{ sectionHeading }}</h1>
+              <div class="section-subheading" :class="{ 'is-done': isAllChecked }">{{ sectionSubtitle }}</div>
             </div>
             <!-- Додатковий прогрес бар для мобільних -->
             <div class="d-md-none fw-bold fs-5">
@@ -238,10 +238,17 @@
                   </div>
                </button>
 
-               <!-- Пропустити -->
+               <!-- Повідомити про проблему -->
                <button class="btn-skip-massive w-100" data-bs-toggle="modal" data-bs-target="#skipModal">
-                 <i class="bi bi-exclamation-triangle"></i>
-                 <span>Пропустити / Нема товару</span>
+                 <div class="btn-skip-inner">
+                   <div class="btn-skip-icon">
+                     <i class="bi bi-exclamation-octagon"></i>
+                   </div>
+                   <div class="btn-skip-copy">
+                     <span class="skip-main-text">Повідомити про проблему</span>
+                     <span class="skip-sub-text">Нема товару, брак або пересорт</span>
+                   </div>
+                 </div>
                </button>
             </div>
 
@@ -351,18 +358,17 @@
     <!-- Skip Modal -->
     <div class="modal fade" id="skipModal" tabindex="-1" aria-hidden="true">
       <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow-lg rounded-4">
-           <div class="modal-header border-0"><h5 class="fw-bold text-danger">Повідомити про проблему</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
-           <div class="modal-body p-0">
-             <div class="list-group list-group-flush">
-               <button v-for="r in skipReasons" :key="r" class="list-group-item list-group-item-action p-3 d-flex align-items-center justify-content-between" @click="selectedSkipReason = r">
-                 {{ r }}
-                 <i class="bi bi-check-circle-fill text-warning" v-if="selectedSkipReason === r"></i>
-               </button>
-             </div>
-             <div class="p-3">
-               <textarea class="form-control bg-light border-0" rows="3" placeholder="Коментар..." v-model="skipComment"></textarea>
-               <button class="btn-skip-massive w-100 mt-3" data-bs-dismiss="modal" @click="skipOrder">Підтвердити пропуск</button>
+        <div class="modal-content border-0 shadow-lg rounded-4 skip-modal-content">
+           <div class="modal-header border-0 pb-0">
+             <h5 class="fw-bold text-danger">Відкласти замовлення?</h5>
+             <button class="btn-close" data-bs-dismiss="modal"></button>
+           </div>
+           <div class="modal-body p-4 pt-3">
+             <div class="skip-modal-text">Замовлення буде відкладене.</div>
+             <div class="skip-modal-hint">Ви зможете повернутися до нього пізніше.</div>
+             <div class="skip-confirm-actions mt-4">
+               <button class="btn-skip-cancel" data-bs-dismiss="modal">Повернутися</button>
+               <button class="btn-skip-confirm" data-bs-dismiss="modal" @click="skipOrder">Відкласти</button>
              </div>
            </div>
         </div>
@@ -381,10 +387,6 @@ const props = defineProps({
 });
 
 const products = ref([]);
-
-const skipReasons = ['Нема товару', 'Брак', 'Пересорт', 'Інше'];
-const selectedSkipReason = ref(skipReasons[0]);
-const skipComment = ref('');
 const showImageModal = ref(false);
 const selectedImage = ref(null);
 const hasActionTaken = ref(false); 
@@ -491,6 +493,22 @@ const mainButtonText = computed(() => {
   return 'ЗАПАКОВАНО';
 });
 
+const sectionHeading = computed(() => (
+  isAllChecked.value ? 'Замовлення зібране' : 'Збір замовлення'
+));
+
+const sectionSubtitle = computed(() => {
+  if (!isAllChecked.value) {
+    return 'Перевірте та відскануйте товари';
+  }
+
+  if (!hasActionTaken.value) {
+    return 'Відкрийте або роздрукуйте ТТН, щоб завершити пакування';
+  }
+
+  return 'Усе готово для завершення і переходу до наступного замовлення';
+});
+
 const ttnParts = computed(() => {
   const t = order.value.ttn.replace(/\s/g, '');
   if (t.length <= 4) return { head: '', tail: t };
@@ -592,10 +610,7 @@ const skipOrder = async () => {
   try {
     const orderId = order.value.id;
     if (!orderId) return;
-    await axios.post(`/packing/${orderId}/problem`, {
-      reason: selectedSkipReason.value,
-      comment: skipComment.value,
-    });
+    await axios.post(`/packing/${orderId}/problem`);
     
     const { data: listData } = await axios.get('/api/packing/list');
     const nextOrder = Array.isArray(listData) 
@@ -777,13 +792,136 @@ onUnmounted(() => {
 .sub-text { font-size: 0.8rem; font-weight: 600; opacity: 0.8; display: block; }
 
 .btn-skip-massive {
-  background: #fff1f2; border: 1px solid #fecdd3; color: #be123c; border-radius: 14px; padding: 1rem;
-  font-weight: 800; font-size: 0.95rem; display: flex; align-items: center; justify-content: center; gap: 8px;
-  transition: 0.2s; min-height: 56px;
+  background: linear-gradient(135deg, #fff7ed 0%, #fff1f2 100%);
+  border: 1px solid #fbcfe8;
+  color: #9f1239;
+  border-radius: 18px;
+  padding: 1rem 1.1rem;
+  font-weight: 800;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: 0.2s;
+  min-height: 72px;
+  box-shadow: 0 10px 24px rgba(190, 24, 93, 0.08);
 }
-.btn-skip-massive:hover { background: #ffe4e6; border-color: #fda4af; }
+.btn-skip-massive:hover {
+  background: linear-gradient(135deg, #fff1f2 0%, #ffe4e6 100%);
+  border-color: #f9a8d4;
+  transform: translateY(-2px);
+  box-shadow: 0 16px 32px rgba(190, 24, 93, 0.12);
+}
+.btn-skip-inner {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  text-align: left;
+}
+.btn-skip-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(244, 114, 182, 0.22);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #be123c;
+  font-size: 1.25rem;
+}
+.btn-skip-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.05;
+}
+.skip-main-text {
+  font-size: 1.02rem;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+}
+.skip-sub-text {
+  margin-top: 0.22rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: rgba(159, 18, 57, 0.72);
+}
+.skip-modal-content {
+  border-radius: 24px;
+}
+.skip-modal-text {
+  font-size: 1.08rem;
+  font-weight: 800;
+  color: #1f2937;
+  line-height: 1.35;
+}
+.skip-modal-hint {
+  margin-top: 0.45rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #6b7280;
+  line-height: 1.45;
+}
+.skip-confirm-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+.skip-confirm-actions > * {
+  flex: 1 1 0;
+}
+.btn-skip-cancel {
+  min-height: 60px;
+  border-radius: 14px;
+  border: 1px solid #dbe3ee;
+  background: #fff;
+  color: #475569;
+  font-weight: 800;
+  transition: 0.2s;
+}
+.btn-skip-cancel:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+.btn-skip-confirm {
+  min-height: 60px;
+  border-radius: 14px;
+  border: 1px solid #e11d48;
+  background: #e11d48;
+  color: #fff;
+  font-weight: 800;
+  transition: 0.2s;
+}
+.btn-skip-confirm:hover {
+  background: #be123c;
+  border-color: #be123c;
+}
 
 .product-grid { display: flex; flex-direction: column; gap: 1.25rem; margin-top: 1rem; }
+.page-heading {
+  margin: 0;
+  font-size: clamp(2.4rem, 3.2vw, 3.35rem);
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  line-height: 0.98;
+  color: var(--ink);
+  transition: color 0.2s ease;
+}
+.page-heading.is-done {
+  color: #059669;
+}
+.section-subheading {
+  margin-top: 0.65rem;
+  color: var(--muted);
+  font-weight: 800;
+  font-size: 1.02rem;
+  transition: color 0.2s ease;
+}
+.section-subheading.is-done {
+  color: #0f766e;
+}
 
 .modern-card {
   background: var(--surface); border-radius: 20px; padding: 0; position: relative;
