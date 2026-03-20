@@ -594,6 +594,17 @@ class ChatService
 
         if (
             !$this->normalizeAvatarPath($contact->avatar_path)
+            && (str_starts_with($rawCustomerAvatar, 'http://') || str_starts_with($rawCustomerAvatar, 'https://'))
+        ) {
+            $cachedAvatar = $this->cacheProfileAvatar($contact->id, $rawCustomerAvatar);
+            if ($cachedAvatar) {
+                $contact->avatar_path = $cachedAvatar;
+                $changed = true;
+            }
+        }
+
+        if (
+            !$this->normalizeAvatarPath($contact->avatar_path)
             && !str_starts_with($rawCustomerAvatar, 'http://')
             && !str_starts_with($rawCustomerAvatar, 'https://')
         ) {
