@@ -20,22 +20,6 @@
       <p>{{ aiSummaryText }}</p>
     </div>
 
-    <div v-if="aiLeadRows.length" class="ai-detail-list">
-      <div
-        v-for="item in aiLeadRows"
-        :key="item.key"
-        class="ai-detail-row"
-      >
-        <span>{{ item.label }}</span>
-        <strong>{{ item.value }}</strong>
-      </div>
-
-      <div v-if="aiNotes" class="ai-detail-row">
-        <span>Нотатка</span>
-        <strong>{{ aiNotes }}</strong>
-      </div>
-    </div>
-
     <div class="ai-actions">
       <button
         type="button"
@@ -76,7 +60,6 @@ const aiSystemEnabled = computed(() => aiState.value?.system_enabled !== false);
 const aiSummary = computed(() => compactText(aiState.value?.summary || ''));
 const aiHandoffReason = computed(() => compactText(aiState.value?.handoff_reason || ''));
 const aiLastError = computed(() => compactText(aiState.value?.last_error || ''));
-const aiNotes = computed(() => compactText(aiState.value?.lead?.notes || ''));
 
 const aiModeTitle = computed(() => {
   const status = aiState.value?.status;
@@ -167,21 +150,6 @@ const aiAlertClass = computed(() => {
   }
 
   return 'is-error';
-});
-
-const aiLeadRows = computed(() => {
-  const lead = aiState.value?.lead || {};
-
-  return [
-    { key: 'customer_name', label: 'Імʼя', value: lead.customer_name || '' },
-    { key: 'phone', label: 'Телефон', value: lead.phone || '' },
-    { key: 'product_interest', label: 'Інтерес', value: lead.product_interest || '' },
-    { key: 'budget', label: 'Бюджет', value: lead.budget || '' },
-    { key: 'timeline', label: 'Термін', value: lead.timeline || '' },
-    { key: 'city', label: 'Місто', value: lead.city || '' },
-  ]
-    .map((item) => ({ ...item, value: compactText(item.value) }))
-    .filter((item) => item.value);
 });
 
 function compactText(value) {
@@ -326,38 +294,6 @@ function takeoverAi() {
 
 .ai-alert.is-error {
   color: #991b1b;
-}
-
-.ai-detail-list {
-  margin-top: 12px;
-  border-top: 1px solid #eef2f7;
-}
-
-.ai-detail-row {
-  display: grid;
-  grid-template-columns: 78px minmax(0, 1fr);
-  gap: 10px;
-  padding: 10px 0;
-  border-bottom: 1px solid #f1f5f9;
-}
-
-.ai-detail-row:last-child {
-  border-bottom: none;
-}
-
-.ai-detail-row span {
-  font-size: 12px;
-  font-weight: 700;
-  color: #64748b;
-}
-
-.ai-detail-row strong {
-  min-width: 0;
-  font-size: 14px;
-  line-height: 1.35;
-  font-weight: 700;
-  color: #0f172a;
-  word-break: break-word;
 }
 
 .ai-actions {
