@@ -3,12 +3,12 @@
     <div class="ai-side-head">
       <div class="ai-side-copy">
         <div class="ai-side-title-row">
-          <span class="ai-side-label">AI first line</span>
+          <span class="ai-side-label">AI-асистент</span>
           <span class="ai-status-chip" :class="aiStatusClass">{{ aiStatusLabel }}</span>
         </div>
-        <strong>Перший контакт</strong>
+        <strong>{{ aiHeadline }}</strong>
         <span class="ai-side-summary">
-          {{ aiSummary || 'Чекає на новий діалог.' }}
+          {{ aiSummary || aiDefaultSummary }}
         </span>
       </div>
 
@@ -19,7 +19,7 @@
           :class="{ 'is-paused': !aiEnabled }"
           @click="toggleAi"
         >
-          {{ aiEnabled ? 'Пауза' : 'Увімк.' }}
+          {{ aiEnabled ? 'Зупинити AI' : 'Увімкнути AI' }}
         </button>
 
         <button
@@ -27,7 +27,7 @@
           class="ai-action-btn is-primary"
           @click="takeoverAi"
         >
-          Менеджер
+          Передати менеджеру
         </button>
       </div>
     </div>
@@ -86,13 +86,47 @@ const aiSummary = computed(() => String(aiState.value?.summary || '').trim());
 const aiHandoffReason = computed(() => String(aiState.value?.handoff_reason || '').trim());
 const aiLastError = computed(() => String(aiState.value?.last_error || '').trim());
 const aiNotes = computed(() => String(aiState.value?.lead?.notes || '').trim());
+const aiHeadline = computed(() => {
+  const status = aiState.value?.status;
+
+  if (status === 'manual') {
+    return 'Чат веде менеджер';
+  }
+
+  if (status === 'paused' || status === 'disabled') {
+    return 'AI зупинений';
+  }
+
+  if (status === 'handoff') {
+    return 'Потрібен менеджер';
+  }
+
+  return 'AI відповідає першим';
+});
+const aiDefaultSummary = computed(() => {
+  const status = aiState.value?.status;
+
+  if (status === 'manual') {
+    return 'AI більше не відповідає. Далі діалог веде менеджер.';
+  }
+
+  if (status === 'paused' || status === 'disabled') {
+    return 'AI не відповідає на нові повідомлення, доки його знову не увімкнуть.';
+  }
+
+  if (status === 'handoff') {
+    return 'AI зібрав запит і очікує, що менеджер підхопить діалог.';
+  }
+
+  return 'Коли клієнт напише, AI відповість першим, поставить уточнення і за потреби передасть чат менеджеру.';
+});
 const aiStatusLabel = computed(() => {
   const map = {
-    idle: 'Готовий',
-    queued: 'У черзі',
+    idle: 'AI увімкнено',
+    queued: 'Є нове повідомлення',
     processing: 'Обробка',
-    replied: 'Відповів',
-    handoff: 'Передати',
+    replied: 'AI відповів',
+    handoff: 'Потрібен менеджер',
     manual: 'У менеджера',
     paused: 'Пауза',
     disabled: 'Вимкнено',
