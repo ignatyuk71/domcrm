@@ -43,6 +43,8 @@ class MetaConnectionService
             'scope' => implode(',', $this->scopes()),
             'response_type' => 'code',
             'state' => $this->generateState(),
+            'auth_type' => 'rerequest',
+            'return_scopes' => 'true',
         ]);
 
         return 'https://www.facebook.com/' . $this->graphVersion() . '/dialog/oauth?' . $query;
@@ -77,6 +79,8 @@ class MetaConnectionService
         $longLivedToken = $this->exchangeForLongLivedUserToken($shortLivedToken['access_token']);
         $userToken = $longLivedToken['access_token'] ?? $shortLivedToken['access_token'];
         $userTokenExpiresAt = $this->resolveExpiresAt($longLivedToken['expires_in'] ?? $shortLivedToken['expires_in'] ?? null);
+        $grantedScopes = $this->fetchGrantedScopes($userToken);
+        $missingScopes = $this->missingRequiredScopes($grantedScopes);
 
         $metaUser = $this->fetchMetaUser($userToken);
         $pages = $this->fetchPages($userToken);
@@ -112,7 +116,7 @@ class MetaConnectionService
                 'access_token' => $selectedPage['access_token'] ?? null,
                 'token_type' => $shortLivedToken['token_type'] ?? 'bearer',
                 'token_expires_at' => null,
-                'granted_scopes' => $this->scopes(),
+                'granted_scopes' => $grantedScopes !== [] ? $grantedScopes : $this->scopes(),
                 'verify_token' => $previousConnection?->verify_token ?: Str::random(40),
                 'webhook_secret' => $previousConnection?->webhook_secret ?: Str::random(64),
                 'webhook_fields' => ['messages', 'messaging_postbacks', 'messaging_seen', 'messaging_optins'],
@@ -120,11 +124,15 @@ class MetaConnectionService
                 'is_active' => true,
                 'connected_at' => now(),
                 'last_token_refresh_at' => now(),
-                'last_error' => null,
+                'last_error' => $missingScopes === []
+                    ? null
+                    : 'Meta не видала обов’язкові дозволи: ' . implode(', ', $missingScopes) . '. Перепідключіть інтеграцію та підтвердьте всі запити.',
                 'profile_payload' => [
                     'meta_user' => $metaUser,
                     'selected_page' => $selectedPage,
                     'pages' => $pages,
+                    'granted_scopes' => $grantedScopes,
+                    'missing_scopes' => $missingScopes,
                 ],
                 'connected_by' => $user->id,
             ]
@@ -205,6 +213,38 @@ class MetaConnectionService
         return $response->json('data') ?? [];
     }
 
+    private function fetchGrantedScopes(string $accessToken): array
+    {
+        $response = Http::withToken($accessToken)->get($this->graphApiUrl('/me/permissions'));
+
+        if (!$response->successful()) {
+            return [];
+        }
+
+        $granted = [];
+        foreach ($response->json('data', []) as $permission) {
+            if (($permission['status'] ?? null) !== 'granted') {
+                continue;
+            }
+
+            $name = trim((string) ($permission['permission'] ?? ''));
+            if ($name !== '') {
+                $granted[] = $name;
+            }
+        }
+
+        return array_values(array_unique($granted));
+    }
+
+    private function missingRequiredScopes(array $grantedScopes): array
+    {
+        if ($grantedScopes === []) {
+            return [];
+        }
+
+        return array_values(array_diff($this->requiredScopes(), $grantedScopes));
+    }
+
     private function selectPage(array $pages): ?array
     {
         foreach ($pages as $page) {
@@ -257,6 +297,18 @@ class MetaConnectionService
         }
 
         return array_values(array_filter($scopes));
+    }
+
+    private function requiredScopes(): array
+    {
+        return array_values(array_filter([
+            'pages_show_list',
+            'pages_messaging',
+            'pages_manage_metadata',
+            'pages_read_engagement',
+            'instagram_basic',
+            'instagram_manage_messages',
+        ]));
     }
 
     private function graphApiUrl(string $path): string

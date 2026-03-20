@@ -17,7 +17,7 @@
             @click="startConnect"
           >
             <i class="bi bi-facebook me-2"></i>
-            Авторизація через Facebook
+            {{ connection ? 'Перепідключити через Facebook' : 'Авторизація через Facebook' }}
           </button>
 
           <button
@@ -74,6 +74,10 @@
               <span class="label">Підключено</span>
               <strong>{{ formatDate(connection.connected_at) }}</strong>
             </div>
+            <div class="info-row">
+              <span class="label">Видані дозволи</span>
+              <strong>{{ formatScopes(connection.granted_scopes) }}</strong>
+            </div>
           </div>
 
           <div v-else class="empty-state">
@@ -126,6 +130,7 @@
           <div class="tips">
             <div>Callback URL: <strong>{{ meta.callback_url || '—' }}</strong></div>
             <div>Для чату потрібні дозволи `pages_messaging` та `instagram_manage_messages`.</div>
+            <div>Кнопка підключення перевидає доступ Meta та повторно запитує раніше пропущені дозволи.</div>
           </div>
         </section>
       </div>
@@ -209,6 +214,14 @@ function startConnect() {
   }
 
   window.location.href = meta.connect_url;
+}
+
+function formatScopes(scopes) {
+  if (!Array.isArray(scopes) || scopes.length === 0) {
+    return '—';
+  }
+
+  return scopes.join(', ');
 }
 
 async function saveSettings() {

@@ -32,6 +32,7 @@ class MetaConnectionController extends Controller
                     'webhook_secret' => $connection->webhook_secret,
                     'webhook_subscribed' => $connection->webhook_subscribed,
                     'connected_at' => optional($connection->connected_at)?->toIso8601String(),
+                    'granted_scopes' => $connection->granted_scopes ?? [],
                     'last_error' => $connection->last_error,
                     'has_page_token' => filled($connection->access_token),
                 ] : null,

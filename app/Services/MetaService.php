@@ -164,24 +164,25 @@ class MetaService
 
     public function getContactProfile(string $externalUserId, string $platform = 'messenger'): array
     {
+        $participantSnapshot = $this->getParticipantProfileSnapshot($externalUserId, $platform);
+
         $fields = $platform === 'instagram'
-            ? 'name,username,profile_pic'
-            : 'first_name,last_name,profile_pic';
+            ? 'name,username,profile_pic,picture.type(large)'
+            : 'first_name,last_name,name,profile_pic,picture.type(large)';
 
         $response = Http::withToken($this->getSettings()->access_token)
             ->get($this->graphUrl("/{$externalUserId}"), ['fields' => $fields]);
 
-        if ($response->ok() && $response->json() !== []) {
-            $profile = $response->json();
-            $participantSnapshot = $this->getParticipantProfileSnapshot($externalUserId, $platform);
-
-            return array_merge(
-                $participantSnapshot,
-                array_filter($profile, static fn ($value) => $value !== null && $value !== '')
-            );
+        if (!$response->ok() || $response->json() === []) {
+            return $participantSnapshot;
         }
 
-        return $this->getParticipantProfileSnapshot($externalUserId, $platform);
+        $profile = $this->normalizeProfilePayload($response->json());
+
+        return array_merge(
+            $participantSnapshot,
+            array_filter($profile, static fn ($value) => $value !== null && $value !== '')
+        );
     }
 
     /**
@@ -204,21 +205,27 @@ class MetaService
         }
 
         foreach ($platforms as $platform => $externalUserId) {
+            $profile = $this->getParticipantProfileSnapshot($externalUserId, $platform);
             $fields = $platform === 'instagram'
-                ? 'name,username,profile_pic'
-                : 'first_name,last_name,profile_pic';
+                ? 'name,username,profile_pic,picture.type(large)'
+                : 'first_name,last_name,name,profile_pic,picture.type(large)';
 
             $response = Http::withToken($connection->access_token)
                 ->get($this->graphUrl("/{$externalUserId}"), ['fields' => $fields]);
 
-            if (!$response->successful()) {
-                continue;
+            if ($response->successful() && is_array($response->json())) {
+                $profile = array_merge(
+                    $profile,
+                    array_filter(
+                        $this->normalizeProfilePayload($response->json()),
+                        static fn ($value) => $value !== null && $value !== ''
+                    )
+                );
             }
 
-            $profile = array_merge(
-                $this->getParticipantProfileSnapshot($externalUserId, $platform),
-                array_filter($response->json(), static fn ($value) => $value !== null && $value !== '')
-            );
+            if ($profile === []) {
+                continue;
+            }
 
             $payload = [];
             if ($platform === 'instagram') {
@@ -456,7 +463,7 @@ class MetaService
         }
 
         $response = Http::withToken($settings->access_token)
-            ->get($this->graphUrl("/{$threadId}"), ['fields' => 'participants{id,name,profile_pic}']);
+            ->get($this->graphUrl("/{$threadId}"), ['fields' => 'participants{id,name,email,profile_pic,picture.type(large)}']);
 
         if ($response->failed()) {
             return [];
@@ -479,11 +486,38 @@ class MetaService
                 'name' => $name,
                 'first_name' => $firstName,
                 'last_name' => $lastName,
-                'profile_pic' => $participant['profile_pic'] ?? null,
+                'profile_pic' => $this->extractProfilePictureUrl($participant),
             ], static fn ($value) => $value !== null && $value !== '');
         }
 
         return [];
+    }
+
+    private function normalizeProfilePayload(array $profile): array
+    {
+        $profilePicture = $this->extractProfilePictureUrl($profile);
+        if ($profilePicture && empty($profile['profile_pic'])) {
+            $profile['profile_pic'] = $profilePicture;
+        }
+
+        return $profile;
+    }
+
+    private function extractProfilePictureUrl(array $payload): ?string
+    {
+        $candidates = [
+            $payload['profile_pic'] ?? null,
+            data_get($payload, 'picture.data.url'),
+            data_get($payload, 'picture.url'),
+        ];
+
+        foreach ($candidates as $candidate) {
+            if (is_string($candidate) && trim($candidate) !== '') {
+                return trim($candidate);
+            }
+        }
+
+        return null;
     }
 
     private function splitDisplayName(string $name): array
