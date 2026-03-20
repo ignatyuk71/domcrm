@@ -275,17 +275,35 @@ class ChatService
             ->first();
     }
 
-    public function formatAvatarUrl(?ChatContact $contact): ?string
+    public function formatAvatarUrl(?ChatContact $contact, ?Customer $customer = null): ?string
     {
-        if (!$contact?->avatar_path) {
+        $candidates = [
+            $contact?->avatar_path,
+            $customer?->fb_profile_pic,
+        ];
+
+        foreach ($candidates as $candidate) {
+            $formatted = $this->normalizeAvatarPath($candidate);
+            if ($formatted) {
+                return $formatted;
+            }
+        }
+
+        return null;
+    }
+
+    private function normalizeAvatarPath(?string $path): ?string
+    {
+        $path = trim((string) $path);
+        if ($path === '') {
             return null;
         }
 
-        if (str_starts_with($contact->avatar_path, 'http://') || str_starts_with($contact->avatar_path, 'https://')) {
-            return $contact->avatar_path;
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            return $path;
         }
 
-        return url(ltrim($contact->avatar_path, '/'));
+        return url(ltrim($path, '/'));
     }
 
     public function extractOriginContext(?string $text, ?string $platform = null): ?array
