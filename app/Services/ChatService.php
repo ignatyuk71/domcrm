@@ -371,16 +371,6 @@ class ChatService
 
         $normalizedCustomerAvatar = $this->normalizeAvatarPath($customerAvatar);
         if ($normalizedCustomerAvatar) {
-            if (
-                str_contains($normalizedCustomerAvatar, 'platform-lookaside.fbsbx.com')
-                || str_contains($normalizedCustomerAvatar, 'scontent-')
-            ) {
-                return $this->buildFallbackAvatarUrl(
-                    $fallbackName ?: $this->resolveDisplayName($contact, $customer),
-                    $contact?->platform
-                );
-            }
-
             return $normalizedCustomerAvatar;
         }
 
