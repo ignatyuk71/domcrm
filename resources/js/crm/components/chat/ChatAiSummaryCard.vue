@@ -20,29 +20,56 @@
       <p>{{ aiSummaryText }}</p>
     </div>
 
-    <div class="ai-actions">
+    <div class="ai-controls">
       <button
         type="button"
-        class="ai-button ai-button-secondary"
-        :class="{ 'is-paused': !aiEnabled }"
+        class="ai-switch"
+        :class="{ 'is-active': aiEnabled }"
+        :aria-pressed="aiEnabled ? 'true' : 'false'"
         @click="toggleAi"
       >
-        {{ aiEnabled ? 'Пауза AI' : 'Увімкнути AI' }}
+        <span class="ai-switch-track">
+          <span class="ai-switch-thumb"></span>
+        </span>
+        <span class="ai-switch-copy">
+          <strong>{{ aiEnabled ? 'AI увімкнено' : 'AI вимкнено' }}</strong>
+          <small>{{ aiEnabled ? 'Відповідає першим' : 'AI не відповідає' }}</small>
+        </span>
       </button>
+    </div>
 
+    <div v-if="aiLeadRows.length" class="ai-dropdown-wrap">
       <button
         type="button"
-        class="ai-button ai-button-primary"
-        @click="takeoverAi"
+        class="ai-dropdown-trigger"
+        :class="{ 'is-open': showLeadFields }"
+        @click="showLeadFields = !showLeadFields"
       >
-        Менеджер
+        <span>Кваліфікація</span>
+        <div class="ai-dropdown-meta">
+          <strong>{{ aiLeadRows.length }}</strong>
+          <i class="bi bi-chevron-down"></i>
+        </div>
       </button>
+
+      <transition name="ai-expand">
+        <div v-if="showLeadFields" class="ai-dropdown-panel">
+          <div
+            v-for="item in aiLeadRows"
+            :key="item.key"
+            class="ai-field-row"
+          >
+            <span>{{ item.label }}</span>
+            <strong>{{ item.value }}</strong>
+          </div>
+        </div>
+      </transition>
     </div>
   </section>
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 
 const props = defineProps({
   conversation: {
@@ -52,6 +79,7 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['toggle-ai', 'takeover-ai']);
+const showLeadFields = ref(false);
 
 const aiState = computed(() => props.conversation?.ai || null);
 const aiEnabled = computed(() => Boolean(aiState.value?.enabled));
@@ -152,6 +180,22 @@ const aiAlertClass = computed(() => {
   return 'is-error';
 });
 
+const aiLeadRows = computed(() => {
+  const lead = aiState.value?.lead || {};
+
+  return [
+    { key: 'customer_name', label: 'Імʼя', value: lead.customer_name || '' },
+    { key: 'phone', label: 'Телефон', value: lead.phone || '' },
+    { key: 'product_interest', label: 'Інтерес', value: lead.product_interest || '' },
+    { key: 'budget', label: 'Бюджет', value: lead.budget || '' },
+    { key: 'timeline', label: 'Термін', value: lead.timeline || '' },
+    { key: 'city', label: 'Місто', value: lead.city || '' },
+    { key: 'notes', label: 'Нотатка', value: lead.notes || '' },
+  ]
+    .map((item) => ({ ...item, value: compactText(item.value) }))
+    .filter((item) => item.value);
+});
+
 function compactText(value) {
   return String(value || '').replace(/\s+/g, ' ').trim();
 }
@@ -165,14 +209,6 @@ function toggleAi() {
     conversationId: props.conversation.conversation_id,
     enabled: !aiEnabled.value,
   });
-}
-
-function takeoverAi() {
-  if (!props.conversation?.conversation_id) {
-    return;
-  }
-
-  emit('takeover-ai', props.conversation.conversation_id);
 }
 </script>
 
@@ -296,48 +332,207 @@ function takeoverAi() {
   color: #991b1b;
 }
 
-.ai-actions {
+.ai-controls {
   margin-top: 14px;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
 }
 
-.ai-button {
-  min-height: 40px;
-  padding: 0 12px;
-  border-radius: 12px;
+.ai-switch {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid #dbe4f0;
+  border-radius: 16px;
+  background: #f8fafc;
+  text-align: left;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+.ai-switch:hover {
+  border-color: #bfdbfe;
+  box-shadow: 0 12px 24px -22px rgba(37, 99, 235, 0.38);
+}
+
+.ai-switch.is-active {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.ai-switch-track {
+  position: relative;
+  flex-shrink: 0;
+  width: 46px;
+  height: 28px;
+  border-radius: 999px;
+  background: #cbd5e1;
+  transition: background-color 0.18s ease;
+}
+
+.ai-switch-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.2);
+  transition: transform 0.18s ease;
+}
+
+.ai-switch.is-active .ai-switch-track {
+  background: #22c55e;
+}
+
+.ai-switch.is-active .ai-switch-thumb {
+  transform: translateX(18px);
+}
+
+.ai-switch-copy {
+  min-width: 0;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ai-switch-copy strong {
+  font-size: 14px;
+  line-height: 1.3;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.ai-switch-copy small {
+  font-size: 12px;
+  line-height: 1.35;
+  color: #64748b;
+}
+
+.ai-dropdown-wrap {
+  margin-top: 12px;
+}
+
+.ai-dropdown-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid #dbe4f0;
+  border-radius: 14px;
+  background: #ffffff;
   font-size: 13px;
   font-weight: 700;
-  transition: all 0.18s ease;
-}
-
-.ai-button-secondary {
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
   color: #334155;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
-.ai-button-secondary.is-paused {
+.ai-dropdown-trigger:hover {
   border-color: #bfdbfe;
-  color: #1d4ed8;
 }
 
-.ai-button-primary {
-  border: 1px solid #0f172a;
-  background: #0f172a;
-  color: #ffffff;
+.ai-dropdown-trigger.is-open {
+  border-color: #bfdbfe;
+  box-shadow: 0 0 0 4px rgba(191, 219, 254, 0.18);
+}
+
+.ai-dropdown-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #64748b;
+}
+
+.ai-dropdown-meta strong {
+  min-width: 18px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 800;
+  color: #2563eb;
+}
+
+.ai-dropdown-meta i {
+  font-size: 12px;
+  transition: transform 0.18s ease;
+}
+
+.ai-dropdown-trigger.is-open .ai-dropdown-meta i {
+  transform: rotate(180deg);
+}
+
+.ai-dropdown-panel {
+  margin-top: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #f8fafc;
+  overflow: hidden;
+}
+
+.ai-field-row {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  gap: 10px;
+  padding: 11px 14px;
+  border-top: 1px solid #e5edf6;
+}
+
+.ai-field-row:first-child {
+  border-top: none;
+}
+
+.ai-field-row span {
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.ai-field-row strong {
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.35;
+  font-weight: 700;
+  color: #0f172a;
+  word-break: break-word;
+}
+
+.ai-expand-enter-active,
+.ai-expand-leave-active {
+  transition: all 0.2s ease;
+}
+
+.ai-expand-enter-from,
+.ai-expand-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+.ai-expand-enter-to,
+.ai-expand-leave-from {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 @media (max-width: 768px) {
-  .ai-widget-head,
-  .ai-actions {
+  .ai-widget-head {
     display: grid;
     grid-template-columns: 1fr;
   }
 
   .ai-status-pill {
     justify-self: start;
+  }
+
+  .ai-switch {
+    align-items: flex-start;
+  }
+
+  .ai-field-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
   }
 }
 </style>
