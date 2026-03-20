@@ -354,7 +354,11 @@ class ChatService
 
         $contactOriginalAvatar = $this->normalizeAvatarPath($contact?->avatar_original_url);
         if ($contactOriginalAvatar) {
-            if ($allowRecovery && $contact) {
+            if (
+                $allowRecovery
+                && $contact
+                && $this->isRemoteAvatarUrl($contactOriginalAvatar)
+            ) {
                 $cachedAvatar = $this->cacheProfileAvatar($contact->id, $contactOriginalAvatar);
                 if ($cachedAvatar) {
                     $contact->avatar_path = $cachedAvatar;
@@ -364,7 +368,18 @@ class ChatService
                 }
             }
 
-            return $contactOriginalAvatar;
+            if (
+                $contact
+                && $this->isExpiredMetaAvatarUrl($contactOriginalAvatar)
+            ) {
+                $contact->avatar_original_url = null;
+                $contact->save();
+                $contactOriginalAvatar = null;
+            }
+
+            if ($contactOriginalAvatar) {
+                return $contactOriginalAvatar;
+            }
         }
 
         $legacyCustomerAvatar = $this->importLegacyCustomerAvatarToContact($contact, $customer);
@@ -381,7 +396,7 @@ class ChatService
                 }
 
                 $refreshedOriginalAvatar = $this->normalizeAvatarPath($refreshedContact->avatar_original_url);
-                if ($refreshedOriginalAvatar) {
+                if ($refreshedOriginalAvatar && !$this->isExpiredMetaAvatarUrl($refreshedOriginalAvatar)) {
                     return $refreshedOriginalAvatar;
                 }
             } catch (\Throwable $e) {
@@ -443,6 +458,11 @@ class ChatService
             return false;
         }
 
+        $normalizedOriginalAvatar = $this->normalizeAvatarPath($contact->avatar_original_url);
+        if ($this->isExpiredMetaAvatarUrl($normalizedOriginalAvatar)) {
+            return true;
+        }
+
         return $this->canRefreshContactProfile($contact);
     }
 
@@ -463,8 +483,8 @@ class ChatService
 
         $hasValidVisibleName = $resolvedName !== '' && !$this->isPlaceholderName($resolvedName);
         $hasVisibleAvatar = $this->normalizeAvatarPath($contact->avatar_path) !== null
-            || $contactOriginalAvatar !== null
-            || $legacyCustomerAvatar !== null;
+            || $this->isUsableAvatarUrl($contactOriginalAvatar)
+            || $this->isUsableAvatarUrl($legacyCustomerAvatar);
 
         if ($hasValidVisibleName && $hasVisibleAvatar) {
             return false;
@@ -520,6 +540,10 @@ class ChatService
             return true;
         }
 
+        if ($this->isExpiredMetaAvatarUrl($this->normalizeAvatarPath($contact->avatar_original_url))) {
+            return true;
+        }
+
         return $contact->last_profile_sync_at->lt(now()->subHours(6));
     }
 
@@ -535,6 +559,54 @@ class ChatService
         }
 
         return url(ltrim($path, '/'));
+    }
+
+    private function isRemoteAvatarUrl(?string $url): bool
+    {
+        $url = trim((string) $url);
+
+        return str_starts_with($url, 'http://') || str_starts_with($url, 'https://');
+    }
+
+    private function isExpiredMetaAvatarUrl(?string $url): bool
+    {
+        $url = trim((string) $url);
+        if ($url === '' || !$this->isRemoteAvatarUrl($url)) {
+            return false;
+        }
+
+        $host = mb_strtolower((string) parse_url($url, PHP_URL_HOST));
+        $path = mb_strtolower((string) parse_url($url, PHP_URL_PATH));
+        if (!str_contains($host, 'lookaside.fbsbx.com') && !str_contains($path, '/platform/profilepic')) {
+            return false;
+        }
+
+        $query = parse_url($url, PHP_URL_QUERY);
+        if (!is_string($query) || $query === '') {
+            return false;
+        }
+
+        parse_str($query, $queryParams);
+        $expiresAt = (int) ($queryParams['ext'] ?? 0);
+        if ($expiresAt <= 0) {
+            return false;
+        }
+
+        return $expiresAt <= now()->timestamp;
+    }
+
+    private function isUsableAvatarUrl(?string $url): bool
+    {
+        $normalized = $this->normalizeAvatarPath($url);
+        if (!$normalized) {
+            return false;
+        }
+
+        if (!$this->isRemoteAvatarUrl($normalized)) {
+            return true;
+        }
+
+        return !$this->isExpiredMetaAvatarUrl($normalized);
     }
 
     private function normalizeDisplayName(string $value): string
@@ -577,7 +649,7 @@ class ChatService
     {
         $rawCustomerAvatar = trim((string) ($customer?->fb_profile_pic ?? ''));
         $customerAvatar = $this->normalizeAvatarPath($rawCustomerAvatar);
-        if (!$customerAvatar) {
+        if (!$customerAvatar || !$this->isUsableAvatarUrl($customerAvatar)) {
             return null;
         }
 
