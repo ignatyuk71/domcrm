@@ -38,7 +38,7 @@
             <input 
               v-model="searchQuery" 
               type="text" 
-              placeholder="Номер замовлення або місто..."
+              placeholder="Номер, місто, клієнт або телефон..."
             />
           </div>
 
@@ -101,6 +101,19 @@
                 </div>
                 <div class="order-sub">
                    <i class="bi bi-geo-alt-fill"></i> {{ order.delivery?.city_name || 'Місто не вказано' }}
+                </div>
+                <div class="order-customer-card">
+                  <div class="customer-avatar" :class="{ 'is-empty': !hasOrderContact(order) }">
+                    {{ customerInitials(order) }}
+                  </div>
+                  <div class="customer-meta">
+                    <div class="customer-label">Контакт</div>
+                    <div class="customer-name">{{ orderContactName(order) }}</div>
+                    <div class="customer-phone" :class="{ 'is-empty': !orderContactPhone(order) }">
+                      <i class="bi" :class="orderContactPhone(order) ? 'bi-telephone' : 'bi-dash-circle'"></i>
+                      <span>{{ formatPhoneDisplay(orderContactPhone(order)) || 'Телефон не вказано' }}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -331,9 +344,12 @@ const filteredOrders = computed(() => {
   // Пошук
   if (searchQuery.value) {
     const q = searchQuery.value.toLowerCase();
+    const phoneQuery = normalizePhone(q);
     result = source.filter(o => 
       String(o.order_number).toLowerCase().includes(q) ||
-      (o.delivery?.city_name || '').toLowerCase().includes(q)
+      (o.delivery?.city_name || '').toLowerCase().includes(q) ||
+      orderContactName(o).toLowerCase().includes(q) ||
+      (phoneQuery ? normalizePhone(orderContactPhone(o)).includes(phoneQuery) : false)
     );
   }
 
@@ -531,6 +547,56 @@ const declension = (number, titles) => {
     return titles[(number % 100 > 4 && number % 100 < 20) ? 2 : cases[(number % 10 < 5) ? number % 10 : 5]];  
 }
 
+const normalizePhone = (value = '') => String(value).replace(/\D+/g, '');
+
+const formatPhoneDisplay = (value = '') => {
+  const raw = String(value).trim();
+  const digits = normalizePhone(raw);
+
+  if (digits.length === 12 && digits.startsWith('380')) {
+    return `+${digits.slice(0, 2)} (${digits.slice(2, 5)}) ${digits.slice(5, 8)}-${digits.slice(8, 10)}-${digits.slice(10, 12)}`;
+  }
+
+  if (digits.length === 10 && digits.startsWith('0')) {
+    return `+38 (${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 8)}-${digits.slice(8, 10)}`;
+  }
+
+  return raw;
+};
+
+const orderContactName = (order) => {
+  const customerName = [
+    order?.customer?.first_name,
+    order?.customer?.last_name,
+  ].filter(Boolean).join(' ').trim();
+
+  return (
+    order?.delivery?.recipient_name ||
+    customerName ||
+    order?.customer?.full_name ||
+    ''
+  );
+};
+
+const orderContactPhone = (order) => (
+  order?.delivery?.recipient_phone ||
+  order?.customer?.phone ||
+  order?.phone ||
+  ''
+);
+
+const hasOrderContact = (order) => Boolean(orderContactName(order) || orderContactPhone(order));
+
+const customerInitials = (order) => {
+  const name = orderContactName(order);
+  if (!name) return '??';
+
+  const parts = name.split(/\s+/).filter(Boolean).slice(0, 2);
+  if (!parts.length) return '??';
+
+  return parts.map(part => part.charAt(0)).join('').toUpperCase();
+};
+
 const normalizeImageUrl = (raw) => {
   if (!raw) return '';
   if (raw.startsWith('http') || raw.startsWith('/')) return raw;
@@ -693,12 +759,76 @@ onUnmounted(() => {
 .priority-strip { position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: #ef4444; z-index: 10; }
 
 .order-main-content {
-  display: grid; grid-template-columns: minmax(220px, 260px) 1fr minmax(140px, auto) 170px;
+  display: grid; grid-template-columns: minmax(260px, 360px) 1fr minmax(150px, auto) 170px;
   align-items: center; padding: 1.25rem 1.5rem; gap: 1.5rem;
 }
 .order-id { font-size: 1.35rem; font-weight: 800; color: #1e293b; letter-spacing: -0.02em; }
 .order-sub { font-size: 0.9rem; color: #64748b; font-weight: 500; display: flex; align-items: center; }
 .order-sub i { margin-right: 6px; color: #94a3b8; }
+.order-customer-card {
+  margin-top: 0.9rem;
+  padding: 0.8rem 0.9rem;
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: 0.75rem;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+}
+.customer-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%);
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  box-shadow: 0 10px 20px -14px rgba(37, 99, 235, 0.9);
+}
+.customer-avatar.is-empty {
+  background: linear-gradient(135deg, #94a3b8 0%, #64748b 100%);
+}
+.customer-meta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.customer-label {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+.customer-name {
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.25;
+  word-break: break-word;
+}
+.customer-phone {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #475569;
+  font-size: 0.88rem;
+  font-weight: 600;
+  margin-top: 0.15rem;
+  word-break: break-word;
+}
+.customer-phone i {
+  color: #64748b;
+  font-size: 0.82rem;
+}
+.customer-phone.is-empty {
+  color: #94a3b8;
+}
 .badge-status {
   font-size: 0.7rem; font-weight: 800; padding: 0.35rem 0.65rem;
   border-radius: 8px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 5px; margin-left: auto;
@@ -925,6 +1055,10 @@ onUnmounted(() => {
   .order-main-content { grid-template-columns: 1fr; text-align: center; padding: 1rem; }
   .order-identity { justify-content: center; flex-direction: column; align-items: center; }
   .identity-top { width: 100%; justify-content: space-between; }
+  .order-customer-card {
+    width: 100%;
+    text-align: left;
+  }
   .badge-status { position: relative; margin: 0; }
   .order-items-preview, .thumb-stack { align-items: center; justify-content: center; }
   .order-actions { grid-column: 1; grid-row: auto; }
