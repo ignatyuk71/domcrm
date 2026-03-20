@@ -753,6 +753,7 @@ class ChatAiAssistantService
             return null;
         }
 
+        $catalogIntent = $this->buildCatalogIntentProfile($text);
         $selectedCandidate = $this->resolveSelectedCandidateProduct($text, $state);
         if ($selectedCandidate) {
             return $this->buildProductSelectionReply($selectedCandidate, $text, $state);
@@ -760,11 +761,20 @@ class ChatAiAssistantService
 
         $candidates = $this->findProductCandidatesFromText($text);
         $matchedProduct = $this->selectSingleProductMatch($candidates);
+        $topCandidate = $candidates->first();
         $currentProduct = $matchedProduct
             ?: $this->loadProductById((int) ($state['current_product_id'] ?? 0))
             ?: $this->matchProductFromText((string) ($state['lead']['product_interest'] ?? ''));
 
         if ($matchedProduct) {
+            if (
+                !$catalogIntent['prefer_child']
+                && $this->productLooksChild($matchedProduct)
+                && (($topCandidate['score'] ?? 0) < 140)
+            ) {
+                return $this->buildChildClarificationReply($matchedProduct, $state);
+            }
+
             return $this->buildProductSelectionReply($matchedProduct, $text, $state);
         }
 
@@ -774,6 +784,10 @@ class ChatAiAssistantService
 
         if ($candidates->isNotEmpty()) {
             return $this->buildProductOptionsReply($candidates, $state);
+        }
+
+        if ($catalogIntent['exclude_child']) {
+            return $this->buildAdultOnlyClarificationReply($state);
         }
 
         return null;
@@ -1001,6 +1015,58 @@ class ChatAiAssistantService
         ];
     }
 
+    /**
+     * @param  array<string, mixed>  $state
+     * @return array<string, mixed>
+     */
+    private function buildAdultOnlyClarificationReply(array $state): array
+    {
+        return [
+            'reply_text' => $this->sanitizeReplyText(
+                'Зрозуміла, дитячі моделі не показую. Напишіть колір або модель дорослих капців, і я одразу підберу варіанти.'
+            ),
+            'attachments' => [],
+            'summary' => 'Клієнт відкинув дитячі моделі.',
+            'lead_status' => 'qualifying',
+            'lead' => array_merge($state['lead'] ?? [], [
+                'notes' => 'Клієнта цікавлять не дитячі, а дорослі моделі.',
+            ]),
+            'current_product_id' => null,
+            'current_product_title' => '',
+            'current_size' => '',
+            'candidate_product_ids' => [],
+            'candidate_product_titles' => [],
+            'handoff_required' => false,
+            'handoff_reason' => '',
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $state
+     * @return array<string, mixed>
+     */
+    private function buildChildClarificationReply(Product $product, array $state): array
+    {
+        return [
+            'reply_text' => $this->sanitizeReplyText(
+                'Бачу схожу дитячу модель "' . $product->title . '". Якщо вам потрібні дорослі капці, напишіть колір або модель, і я підберу дорослі варіанти.'
+            ),
+            'attachments' => [],
+            'summary' => 'Потрібно уточнити, чи цікавлять дитячі чи дорослі моделі.',
+            'lead_status' => 'qualifying',
+            'lead' => array_merge($state['lead'] ?? [], [
+                'notes' => 'Бот не став автоматично показувати дитячу модель без явного підтвердження.',
+            ]),
+            'current_product_id' => null,
+            'current_product_title' => '',
+            'current_size' => '',
+            'candidate_product_ids' => [],
+            'candidate_product_titles' => [],
+            'handoff_required' => false,
+            'handoff_reason' => '',
+        ];
+    }
+
     private function buildVariantReply(Product $product, ProductVariant $variant, string $requestedSize, bool $includePrompt): string
     {
         $price = $this->formatProductPrice($product);
@@ -1104,6 +1170,7 @@ class ChatAiAssistantService
         $normalizedText = $this->normalizeComparableText($text);
         $tokens = $this->extractSearchTokens($text);
         $fragments = $this->buildSearchFragments($tokens);
+        $catalogIntent = $this->buildCatalogIntentProfile($text);
 
         if ($normalizedText === '' || $fragments === []) {
             return collect();
@@ -1116,6 +1183,17 @@ class ChatAiAssistantService
                 'category',
             ])
             ->where('is_active', true)
+            ->when($catalogIntent['exclude_child'], function ($query) {
+                $query
+                    ->where('title', 'not like', '%дитяч%')
+                    ->where(function ($categoryQuery) {
+                        $categoryQuery
+                            ->whereDoesntHave('category', function ($childCategoryQuery) {
+                                $childCategoryQuery->where('name', 'like', '%дитяч%');
+                            })
+                            ->orWhereNull('category_id');
+                    });
+            })
             ->where(function ($query) use ($fragments, $normalizedText) {
                 foreach ($fragments as $fragment) {
                     $query
@@ -1150,10 +1228,10 @@ class ChatAiAssistantService
             return collect();
         }
 
-        return $products->map(function (Product $product) use ($normalizedText, $tokens) {
+        return $products->map(function (Product $product) use ($normalizedText, $tokens, $catalogIntent) {
             return [
                 'product' => $product,
-                'score' => $this->scoreProductMatch($product, $normalizedText, $tokens),
+                'score' => $this->scoreProductMatch($product, $normalizedText, $tokens, $catalogIntent),
             ];
         })->filter(fn (array $item) => $item['score'] >= 40)
             ->sortByDesc('score')
@@ -1183,13 +1261,14 @@ class ChatAiAssistantService
     /**
      * @param  array<int, string>  $tokens
      */
-    private function scoreProductMatch(Product $product, string $normalizedText, array $tokens): int
+    private function scoreProductMatch(Product $product, string $normalizedText, array $tokens, array $catalogIntent = []): int
     {
         $title = $this->normalizeComparableText($product->title);
         $sku = $this->normalizeComparableText((string) $product->sku);
         $description = $this->normalizeComparableText((string) $product->description);
         $category = $this->normalizeComparableText((string) optional($product->category)->name);
         $color = $this->normalizeComparableText((string) optional($product->color)->name);
+        $looksChild = $this->productLooksChild($product);
         $variantSkus = $product->variants
             ->pluck('sku')
             ->filter()
@@ -1205,6 +1284,10 @@ class ChatAiAssistantService
         $queryLexemes = $this->buildComparableLexemes($tokens);
         $queryGroups = array_values(array_filter($queryLexemes, fn ($lexeme) => str_starts_with($lexeme, 'group:')));
         $productGroups = array_values(array_filter($productLexemes, fn ($lexeme) => str_starts_with($lexeme, 'group:')));
+
+        if (($catalogIntent['exclude_child'] ?? false) && $looksChild) {
+            return -1000;
+        }
 
         $score = 0;
 
@@ -1279,6 +1362,14 @@ class ChatAiAssistantService
                 : 22;
         }
 
+        if ($looksChild && !($catalogIntent['prefer_child'] ?? false)) {
+            $score -= 18;
+        }
+
+        if (($catalogIntent['prefer_child'] ?? false) && $looksChild) {
+            $score += 40;
+        }
+
         return $score;
     }
 
@@ -1306,6 +1397,25 @@ class ChatAiAssistantService
 
             return mb_strlen($token) >= 3;
         })));
+    }
+
+    /**
+     * @return array{exclude_child: bool, prefer_child: bool}
+     */
+    private function buildCatalogIntentProfile(string $text): array
+    {
+        $normalized = $this->normalizeComparableText($text);
+        $excludeChild = preg_match('/не\s+\p{L}*дитяч/u', $normalized) === 1
+            || preg_match('/дитяч\p{L}*\s+не\s+цікав/u', $normalized) === 1
+            || preg_match('/не\s+треба\s+\p{L}*дитяч/u', $normalized) === 1
+            || preg_match('/не\s+хочу\s+\p{L}*дитяч/u', $normalized) === 1;
+
+        $preferChild = !$excludeChild && str_contains($normalized, 'дитяч');
+
+        return [
+            'exclude_child' => $excludeChild,
+            'prefer_child' => $preferChild,
+        ];
     }
 
     /**
@@ -1398,6 +1508,7 @@ class ChatAiAssistantService
     {
         return [
             'slippers' => ['тап', 'тапк', 'тапоч', 'тапул', 'капц', 'капчик'],
+            'children' => ['дитяч', 'малеч'],
             'red' => ['червон', 'красн'],
             'burgundy' => ['бордов'],
             'black' => ['чорн', 'black'],
@@ -1448,6 +1559,15 @@ class ChatAiAssistantService
         }
 
         return max(0, ((int) ($matches[1] ?? 0)) - 1);
+    }
+
+    private function productLooksChild(Product $product): bool
+    {
+        $title = $this->normalizeComparableText($product->title);
+        $category = $this->normalizeComparableText((string) optional($product->category)->name);
+
+        return str_contains($title, 'дитяч')
+            || str_contains($category, 'дитяч');
     }
 
     /**
