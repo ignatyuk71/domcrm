@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Jobs\SyncMetaContactProfileJob;
 use App\Models\ChatContact;
 use App\Models\ChatConversation;
 use App\Models\ChatMessage;
@@ -106,6 +107,11 @@ class ChatService
         }
 
         $contact->save();
+
+        // ЯКЩО КОНТАКТ ЩОЙНО СТВОРЕНО - СТАВИМО ЗАДАЧУ НА АСИНХРОННЕ ОНОВЛЕННЯ ПРОФІЛЮ
+        if ($contact->wasRecentlyCreated) {
+            SyncMetaContactProfileJob::dispatch($contact->id)->onQueue('default');
+        }
 
         return $contact;
     }
