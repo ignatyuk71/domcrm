@@ -778,12 +778,12 @@ class ChatAiAssistantService
             return $this->buildProductSelectionReply($matchedProduct, $text, $state);
         }
 
-        if ($currentProduct && $this->looksLikeProductFollowUp($text)) {
-            return $this->buildCurrentProductReply($currentProduct, $text, $state);
-        }
-
         if ($candidates->isNotEmpty()) {
             return $this->buildProductOptionsReply($candidates, $state);
+        }
+
+        if ($currentProduct && $this->looksLikeProductFollowUp($text)) {
+            return $this->buildCurrentProductReply($currentProduct, $text, $state);
         }
 
         if ($catalogIntent['exclude_child']) {
