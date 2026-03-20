@@ -447,21 +447,24 @@ const buildProducts = (src) => {
   items.forEach((item) => {
     const product = item?.product;
     const variant = item?.variant;
-    const qty = Number(item?.qty || 1);
+    const qty = Math.max(1, Number(item?.qty || 1));
     const baseName = product?.title || 'Товар';
-    const name = qty > 1 ? `${baseName} (x${qty})` : baseName;
     const image = normalizeImageUrl(product?.main_photo_url || null);
 
-    result.push({
-      id: item?.id,
-      sku: variant?.sku || '—',
-      name,
-      color: product?.color?.name || '—',
-      size: variant?.size || '—',
-      checked: false,
-      colorClass: colorClassFor(product?.color?.name),
-      image
-    });
+    // Кожну одиницю товару показуємо окремою карткою,
+    // щоб пакувальник не пропустив дублікати одного розміру.
+    for (let unitIndex = 0; unitIndex < qty; unitIndex += 1) {
+      result.push({
+        id: `${item?.id || product?.id || baseName}-${unitIndex + 1}`,
+        sku: variant?.sku || '—',
+        name: baseName,
+        color: product?.color?.name || '—',
+        size: variant?.size || '—',
+        checked: false,
+        colorClass: colorClassFor(product?.color?.name),
+        image
+      });
+    }
   });
 
   return result;
