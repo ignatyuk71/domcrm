@@ -277,19 +277,30 @@ class ChatService
 
     public function formatAvatarUrl(?ChatContact $contact, ?Customer $customer = null): ?string
     {
-        $candidates = [
-            $contact?->avatar_path,
-            $customer?->fb_profile_pic,
-        ];
+        $contactAvatar = $this->normalizeAvatarPath($contact?->avatar_path);
+        if ($contactAvatar) {
+            return $contactAvatar;
+        }
 
-        foreach ($candidates as $candidate) {
-            $formatted = $this->normalizeAvatarPath($candidate);
-            if ($formatted) {
-                return $formatted;
+        $customerAvatar = trim((string) ($customer?->fb_profile_pic ?? ''));
+        if ($customerAvatar === '') {
+            return null;
+        }
+
+        if (
+            $contact
+            && (str_starts_with($customerAvatar, 'http://') || str_starts_with($customerAvatar, 'https://'))
+        ) {
+            $cachedAvatar = $this->cacheProfileAvatar($contact->id, $customerAvatar);
+            if ($cachedAvatar) {
+                $contact->avatar_path = $cachedAvatar;
+                $contact->save();
+
+                return $this->normalizeAvatarPath($cachedAvatar);
             }
         }
 
-        return null;
+        return $this->normalizeAvatarPath($customerAvatar);
     }
 
     private function normalizeAvatarPath(?string $path): ?string
