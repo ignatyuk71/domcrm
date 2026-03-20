@@ -1,67 +1,58 @@
 <template>
-  <section v-if="aiState" class="ai-side-card">
-    <div class="ai-side-head">
-      <div class="ai-side-copy">
-        <div class="ai-side-title-row">
-          <span class="ai-side-label">AI-асистент</span>
-          <span class="ai-status-chip" :class="aiStatusClass">{{ aiStatusLabel }}</span>
-        </div>
-        <strong>{{ aiHeadline }}</strong>
-        <span class="ai-side-summary">
-          {{ aiSummary || aiDefaultSummary }}
-        </span>
+  <section v-if="aiState" class="ai-widget">
+    <div class="ai-widget-head">
+      <div class="ai-widget-title">
+        <span class="ai-widget-eyebrow">AI</span>
+        <strong>{{ aiModeTitle }}</strong>
       </div>
 
-      <div class="ai-side-actions">
-        <button
-          type="button"
-          class="ai-action-btn"
-          :class="{ 'is-paused': !aiEnabled }"
-          @click="toggleAi"
-        >
-          {{ aiEnabled ? 'Зупинити AI' : 'Увімкнути AI' }}
-        </button>
-
-        <button
-          type="button"
-          class="ai-action-btn is-primary"
-          @click="takeoverAi"
-        >
-          Передати менеджеру
-        </button>
-      </div>
+      <span class="ai-status-pill" :class="aiStatusClass">
+        {{ aiStatusLabel }}
+      </span>
     </div>
 
-    <div v-if="!aiSystemEnabled" class="ai-inline-note is-warning">
-      AI вимкнений у системі.
+    <div v-if="aiAlertText" class="ai-alert" :class="aiAlertClass">
+      {{ aiAlertText }}
     </div>
 
-    <div v-else-if="!aiAvailable" class="ai-inline-note is-error">
-      Ключ OpenAI не додано.
+    <div v-else class="ai-summary-row">
+      <span class="ai-row-label">Суть</span>
+      <p>{{ aiSummaryText }}</p>
     </div>
 
-    <div v-else-if="aiHandoffReason" class="ai-inline-note is-warning">
-      {{ aiHandoffReason }}
-    </div>
-
-    <div v-else-if="aiLastError" class="ai-inline-note is-error">
-      {{ aiLastError }}
-    </div>
-
-    <div v-if="aiLeadItems.length" class="ai-lead-grid">
+    <div v-if="aiLeadRows.length" class="ai-detail-list">
       <div
-        v-for="item in aiLeadItems"
+        v-for="item in aiLeadRows"
         :key="item.key"
-        class="ai-lead-item"
+        class="ai-detail-row"
       >
         <span>{{ item.label }}</span>
         <strong>{{ item.value }}</strong>
       </div>
+
+      <div v-if="aiNotes" class="ai-detail-row">
+        <span>Нотатка</span>
+        <strong>{{ aiNotes }}</strong>
+      </div>
     </div>
 
-    <div v-if="aiNotes" class="ai-notes">
-      <span>Нотатки</span>
-      <strong>{{ aiNotes }}</strong>
+    <div class="ai-actions">
+      <button
+        type="button"
+        class="ai-button ai-button-secondary"
+        :class="{ 'is-paused': !aiEnabled }"
+        @click="toggleAi"
+      >
+        {{ aiEnabled ? 'Пауза AI' : 'Увімкнути AI' }}
+      </button>
+
+      <button
+        type="button"
+        class="ai-button ai-button-primary"
+        @click="takeoverAi"
+      >
+        Менеджер
+      </button>
     </div>
   </section>
 </template>
@@ -82,15 +73,16 @@ const aiState = computed(() => props.conversation?.ai || null);
 const aiEnabled = computed(() => Boolean(aiState.value?.enabled));
 const aiAvailable = computed(() => Boolean(aiState.value?.available));
 const aiSystemEnabled = computed(() => aiState.value?.system_enabled !== false);
-const aiSummary = computed(() => String(aiState.value?.summary || '').trim());
-const aiHandoffReason = computed(() => String(aiState.value?.handoff_reason || '').trim());
-const aiLastError = computed(() => String(aiState.value?.last_error || '').trim());
-const aiNotes = computed(() => String(aiState.value?.lead?.notes || '').trim());
-const aiHeadline = computed(() => {
+const aiSummary = computed(() => compactText(aiState.value?.summary || ''));
+const aiHandoffReason = computed(() => compactText(aiState.value?.handoff_reason || ''));
+const aiLastError = computed(() => compactText(aiState.value?.last_error || ''));
+const aiNotes = computed(() => compactText(aiState.value?.lead?.notes || ''));
+
+const aiModeTitle = computed(() => {
   const status = aiState.value?.status;
 
   if (status === 'manual') {
-    return 'Чат веде менеджер';
+    return 'Чат у менеджера';
   }
 
   if (status === 'paused' || status === 'disabled') {
@@ -101,43 +93,83 @@ const aiHeadline = computed(() => {
     return 'Потрібен менеджер';
   }
 
-  return 'AI відповідає першим';
+  return 'AI веде перший контакт';
 });
-const aiDefaultSummary = computed(() => {
+
+const aiSummaryText = computed(() => {
+  if (aiSummary.value) {
+    return aiSummary.value;
+  }
+
   const status = aiState.value?.status;
 
   if (status === 'manual') {
-    return 'AI більше не відповідає. Далі діалог веде менеджер.';
+    return 'Далі відповідає менеджер.';
   }
 
   if (status === 'paused' || status === 'disabled') {
-    return 'AI не відповідає на нові повідомлення, доки його знову не увімкнуть.';
+    return 'AI не відповідає на нові повідомлення.';
   }
 
   if (status === 'handoff') {
-    return 'AI зібрав запит і очікує, що менеджер підхопить діалог.';
+    return 'AI зібрав запит і очікує менеджера.';
   }
 
-  return 'Коли клієнт напише, AI відповість першим, поставить уточнення і за потреби передасть чат менеджеру.';
+  return 'AI відповідає першим і передає чат менеджеру, коли це потрібно.';
 });
+
 const aiStatusLabel = computed(() => {
   const map = {
-    idle: 'AI увімкнено',
-    queued: 'Є нове повідомлення',
+    idle: 'Активний',
+    queued: 'Нове',
     processing: 'Обробка',
-    replied: 'AI відповів',
-    handoff: 'Потрібен менеджер',
-    manual: 'У менеджера',
+    replied: 'Відповів',
+    handoff: 'Передати',
+    manual: 'Менеджер',
     paused: 'Пауза',
     disabled: 'Вимкнено',
     error: 'Помилка',
     not_configured: 'Без ключа',
   };
 
-  return map[aiState.value?.status] || 'Готовий';
+  return map[aiState.value?.status] || 'Активний';
 });
+
 const aiStatusClass = computed(() => `is-${aiState.value?.status || 'idle'}`);
-const aiLeadItems = computed(() => {
+
+const aiAlertText = computed(() => {
+  if (!aiSystemEnabled.value) {
+    return 'AI вимкнений у системі.';
+  }
+
+  if (!aiAvailable.value) {
+    return 'Не додано ключ OpenAI.';
+  }
+
+  if (aiHandoffReason.value) {
+    return aiHandoffReason.value;
+  }
+
+  if (aiLastError.value) {
+    if (aiLastError.value.includes('429') || aiLastError.value.toLowerCase().includes('quota')) {
+      return 'OpenAI тимчасово недоступний: немає квоти.';
+    }
+
+    return aiLastError.value;
+  }
+
+  return '';
+});
+
+const aiAlertClass = computed(() => {
+  if (!aiSystemEnabled.value || aiHandoffReason.value) {
+    return 'is-warning';
+  }
+
+  return 'is-error';
+});
+
+const aiLeadRows = computed(() => {
   const lead = aiState.value?.lead || {};
 
   return [
@@ -147,8 +179,14 @@ const aiLeadItems = computed(() => {
     { key: 'budget', label: 'Бюджет', value: lead.budget || '' },
     { key: 'timeline', label: 'Термін', value: lead.timeline || '' },
     { key: 'city', label: 'Місто', value: lead.city || '' },
-  ].filter((item) => String(item.value || '').trim());
+  ]
+    .map((item) => ({ ...item, value: compactText(item.value) }))
+    .filter((item) => item.value);
 });
+
+function compactText(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
 
 function toggleAi() {
   if (!props.conversation?.conversation_id) {
@@ -171,196 +209,199 @@ function takeoverAi() {
 </script>
 
 <style scoped>
-.ai-side-card {
+.ai-widget {
   margin-top: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
   padding: 14px;
+  border: 1px solid #dbe4f0;
   border-radius: 18px;
-  border: 1px solid #dbeafe;
-  background: linear-gradient(180deg, #f8fbff 0%, #eef6ff 100%);
+  background: #ffffff;
+  box-shadow: 0 16px 32px -28px rgba(15, 23, 42, 0.38);
 }
 
-.ai-side-head {
+.ai-widget-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
 }
 
-.ai-side-copy {
+.ai-widget-title {
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-.ai-side-title-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+.ai-widget-eyebrow {
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #2563eb;
 }
 
-.ai-side-label {
-  font-size: 11px;
+.ai-widget-title strong {
+  font-size: 18px;
   line-height: 1.2;
   font-weight: 800;
-  color: #2563eb;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.ai-side-copy strong {
-  font-size: 16px;
-  line-height: 1.3;
   color: #0f172a;
 }
 
-.ai-side-summary {
-  font-size: 13px;
-  line-height: 1.45;
-  color: #475569;
-}
-
-.ai-side-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.ai-status-chip {
+.ai-status-pill {
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 24px;
+  min-height: 28px;
   padding: 0 10px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
 }
 
-.ai-status-chip.is-idle,
-.ai-status-chip.is-replied {
+.ai-status-pill.is-idle,
+.ai-status-pill.is-replied {
   background: #dcfce7;
   color: #166534;
 }
 
-.ai-status-chip.is-queued,
-.ai-status-chip.is-processing {
+.ai-status-pill.is-queued,
+.ai-status-pill.is-processing {
   background: #e0f2fe;
   color: #0c4a6e;
 }
 
-.ai-status-chip.is-handoff {
+.ai-status-pill.is-handoff {
   background: #fef3c7;
   color: #92400e;
 }
 
-.ai-status-chip.is-disabled,
-.ai-status-chip.is-manual,
-.ai-status-chip.is-paused {
+.ai-status-pill.is-manual,
+.ai-status-pill.is-paused,
+.ai-status-pill.is-disabled {
   background: #e5e7eb;
   color: #374151;
 }
 
-.ai-status-chip.is-error,
-.ai-status-chip.is-not_configured {
+.ai-status-pill.is-error,
+.ai-status-pill.is-not_configured {
   background: #fee2e2;
   color: #991b1b;
 }
 
-.ai-action-btn {
-  min-height: 34px;
-  padding: 0 12px;
-  border-radius: 10px;
-  border: 1px solid #bfdbfe;
-  background: #ffffff;
-  color: #1d4ed8;
-  font-size: 12px;
+.ai-summary-row,
+.ai-alert {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #eef2f7;
+}
+
+.ai-row-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 11px;
   font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
 }
 
-.ai-action-btn.is-paused {
-  border-color: #d1d5db;
-  color: #374151;
+.ai-summary-row p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: #475569;
 }
 
-.ai-action-btn.is-primary {
-  border-color: #0f172a;
-  background: #0f172a;
-  color: #ffffff;
-}
-
-.ai-inline-note {
-  padding: 9px 10px;
-  border-radius: 10px;
-  font-size: 12px;
+.ai-alert {
+  font-size: 13px;
   line-height: 1.45;
   font-weight: 600;
 }
 
-.ai-inline-note.is-warning {
-  background: #fffbeb;
+.ai-alert.is-warning {
   color: #92400e;
-  border: 1px solid #fde68a;
 }
 
-.ai-inline-note.is-error {
-  background: #fef2f2;
+.ai-alert.is-error {
   color: #991b1b;
-  border: 1px solid #fecaca;
 }
 
-.ai-lead-grid {
+.ai-detail-list {
+  margin-top: 12px;
+  border-top: 1px solid #eef2f7;
+}
+
+.ai-detail-row {
+  display: grid;
+  grid-template-columns: 78px minmax(0, 1fr);
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.ai-detail-row:last-child {
+  border-bottom: none;
+}
+
+.ai-detail-row span {
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.ai-detail-row strong {
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.35;
+  font-weight: 700;
+  color: #0f172a;
+  word-break: break-word;
+}
+
+.ai-actions {
+  margin-top: 14px;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  gap: 10px;
 }
 
-.ai-lead-item,
-.ai-notes {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 10px 11px;
+.ai-button {
+  min-height: 40px;
+  padding: 0 12px;
   border-radius: 12px;
-  border: 1px solid rgba(191, 219, 254, 0.9);
-  background: rgba(255, 255, 255, 0.82);
-}
-
-.ai-lead-item span,
-.ai-notes span {
-  font-size: 10px;
-  line-height: 1.2;
-  font-weight: 800;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.ai-lead-item strong,
-.ai-notes strong {
   font-size: 13px;
-  line-height: 1.35;
-  color: #0f172a;
+  font-weight: 700;
+  transition: all 0.18s ease;
+}
+
+.ai-button-secondary {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+}
+
+.ai-button-secondary.is-paused {
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.ai-button-primary {
+  border: 1px solid #0f172a;
+  background: #0f172a;
+  color: #ffffff;
 }
 
 @media (max-width: 768px) {
-  .ai-side-head {
-    flex-direction: column;
+  .ai-widget-head,
+  .ai-actions {
+    display: grid;
+    grid-template-columns: 1fr;
   }
 
-  .ai-side-actions {
-    width: 100%;
-    justify-content: stretch;
-  }
-
-  .ai-action-btn {
-    flex: 1 1 0;
+  .ai-status-pill {
+    justify-self: start;
   }
 }
 </style>
