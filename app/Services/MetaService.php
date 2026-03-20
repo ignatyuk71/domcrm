@@ -187,28 +187,82 @@ class MetaService
     /**
      * Оновлює знімок профілю в customers і chat_contacts.
      */
-    public function updateCustomerProfile(Customer $customer): void
+    public function updateCustomerProfile(Customer $customer, ?string $platform = null): void
     {
-        $chatService = app(ChatService::class);
         $connection = $this->getSettings();
-
         $platforms = [];
-        if ($customer->fb_user_id) {
+
+        if ($platform === 'messenger' && $customer->fb_user_id) {
+            $platforms['messenger'] = (string) $customer->fb_user_id;
+        } elseif ($platform === 'instagram' && $customer->instagram_user_id) {
+            $platforms['instagram'] = (string) $customer->instagram_user_id;
+        } elseif ($platform === null && $customer->fb_user_id) {
             $platforms['messenger'] = (string) $customer->fb_user_id;
         }
-        if ($customer->instagram_user_id) {
+        if ($platform === null && $customer->instagram_user_id) {
             $platforms['instagram'] = (string) $customer->instagram_user_id;
         }
 
         foreach ($platforms as $platform => $externalUserId) {
+            $fields = $platform === 'instagram'
+                ? 'name,username,profile_pic'
+                : 'first_name,last_name,profile_pic';
+
+            $response = Http::withToken($connection->access_token)
+                ->get($this->graphUrl("/{$externalUserId}"), ['fields' => $fields]);
+
+            if (!$response->successful()) {
+                continue;
+            }
+
+            $profile = array_merge(
+                $this->getParticipantProfileSnapshot($externalUserId, $platform),
+                array_filter($response->json(), static fn ($value) => $value !== null && $value !== '')
+            );
+
+            $payload = [];
+            if ($platform === 'instagram') {
+                $fullName = trim((string) ($profile['name'] ?? ''));
+                if ($fullName !== '') {
+                    [$firstName, $lastName] = $this->splitDisplayName($fullName);
+                    $payload['first_name'] = $firstName ?: $customer->first_name;
+                    $payload['last_name'] = $lastName ?: $customer->last_name;
+                }
+
+                if (!empty($profile['username'])) {
+                    $payload['instagram_username'] = (string) $profile['username'];
+                }
+            } else {
+                if (!empty($profile['first_name'])) {
+                    $payload['first_name'] = (string) $profile['first_name'];
+                }
+                if (!empty($profile['last_name'])) {
+                    $payload['last_name'] = (string) $profile['last_name'];
+                }
+            }
+
+            if (!empty($profile['profile_pic'])) {
+                $payload['fb_profile_pic'] = $this->cacheProfileAvatar($customer, (string) $profile['profile_pic'])
+                    ?: (string) $profile['profile_pic'];
+            }
+
+            if ($payload !== []) {
+                $customer->update($payload);
+                $customer->refresh();
+            }
+
+            $chatService = app(ChatService::class);
             $contact = $chatService->findOrCreateContact(
                 $connection,
                 $platform,
                 $externalUserId,
-                $customer
+                $customer,
+                $profile
             );
 
-            $chatService->syncContactProfile($contact, $this, $customer);
+            if (!empty($profile['profile_pic'])) {
+                $chatService->syncContactProfile($contact, $this, $customer);
+            }
         }
     }
 
@@ -479,5 +533,46 @@ class MetaService
     private function graphUrl(string $path): string
     {
         return 'https://graph.facebook.com/' . config('services.meta.graph_version', 'v19.0') . $path;
+    }
+
+    private function cacheProfileAvatar(Customer $customer, string $remoteUrl): ?string
+    {
+        if ($remoteUrl === '') {
+            return null;
+        }
+
+        if (!str_starts_with($remoteUrl, 'http://') && !str_starts_with($remoteUrl, 'https://')) {
+            return ltrim($remoteUrl, '/');
+        }
+
+        try {
+            $response = Http::timeout(10)->get($remoteUrl);
+            if ($response->failed()) {
+                Log::warning('Profile avatar download failed', [
+                    'customer_id' => $customer->id,
+                    'url' => $remoteUrl,
+                    'status' => $response->status(),
+                ]);
+
+                return null;
+            }
+
+            $mimeType = $response->header('Content-Type');
+            $extension = $this->guessExtension($remoteUrl, $mimeType);
+            $relativePath = 'avatars/' . date('Y/m') . '/customer_' . $customer->id . '_' . md5($remoteUrl) . '.' . strtolower($extension);
+
+            Storage::disk('chat_uploads')->put($relativePath, $response->body());
+            @chmod(public_path('chat/' . $relativePath), 0644);
+
+            return 'chat/' . $relativePath;
+        } catch (\Throwable $e) {
+            Log::warning('Profile avatar download failed', [
+                'customer_id' => $customer->id,
+                'url' => $remoteUrl,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
     }
 }

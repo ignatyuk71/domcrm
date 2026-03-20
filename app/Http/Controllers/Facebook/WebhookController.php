@@ -150,6 +150,13 @@ class WebhookController extends Controller
         $connection = $chatService->getCurrentConnection();
         $profile = $metaService->getContactProfile((string) $externalUserId, $platform);
         $customer = $chatService->resolveCustomer($platform, (string) $externalUserId, $profile);
+
+        if (!$isEcho) {
+            $metaService->updateCustomerProfile($customer, $platform);
+            $customer->refresh();
+            $profile = $metaService->getContactProfile((string) $externalUserId, $platform);
+        }
+
         $contact = $chatService->findOrCreateContact(
             $connection,
             $platform,
@@ -158,12 +165,7 @@ class WebhookController extends Controller
             $profile
         );
 
-        $shouldPersistProfile = !$isEcho
-            || !$contact->display_name
-            || (!$contact->avatar_path && !$contact->avatar_original_url)
-            || $chatService->shouldRefreshContactProfile($contact, $customer);
-
-        if ($shouldPersistProfile) {
+        if (!$contact->display_name || (!$contact->avatar_path && !$contact->avatar_original_url)) {
             $contact = $chatService->syncContactProfile($contact, $metaService, $customer);
         }
 
