@@ -300,7 +300,36 @@ class ChatService
             }
         }
 
+        if ($contact && $this->shouldRefreshContactAvatar($contact)) {
+            try {
+                $refreshedContact = $this->syncContactProfile($contact, app(MetaService::class), $customer);
+                $refreshedAvatar = $this->normalizeAvatarPath($refreshedContact->avatar_path);
+                if ($refreshedAvatar) {
+                    return $refreshedAvatar;
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Не вдалося оновити аватар контакту через fallback', [
+                    'contact_id' => $contact->id,
+                    'platform' => $contact->platform,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
         return $this->normalizeAvatarPath($customerAvatar);
+    }
+
+    private function shouldRefreshContactAvatar(ChatContact $contact): bool
+    {
+        if (!empty($contact->avatar_path)) {
+            return false;
+        }
+
+        if (!$contact->last_profile_sync_at) {
+            return true;
+        }
+
+        return $contact->last_profile_sync_at->lt(now()->subHours(6));
     }
 
     private function normalizeAvatarPath(?string $path): ?string
