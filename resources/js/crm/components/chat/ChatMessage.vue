@@ -27,6 +27,9 @@
         <div class="origin-message-copy">
           <span class="origin-message-label">{{ originSummary }}</span>
           <strong>{{ originTitle }}</strong>
+          <span v-if="originSourceDisplay" class="origin-message-source">
+            {{ originSourceTitle }}: {{ originSourceDisplay }}
+          </span>
         </div>
         <a
           v-if="originContext.url"
@@ -123,6 +126,8 @@ const originTitle = computed(() => {
         ? 'Джерело: reels'
         : 'Джерело: пост';
 });
+const originSourceTitle = computed(() => originContext.value?.source_title || 'Джерело');
+const originSourceDisplay = computed(() => originContext.value?.source_display || '');
 
 const normalizedAttachments = computed(() => {
   if (!hasAttachments.value) return [];
@@ -274,6 +279,13 @@ const statusIcon = computed(() => {
   color: #0f172a;
 }
 
+.origin-message-source {
+  font-size: 12px;
+  line-height: 1.35;
+  color: #475569;
+  word-break: break-word;
+}
+
 .origin-message-link {
   flex-shrink: 0;
   display: inline-flex;
@@ -297,6 +309,7 @@ const statusIcon = computed(() => {
 
 .chat-message.mine .origin-message-label,
 .chat-message.mine .origin-message-copy strong,
+.chat-message.mine .origin-message-source,
 .chat-message.mine .origin-message-link {
   color: #ffffff;
 }

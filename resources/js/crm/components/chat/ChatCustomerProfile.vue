@@ -124,12 +124,12 @@
             <span v-else-if="historyOrders.length" class="counter-badge">{{ historyOrders.length }}</span>
           </div>
 
-          <div v-if="!historyOrders.length && !historyLoading" class="empty-history">
+          <div v-if="historyReady && !historyOrders.length && !historyLoading" class="empty-history">
             <div class="empty-icon"><i class="bi bi-box-seam"></i></div>
             <span>Замовлень ще немає</span>
           </div>
 
-          <div v-else class="orders-list">
+          <div v-else-if="historyOrders.length" class="orders-list">
             <div 
               v-for="order in historyOrders" 
               :key="order.id" 
@@ -256,8 +256,10 @@ const phoneRef = ref(null);
 const isOrderSaving = ref(false);
 const historyOrders = ref([]);
 const historyLoading = ref(false);
+const historyReady = ref(false);
 const placeholderThumb = 'https://via.placeholder.com/48x48?text=%20';
 const avatarFailed = ref(false);
+let historyRequestToken = 0;
 
 // Refs для скролу
 const profileContainer = ref(null);
@@ -378,24 +380,53 @@ const avatarUrl = computed(() => props.customer?.fb_profile_pic || props.custome
 const safeAvatarUrl = computed(() => (avatarFailed.value ? '' : avatarUrl.value));
 const isInstagram = computed(() => (props.customer?.source || props.customer?.platform) === 'instagram' || !!props.customer?.instagram_user_id);
 
-watch(() => props.customer, (newVal) => {
-  if (newVal) {
-    form.first_name = newVal.first_name || '';
-    form.last_name = newVal.last_name || '';
-    form.phone = newVal.phone ? newVal.phone.replace(/\D/g, '') : '';
-    form.email = newVal.email || '';
-    showPhoneInput.value = !!form.phone;
-    showEmailInput.value = !!form.email;
+function syncFormFromCustomer(customer, { resetPanels = false } = {}) {
+  if (!customer) {
+    return;
+  }
+
+  form.first_name = customer.first_name || '';
+  form.last_name = customer.last_name || '';
+  form.phone = customer.phone ? customer.phone.replace(/\D/g, '') : '';
+  form.email = customer.email || '';
+  showPhoneInput.value = !!form.phone;
+  showEmailInput.value = !!form.email;
+
+  if (resetPanels) {
     showNameInput.value = false;
     showOrderPanel.value = false;
     resetOrderDraft();
-    if (customerId.value) loadCustomerHistory(customerId.value);
   }
-}, { immediate: true });
+}
 
-watch(customerId, (id) => {
-  if (id) loadCustomerHistory(id);
-});
+watch(
+  customerId,
+  async (id, oldId) => {
+    if (!id) {
+      historyOrders.value = [];
+      historyReady.value = false;
+      return;
+    }
+
+    syncFormFromCustomer(props.customer, { resetPanels: id !== oldId });
+
+    if (id !== oldId) {
+      await loadCustomerHistory(id);
+    }
+  },
+  { immediate: true }
+);
+
+watch(
+  () => [props.customer?.first_name, props.customer?.last_name, props.customer?.phone, props.customer?.email],
+  () => {
+    if (!props.customer || showNameInput.value) {
+      return;
+    }
+
+    syncFormFromCustomer(props.customer, { resetPanels: false });
+  }
+);
 
 watch(avatarUrl, () => {
   avatarFailed.value = false;
@@ -415,16 +446,28 @@ const enableEmail = async () => { showEmailInput.value = true; await nextTick();
 const clearEmail = () => { form.email = ''; showEmailInput.value = false; };
 
 const loadCustomerHistory = async (id) => {
+  const requestToken = ++historyRequestToken;
   historyLoading.value = true;
+  historyReady.value = false;
   try {
     const { data } = await axios.get(`/customers/${id}`);
     const recent = data?.data?.recent_orders || [];
+
+    if (requestToken !== historyRequestToken) {
+      return;
+    }
+
     historyOrders.value = recent.map((order) => ({ ...order, isOpen: false }));
   } catch (e) {
     console.error(e);
-    historyOrders.value = [];
+    if (requestToken === historyRequestToken) {
+      historyOrders.value = [];
+    }
   } finally {
-    historyLoading.value = false;
+    if (requestToken === historyRequestToken) {
+      historyLoading.value = false;
+      historyReady.value = true;
+    }
   }
 };
 

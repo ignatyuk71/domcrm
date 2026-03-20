@@ -376,6 +376,14 @@ class ChatService
             'object_label' => $objectLabel,
             'summary' => "Коментар до {$objectLabel} {$platformLabel}",
             'url' => $url,
+            'source_title' => match ($objectType) {
+                'ad' => 'Реклама',
+                'story' => 'Сторіс',
+                'reel' => 'Reels',
+                'post' => 'Пост',
+                default => 'Джерело',
+            },
+            'source_display' => $this->formatOriginSourceDisplay($url),
             'comment_id' => $commentId,
         ];
     }
@@ -610,5 +618,33 @@ class ChatService
         }
 
         return $extension !== '' ? $extension : 'jpg';
+    }
+
+    private function formatOriginSourceDisplay(?string $url): ?string
+    {
+        if (!$url) {
+            return null;
+        }
+
+        $host = (string) parse_url($url, PHP_URL_HOST);
+        $path = trim((string) parse_url($url, PHP_URL_PATH), '/');
+
+        $host = preg_replace('/^www\./i', '', $host);
+
+        if ($path === '') {
+            return $host !== '' ? $host : null;
+        }
+
+        $segments = array_values(array_filter(explode('/', $path)));
+        $visibleSegments = array_slice($segments, 0, 3);
+        $displayPath = implode('/', $visibleSegments);
+
+        if (count($segments) > 3) {
+            $displayPath .= '/…';
+        }
+
+        $display = trim(($host !== '' ? $host . '/' : '') . $displayPath, '/');
+
+        return $display !== '' ? $display : null;
     }
 }

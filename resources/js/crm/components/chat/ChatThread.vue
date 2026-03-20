@@ -96,6 +96,9 @@
         <div class="origin-copy">
           <span class="origin-label">{{ originContext.summary }}</span>
           <strong>{{ originTitle }}</strong>
+          <span v-if="originSourceDisplay" class="origin-source-meta">
+            {{ originSourceTitle }}: {{ originSourceDisplay }}
+          </span>
         </div>
         <a
           v-if="originContext.url"
@@ -221,6 +224,8 @@ const originTitle = computed(() => {
         ? 'Коментар до reels'
         : 'Коментар до поста';
 });
+const originSourceTitle = computed(() => originContext.value?.source_title || 'Джерело');
+const originSourceDisplay = computed(() => originContext.value?.source_display || '');
 const originBadgeLabel = computed(() => {
   if (!originContext.value) {
     return '';
@@ -370,6 +375,13 @@ watch(
   font-size: 13px;
   line-height: 1.3;
   color: #0f172a;
+}
+
+.origin-source-meta {
+  font-size: 12px;
+  line-height: 1.35;
+  color: #475569;
+  word-break: break-word;
 }
 
 .origin-link-btn {
