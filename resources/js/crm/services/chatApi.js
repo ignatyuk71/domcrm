@@ -58,6 +58,12 @@ export function forceSync(customerId, platform = null) {
   });
 }
 
+export function refreshCustomerProfile(customerId, platform = null) {
+  return axios.post(`/api/chat/customers/${customerId}/refresh-profile`, {}, {
+    params: platform ? { platform } : {},
+  });
+}
+
 export function fetchNewMessages(threadId, sinceId, platform = null) {
   return axios
     .get(`/api/chat/threads/${threadId}/messages/updates`, {

@@ -22,7 +22,7 @@ class ChatApiController extends Controller
     ) {
     }
 
-    public function list(): JsonResponse
+    public function list(MetaService $metaService): JsonResponse
     {
         try {
             $conversations = ChatConversation::query()
@@ -32,7 +32,7 @@ class ChatApiController extends Controller
                 ->paginate(20);
 
             $conversations->getCollection()->transform(
-                fn (ChatConversation $conversation) => $this->formatConversation($conversation)
+                fn (ChatConversation $conversation) => $this->formatConversation($conversation, $metaService)
             );
 
             return response()->json($conversations);
@@ -46,7 +46,7 @@ class ChatApiController extends Controller
         }
     }
 
-    public function funnel(): JsonResponse
+    public function funnel(MetaService $metaService): JsonResponse
     {
         $conversations = ChatConversation::query()
             ->where('status', '!=', 'archived')
@@ -60,7 +60,7 @@ class ChatApiController extends Controller
         }
 
         foreach ($conversations as $conversation) {
-            $payload = $this->formatConversation($conversation);
+            $payload = $this->formatConversation($conversation, $metaService);
             $stageKey = $payload['stage'] ?: 'none';
             $groups[$stageKey][] = $payload;
         }
@@ -111,7 +111,7 @@ class ChatApiController extends Controller
         return response()->json(['success' => true]);
     }
 
-    public function showByCustomer(Request $request, int $customerId): JsonResponse
+    public function showByCustomer(Request $request, int $customerId, MetaService $metaService): JsonResponse
     {
         $platform = $request->query('platform');
         $conversation = $this->chatService->resolveConversationByCustomer($customerId, $platform);
@@ -120,7 +120,7 @@ class ChatApiController extends Controller
             return response()->json(['error' => 'Conversation not found'], 404);
         }
 
-        return response()->json(['data' => $this->formatConversation($conversation)]);
+        return response()->json(['data' => $this->formatConversation($conversation, $metaService)]);
     }
 
     public function messages(Request $request, int $id, MetaService $metaService): JsonResponse
@@ -440,19 +440,10 @@ class ChatApiController extends Controller
             return response()->json(['error' => 'Conversation not found'], 404);
         }
 
-        $contact = $this->chatService->syncContactProfile($conversation->contact, $metaService, $customer);
+        $conversation = $this->chatService->hydrateConversationProfile($conversation, $metaService, true);
         $conversation = $conversation->fresh(['contact', 'customer', 'stage', 'lastMessage.attachments']);
 
-        return response()->json([
-            'data' => [
-                'id' => $customer->id,
-                'first_name' => $customer->first_name ?: $contact->first_name,
-                'last_name' => $customer->last_name ?: $contact->last_name,
-                'fb_profile_pic' => $this->chatService->formatAvatarUrl($contact, $customer, true),
-                'fb_user_id' => $contact->platform === 'messenger' ? $contact->external_user_id : $customer->fb_user_id,
-                'instagram_user_id' => $contact->platform === 'instagram' ? $contact->external_user_id : $customer->instagram_user_id,
-            ],
-        ]);
+        return response()->json(['data' => $this->formatConversation($conversation)]);
     }
 
     private function availableStages(): array
@@ -466,11 +457,15 @@ class ChatApiController extends Controller
         ];
     }
 
-    private function formatConversation(ChatConversation $conversation): array
+    private function formatConversation(ChatConversation $conversation, ?MetaService $metaService = null): array
     {
+        if ($metaService) {
+            $conversation = $this->chatService->hydrateConversationProfile($conversation, $metaService);
+        }
+
         $contact = $conversation->contact;
         $customer = $conversation->customer;
-        $avatarUrl = $this->chatService->formatAvatarUrl($contact, $customer);
+        $avatarUrl = $this->chatService->formatAvatarUrl($contact, $customer, true);
         $originContext = $this->resolveOriginContext(
             data_get($conversation->meta, 'origin_context'),
             $conversation->last_message_preview,

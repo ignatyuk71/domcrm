@@ -159,6 +159,33 @@ class ChatService
         }
     }
 
+    public function hydrateConversationProfile(
+        ChatConversation $conversation,
+        MetaService $metaService,
+        bool $force = false
+    ): ChatConversation {
+        $contact = $conversation->contact;
+        if (!$contact) {
+            return $conversation;
+        }
+
+        if (!$force && !$this->shouldRefreshContactProfile($contact, $conversation->customer)) {
+            return $conversation;
+        }
+
+        $contact = $this->syncContactProfile($contact, $metaService, $conversation->customer);
+        $conversation->setRelation('contact', $contact);
+
+        if ($conversation->customer_id) {
+            $freshCustomer = Customer::query()->find($conversation->customer_id);
+            if ($freshCustomer) {
+                $conversation->setRelation('customer', $freshCustomer);
+            }
+        }
+
+        return $conversation;
+    }
+
     public function getOrCreateConversation(
         ChatContact $contact,
         ?Customer $customer = null,
@@ -352,11 +379,32 @@ class ChatService
             return false;
         }
 
-        if (!$contact->last_profile_sync_at) {
-            return true;
+        return $this->canRefreshContactProfile($contact);
+    }
+
+    public function shouldRefreshContactProfile(?ChatContact $contact, ?Customer $customer = null): bool
+    {
+        if (!$contact) {
+            return false;
         }
 
-        return $contact->last_profile_sync_at->lt(now()->subHours(6));
+        $displayName = trim((string) $contact->display_name);
+        $contactFirstName = trim((string) $contact->first_name);
+        $contactLastName = trim((string) $contact->last_name);
+        $customerName = trim((string) ($customer?->full_name ?? ''));
+        $resolvedName = $customerName !== '' && !$this->isPlaceholderName($customerName)
+            ? $customerName
+            : ($displayName !== '' ? $displayName : trim($contactFirstName . ' ' . $contactLastName));
+
+        $hasValidVisibleName = $resolvedName !== '' && !$this->isPlaceholderName($resolvedName);
+        $hasVisibleAvatar = $this->normalizeAvatarPath($contact->avatar_path) !== null
+            || trim((string) ($customer?->fb_profile_pic ?? '')) !== '';
+
+        if ($hasValidVisibleName && $hasVisibleAvatar) {
+            return false;
+        }
+
+        return $this->canRefreshContactProfile($contact);
     }
 
     private function shouldReplaceCustomerName(?string $firstName): bool
@@ -366,6 +414,27 @@ class ChatService
         return $firstName === ''
             || str_contains($firstName, 'Facebook User')
             || str_contains($firstName, 'Instagram User');
+    }
+
+    private function isPlaceholderName(?string $value): bool
+    {
+        $value = trim((string) $value);
+
+        if ($value === '') {
+            return false;
+        }
+
+        return str_contains($value, 'Facebook User')
+            || str_contains($value, 'Instagram User');
+    }
+
+    private function canRefreshContactProfile(ChatContact $contact): bool
+    {
+        if (!$contact->last_profile_sync_at) {
+            return true;
+        }
+
+        return $contact->last_profile_sync_at->lt(now()->subHours(6));
     }
 
     private function normalizeAvatarPath(?string $path): ?string

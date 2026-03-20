@@ -7,6 +7,7 @@ import {
   getConversationByCustomer,
   getMessages,
   markRead as apiMarkRead,
+  refreshCustomerProfile as apiRefreshCustomerProfile,
   sendMessage as apiSendMessage,
   updateConversationStage as apiUpdateConversationStage,
 } from '@/crm/services/chatApi';
@@ -64,6 +65,17 @@ export function useChat() {
     conversations.value = conversations.value.map((chat) => (
       chat.conversation_id === conversationId ? updater(chat) : chat
     ));
+  }
+
+  function patchConversationSnapshot(snapshot) {
+    if (!snapshot?.conversation_id) {
+      return;
+    }
+
+    patchConversation(snapshot.conversation_id, (chat) => ({
+      ...chat,
+      ...snapshot,
+    }));
   }
 
   function moveConversationToTop(conversationId) {
@@ -141,6 +153,19 @@ export function useChat() {
     try {
       const { data } = await getMessages(chat.customer_id, chat.platform);
       messages.value = normalizeCollection(data);
+
+      apiRefreshCustomerProfile(chat.customer_id, chat.platform)
+        .then(({ data: responseData }) => {
+          const snapshot = responseData?.data || null;
+          if (!snapshot) {
+            return;
+          }
+
+          patchConversationSnapshot(snapshot);
+        })
+        .catch((e) => {
+          console.warn('Не вдалося оновити профіль чату', e);
+        });
 
       apiMarkRead(chat.customer_id, chat.platform).catch(() => {});
 
