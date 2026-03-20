@@ -24,7 +24,8 @@ class OpenAiResponsesService
         string $instructions,
         array|string $input,
         array $schema,
-        string $schemaName = 'chat_triage'
+        string $schemaName = 'chat_triage',
+        ?string $model = null
     ): array {
         if (!$this->isConfigured()) {
             throw new RuntimeException('OPENAI_API_KEY не налаштований.');
@@ -36,7 +37,7 @@ class OpenAiResponsesService
             ->withToken((string) config('services.openai.api_key'))
             ->acceptJson()
             ->post('responses', [
-                'model' => (string) config('services.openai.model', 'gpt-4.1-mini'),
+                'model' => $model ?: (string) config('services.openai.model', 'gpt-4.1-mini'),
                 'instructions' => $instructions,
                 'input' => $input,
                 'store' => (bool) config('services.openai.store', false),

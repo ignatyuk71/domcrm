@@ -462,7 +462,7 @@
                 <span class="icon-frame"><i class="bi bi-box-seam"></i></span>
                 <span class="item-text-sub">Нова Пошта</span>
             </a>
-            <a href="#" class="sidebar-link-sub">
+            <a href="{{ route('settings.ai.index') }}" class="sidebar-link-sub {{ request()->is('settings/ai*') ? 'active' : '' }}">
                 <span class="icon-frame"><i class="bi bi-sliders"></i></span>
                 <span class="item-text-sub">Система</span>
             </a>

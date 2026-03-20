@@ -17,13 +17,14 @@ class ChatAiAssistantService
     public function __construct(
         private readonly OpenAiResponsesService $openAiResponses,
         private readonly ChatService $chatService,
-        private readonly MetaService $metaService
+        private readonly MetaService $metaService,
+        private readonly ChatAiSettingsService $chatAiSettings
     ) {
     }
 
     public function isFeatureEnabled(): bool
     {
-        return (bool) config('services.chat_ai.enabled', true);
+        return (bool) $this->chatAiSettings->resolveRuntimeSettings()['enabled'];
     }
 
     public function isConfigured(): bool
@@ -57,7 +58,9 @@ class ChatAiAssistantService
         $this->storeState($conversation, [
             'enabled' => $enabled,
             'status' => $enabled
-                ? ($this->isConfigured() ? 'idle' : 'not_configured')
+                ? ($this->isFeatureEnabled()
+                    ? ($this->isConfigured() ? 'idle' : 'not_configured')
+                    : 'disabled')
                 : 'paused',
             'handoff_required' => false,
             'handoff_reason' => '',
@@ -109,6 +112,7 @@ class ChatAiAssistantService
 
         return [
             'available' => $this->isConfigured(),
+            'system_enabled' => $this->isFeatureEnabled(),
             'enabled' => (bool) $state['enabled'],
             'status' => (string) $state['status'],
             'summary' => (string) $state['summary'],
@@ -153,6 +157,7 @@ class ChatAiAssistantService
             return;
         }
 
+        $runtimeSettings = $this->chatAiSettings->resolveRuntimeSettings();
         $currentState = $this->getState($conversation);
 
         $this->storeState($conversation, [
@@ -167,10 +172,11 @@ class ChatAiAssistantService
 
         try {
             $decision = $this->openAiResponses->createStructuredResponse(
-                $this->buildInstructions(),
-                $this->buildInput($conversation, $message),
+                $this->buildInstructions($runtimeSettings),
+                $this->buildInput($conversation, $message, $runtimeSettings),
                 $this->decisionSchema(),
-                'chat_first_line_triage'
+                'chat_first_line_triage',
+                (string) $runtimeSettings['model']
             );
         } catch (\Throwable $e) {
             Log::warning('Chat AI decision failed', [
@@ -206,7 +212,13 @@ class ChatAiAssistantService
 
         try {
             if ($shouldReply) {
-                $sentMessage = $this->sendAiReply($conversation, $replyText, $handoffRequired, $leadStatus);
+                $sentMessage = $this->sendAiReply(
+                    $conversation,
+                    $replyText,
+                    $handoffRequired,
+                    $leadStatus,
+                    (string) $runtimeSettings['model']
+                );
                 $conversation = $this->freshConversation($conversation);
             }
         } catch (\Throwable $e) {
@@ -236,7 +248,7 @@ class ChatAiAssistantService
             'lead_status' => $leadStatus,
             'lead' => $lead,
             'last_error' => '',
-            'model' => (string) config('services.openai.model', 'gpt-4.1-mini'),
+            'model' => (string) $runtimeSettings['model'],
             'updated_at' => now()->toDateTimeString(),
         ]);
 
@@ -348,13 +360,13 @@ class ChatAiAssistantService
     /**
      * @return array<int, string>
      */
-    private function buildTranscript(ChatConversation $conversation): array
+    private function buildTranscript(ChatConversation $conversation, int $limit): array
     {
         $messages = ChatMessage::query()
             ->with('attachments')
             ->where('conversation_id', $conversation->id)
             ->orderByDesc('id')
-            ->limit((int) config('services.chat_ai.max_messages', 12))
+            ->limit($limit)
             ->get()
             ->sortBy('id')
             ->values();
@@ -388,10 +400,13 @@ class ChatAiAssistantService
         })->all();
     }
 
-    private function buildInstructions(): string
+    /**
+     * @param  array<string, mixed>  $settings
+     */
+    private function buildInstructions(array $settings): string
     {
-        return implode("\n", [
-            'Ти AI-асистент першої лінії для CRM інтернет-магазину.',
+        $instructions = [
+            'Ти ' . $settings['assistant_name'] . ', AI-асистент першої лінії для CRM інтернет-магазину.',
             'Спілкуйся тільки українською мовою.',
             'Ти відповідаєш першим, збираєш дані та передаєш менеджеру складні або продажні кейси.',
             'Не вигадуй ціну, наявність, строки доставки, знижки або умови оплати, якщо цього немає в контексті.',
@@ -401,15 +416,37 @@ class ChatAiAssistantService
             'Не використовуй російську мову.',
             'Якщо потрібно передати менеджеру, можеш коротко написати, що передаєш запит менеджеру.',
             'Поверни тільки JSON за заданою схемою.',
-        ]);
+            'Стиль відповіді: ' . $settings['reply_style'],
+        ];
+
+        if ($settings['qualification_fields'] !== []) {
+            $instructions[] = 'Під час кваліфікації збирай по можливості: ' . implode(', ', $settings['qualification_fields']) . '.';
+        }
+
+        if ($settings['company_context'] !== '') {
+            $instructions[] = 'Контекст бізнесу: ' . $this->limitText((string) $settings['company_context'], 2000);
+        }
+
+        if ($settings['handoff_rules'] !== '') {
+            $instructions[] = 'Окремі правила передачі менеджеру: ' . $this->limitText((string) $settings['handoff_rules'], 2000);
+        }
+
+        if ($settings['knowledge_base'] !== '') {
+            $instructions[] = 'База знань: ' . $this->limitText((string) $settings['knowledge_base'], 4000);
+        }
+
+        return implode("\n", $instructions);
     }
 
-    private function buildInput(ChatConversation $conversation, ChatMessage $message): string
+    /**
+     * @param  array<string, mixed>  $settings
+     */
+    private function buildInput(ChatConversation $conversation, ChatMessage $message, array $settings): string
     {
         $customer = $conversation->customer;
         $contact = $conversation->contact;
         $state = $this->getState($conversation);
-        $transcript = $this->buildTranscript($conversation);
+        $transcript = $this->buildTranscript($conversation, (int) $settings['max_messages']);
 
         return implode("\n", [
             'Канал: ' . ($contact?->platform === 'instagram' ? 'Instagram' : 'Messenger'),
@@ -502,7 +539,8 @@ class ChatAiAssistantService
         ChatConversation $conversation,
         string $replyText,
         bool $handoffRequired,
-        string $leadStatus
+        string $leadStatus,
+        string $model
     ): ?ChatMessage {
         $customer = $conversation->customer;
         $contact = $conversation->contact;
@@ -533,7 +571,7 @@ class ChatAiAssistantService
             'meta' => [
                 'ai_generated' => true,
                 'provider' => 'openai',
-                'model' => (string) config('services.openai.model', 'gpt-4.1-mini'),
+                'model' => $model,
                 'handoff_required' => $handoffRequired,
                 'lead_status' => $leadStatus,
             ],

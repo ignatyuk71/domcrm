@@ -214,6 +214,12 @@
             </div>
           </div>
         </div>
+
+        <ChatAiSummaryCard
+          :conversation="customer"
+          @toggle-ai="emit('toggle-ai', $event)"
+          @takeover-ai="emit('takeover-ai', $event)"
+        />
       </div>
 
     </div>
@@ -241,10 +247,11 @@
 <script setup>
 import { ref, reactive, watch, nextTick, computed } from 'vue';
 import axios from 'axios';
+import ChatAiSummaryCard from '@/crm/components/chat/ChatAiSummaryCard.vue';
 import ChatOrderPanel from '@/crm/components/chat/ChatOrderPanel.vue';
 
 const props = defineProps({ customer: Object });
-const emit = defineEmits(['close', 'update-stage']);
+const emit = defineEmits(['close', 'update-stage', 'toggle-ai', 'takeover-ai']);
 
 const showNameInput = ref(false);
 const phoneFocused = ref(false);

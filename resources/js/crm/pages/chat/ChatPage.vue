@@ -54,8 +54,6 @@
         @open-list="openMobileList"
         @open-profile="openProfile"
         @update-stage="handleUpdateStage"
-        @toggle-ai="handleToggleAi"
-        @takeover-ai="handleTakeoverAi"
       />
       <ChatEmpty v-else @open-list="openMobileList" />
     </template>
@@ -65,6 +63,8 @@
         :customer="activeChat"
         @close="closeProfile"
         @update-stage="handleUpdateStage"
+        @toggle-ai="handleToggleAi"
+        @takeover-ai="handleTakeoverAi"
       />
     </template>
   </ChatLayout>
