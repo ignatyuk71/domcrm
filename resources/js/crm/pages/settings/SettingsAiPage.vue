@@ -37,13 +37,26 @@
             <span class="hint">Базові параметри запуску</span>
           </div>
 
-          <label class="toggle-row">
-            <div>
+          <div class="toggle-row">
+            <div class="toggle-copy">
               <strong>Увімкнути AI у чаті</strong>
               <span>Глобальний перемикач для першої лінії.</span>
             </div>
-            <input v-model="form.enabled" type="checkbox" class="form-check-input">
-          </label>
+            <button
+              type="button"
+              class="ai-toggle"
+              :class="{ 'is-active': form.enabled }"
+              :aria-pressed="form.enabled ? 'true' : 'false'"
+              @click="form.enabled = !form.enabled"
+            >
+              <span class="ai-toggle-track">
+                <span class="ai-toggle-thumb"></span>
+              </span>
+              <span class="ai-toggle-text">
+                {{ form.enabled ? 'Увімкнено' : 'Вимкнено' }}
+              </span>
+            </button>
+          </div>
 
           <div class="form-grid">
             <div class="field">
@@ -414,6 +427,10 @@ onMounted(loadData);
   border: 1px solid #e2e8f0;
 }
 
+.toggle-copy {
+  min-width: 0;
+}
+
 .toggle-row strong {
   display: block;
   font-size: 15px;
@@ -425,6 +442,72 @@ onMounted(loadData);
   margin-top: 4px;
   font-size: 13px;
   color: #64748b;
+}
+
+.ai-toggle {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 150px;
+  padding: 10px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 14px;
+  font-weight: 700;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+}
+
+.ai-toggle:hover {
+  border-color: #93c5fd;
+  box-shadow: 0 10px 24px -18px rgba(37, 99, 235, 0.45);
+}
+
+.ai-toggle:focus-visible {
+  outline: none;
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.16);
+}
+
+.ai-toggle.is-active {
+  border-color: #86efac;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.ai-toggle-track {
+  position: relative;
+  width: 42px;
+  height: 24px;
+  border-radius: 999px;
+  background: #cbd5e1;
+  transition: background-color 0.2s ease;
+}
+
+.ai-toggle-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.22);
+  transition: transform 0.22s ease;
+}
+
+.ai-toggle.is-active .ai-toggle-track {
+  background: #22c55e;
+}
+
+.ai-toggle.is-active .ai-toggle-thumb {
+  transform: translateX(18px);
+}
+
+.ai-toggle-text {
+  white-space: nowrap;
 }
 
 .form-grid {
@@ -533,7 +616,8 @@ onMounted(loadData);
 
 @media (max-width: 992px) {
   .hero-card,
-  .footer-bar {
+  .footer-bar,
+  .toggle-row {
     flex-direction: column;
     align-items: stretch;
   }
