@@ -169,6 +169,25 @@ class WebhookController extends Controller
             $contact = $chatService->syncContactProfile($contact, $metaService, $customer);
         }
 
+        // Тимчасовий точковий лог для нових Messenger-діалогів без фото від Meta.
+        if (
+            !$isEcho
+            && $platform === 'messenger'
+            && empty($profile['profile_pic'])
+            && empty($contact->avatar_path)
+            && empty($contact->avatar_original_url)
+        ) {
+            Log::warning('Messenger contact arrived without avatar payload', [
+                'external_user_id' => (string) $externalUserId,
+                'external_message_id' => $externalMessageId,
+                'customer_id' => $customer->id,
+                'contact_id' => $contact->id,
+                'profile' => $profile,
+                'event_sender_id' => (string) ($senderId ?? ''),
+                'event_recipient_id' => (string) ($recipientId ?? ''),
+            ]);
+        }
+
         $conversation = $chatService->getOrCreateConversation($contact, $customer);
         $recentLocal = $isEcho ? $this->findRecentLocalOutbound($conversation->id, (string) ($message['text'] ?? '')) : null;
         $processedAttachments = [];
