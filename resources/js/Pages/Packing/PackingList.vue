@@ -38,7 +38,7 @@
             <input 
               v-model="searchQuery" 
               type="text" 
-              placeholder="Номер, місто, клієнт або телефон..."
+              placeholder="Номер замовлення або місто..."
             />
           </div>
 
@@ -100,20 +100,13 @@
                   <span v-else class="badge-status pending">Черга</span>
                 </div>
                 <div class="order-sub">
-                   <i class="bi bi-geo-alt-fill"></i> {{ order.delivery?.city_name || 'Місто не вказано' }}
+                   <i class="bi bi-geo-alt-fill"></i>
+                   <span class="order-sub-text">{{ orderLocation(order) }}</span>
                 </div>
-                <div class="order-customer-card">
-                  <div class="customer-avatar" :class="{ 'is-empty': !hasOrderContact(order) }">
-                    {{ customerInitials(order) }}
-                  </div>
-                  <div class="customer-meta">
-                    <div class="customer-label">Контакт</div>
-                    <div class="customer-name">{{ orderContactName(order) }}</div>
-                    <div class="customer-phone" :class="{ 'is-empty': !orderContactPhone(order) }">
-                      <i class="bi" :class="orderContactPhone(order) ? 'bi-telephone' : 'bi-dash-circle'"></i>
-                      <span>{{ formatPhoneDisplay(orderContactPhone(order)) || 'Телефон не вказано' }}</span>
-                    </div>
-                  </div>
+                <div v-if="hasOrderContact(order)" class="order-contact-compact">
+                  <span v-if="orderContactName(order)">{{ orderContactName(order) }}</span>
+                  <span v-if="orderContactName(order) && orderContactPhone(order)" class="contact-separator">•</span>
+                  <span v-if="orderContactPhone(order)">{{ formatPhoneDisplay(orderContactPhone(order)) }}</span>
                 </div>
               </div>
 
@@ -344,12 +337,9 @@ const filteredOrders = computed(() => {
   // Пошук
   if (searchQuery.value) {
     const q = searchQuery.value.toLowerCase();
-    const phoneQuery = normalizePhone(q);
     result = source.filter(o => 
       String(o.order_number).toLowerCase().includes(q) ||
-      (o.delivery?.city_name || '').toLowerCase().includes(q) ||
-      orderContactName(o).toLowerCase().includes(q) ||
-      (phoneQuery ? normalizePhone(orderContactPhone(o)).includes(phoneQuery) : false)
+      (o.delivery?.city_name || '').toLowerCase().includes(q)
     );
   }
 
@@ -587,14 +577,13 @@ const orderContactPhone = (order) => (
 
 const hasOrderContact = (order) => Boolean(orderContactName(order) || orderContactPhone(order));
 
-const customerInitials = (order) => {
-  const name = orderContactName(order);
-  if (!name) return '??';
+const orderLocation = (order) => {
+  const parts = [
+    order?.delivery?.city_name,
+    order?.delivery?.warehouse_name,
+  ].filter(Boolean);
 
-  const parts = name.split(/\s+/).filter(Boolean).slice(0, 2);
-  if (!parts.length) return '??';
-
-  return parts.map(part => part.charAt(0)).join('').toUpperCase();
+  return parts.length ? parts.join(' • ') : 'Місто не вказано';
 };
 
 const normalizeImageUrl = (raw) => {
@@ -759,75 +748,44 @@ onUnmounted(() => {
 .priority-strip { position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: #ef4444; z-index: 10; }
 
 .order-main-content {
-  display: grid; grid-template-columns: minmax(260px, 360px) 1fr minmax(150px, auto) 170px;
+  display: grid; grid-template-columns: minmax(420px, 1.8fr) minmax(96px, 120px) minmax(140px, auto) 170px;
   align-items: center; padding: 1.25rem 1.5rem; gap: 1.5rem;
 }
 .order-id { font-size: 1.35rem; font-weight: 800; color: #1e293b; letter-spacing: -0.02em; }
-.order-sub { font-size: 0.9rem; color: #64748b; font-weight: 500; display: flex; align-items: center; }
-.order-sub i { margin-right: 6px; color: #94a3b8; }
-.order-customer-card {
-  margin-top: 0.9rem;
-  padding: 0.8rem 0.9rem;
-  display: grid;
-  grid-template-columns: 44px 1fr;
-  gap: 0.75rem;
-  border-radius: 14px;
-  border: 1px solid #e2e8f0;
-  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
-}
-.customer-avatar {
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%);
-  color: #fff;
+.order-sub {
   font-size: 0.9rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  box-shadow: 0 10px 20px -14px rgba(37, 99, 235, 0.9);
-}
-.customer-avatar.is-empty {
-  background: linear-gradient(135deg, #94a3b8 0%, #64748b 100%);
-}
-.customer-meta {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-}
-.customer-label {
-  font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #94a3b8;
-}
-.customer-name {
-  font-size: 0.98rem;
-  font-weight: 700;
-  color: #0f172a;
-  line-height: 1.25;
-  word-break: break-word;
-}
-.customer-phone {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  color: #475569;
-  font-size: 0.88rem;
-  font-weight: 600;
-  margin-top: 0.15rem;
-  word-break: break-word;
-}
-.customer-phone i {
   color: #64748b;
-  font-size: 0.82rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  white-space: nowrap;
 }
-.customer-phone.is-empty {
+.order-sub i { margin-right: 6px; color: #94a3b8; }
+.order-sub-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.order-contact-compact {
+  margin-top: 0.12rem;
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #64748b;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.contact-separator {
+  margin: 0 0.28rem;
   color: #94a3b8;
+}
+.order-items-preview {
+  width: fit-content;
+  justify-self: start;
 }
 .badge-status {
   font-size: 0.7rem; font-weight: 800; padding: 0.35rem 0.65rem;
@@ -1055,10 +1013,6 @@ onUnmounted(() => {
   .order-main-content { grid-template-columns: 1fr; text-align: center; padding: 1rem; }
   .order-identity { justify-content: center; flex-direction: column; align-items: center; }
   .identity-top { width: 100%; justify-content: space-between; }
-  .order-customer-card {
-    width: 100%;
-    text-align: left;
-  }
   .badge-status { position: relative; margin: 0; }
   .order-items-preview, .thumb-stack { align-items: center; justify-content: center; }
   .order-actions { grid-column: 1; grid-row: auto; }
