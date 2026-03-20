@@ -327,7 +327,8 @@ class ChatService
     public function formatAvatarUrl(
         ?ChatContact $contact,
         ?Customer $customer = null,
-        bool $allowRecovery = false
+        bool $allowRecovery = false,
+        ?string $fallbackName = null
     ): ?string
     {
         $contactAvatar = $this->normalizeAvatarPath($contact?->avatar_path);
@@ -336,21 +337,19 @@ class ChatService
         }
 
         $customerAvatar = trim((string) ($customer?->fb_profile_pic ?? ''));
-        if ($customerAvatar === '') {
-            return null;
-        }
+        if ($customerAvatar !== '') {
+            if (
+                $allowRecovery
+                && $contact
+                && (str_starts_with($customerAvatar, 'http://') || str_starts_with($customerAvatar, 'https://'))
+            ) {
+                $cachedAvatar = $this->cacheProfileAvatar($contact->id, $customerAvatar);
+                if ($cachedAvatar) {
+                    $contact->avatar_path = $cachedAvatar;
+                    $contact->save();
 
-        if (
-            $allowRecovery
-            && $contact
-            && (str_starts_with($customerAvatar, 'http://') || str_starts_with($customerAvatar, 'https://'))
-        ) {
-            $cachedAvatar = $this->cacheProfileAvatar($contact->id, $customerAvatar);
-            if ($cachedAvatar) {
-                $contact->avatar_path = $cachedAvatar;
-                $contact->save();
-
-                return $this->normalizeAvatarPath($cachedAvatar);
+                    return $this->normalizeAvatarPath($cachedAvatar);
+                }
             }
         }
 
@@ -370,7 +369,63 @@ class ChatService
             }
         }
 
-        return $this->normalizeAvatarPath($customerAvatar);
+        $normalizedCustomerAvatar = $this->normalizeAvatarPath($customerAvatar);
+        if ($normalizedCustomerAvatar) {
+            if (
+                str_contains($normalizedCustomerAvatar, 'platform-lookaside.fbsbx.com')
+                || str_contains($normalizedCustomerAvatar, 'scontent-')
+            ) {
+                return $this->buildFallbackAvatarUrl(
+                    $fallbackName ?: $this->resolveDisplayName($contact, $customer),
+                    $contact?->platform
+                );
+            }
+
+            return $normalizedCustomerAvatar;
+        }
+
+        return $this->buildFallbackAvatarUrl(
+            $fallbackName ?: $this->resolveDisplayName($contact, $customer),
+            $contact?->platform
+        );
+    }
+
+    public function resolveDisplayName(?ChatContact $contact, ?Customer $customer = null): string
+    {
+        $customerName = $this->normalizeDisplayName((string) ($customer?->full_name ?? ''));
+        $contactName = $this->normalizeDisplayName((string) ($contact?->display_name ?? ''));
+
+        if (
+            $customerName !== ''
+            && !$this->isPlaceholderName($customerName)
+            && !$this->shouldPreferContactName($customerName, $contactName)
+        ) {
+            return $customerName;
+        }
+
+        if ($contactName !== '' && !$this->isPlaceholderName($contactName)) {
+            return $contactName;
+        }
+
+        $contactFullName = $this->normalizeDisplayName(trim((string) (($contact?->first_name ?? '') . ' ' . ($contact?->last_name ?? ''))));
+        if ($contactFullName !== '' && !$this->isPlaceholderName($contactFullName)) {
+            return $contactFullName;
+        }
+
+        $externalUsername = trim((string) ($contact?->external_username ?? ''));
+        if ($externalUsername !== '') {
+            return ltrim($externalUsername, '@');
+        }
+
+        return $contact?->platform === 'instagram' ? 'Instagram User' : 'Facebook User';
+    }
+
+    public function resolveDisplayNameParts(?ChatContact $contact, ?Customer $customer = null): array
+    {
+        $resolvedName = $this->resolveDisplayName($contact, $customer);
+        [$firstName, $lastName] = $this->splitName($resolvedName);
+
+        return [$firstName, $lastName];
     }
 
     private function shouldRefreshContactAvatar(ChatContact $contact): bool
@@ -428,6 +483,26 @@ class ChatService
             || str_contains($value, 'Instagram User');
     }
 
+    private function shouldPreferContactName(string $customerName, string $contactName): bool
+    {
+        if ($contactName === '' || $customerName === '' || $customerName === $contactName) {
+            return false;
+        }
+
+        $customerHasLatin = (bool) preg_match('/[A-Za-z]/u', $customerName);
+        $customerHasCyrillic = (bool) preg_match('/[А-Яа-яЁёЇїІіЄєҐґ]/u', $customerName);
+        if ($customerHasLatin && $customerHasCyrillic) {
+            return true;
+        }
+
+        [$customerFirst] = $this->splitName($customerName);
+        [$contactFirst] = $this->splitName($contactName);
+
+        return $customerFirst !== null
+            && $contactFirst !== null
+            && mb_strtolower($customerFirst) !== mb_strtolower($contactFirst);
+    }
+
     private function canRefreshContactProfile(ChatContact $contact): bool
     {
         if (!$contact->last_profile_sync_at) {
@@ -449,6 +524,42 @@ class ChatService
         }
 
         return url(ltrim($path, '/'));
+    }
+
+    private function normalizeDisplayName(string $value): string
+    {
+        $value = trim(preg_replace('/\s+/u', ' ', $value));
+        if ($value === '') {
+            return '';
+        }
+
+        $parts = preg_split('/\s+/u', $value) ?: [];
+        while (count($parts) >= 2) {
+            $last = mb_strtolower((string) $parts[count($parts) - 1]);
+            $previous = mb_strtolower((string) $parts[count($parts) - 2]);
+
+            if ($last !== $previous) {
+                break;
+            }
+
+            array_pop($parts);
+        }
+
+        return trim(implode(' ', $parts));
+    }
+
+    private function buildFallbackAvatarUrl(string $name, ?string $platform = null): string
+    {
+        $preparedName = $this->normalizeDisplayName($name);
+        if ($preparedName === '' || $this->isPlaceholderName($preparedName)) {
+            $preparedName = $platform === 'instagram' ? 'Instagram User' : 'Facebook User';
+        }
+
+        $background = $platform === 'instagram' ? 'E4405F' : '1877F2';
+
+        return 'https://ui-avatars.com/api/?name=' . urlencode($preparedName)
+            . '&background=' . $background
+            . '&color=fff&bold=true&size=128';
     }
 
     public function extractOriginContext(?string $text, ?string $platform = null): ?array

@@ -465,7 +465,9 @@ class ChatApiController extends Controller
 
         $contact = $conversation->contact;
         $customer = $conversation->customer;
-        $avatarUrl = $this->chatService->formatAvatarUrl($contact, $customer, true);
+        $customerName = $this->chatService->resolveDisplayName($contact, $customer);
+        [$firstName, $lastName] = $this->chatService->resolveDisplayNameParts($contact, $customer);
+        $avatarUrl = $this->chatService->formatAvatarUrl($contact, $customer, true, $customerName);
         $originContext = $this->resolveOriginContext(
             data_get($conversation->meta, 'origin_context'),
             $conversation->last_message_preview,
@@ -479,26 +481,14 @@ class ChatApiController extends Controller
             $stageCode = null;
         }
 
-        $customerName = trim((string) ($customer?->full_name ?: ''));
-        if (
-            $customerName === ''
-            || str_contains($customerName, 'Facebook User')
-            || str_contains($customerName, 'Instagram User')
-        ) {
-            $customerName = $contact?->display_name ?: trim((string) (($contact?->first_name ?? '') . ' ' . ($contact?->last_name ?? '')));
-        }
-        if ($customerName === '') {
-            $customerName = $contact?->external_username ?: 'Невідомий клієнт';
-        }
-
         return [
             'conversation_id' => $conversation->id,
             'customer_id' => $conversation->customer_id,
             'customer_name' => $customerName,
             'customer_avatar' => $avatarUrl,
             'fb_profile_pic' => $avatarUrl,
-            'first_name' => $customer?->first_name ?: $contact?->first_name,
-            'last_name' => $customer?->last_name ?: $contact?->last_name,
+            'first_name' => $firstName,
+            'last_name' => $lastName,
             'phone' => $customer?->phone,
             'email' => $customer?->email,
             'last_message' => $conversation->last_message_preview,
