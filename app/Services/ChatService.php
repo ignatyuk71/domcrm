@@ -186,6 +186,22 @@ class ChatService
         return $conversation;
     }
 
+    public function buildConversationProfileSnapshot(
+        ?ChatContact $contact,
+        ?Customer $customer = null,
+        bool $allowRecovery = false
+    ): array {
+        $displayName = $this->resolveDisplayName($contact, $customer);
+        [$firstName, $lastName] = $this->resolveDisplayNameParts($contact, $customer);
+
+        return [
+            'display_name' => $displayName,
+            'first_name' => $firstName,
+            'last_name' => $lastName,
+            'avatar_url' => $this->formatAvatarUrl($contact, $customer, $allowRecovery, $displayName),
+        ];
+    }
+
     public function getOrCreateConversation(
         ChatContact $contact,
         ?Customer $customer = null,
@@ -336,14 +352,10 @@ class ChatService
             return $contactAvatar;
         }
 
-        $customerAvatar = trim((string) ($customer?->fb_profile_pic ?? ''));
-        if ($customerAvatar !== '') {
-            if (
-                $allowRecovery
-                && $contact
-                && (str_starts_with($customerAvatar, 'http://') || str_starts_with($customerAvatar, 'https://'))
-            ) {
-                $cachedAvatar = $this->cacheProfileAvatar($contact->id, $customerAvatar);
+        $contactOriginalAvatar = $this->normalizeAvatarPath($contact?->avatar_original_url);
+        if ($contactOriginalAvatar) {
+            if ($allowRecovery && $contact) {
+                $cachedAvatar = $this->cacheProfileAvatar($contact->id, $contactOriginalAvatar);
                 if ($cachedAvatar) {
                     $contact->avatar_path = $cachedAvatar;
                     $contact->save();
@@ -351,6 +363,13 @@ class ChatService
                     return $this->normalizeAvatarPath($cachedAvatar);
                 }
             }
+
+            return $contactOriginalAvatar;
+        }
+
+        $legacyCustomerAvatar = $this->importLegacyCustomerAvatarToContact($contact, $customer);
+        if ($legacyCustomerAvatar) {
+            return $legacyCustomerAvatar;
         }
 
         if ($allowRecovery && $contact && $this->shouldRefreshContactAvatar($contact)) {
@@ -359,6 +378,11 @@ class ChatService
                 $refreshedAvatar = $this->normalizeAvatarPath($refreshedContact->avatar_path);
                 if ($refreshedAvatar) {
                     return $refreshedAvatar;
+                }
+
+                $refreshedOriginalAvatar = $this->normalizeAvatarPath($refreshedContact->avatar_original_url);
+                if ($refreshedOriginalAvatar) {
+                    return $refreshedOriginalAvatar;
                 }
             } catch (\Throwable $e) {
                 Log::warning('Не вдалося оновити аватар контакту через fallback', [
@@ -369,11 +393,6 @@ class ChatService
             }
         }
 
-        $normalizedCustomerAvatar = $this->normalizeAvatarPath($customerAvatar);
-        if ($normalizedCustomerAvatar) {
-            return $normalizedCustomerAvatar;
-        }
-
         return $this->buildFallbackAvatarUrl(
             $fallbackName ?: $this->resolveDisplayName($contact, $customer),
             $contact?->platform
@@ -382,8 +401,17 @@ class ChatService
 
     public function resolveDisplayName(?ChatContact $contact, ?Customer $customer = null): string
     {
-        $customerName = $this->normalizeDisplayName((string) ($customer?->full_name ?? ''));
         $contactName = $this->normalizeDisplayName((string) ($contact?->display_name ?? ''));
+        $contactFullName = $this->normalizeDisplayName(trim((string) (($contact?->first_name ?? '') . ' ' . ($contact?->last_name ?? ''))));
+        $customerName = $this->normalizeDisplayName((string) ($customer?->full_name ?? ''));
+
+        if ($contactName !== '' && !$this->isPlaceholderName($contactName)) {
+            return $contactName;
+        }
+
+        if ($contactFullName !== '' && !$this->isPlaceholderName($contactFullName)) {
+            return $contactFullName;
+        }
 
         if (
             $customerName !== ''
@@ -391,15 +419,6 @@ class ChatService
             && !$this->shouldPreferContactName($customerName, $contactName)
         ) {
             return $customerName;
-        }
-
-        if ($contactName !== '' && !$this->isPlaceholderName($contactName)) {
-            return $contactName;
-        }
-
-        $contactFullName = $this->normalizeDisplayName(trim((string) (($contact?->first_name ?? '') . ' ' . ($contact?->last_name ?? ''))));
-        if ($contactFullName !== '' && !$this->isPlaceholderName($contactFullName)) {
-            return $contactFullName;
         }
 
         $externalUsername = trim((string) ($contact?->external_username ?? ''));
@@ -436,14 +455,16 @@ class ChatService
         $displayName = trim((string) $contact->display_name);
         $contactFirstName = trim((string) $contact->first_name);
         $contactLastName = trim((string) $contact->last_name);
-        $customerName = trim((string) ($customer?->full_name ?? ''));
-        $resolvedName = $customerName !== '' && !$this->isPlaceholderName($customerName)
-            ? $customerName
-            : ($displayName !== '' ? $displayName : trim($contactFirstName . ' ' . $contactLastName));
+        $contactOriginalAvatar = $this->normalizeAvatarPath($contact->avatar_original_url);
+        $legacyCustomerAvatar = $this->normalizeAvatarPath((string) ($customer?->fb_profile_pic ?? ''));
+        $resolvedName = $displayName !== ''
+            ? $displayName
+            : trim($contactFirstName . ' ' . $contactLastName);
 
         $hasValidVisibleName = $resolvedName !== '' && !$this->isPlaceholderName($resolvedName);
         $hasVisibleAvatar = $this->normalizeAvatarPath($contact->avatar_path) !== null
-            || trim((string) ($customer?->fb_profile_pic ?? '')) !== '';
+            || $contactOriginalAvatar !== null
+            || $legacyCustomerAvatar !== null;
 
         if ($hasValidVisibleName && $hasVisibleAvatar) {
             return false;
@@ -550,6 +571,42 @@ class ChatService
         return 'https://ui-avatars.com/api/?name=' . urlencode($preparedName)
             . '&background=' . $background
             . '&color=fff&bold=true&size=128';
+    }
+
+    private function importLegacyCustomerAvatarToContact(?ChatContact $contact, ?Customer $customer = null): ?string
+    {
+        $rawCustomerAvatar = trim((string) ($customer?->fb_profile_pic ?? ''));
+        $customerAvatar = $this->normalizeAvatarPath($rawCustomerAvatar);
+        if (!$customerAvatar) {
+            return null;
+        }
+
+        if (!$contact) {
+            return $customerAvatar;
+        }
+
+        $changed = false;
+
+        if (!$this->normalizeAvatarPath($contact->avatar_original_url)) {
+            $contact->avatar_original_url = $customerAvatar;
+            $changed = true;
+        }
+
+        if (
+            !$this->normalizeAvatarPath($contact->avatar_path)
+            && !str_starts_with($rawCustomerAvatar, 'http://')
+            && !str_starts_with($rawCustomerAvatar, 'https://')
+        ) {
+            $contact->avatar_path = ltrim($rawCustomerAvatar, '/');
+            $changed = true;
+        }
+
+        if ($changed) {
+            $contact->save();
+        }
+
+        return $this->normalizeAvatarPath($contact->avatar_path)
+            ?: $this->normalizeAvatarPath($contact->avatar_original_url);
     }
 
     public function extractOriginContext(?string $text, ?string $platform = null): ?array
@@ -718,8 +775,9 @@ class ChatService
             $payload['fb_user_id'] = $contact->external_user_id;
         }
 
-        if (!empty($contact->avatar_path)) {
-            $payload['fb_profile_pic'] = $contact->avatar_path;
+        $avatarForCustomer = $contact->avatar_path ?: $contact->avatar_original_url;
+        if (!empty($avatarForCustomer)) {
+            $payload['fb_profile_pic'] = $avatarForCustomer;
         }
 
         if ($contact->first_name && ($customer->first_name === null || str_contains($customer->first_name, 'User'))) {

@@ -465,9 +465,7 @@ class ChatApiController extends Controller
 
         $contact = $conversation->contact;
         $customer = $conversation->customer;
-        $customerName = $this->chatService->resolveDisplayName($contact, $customer);
-        [$firstName, $lastName] = $this->chatService->resolveDisplayNameParts($contact, $customer);
-        $avatarUrl = $this->chatService->formatAvatarUrl($contact, $customer, true, $customerName);
+        $profileSnapshot = $this->chatService->buildConversationProfileSnapshot($contact, $customer, true);
         $originContext = $this->resolveOriginContext(
             data_get($conversation->meta, 'origin_context'),
             $conversation->last_message_preview,
@@ -484,11 +482,11 @@ class ChatApiController extends Controller
         return [
             'conversation_id' => $conversation->id,
             'customer_id' => $conversation->customer_id,
-            'customer_name' => $customerName,
-            'customer_avatar' => $avatarUrl,
-            'fb_profile_pic' => $avatarUrl,
-            'first_name' => $firstName,
-            'last_name' => $lastName,
+            'customer_name' => $profileSnapshot['display_name'],
+            'customer_avatar' => $profileSnapshot['avatar_url'],
+            'fb_profile_pic' => $profileSnapshot['avatar_url'],
+            'first_name' => $profileSnapshot['first_name'],
+            'last_name' => $profileSnapshot['last_name'],
             'phone' => $customer?->phone,
             'email' => $customer?->email,
             'last_message' => $conversation->last_message_preview,
@@ -633,9 +631,13 @@ class ChatApiController extends Controller
             ],
             [
                 'customer_id' => $customer->id,
-                'display_name' => str_contains((string) $customer->full_name, 'User')
-                    ? ($customer->instagram_username ?: null)
-                    : (trim($customer->full_name) ?: $customer->instagram_username ?: null),
+                'display_name' => trim($customer->full_name) !== ''
+                    && !str_contains((string) $customer->full_name, 'User')
+                    ? trim($customer->full_name)
+                    : ($customer->instagram_username ?: null),
+                'first_name' => $customer->first_name,
+                'last_name' => $customer->last_name,
+                'external_username' => $customer->instagram_username,
             ]
         );
 
