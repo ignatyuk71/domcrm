@@ -54,6 +54,8 @@
         @open-list="openMobileList"
         @open-profile="openProfile"
         @update-stage="handleUpdateStage"
+        @toggle-ai="handleToggleAi"
+        @takeover-ai="handleTakeoverAi"
       />
       <ChatEmpty v-else @open-list="openMobileList" />
     </template>
@@ -106,6 +108,8 @@ const {
   forceSync,
   stopPolling,
   updateStage,
+  updateAiState,
+  takeOverConversation,
   ensureConversation,
 } = useChat();
 
@@ -214,6 +218,14 @@ async function handleDeleteConversation() {
 
 function handleUpdateStage({ conversationId, stage }) {
   updateStage(conversationId, stage);
+}
+
+function handleToggleAi({ conversationId, enabled }) {
+  updateAiState(conversationId, enabled);
+}
+
+function handleTakeoverAi(conversationId) {
+  takeOverConversation(conversationId);
 }
 
 function openMobileList() {

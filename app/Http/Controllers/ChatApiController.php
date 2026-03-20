@@ -7,6 +7,7 @@ use App\Models\ChatConversation;
 use App\Models\ChatMessage;
 use App\Models\ChatStage;
 use App\Models\Customer;
+use App\Services\ChatAiAssistantService;
 use App\Services\ChatService;
 use App\Services\MetaService;
 use Carbon\Carbon;
@@ -18,7 +19,8 @@ use Illuminate\Validation\Rule;
 class ChatApiController extends Controller
 {
     public function __construct(
-        private readonly ChatService $chatService
+        private readonly ChatService $chatService,
+        private readonly ChatAiAssistantService $chatAiAssistant
     ) {
     }
 
@@ -27,7 +29,7 @@ class ChatApiController extends Controller
         try {
             $conversations = ChatConversation::query()
                 ->where('status', '!=', 'archived')
-                ->with(['contact', 'customer', 'stage'])
+                ->with(['contact', 'customer', 'stage', 'assignedUser'])
                 ->orderByDesc('last_message_at')
                 ->paginate(20);
 
@@ -50,7 +52,7 @@ class ChatApiController extends Controller
     {
         $conversations = ChatConversation::query()
             ->where('status', '!=', 'archived')
-            ->with(['contact', 'customer', 'stage'])
+            ->with(['contact', 'customer', 'stage', 'assignedUser'])
             ->orderByDesc('last_message_at')
             ->get();
 
@@ -304,7 +306,16 @@ class ChatApiController extends Controller
                 $createdMessages[] = $this->formatMessage($message);
             }
 
-            return response()->json(['data' => $createdMessages]);
+            if ($request->user()) {
+                $conversation = $this->chatAiAssistant->registerOperatorReply($conversation, $request->user());
+            } else {
+                $conversation = $conversation->fresh(['contact', 'customer', 'stage', 'assignedUser', 'lastMessage.attachments']);
+            }
+
+            return response()->json([
+                'data' => $createdMessages,
+                'conversation' => $this->formatConversation($conversation),
+            ]);
         } catch (\Throwable $e) {
             Log::error('Chat send failed', [
                 'customer_id' => $customer->id,
@@ -367,6 +378,7 @@ class ChatApiController extends Controller
 
             $normalized = $messages->map(fn (ChatMessage $message) => $this->formatMessage($message));
             $lastMessage = $messages->last();
+            $conversation = $conversation->fresh(['contact', 'customer', 'stage', 'assignedUser', 'lastMessage.attachments']);
 
             return response()->json([
                 'messages' => $normalized,
@@ -375,6 +387,7 @@ class ChatApiController extends Controller
                     'last_message_text' => $conversation->last_message_preview,
                     'last_message_at' => optional($conversation->last_message_at)->toDateTimeString(),
                 ] : null,
+                'conversation' => $this->formatConversation($conversation),
                 'has_updates' => $messages->isNotEmpty(),
             ]);
         } catch (\Throwable $e) {
@@ -441,7 +454,33 @@ class ChatApiController extends Controller
         }
 
         $conversation = $this->chatService->hydrateConversationProfile($conversation, $metaService, true);
-        $conversation = $conversation->fresh(['contact', 'customer', 'stage', 'lastMessage.attachments']);
+        $conversation = $conversation->fresh(['contact', 'customer', 'stage', 'assignedUser', 'lastMessage.attachments']);
+
+        return response()->json(['data' => $this->formatConversation($conversation)]);
+    }
+
+    public function updateAiState(Request $request, ChatConversation $conversation): JsonResponse
+    {
+        $validated = $request->validate([
+            'enabled' => ['required', 'boolean'],
+        ]);
+
+        $conversation = $this->chatAiAssistant->setEnabled(
+            $conversation,
+            (bool) $validated['enabled'],
+            $request->user()
+        );
+
+        return response()->json(['data' => $this->formatConversation($conversation)]);
+    }
+
+    public function takeOverConversation(Request $request, ChatConversation $conversation): JsonResponse
+    {
+        if (!$request->user()) {
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
+
+        $conversation = $this->chatAiAssistant->takeOver($conversation, $request->user());
 
         return response()->json(['data' => $this->formatConversation($conversation)]);
     }
@@ -506,6 +545,11 @@ class ChatApiController extends Controller
                 ? $contact->external_user_id
                 : $customer?->instagram_user_id,
             'external_username' => $contact?->external_username,
+            'assigned_user' => $conversation->assignedUser ? [
+                'id' => $conversation->assignedUser->id,
+                'name' => $conversation->assignedUser->name,
+            ] : null,
+            'ai' => $this->chatAiAssistant->getPublicState($conversation),
         ];
     }
 

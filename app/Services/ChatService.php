@@ -324,7 +324,7 @@ class ChatService
     public function resolveConversationByCustomer(int $customerId, ?string $platform = null): ?ChatConversation
     {
         return ChatConversation::query()
-            ->with(['contact', 'customer', 'stage', 'lastMessage', 'lastMessage.attachments'])
+            ->with(['contact', 'customer', 'stage', 'assignedUser', 'lastMessage', 'lastMessage.attachments'])
             ->where('customer_id', $customerId)
             ->where('status', '!=', 'archived')
             ->when($platform, fn ($query) => $query->whereHas(

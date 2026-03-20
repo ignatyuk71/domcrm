@@ -91,7 +91,72 @@
       </div>
     </header>
 
-    <div v-if="originContext || syncNotice" class="thread-context-stack">
+    <div v-if="aiState || originContext || syncNotice" class="thread-context-stack">
+      <div v-if="aiState" class="thread-ai-card">
+        <div class="ai-card-head">
+          <div class="ai-card-copy">
+            <div class="ai-card-title-row">
+              <span class="ai-label">AI First Line</span>
+              <span class="ai-status-chip" :class="aiStatusClass">{{ aiStatusLabel }}</span>
+            </div>
+
+            <strong>Автовідповідач і кваліфікація ліда</strong>
+            <span v-if="activeChat?.assigned_user?.name" class="ai-assignee">
+              Менеджер: {{ activeChat.assigned_user.name }}
+            </span>
+            <span v-if="aiSummary" class="ai-summary">{{ aiSummary }}</span>
+            <span v-else class="ai-summary is-muted">AI ще не зібрав summary для цього діалогу.</span>
+          </div>
+
+          <div class="ai-card-actions">
+            <button
+              type="button"
+              class="ai-action-btn"
+              :class="{ 'is-paused': !aiEnabled }"
+              @click="toggleAi"
+            >
+              {{ aiEnabled ? 'Пауза AI' : 'Увімкнути AI' }}
+            </button>
+
+            <button
+              type="button"
+              class="ai-action-btn is-primary"
+              @click="takeoverAi"
+            >
+              Забрати менеджеру
+            </button>
+          </div>
+        </div>
+
+        <div v-if="!aiAvailable" class="ai-inline-note is-error">
+          OPENAI_API_KEY не налаштований. AI не зможе відповідати, доки не буде додано ключ.
+        </div>
+
+        <div v-else-if="aiHandoffReason" class="ai-inline-note is-warning">
+          {{ aiHandoffReason }}
+        </div>
+
+        <div v-else-if="aiLastError" class="ai-inline-note is-error">
+          {{ aiLastError }}
+        </div>
+
+        <div v-if="aiLeadItems.length" class="ai-lead-grid">
+          <div
+            v-for="item in aiLeadItems"
+            :key="item.key"
+            class="ai-lead-item"
+          >
+            <span>{{ item.label }}</span>
+            <strong>{{ item.value }}</strong>
+          </div>
+        </div>
+
+        <div v-if="aiNotes" class="ai-notes">
+          <span>Нотатки AI</span>
+          <strong>{{ aiNotes }}</strong>
+        </div>
+      </div>
+
       <div v-if="originContext" class="thread-origin-card" :class="{ 'has-embed': originEmbedUrl }">
         <div class="origin-head-row">
           <div class="origin-copy">
@@ -190,7 +255,16 @@ const props = defineProps({
   syncNotice: { type: Object, default: null },
 });
 
-const emit = defineEmits(['send', 'force-sync', 'delete-conversation', 'open-list', 'open-profile', 'update-stage']);
+const emit = defineEmits([
+  'send',
+  'force-sync',
+  'delete-conversation',
+  'open-list',
+  'open-profile',
+  'update-stage',
+  'toggle-ai',
+  'takeover-ai',
+]);
 
 const threadBody = ref(null);
 const localStage = ref('');
@@ -264,6 +338,43 @@ const originBadgeLabel = computed(() => {
 const originBadgeClass = computed(() => (
   originContext.value ? `source-${originContext.value.object_type || 'comment'}` : ''
 ));
+const aiState = computed(() => props.activeChat?.ai || null);
+const aiEnabled = computed(() => Boolean(aiState.value?.enabled));
+const aiAvailable = computed(() => Boolean(aiState.value?.available));
+const aiSummary = computed(() => String(aiState.value?.summary || '').trim());
+const aiHandoffReason = computed(() => String(aiState.value?.handoff_reason || '').trim());
+const aiLastError = computed(() => String(aiState.value?.last_error || '').trim());
+const aiNotes = computed(() => String(aiState.value?.lead?.notes || '').trim());
+const aiStatusLabel = computed(() => {
+  const status = aiState.value?.status;
+
+  const map = {
+    idle: 'Готовий',
+    queued: 'У черзі',
+    processing: 'Обробка',
+    replied: 'Відповів',
+    handoff: 'Передати менеджеру',
+    manual: 'У менеджера',
+    paused: 'Пауза',
+    error: 'Помилка',
+    not_configured: 'Не налаштовано',
+  };
+
+  return map[status] || 'Готовий';
+});
+const aiStatusClass = computed(() => `is-${aiState.value?.status || 'idle'}`);
+const aiLeadItems = computed(() => {
+  const lead = aiState.value?.lead || {};
+
+  return [
+    { key: 'customer_name', label: 'Імʼя', value: lead.customer_name || '' },
+    { key: 'phone', label: 'Телефон', value: lead.phone || '' },
+    { key: 'product_interest', label: 'Інтерес', value: lead.product_interest || '' },
+    { key: 'budget', label: 'Бюджет', value: lead.budget || '' },
+    { key: 'timeline', label: 'Термін', value: lead.timeline || '' },
+    { key: 'city', label: 'Місто', value: lead.city || '' },
+  ].filter((item) => String(item.value || '').trim());
+});
 
 const groupedMessages = computed(() => {
   const groups = [];
@@ -292,6 +403,25 @@ function commitStage() {
     conversationId: props.activeChat?.conversation_id,
     stage: localStage.value || null,
   });
+}
+
+function toggleAi() {
+  if (!props.activeChat?.conversation_id) {
+    return;
+  }
+
+  emit('toggle-ai', {
+    conversationId: props.activeChat.conversation_id,
+    enabled: !aiEnabled.value,
+  });
+}
+
+function takeoverAi() {
+  if (!props.activeChat?.conversation_id) {
+    return;
+  }
+
+  emit('takeover-ai', props.activeChat.conversation_id);
 }
 
 function scrollToBottom() {
@@ -366,7 +496,8 @@ watch(
 }
 
 .thread-origin-card,
-.thread-sync-notice {
+.thread-sync-notice,
+.thread-ai-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -380,6 +511,194 @@ watch(
 .thread-origin-card {
   flex-direction: column;
   align-items: stretch;
+}
+
+.thread-ai-card {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  border-color: #dbeafe;
+  background: linear-gradient(135deg, #f8fbff, #eef6ff);
+}
+
+.ai-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.ai-card-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ai-card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ai-label {
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 800;
+  color: #2563eb;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ai-card-copy strong {
+  font-size: 14px;
+  line-height: 1.35;
+  color: #0f172a;
+}
+
+.ai-assignee,
+.ai-summary {
+  font-size: 13px;
+  line-height: 1.45;
+  color: #334155;
+}
+
+.ai-summary.is-muted {
+  color: #64748b;
+}
+
+.ai-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.ai-status-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.ai-status-chip.is-idle,
+.ai-status-chip.is-replied {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.ai-status-chip.is-queued,
+.ai-status-chip.is-processing {
+  background: #e0f2fe;
+  color: #0c4a6e;
+}
+
+.ai-status-chip.is-handoff {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.ai-status-chip.is-manual,
+.ai-status-chip.is-paused {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.ai-status-chip.is-error,
+.ai-status-chip.is-not_configured {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.ai-action-btn {
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid #bfdbfe;
+  background: #ffffff;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ai-action-btn.is-paused {
+  border-color: #d1d5db;
+  color: #374151;
+}
+
+.ai-action-btn.is-primary {
+  border-color: #0f172a;
+  background: #0f172a;
+  color: #ffffff;
+}
+
+.ai-inline-note {
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  font-weight: 600;
+}
+
+.ai-inline-note.is-warning {
+  background: #fffbeb;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.ai-inline-note.is-error {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.ai-lead-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ai-lead-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #dbeafe;
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.ai-lead-item span,
+.ai-notes span {
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 800;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ai-lead-item strong,
+.ai-notes strong {
+  font-size: 13px;
+  line-height: 1.4;
+  color: #0f172a;
+}
+
+.ai-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #dbeafe;
+  background: rgba(255, 255, 255, 0.84);
 }
 
 .origin-head-row {
@@ -786,6 +1105,23 @@ watch(
 
   .origin-head-row {
     flex-direction: column;
+  }
+
+  .ai-card-head {
+    flex-direction: column;
+  }
+
+  .ai-card-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .ai-action-btn {
+    width: 100%;
+  }
+
+  .ai-lead-grid {
+    grid-template-columns: 1fr;
   }
 
   .origin-link-btn {

@@ -22,6 +22,14 @@ export function updateConversationStage(conversationId, stage) {
   return axios.patch(`/api/chat/conversations/${conversationId}/stage`, { stage });
 }
 
+export function updateConversationAiState(conversationId, enabled) {
+  return axios.patch(`/api/chat/conversations/${conversationId}/ai`, { enabled });
+}
+
+export function takeOverConversation(conversationId) {
+  return axios.post(`/api/chat/conversations/${conversationId}/takeover`);
+}
+
 export function archiveConversation(conversationId) {
   return axios.delete(`/api/chat/conversations/${conversationId}`);
 }

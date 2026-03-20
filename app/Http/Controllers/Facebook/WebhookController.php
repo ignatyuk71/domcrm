@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Facebook;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\ProcessChatAiReplyJob;
 use App\Models\ChatContact;
 use App\Models\ChatMessage;
 use App\Models\MetaConnection;
+use App\Services\ChatAiAssistantService;
 use App\Services\ChatService;
 use App\Services\MetaService;
 use Carbon\Carbon;
@@ -39,7 +41,12 @@ class WebhookController extends Controller
         return response('Forbidden', 403);
     }
 
-    public function handle(Request $request, MetaService $metaService, ChatService $chatService)
+    public function handle(
+        Request $request,
+        MetaService $metaService,
+        ChatService $chatService,
+        ChatAiAssistantService $chatAiAssistant
+    )
     {
         if (!$this->verifySignature($request)) {
             Log::warning('Facebook Webhook: invalid signature', [
@@ -55,7 +62,7 @@ class WebhookController extends Controller
             foreach ($request->input('entry', []) as $entry) {
                 foreach ($entry['messaging'] ?? [] as $event) {
                     if (isset($event['message'])) {
-                        $this->processMessage($event, $platform, $metaService, $chatService);
+                        $this->processMessage($event, $platform, $metaService, $chatService, $chatAiAssistant);
                         continue;
                     }
 
@@ -126,7 +133,8 @@ class WebhookController extends Controller
         array $event,
         string $platform,
         MetaService $metaService,
-        ChatService $chatService
+        ChatService $chatService,
+        ChatAiAssistantService $chatAiAssistant
     ): void {
         $message = $event['message'] ?? null;
         if (!$message) {
@@ -246,7 +254,12 @@ class WebhookController extends Controller
             $conversation = $conversation->fresh();
         }
 
-        $chatService->updateConversationAfterMessage($conversation, $storedMessage, !$isEcho);
+        $conversation = $chatService->updateConversationAfterMessage($conversation, $storedMessage, !$isEcho);
+
+        if (!$isEcho) {
+            $chatAiAssistant->queueInboundMessage($conversation, $storedMessage);
+            ProcessChatAiReplyJob::dispatch($conversation->id, $storedMessage->id)->onQueue('default');
+        }
     }
 
     private function processReadReceipt(array $event, string $platform): void

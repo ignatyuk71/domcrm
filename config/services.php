@@ -67,11 +67,29 @@ return [
     'meta' => [
         'app_id' => env('META_APP_ID'),
         'app_secret' => env('META_APP_SECRET'),
-        'graph_version' => env('META_GRAPH_VERSION', 'v19.0'),
+        'graph_version' => env('META_GRAPH_VERSION', 'v24.0'),
         'scopes' => array_filter(array_map('trim', explode(',', (string) env(
             'META_SCOPES',
-            'pages_show_list,pages_messaging,pages_manage_metadata,pages_read_engagement,instagram_basic,instagram_manage_messages,business_management'
+            'pages_show_list,pages_messaging,pages_manage_metadata,pages_read_engagement,instagram_business_basic,instagram_business_manage_messages,business_management'
         )))),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | OpenAI / AI First Line
+    |--------------------------------------------------------------------------
+    */
+    'openai' => [
+        'api_key' => env('OPENAI_API_KEY'),
+        'base_url' => env('OPENAI_BASE_URL', 'https://api.openai.com/v1'),
+        'model' => env('OPENAI_MODEL', 'gpt-4.1-mini'),
+        'timeout' => (int) env('OPENAI_TIMEOUT', 30),
+        'store' => filter_var(env('OPENAI_STORE', false), FILTER_VALIDATE_BOOL),
+    ],
+
+    'chat_ai' => [
+        'enabled' => filter_var(env('CHAT_AI_ENABLED', true), FILTER_VALIDATE_BOOL),
+        'max_messages' => (int) env('CHAT_AI_MAX_MESSAGES', 12),
     ],
 
 ];
