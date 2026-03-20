@@ -157,7 +157,14 @@
         </div>
       </div>
 
-      <div v-if="originContext" class="thread-origin-card" :class="{ 'has-embed': originEmbedUrl }">
+      <div
+        v-if="originContext"
+        class="thread-origin-card"
+        :class="{
+          'has-embed': originEmbedUrl,
+          'is-collapsed': hasOriginPreview && !isOriginExpanded,
+        }"
+      >
         <div class="origin-head-row">
           <div class="origin-copy">
             <span class="origin-label">{{ originContext.summary }}</span>
@@ -168,18 +175,29 @@
               {{ originSourceTitle }}: {{ originSourceDisplay }}
             </span>
           </div>
-          <a
-            v-if="originContext.url"
-            :href="originContext.url"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="origin-link-btn"
-          >
-            Відкрити
-          </a>
+          <div class="origin-actions">
+            <button
+              v-if="hasOriginPreview"
+              type="button"
+              class="origin-toggle-btn"
+              @click="toggleOriginPreview"
+            >
+              {{ isOriginExpanded ? 'Сховати превʼю' : 'Показати превʼю' }}
+            </button>
+
+            <a
+              v-if="originContext.url"
+              :href="originContext.url"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="origin-link-btn"
+            >
+              Відкрити
+            </a>
+          </div>
         </div>
 
-        <div v-if="originEmbedUrl" class="origin-embed-frame">
+        <div v-if="originEmbedUrl && isOriginExpanded" class="origin-embed-frame">
           <iframe
             :src="originEmbedUrl"
             title="Джерело коментаря"
@@ -189,7 +207,7 @@
           ></iframe>
         </div>
 
-        <div v-else-if="originPreviewImage" class="origin-preview-media">
+        <div v-else-if="originPreviewImage && isOriginExpanded" class="origin-preview-media">
           <img :src="originPreviewImage" alt="Джерело коментаря" loading="lazy">
         </div>
       </div>
@@ -269,6 +287,7 @@ const emit = defineEmits([
 const threadBody = ref(null);
 const localStage = ref('');
 const avatarFailed = ref(false);
+const isOriginExpanded = ref(false);
 
 const stageOptions = [
   { value: '', label: 'Без етапу' },
@@ -322,6 +341,7 @@ const originEmbedUrl = computed(() => originContext.value?.embed_url || '');
 const originPreviewImage = computed(() => originContext.value?.preview_image_url || '');
 const originPreviewTitle = computed(() => originContext.value?.preview_title || '');
 const originPreviewDescription = computed(() => originContext.value?.preview_description || '');
+const hasOriginPreview = computed(() => Boolean(originEmbedUrl.value || originPreviewImage.value));
 const originBadgeLabel = computed(() => {
   if (!originContext.value) {
     return '';
@@ -424,6 +444,14 @@ function takeoverAi() {
   emit('takeover-ai', props.activeChat.conversation_id);
 }
 
+function toggleOriginPreview() {
+  if (!hasOriginPreview.value) {
+    return;
+  }
+
+  isOriginExpanded.value = !isOriginExpanded.value;
+}
+
 function scrollToBottom() {
   if (!threadBody.value) {
     return;
@@ -465,6 +493,14 @@ watch(
   () => {
     avatarFailed.value = false;
   }
+);
+
+watch(
+  () => props.activeChat?.conversation_id,
+  () => {
+    isOriginExpanded.value = false;
+  },
+  { immediate: true }
 );
 </script>
 
@@ -511,6 +547,10 @@ watch(
 .thread-origin-card {
   flex-direction: column;
   align-items: stretch;
+}
+
+.thread-origin-card.is-collapsed {
+  gap: 0;
 }
 
 .thread-ai-card {
@@ -707,9 +747,16 @@ watch(
   gap: 12px;
 }
 
+.origin-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 .origin-preview-media {
   width: 100%;
-  max-width: 500px;
+  max-width: 360px;
   border-radius: 16px;
   overflow: hidden;
   background: #e2e8f0;
@@ -718,7 +765,8 @@ watch(
 
 .origin-preview-media img {
   width: 100%;
-  height: 100%;
+  max-height: 220px;
+  height: 220px;
   object-fit: cover;
   display: block;
 }
@@ -772,7 +820,7 @@ watch(
 
 .origin-embed-frame {
   width: 100%;
-  max-width: 500px;
+  max-width: 360px;
   border-radius: 16px;
   overflow: hidden;
   border: 1px solid #dbe4ee;
@@ -781,12 +829,14 @@ watch(
 
 .origin-embed-frame iframe {
   width: 100%;
-  min-height: 560px;
+  min-height: 220px;
+  height: 220px;
   border: 0;
   display: block;
   background: #ffffff;
 }
 
+.origin-toggle-btn,
 .origin-link-btn {
   flex-shrink: 0;
   display: inline-flex;
@@ -801,6 +851,11 @@ watch(
   text-decoration: none;
   font-size: 12px;
   font-weight: 700;
+}
+
+.origin-toggle-btn {
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
 }
 
 .thread-sync-notice {
@@ -1107,6 +1162,12 @@ watch(
     flex-direction: column;
   }
 
+  .origin-actions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .ai-card-head {
     flex-direction: column;
   }
@@ -1124,13 +1185,14 @@ watch(
     grid-template-columns: 1fr;
   }
 
+  .origin-toggle-btn,
   .origin-link-btn {
     width: 100%;
     justify-content: center;
   }
 
   .origin-embed-frame iframe {
-    min-height: 460px;
+    min-height: 220px;
   }
 
   .stage-picker {
