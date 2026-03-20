@@ -20,25 +20,8 @@
       
       <div class="header-section">
         <div class="avatar-wrap">
-          <input
-            ref="avatarInput"
-            type="file"
-            accept="image/*"
-            class="d-none"
-            @change="handleAvatarSelected"
-          >
           <img v-if="safeAvatarUrl" :src="safeAvatarUrl" class="avatar-img" @error="avatarFailed = true">
           <div v-else class="avatar-placeholder">{{ displayInitial }}</div>
-
-          <button
-            type="button"
-            class="avatar-upload-btn"
-            :disabled="isAvatarUploading"
-            title="Завантажити аватар"
-            @click="avatarInput?.click()"
-          >
-            <i class="bi" :class="isAvatarUploading ? 'bi-arrow-repeat spin' : 'bi-camera-fill'"></i>
-          </button>
           
           <div 
             class="platform-icon-indicator" 
@@ -267,11 +250,9 @@ const showNameInput = ref(false);
 const phoneFocused = ref(false);
 const emailFocused = ref(false);
 const isLoading = ref(false);
-const isAvatarUploading = ref(false);
 const showPhoneInput = ref(false);
 const showEmailInput = ref(false);
 const phoneRef = ref(null);
-const avatarInput = ref(null);
 const isOrderSaving = ref(false);
 const historyOrders = ref([]);
 const historyLoading = ref(false);
@@ -463,44 +444,6 @@ const enablePhone = async () => { showPhoneInput.value = true; if (!form.phone) 
 const clearPhone = () => { form.phone = ''; showPhoneInput.value = false; };
 const enableEmail = async () => { showEmailInput.value = true; await nextTick(); };
 const clearEmail = () => { form.email = ''; showEmailInput.value = false; };
-
-const handleAvatarSelected = async (event) => {
-  const file = event?.target?.files?.[0];
-  if (!file || !customerId.value) {
-    return;
-  }
-
-  isAvatarUploading.value = true;
-
-  try {
-    const payload = new FormData();
-    payload.append('first_name', form.first_name || '');
-    payload.append('last_name', form.last_name || '');
-    payload.append('phone', form.phone || '');
-    payload.append('email', form.email || '');
-    payload.append('avatar', file);
-
-    const response = await axios.post(`/api/customers/${customerId.value}?_method=PUT`, payload, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
-
-    const updatedCustomer = response?.data?.data;
-    if (props.customer && updatedCustomer) {
-      Object.assign(props.customer, updatedCustomer);
-    }
-
-    avatarFailed.value = false;
-    showToast('Аватар оновлено.');
-  } catch (error) {
-    console.error(error);
-    showToast('Не вдалося завантажити аватар.', 'error');
-  } finally {
-    isAvatarUploading.value = false;
-    if (avatarInput.value) {
-      avatarInput.value.value = '';
-    }
-  }
-};
 
 const loadCustomerHistory = async (id) => {
   const requestToken = ++historyRequestToken;
@@ -808,16 +751,12 @@ const handleOrderClose = () => {
 .avatar-wrap { position: relative; width: 56px; height: 56px; flex-shrink: 0; }
 .avatar-img, .avatar-placeholder { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; background: #f1f5f9; }
 .avatar-placeholder { display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 700; color: #94a3b8; }
-.avatar-upload-btn { position: absolute; top: -4px; right: -4px; width: 22px; height: 22px; border: 0; border-radius: 999px; background: #0f172a; color: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 18px -10px rgba(15, 23, 42, 0.9); }
-.avatar-upload-btn:disabled { opacity: 0.7; cursor: wait; }
-.avatar-upload-btn .spin { animation: avatar-spin 1s linear infinite; }
 .platform-icon-indicator { position: absolute; bottom: -4px; right: -4px; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid #fff; transition: all 0.4s ease; color: white; font-size: 11px; }
 .ig-bg { background: radial-gradient(circle at 30% 107%, #fdf497 0%, #fd5949 45%, #d6249f 60%, #285AEB 90%); }
 .fb-bg { background: #0084FF; }
 .glow-red { box-shadow: 0 0 10px #ef4444; border-color: #ef4444; }
 .glow-green { box-shadow: 0 0 10px #10b981; border-color: #10b981; }
 .platform-icon-indicator i { font-size: 11px; }
-@keyframes avatar-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 .info { flex: 1; min-width: 0; padding-top: 2px; }
 .name-display-wrapper { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
 .name-text { font-size: 15px; font-weight: 700; color: #1a202c; }

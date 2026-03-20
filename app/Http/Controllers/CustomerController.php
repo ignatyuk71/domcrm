@@ -9,7 +9,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 
 class CustomerController extends Controller
 {
@@ -120,24 +119,7 @@ class CustomerController extends Controller
             'last_name'  => 'required|string|max:255',
             'phone'      => 'required|string|max:20',
             'email'      => 'nullable|email|max:255',
-            'avatar'     => 'nullable|image|max:4096',
         ]);
-
-        if ($request->hasFile('avatar')) {
-            $file = $request->file('avatar');
-            $extension = strtolower($file->getClientOriginalExtension() ?: 'jpg');
-            $relativePath = 'manual-avatars/' . now()->format('Y/m') . '/customer_' . $customer->id . '_' . uniqid() . '.' . $extension;
-
-            Storage::disk('chat_uploads')->put($relativePath, file_get_contents($file->getRealPath()));
-            @chmod(public_path('chat/' . $relativePath), 0644);
-
-            $oldAvatar = trim((string) $customer->fb_profile_pic);
-            if ($oldAvatar !== '' && str_starts_with($oldAvatar, 'chat/manual-avatars/')) {
-                Storage::disk('chat_uploads')->delete(ltrim(str_replace('chat/', '', $oldAvatar), '/'));
-            }
-
-            $validated['fb_profile_pic'] = 'chat/' . $relativePath;
-        }
 
         // 2. Оновлення моделі
         $customer->update($validated);
