@@ -15,6 +15,7 @@ return Application::configure(basePath: dirname(__DIR__))
         \App\Console\Commands\SyncDeliveryStatuses::class,
         \App\Console\Commands\FiscalizeDeliveredOrders::class,
         \App\Console\Commands\ReleaseStalePackingOrders::class,
+        \App\Console\Commands\RefreshChatContactProfiles::class,
     ])
     ->withMiddleware(function (Middleware $middleware) {
         // Вимикаємо перевірку CSRF для маршрутів генерації ТТН
