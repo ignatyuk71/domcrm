@@ -211,6 +211,7 @@ class WebhookController extends Controller
 
         $originContext = $chatService->extractOriginContext($text, $platform);
         if ($originContext) {
+            $originContext = $chatService->ensureOriginPreview($originContext);
             $chatService->syncMessageOrigin($storedMessage, $originContext);
             $chatService->syncConversationOrigin($conversation, $originContext);
             $storedMessage = $storedMessage->fresh(['parent', 'attachments']);

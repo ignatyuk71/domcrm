@@ -92,23 +92,41 @@
     </header>
 
     <div v-if="originContext || syncNotice" class="thread-context-stack">
-      <div v-if="originContext" class="thread-origin-card">
-        <div class="origin-copy">
-          <span class="origin-label">{{ originContext.summary }}</span>
-          <strong>{{ originTitle }}</strong>
-          <span v-if="originSourceDisplay" class="origin-source-meta">
-            {{ originSourceTitle }}: {{ originSourceDisplay }}
-          </span>
+      <div v-if="originContext" class="thread-origin-card" :class="{ 'has-embed': originEmbedUrl }">
+        <div class="origin-head-row">
+          <div class="origin-copy">
+            <span class="origin-label">{{ originContext.summary }}</span>
+            <strong>{{ originTitle }}</strong>
+            <span v-if="originPreviewTitle" class="origin-preview-title">{{ originPreviewTitle }}</span>
+            <span v-if="originPreviewDescription" class="origin-preview-description">{{ originPreviewDescription }}</span>
+            <span v-else-if="originSourceDisplay" class="origin-source-meta">
+              {{ originSourceTitle }}: {{ originSourceDisplay }}
+            </span>
+          </div>
+          <a
+            v-if="originContext.url"
+            :href="originContext.url"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="origin-link-btn"
+          >
+            Відкрити
+          </a>
         </div>
-        <a
-          v-if="originContext.url"
-          :href="originContext.url"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="origin-link-btn"
-        >
-          Відкрити
-        </a>
+
+        <div v-if="originEmbedUrl" class="origin-embed-frame">
+          <iframe
+            :src="originEmbedUrl"
+            title="Джерело коментаря"
+            loading="lazy"
+            scrolling="no"
+            allowfullscreen
+          ></iframe>
+        </div>
+
+        <div v-else-if="originPreviewImage" class="origin-preview-media">
+          <img :src="originPreviewImage" alt="Джерело коментаря" loading="lazy">
+        </div>
       </div>
 
       <div v-if="syncNotice" class="thread-sync-notice" :class="`is-${syncNotice.type}`">
@@ -226,6 +244,10 @@ const originTitle = computed(() => {
 });
 const originSourceTitle = computed(() => originContext.value?.source_title || 'Джерело');
 const originSourceDisplay = computed(() => originContext.value?.source_display || '');
+const originEmbedUrl = computed(() => originContext.value?.embed_url || '');
+const originPreviewImage = computed(() => originContext.value?.preview_image_url || '');
+const originPreviewTitle = computed(() => originContext.value?.preview_title || '');
+const originPreviewDescription = computed(() => originContext.value?.preview_description || '');
 const originBadgeLabel = computed(() => {
   if (!originContext.value) {
     return '';
@@ -355,10 +377,38 @@ watch(
   background: #f8fafc;
 }
 
+.thread-origin-card {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.origin-head-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.origin-preview-media {
+  width: 100%;
+  max-width: 500px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #e2e8f0;
+  border: 1px solid #dbe4ee;
+}
+
+.origin-preview-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
 .origin-copy {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
 }
 
@@ -377,11 +427,45 @@ watch(
   color: #0f172a;
 }
 
+.origin-preview-title {
+  font-size: 13px;
+  line-height: 1.35;
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.origin-preview-description {
+  font-size: 12px;
+  line-height: 1.4;
+  color: #64748b;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 .origin-source-meta {
   font-size: 12px;
   line-height: 1.35;
   color: #475569;
   word-break: break-word;
+}
+
+.origin-embed-frame {
+  width: 100%;
+  max-width: 500px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid #dbe4ee;
+  background: #ffffff;
+}
+
+.origin-embed-frame iframe {
+  width: 100%;
+  min-height: 560px;
+  border: 0;
+  display: block;
+  background: #ffffff;
 }
 
 .origin-link-btn {
@@ -698,6 +782,19 @@ watch(
 
   .thread-actions {
     justify-content: space-between;
+  }
+
+  .origin-head-row {
+    flex-direction: column;
+  }
+
+  .origin-link-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .origin-embed-frame iframe {
+    min-height: 460px;
   }
 
   .stage-picker {

@@ -24,9 +24,14 @@
         </div>
       </div>
       <div v-if="originContext" class="origin-message-card">
+        <div v-if="originPreviewImage" class="origin-message-thumb">
+          <img :src="originPreviewImage" alt="Джерело коментаря" loading="lazy">
+        </div>
         <div class="origin-message-copy">
           <span class="origin-message-label">{{ originSummary }}</span>
           <strong>{{ originTitle }}</strong>
+          <span v-if="originPreviewTitle" class="origin-message-title">{{ originPreviewTitle }}</span>
+          <span v-if="originPreviewDescription" class="origin-message-description">{{ originPreviewDescription }}</span>
           <span v-if="originSourceDisplay" class="origin-message-source">
             {{ originSourceTitle }}: {{ originSourceDisplay }}
           </span>
@@ -128,6 +133,9 @@ const originTitle = computed(() => {
 });
 const originSourceTitle = computed(() => originContext.value?.source_title || 'Джерело');
 const originSourceDisplay = computed(() => originContext.value?.source_display || '');
+const originPreviewImage = computed(() => originContext.value?.preview_image_url || '');
+const originPreviewTitle = computed(() => originContext.value?.preview_title || '');
+const originPreviewDescription = computed(() => originContext.value?.preview_description || '');
 
 const normalizedAttachments = computed(() => {
   if (!hasAttachments.value) return [];
@@ -257,11 +265,29 @@ const statusIcon = computed(() => {
   border: 1px solid rgba(148, 163, 184, 0.28);
 }
 
+.origin-message-thumb {
+  width: 64px;
+  height: 64px;
+  border-radius: 10px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: #e2e8f0;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+}
+
+.origin-message-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
 .origin-message-copy {
+  flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
 }
 
 .origin-message-label {
@@ -277,6 +303,23 @@ const statusIcon = computed(() => {
   font-size: 13px;
   line-height: 1.3;
   color: #0f172a;
+}
+
+.origin-message-title {
+  font-size: 13px;
+  line-height: 1.35;
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.origin-message-description {
+  font-size: 12px;
+  line-height: 1.4;
+  color: #64748b;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .origin-message-source {
@@ -309,9 +352,14 @@ const statusIcon = computed(() => {
 
 .chat-message.mine .origin-message-label,
 .chat-message.mine .origin-message-copy strong,
+.chat-message.mine .origin-message-title,
 .chat-message.mine .origin-message-source,
 .chat-message.mine .origin-message-link {
   color: #ffffff;
+}
+
+.chat-message.mine .origin-message-description {
+  color: rgba(255, 255, 255, 0.88);
 }
 
 .chat-message.mine .origin-message-link {

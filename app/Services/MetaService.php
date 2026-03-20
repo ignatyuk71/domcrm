@@ -144,6 +144,7 @@ class MetaService
 
             $originContext = $chatService->extractOriginContext($text, $platform);
             if ($originContext) {
+                $originContext = $chatService->ensureOriginPreview($originContext);
                 $chatService->syncMessageOrigin($message, $originContext);
                 $chatService->syncConversationOrigin($conversation, $originContext);
                 $message = $message->fresh(['parent', 'attachments']);

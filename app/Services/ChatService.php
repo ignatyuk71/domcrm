@@ -376,6 +376,7 @@ class ChatService
             'object_label' => $objectLabel,
             'summary' => "Коментар до {$objectLabel} {$platformLabel}",
             'url' => $url,
+            'embed_url' => $this->buildOriginEmbedUrl($url, $objectType, $resolvedPlatform),
             'source_title' => match ($objectType) {
                 'ad' => 'Реклама',
                 'story' => 'Сторіс',
@@ -386,6 +387,44 @@ class ChatService
             'source_display' => $this->formatOriginSourceDisplay($url),
             'comment_id' => $commentId,
         ];
+    }
+
+    public function ensureOriginPreview(array $originContext): array
+    {
+        $url = trim((string) ($originContext['url'] ?? ''));
+        if ($url === '') {
+            return $originContext;
+        }
+
+        $originContext['embed_url'] = $originContext['embed_url']
+            ?? $this->buildOriginEmbedUrl(
+                $url,
+                (string) ($originContext['object_type'] ?? ''),
+                (string) ($originContext['platform'] ?? '')
+            );
+
+        if (
+            !empty($originContext['embed_url'])
+            || !empty($originContext['preview_image_url'])
+            || !empty($originContext['preview_title'])
+            || array_key_exists('preview_unavailable', $originContext)
+        ) {
+            return $originContext;
+        }
+
+        $preview = $this->fetchOriginPreview($url);
+        $originContext['preview_checked_at'] = now()->toDateTimeString();
+
+        if (!$preview) {
+            $originContext['preview_unavailable'] = true;
+
+            return $originContext;
+        }
+
+        return array_merge($originContext, $preview, [
+            'preview_unavailable' => false,
+            'preview_checked_at' => now()->toDateTimeString(),
+        ]);
     }
 
     public function syncConversationOrigin(ChatConversation $conversation, array $originContext): void
@@ -618,6 +657,232 @@ class ChatService
         }
 
         return $extension !== '' ? $extension : 'jpg';
+    }
+
+    private function fetchOriginPreview(string $url): ?array
+    {
+        try {
+            $response = Http::timeout(10)
+                ->withHeaders([
+                    'User-Agent' => 'Mozilla/5.0 (compatible; DomCRM/1.0; +https://domcrm.com.ua)',
+                    'Accept-Language' => 'uk,en;q=0.8',
+                ])
+                ->get($url);
+
+            if ($response->failed()) {
+                return null;
+            }
+
+            $html = (string) $response->body();
+            if ($html === '') {
+                return null;
+            }
+
+            $title = $this->extractMetaTag($html, ['og:title', 'twitter:title'])
+                ?: $this->extractHtmlTitle($html);
+            $description = $this->extractMetaTag($html, ['og:description', 'description', 'twitter:description']);
+            $imageUrl = $this->extractMetaTag($html, ['og:image', 'twitter:image']);
+            $siteName = $this->extractMetaTag($html, ['og:site_name']);
+
+            if ($imageUrl) {
+                $imageUrl = $this->normalizePreviewUrl($url, $imageUrl);
+                $imageUrl = $this->cacheOriginPreviewImage($imageUrl) ?: $imageUrl;
+            }
+
+            if (!$title && !$description && !$imageUrl) {
+                return null;
+            }
+
+            return array_filter([
+                'preview_title' => $title ? trim(html_entity_decode($title, ENT_QUOTES | ENT_HTML5, 'UTF-8')) : null,
+                'preview_description' => $description ? trim(html_entity_decode($description, ENT_QUOTES | ENT_HTML5, 'UTF-8')) : null,
+                'preview_image_url' => $imageUrl,
+                'preview_site_name' => $siteName ? trim(html_entity_decode($siteName, ENT_QUOTES | ENT_HTML5, 'UTF-8')) : null,
+            ], fn ($value) => $value !== null && $value !== '');
+        } catch (\Throwable $e) {
+            Log::warning('Не вдалося отримати preview джерела коментаря', [
+                'url' => $url,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    private function extractMetaTag(string $html, array $keys): ?string
+    {
+        foreach ($keys as $key) {
+            $quotedKey = preg_quote($key, '~');
+            $patterns = [
+                '~<meta[^>]+(?:property|name)\s*=\s*["\']' . $quotedKey . '["\'][^>]+content\s*=\s*["\']([^"\']+)["\'][^>]*>~iu',
+                '~<meta[^>]+content\s*=\s*["\']([^"\']+)["\'][^>]+(?:property|name)\s*=\s*["\']' . $quotedKey . '["\'][^>]*>~iu',
+            ];
+
+            foreach ($patterns as $pattern) {
+                if (preg_match($pattern, $html, $matches)) {
+                    return html_entity_decode(trim($matches[1]), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private function extractHtmlTitle(string $html): ?string
+    {
+        if (!preg_match('~<title[^>]*>(.*?)</title>~isu', $html, $matches)) {
+            return null;
+        }
+
+        $title = trim(strip_tags(html_entity_decode($matches[1], ENT_QUOTES | ENT_HTML5, 'UTF-8')));
+
+        return $title !== '' ? $title : null;
+    }
+
+    private function normalizePreviewUrl(string $baseUrl, string $previewUrl): string
+    {
+        $previewUrl = trim($previewUrl);
+        if ($previewUrl === '') {
+            return $previewUrl;
+        }
+
+        if (str_starts_with($previewUrl, 'http://') || str_starts_with($previewUrl, 'https://')) {
+            return $previewUrl;
+        }
+
+        $parts = parse_url($baseUrl);
+        $scheme = $parts['scheme'] ?? 'https';
+        $host = $parts['host'] ?? '';
+
+        if (str_starts_with($previewUrl, '//')) {
+            return $scheme . ':' . $previewUrl;
+        }
+
+        if ($host === '') {
+            return $previewUrl;
+        }
+
+        if (str_starts_with($previewUrl, '/')) {
+            return $scheme . '://' . $host . $previewUrl;
+        }
+
+        return $scheme . '://' . $host . '/' . ltrim($previewUrl, '/');
+    }
+
+    private function cacheOriginPreviewImage(?string $remoteUrl): ?string
+    {
+        if (!$remoteUrl) {
+            return null;
+        }
+
+        try {
+            $response = Http::timeout(10)
+                ->withHeaders([
+                    'User-Agent' => 'Mozilla/5.0 (compatible; DomCRM/1.0; +https://domcrm.com.ua)',
+                ])
+                ->get($remoteUrl);
+
+            if ($response->failed()) {
+                return null;
+            }
+
+            $mimeType = $response->header('Content-Type');
+            $extension = $this->guessExtension($remoteUrl, $mimeType);
+            $relativePath = 'origin-previews/' . date('Y/m') . '/' . md5($remoteUrl) . '.' . strtolower($extension);
+
+            Storage::disk('chat_uploads')->put($relativePath, $response->body());
+            @chmod(public_path('chat/' . $relativePath), 0644);
+
+            return url('chat/' . $relativePath);
+        } catch (\Throwable $e) {
+            Log::warning('Не вдалося закешувати preview джерела', [
+                'url' => $remoteUrl,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    private function buildOriginEmbedUrl(?string $url, string $objectType, string $platform): ?string
+    {
+        $url = trim((string) $url);
+        if ($url === '') {
+            return null;
+        }
+
+        $host = (string) parse_url($url, PHP_URL_HOST);
+        $host = strtolower($host);
+
+        if (
+            in_array($objectType, ['post', 'comment'], true)
+            && (str_contains($host, 'facebook.com') || str_contains($host, 'fb.watch'))
+        ) {
+            $normalizedUrl = $this->normalizeFacebookEmbedUrl($url);
+
+            if ($normalizedUrl) {
+                return 'https://www.facebook.com/plugins/post.php?href='
+                    . urlencode($normalizedUrl)
+                    . '&show_text=true&width=500';
+            }
+        }
+
+        if (
+            in_array($objectType, ['post', 'reel'], true)
+            && ($platform === 'instagram' || str_contains($host, 'instagram.com'))
+        ) {
+            $normalizedUrl = $this->normalizeInstagramEmbedUrl($url);
+
+            if ($normalizedUrl) {
+                return $normalizedUrl;
+            }
+        }
+
+        return null;
+    }
+
+    private function normalizeFacebookEmbedUrl(string $url): ?string
+    {
+        $parts = parse_url($url);
+        $host = $parts['host'] ?? null;
+        $path = $parts['path'] ?? null;
+
+        if (!$host || !$path) {
+            return null;
+        }
+
+        $query = [];
+        parse_str((string) ($parts['query'] ?? ''), $query);
+
+        unset($query['comment_id'], $query['reply_comment_id'], $query['notif_t']);
+
+        $normalized = ($parts['scheme'] ?? 'https') . '://' . $host . $path;
+
+        if ($query !== []) {
+            $normalized .= '?' . http_build_query($query);
+        }
+
+        return $normalized;
+    }
+
+    private function normalizeInstagramEmbedUrl(string $url): ?string
+    {
+        if (!preg_match('~https?://(?:www\.)?instagram\.com/(p|reel|reels)/([^/?#]+)/?~i', $url, $matches)) {
+            return null;
+        }
+
+        $type = strtolower($matches[1]);
+        $code = trim($matches[2]);
+
+        if ($code === '') {
+            return null;
+        }
+
+        if ($type === 'p') {
+            return "https://www.instagram.com/p/{$code}/embed/captioned/";
+        }
+
+        return "https://www.instagram.com/reel/{$code}/embed/";
     }
 
     private function formatOriginSourceDisplay(?string $url): ?string
