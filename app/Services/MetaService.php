@@ -172,7 +172,13 @@ class MetaService
             ->get($this->graphUrl("/{$externalUserId}"), ['fields' => $fields]);
 
         if ($response->ok() && $response->json() !== []) {
-            return $response->json();
+            $profile = $response->json();
+            $participantSnapshot = $this->getParticipantProfileSnapshot($externalUserId, $platform);
+
+            return array_merge(
+                $participantSnapshot,
+                array_filter($profile, static fn ($value) => $value !== null && $value !== '')
+            );
         }
 
         return $this->getParticipantProfileSnapshot($externalUserId, $platform);
@@ -396,7 +402,7 @@ class MetaService
         }
 
         $response = Http::withToken($settings->access_token)
-            ->get($this->graphUrl("/{$threadId}"), ['fields' => 'participants']);
+            ->get($this->graphUrl("/{$threadId}"), ['fields' => 'participants{id,name,profile_pic}']);
 
         if ($response->failed()) {
             return [];
@@ -419,6 +425,7 @@ class MetaService
                 'name' => $name,
                 'first_name' => $firstName,
                 'last_name' => $lastName,
+                'profile_pic' => $participant['profile_pic'] ?? null,
             ], static fn ($value) => $value !== null && $value !== '');
         }
 

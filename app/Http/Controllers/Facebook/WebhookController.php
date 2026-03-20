@@ -158,7 +158,12 @@ class WebhookController extends Controller
             $profile
         );
 
-        if (!$contact->display_name || !$contact->avatar_path) {
+        $shouldPersistProfile = !$isEcho
+            || !$contact->display_name
+            || (!$contact->avatar_path && !$contact->avatar_original_url)
+            || $chatService->shouldRefreshContactProfile($contact, $customer);
+
+        if ($shouldPersistProfile) {
             $contact = $chatService->syncContactProfile($contact, $metaService, $customer);
         }
 
