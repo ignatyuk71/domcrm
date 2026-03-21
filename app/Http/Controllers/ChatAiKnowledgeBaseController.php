@@ -20,6 +20,7 @@ class ChatAiKnowledgeBaseController extends Controller
     public function index(): View
     {
         $settings = ChatAiSetting::current();
+        $isAiEnabled = (bool) ($settings?->enabled ?? false);
 
         $stats = [
             'topics_total' => ChatAiTopic::query()->count(),
@@ -91,6 +92,7 @@ class ChatAiKnowledgeBaseController extends Controller
 
         return view('settings.ai-knowledge', compact(
             'settings',
+            'isAiEnabled',
             'stats',
             'topics',
             'keywords',

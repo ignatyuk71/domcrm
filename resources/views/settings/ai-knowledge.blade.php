@@ -96,7 +96,7 @@
                 <div class="col-6 col-lg-2">
                     <div class="kb-stat">
                         <div class="label">AI статус</div>
-                        <div class="value">{{ $settings->enabled ? 'ON' : 'OFF' }}</div>
+                        <div class="value">{{ $isAiEnabled ? 'ON' : 'OFF' }}</div>
                     </div>
                 </div>
                 <div class="col-6 col-lg-2">
