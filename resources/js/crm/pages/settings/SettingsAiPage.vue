@@ -27,6 +27,9 @@
           </div>
 
           <div class="hero-actions">
+            <a class="btn btn-outline-secondary" href="/settings/ai/knowledge">
+              База AI
+            </a>
             <button class="btn btn-outline-secondary" :disabled="loading" @click="loadData">
               Оновити
             </button>
@@ -93,7 +96,6 @@
                   {{ model.label }}
                 </option>
               </select>
-              <p class="field-help">Модель вибирається зі списку, щоб команда не вводила її вручну.</p>
               <div v-if="selectedModelMeta?.description" class="model-note">
                 {{ selectedModelMeta.description }}
               </div>
@@ -251,13 +253,13 @@ const form = reactive({
 const meta = reactive({
   has_api_key: false,
   api_key_source: '.env',
-  default_model: 'gpt-4.1-mini',
+  default_model: 'gpt-5.4-mini',
   default_max_messages: 12,
   available_models: [
     {
-      value: 'gpt-4.1-mini',
-      label: 'GPT-4.1 Mini',
-      description: 'Рекомендовано для першої лінії: швидко і дешевше.',
+      value: 'gpt-5.4-mini',
+      label: 'GPT-5.4 Mini',
+      description: 'Рекомендована середина для першої лінії: дешевше за повну 5.4 і помітно адекватніше за nano.',
     },
   ],
 });
@@ -291,7 +293,7 @@ function fillForm(settings = {}, metaPayload = {}) {
 
   form.enabled = Boolean(settings.enabled);
   form.assistant_name = settings.assistant_name || '';
-  form.model = settings.model || meta.default_model || 'gpt-4.1-mini';
+  form.model = settings.model || meta.default_model || 'gpt-5.4-mini';
   form.max_messages = Number(settings.max_messages || 12);
   form.reply_style = settings.reply_style || '';
   form.company_context = settings.company_context || '';
