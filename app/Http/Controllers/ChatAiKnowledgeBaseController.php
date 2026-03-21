@@ -229,21 +229,33 @@ class ChatAiKnowledgeBaseController extends Controller
             'is_active' => ['nullable', 'boolean'],
         ]);
 
-        ChatAiTopicProduct::query()->create([
+        $topicProduct = ChatAiTopicProduct::query()->updateOrCreate([
             'topic_id' => $data['topic_id'],
             'product_id' => $data['product_id'],
+        ], [
             'sort_order' => $data['sort_order'],
             'is_active' => (bool) ($data['is_active'] ?? false),
         ]);
 
-        return back()->with('success', 'Товар привʼязано до теми.');
+        return back()->with(
+            'success',
+            $topicProduct->wasRecentlyCreated
+                ? 'Товар привʼязано до теми.'
+                : 'Привʼязка вже існувала, параметри оновлено.'
+        );
     }
 
     public function updateTopicProduct(Request $request, ChatAiTopicProduct $topicProduct): RedirectResponse
     {
         $data = $request->validate([
             'topic_id' => ['required', 'exists:chat_ai_topics,id'],
-            'product_id' => ['required', 'exists:products,id'],
+            'product_id' => [
+                'required',
+                'exists:products,id',
+                Rule::unique('chat_ai_topic_products', 'product_id')
+                    ->where(fn ($query) => $query->where('topic_id', $request->input('topic_id')))
+                    ->ignore($topicProduct->id),
+            ],
             'sort_order' => ['required', 'integer', 'min:0', 'max:10000'],
             'is_active' => ['nullable', 'boolean'],
         ]);

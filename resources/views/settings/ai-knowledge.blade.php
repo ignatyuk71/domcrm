@@ -345,6 +345,83 @@
             font-size: .9rem;
         }
 
+        .kb-data-list {
+            display: flex;
+            flex-direction: column;
+            gap: .85rem;
+            margin-top: 1rem;
+        }
+
+        .kb-data-item {
+            border: 1px solid var(--kb-border);
+            background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
+            border-radius: 16px;
+            padding: 1rem;
+            transition: all .18s ease;
+        }
+
+        .kb-data-item:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--kb-shadow-hover);
+        }
+
+        .kb-data-head {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: .85rem;
+            margin-bottom: .75rem;
+        }
+
+        .kb-data-title {
+            font-size: 1rem;
+            font-weight: 800;
+            letter-spacing: -.02em;
+            margin: 0;
+        }
+
+        .kb-data-subtitle {
+            color: var(--kb-muted);
+            font-size: .86rem;
+            margin-top: .2rem;
+        }
+
+        .kb-data-copy {
+            color: var(--kb-muted);
+            font-size: .9rem;
+            line-height: 1.65;
+            margin: 0;
+        }
+
+        .kb-inline-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .5rem;
+        }
+
+        .kb-inline-btn {
+            border-radius: 10px;
+            padding: .48rem .78rem;
+            font-size: .82rem;
+            font-weight: 700;
+        }
+
+        .kb-list-section-label {
+            color: var(--kb-muted);
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            font-size: .76rem;
+            font-weight: 800;
+            margin: 1.1rem 0 .65rem;
+        }
+
+        .kb-grid-two {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 1rem;
+        }
+
         @media (max-width: 1399.98px) {
             .kb-stats {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -354,6 +431,10 @@
         @media (max-width: 991.98px) {
             .kb-section {
                 padding: 1.2rem;
+            }
+
+            .kb-grid-two {
+                grid-template-columns: repeat(1, minmax(0, 1fr));
             }
         }
 
@@ -366,6 +447,11 @@
 
     <div class="py-4 px-3 px-md-4">
         <div class="container-fluid kb-page">
+            @php
+                $positiveKeywordsCount = $keywords->where('match_type', 'positive')->count();
+                $negativeKeywordsCount = $keywords->where('match_type', 'negative')->count();
+            @endphp
+
             @if(session('success'))
                 <div class="alert alert-success border-0 shadow-sm mb-4" role="alert">
                     {{ session('success') }}
@@ -453,7 +539,21 @@
                                                     <span class="kb-badge primary">Пріоритет {{ $topic->priority }}</span>
                                                 </div>
                                             </div>
-
+                                            <div class="kb-inline-actions">
+                                                <button type="button"
+                                                        class="btn btn-outline-secondary kb-inline-btn"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#topicEditModal{{ $topic->id }}">
+                                                    Редагувати
+                                                </button>
+                                                <form method="POST"
+                                                      action="{{ route('settings.ai.knowledge.topics.destroy', $topic) }}"
+                                                      onsubmit="return confirm('Видалити тему «{{ $topic->name }}»?');">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button type="submit" class="btn btn-outline-danger kb-inline-btn">Видалити</button>
+                                                </form>
+                                            </div>
                                         </div>
 
                                         <p class="kb-topic-copy">
@@ -498,21 +598,51 @@
                             </div>
                         </div>
 
-                        <div class="row g-3">
-                            <div class="col-12 col-md-6">
-                                <article class="kb-mini-card h-100">
-                                    <div class="kb-stat-label mb-3">Позитивні збіги</div>
-                                    <div class="kb-stat-value">{{ $stats['keywords_total'] }}</div>
-                                    <div class="kb-stat-copy">Слова, які запускають тему.</div>
-                                </article>
+                        @if($keywords->isNotEmpty())
+                            <div class="kb-data-list">
+                                @foreach($keywords as $keyword)
+                                    <article class="kb-data-item">
+                                        <div class="kb-data-head">
+                                            <div>
+                                                <h3 class="kb-data-title">{{ $keyword->phrase }}</h3>
+                                                <div class="kb-data-subtitle">
+                                                    Тема: {{ $keyword->topic?->name ?: 'Не знайдено' }}
+                                                </div>
+                                            </div>
+                                            <div class="kb-inline-actions">
+                                                <button type="button"
+                                                        class="btn btn-outline-secondary kb-inline-btn"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#keywordEditModal{{ $keyword->id }}">
+                                                    Редагувати
+                                                </button>
+                                                <form method="POST"
+                                                      action="{{ route('settings.ai.knowledge.keywords.destroy', $keyword) }}"
+                                                      onsubmit="return confirm('Видалити ключове слово «{{ $keyword->phrase }}»?');">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button type="submit" class="btn btn-outline-danger kb-inline-btn">Видалити</button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                        <div class="kb-badge-row">
+                                            <span class="kb-badge {{ $keyword->match_type === 'positive' ? 'success' : 'warning' }}">
+                                                {{ $keyword->match_type === 'positive' ? 'Позитивний' : 'Негативний' }}
+                                            </span>
+                                            <span class="kb-badge primary">Вага {{ $keyword->weight }}</span>
+                                            <span class="kb-badge {{ $keyword->is_active ? 'success' : 'muted' }}">
+                                                {{ $keyword->is_active ? 'Активне' : 'Пауза' }}
+                                            </span>
+                                        </div>
+                                    </article>
+                                @endforeach
                             </div>
-                            <div class="col-12 col-md-6">
-                                <article class="kb-mini-card h-100">
-                                    <div class="kb-stat-label mb-3">Роль</div>
-                                        <div class="kb-stat-copy">Слова і фрази, за якими AI знаходить або відсікає тему.</div>
-                                </article>
+                        @else
+                            <div class="kb-empty-card mt-3">
+                                <div class="kb-empty-title">Ключових слів ще немає</div>
+                                <p class="kb-empty-copy mb-0">Додай позитивні та негативні фрази, щоб AI точніше розумів тему.</p>
                             </div>
-                        </div>
+                        @endif
                     </section>
                 </div>
 
@@ -539,21 +669,106 @@
                             </div>
                         </div>
 
-                        <div class="row g-3">
-                            <div class="col-12 col-md-6">
-                                <article class="kb-mini-card h-100">
-                                    <div class="kb-stat-label mb-3">Прив’язані товари</div>
-                                    <div class="kb-stat-value">{{ $stats['linked_products_total'] }}</div>
-                                    <div class="kb-stat-copy">Товари з каталогу, без дублювання даних.</div>
-                                </article>
+                        <div class="kb-list-section-label">Товари тем</div>
+                        @if($topicProducts->isNotEmpty())
+                            <div class="kb-data-list mt-0">
+                                @foreach($topicProducts as $topicProduct)
+                                    <article class="kb-data-item">
+                                        <div class="kb-data-head">
+                                            <div>
+                                                <h3 class="kb-data-title">{{ $topicProduct->product?->title ?: 'Товар не знайдено' }}</h3>
+                                                <div class="kb-data-subtitle">
+                                                    Тема: {{ $topicProduct->topic?->name ?: 'Не знайдено' }}
+                                                    @if($topicProduct->product?->sku)
+                                                        • SKU: {{ $topicProduct->product->sku }}
+                                                    @endif
+                                                </div>
+                                            </div>
+                                            <div class="kb-inline-actions">
+                                                <button type="button"
+                                                        class="btn btn-outline-secondary kb-inline-btn"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#topicProductEditModal{{ $topicProduct->id }}">
+                                                    Редагувати
+                                                </button>
+                                                <form method="POST"
+                                                      action="{{ route('settings.ai.knowledge.topicProducts.destroy', $topicProduct) }}"
+                                                      onsubmit="return confirm('Видалити прив’язку товару?');">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button type="submit" class="btn btn-outline-danger kb-inline-btn">Видалити</button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                        <div class="kb-badge-row">
+                                            <span class="kb-badge primary">Порядок {{ $topicProduct->sort_order }}</span>
+                                            @if(!is_null($topicProduct->product?->sale_price))
+                                                <span class="kb-badge muted">{{ number_format((float) $topicProduct->product->sale_price, 0, ',', ' ') }} грн</span>
+                                            @endif
+                                            <span class="kb-badge {{ $topicProduct->is_active ? 'success' : 'muted' }}">
+                                                {{ $topicProduct->is_active ? 'Активна прив’язка' : 'Пауза' }}
+                                            </span>
+                                        </div>
+                                    </article>
+                                @endforeach
                             </div>
-                            <div class="col-12 col-md-6">
-                                <article class="kb-mini-card h-100">
-                                    <div class="kb-stat-label mb-3">Роль</div>
-                                        <div class="kb-stat-copy">Товари, які підтягуються в тему як опорні дані.</div>
-                                </article>
+                        @else
+                            <div class="kb-empty-card mt-0">
+                                <div class="kb-empty-title">Товарів у темах ще немає</div>
+                                <p class="kb-empty-copy mb-0">Прив’яжи реальні позиції каталогу, щоб AI показував правильні моделі.</p>
                             </div>
-                        </div>
+                        @endif
+
+                        <div class="kb-list-section-label">Медіа тем</div>
+                        @if($topicMedia->isNotEmpty())
+                            <div class="kb-data-list mt-0">
+                                @foreach($topicMedia as $media)
+                                    <article class="kb-data-item">
+                                        <div class="kb-data-head">
+                                            <div>
+                                                <h3 class="kb-data-title">{{ $media->label }}</h3>
+                                                <div class="kb-data-subtitle">
+                                                    Тема: {{ $media->topic?->name ?: 'Не знайдено' }}
+                                                    @if($media->savedFile?->filename)
+                                                        • Файл: {{ $media->savedFile->filename }}
+                                                    @endif
+                                                </div>
+                                            </div>
+                                            <div class="kb-inline-actions">
+                                                <button type="button"
+                                                        class="btn btn-outline-secondary kb-inline-btn"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#topicMediaEditModal{{ $media->id }}">
+                                                    Редагувати
+                                                </button>
+                                                <form method="POST"
+                                                      action="{{ route('settings.ai.knowledge.media.destroy', $media) }}"
+                                                      onsubmit="return confirm('Видалити медіа «{{ $media->label }}»?');">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button type="submit" class="btn btn-outline-danger kb-inline-btn">Видалити</button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                        <div class="kb-badge-row mb-2">
+                                            <span class="kb-badge primary">{{ $media->media_type }}</span>
+                                            <span class="kb-badge primary">Порядок {{ $media->sort_order }}</span>
+                                            <span class="kb-badge {{ $media->is_active ? 'success' : 'muted' }}">
+                                                {{ $media->is_active ? 'Активне' : 'Пауза' }}
+                                            </span>
+                                        </div>
+                                        @if($media->url)
+                                            <p class="kb-data-copy">{{ $media->url }}</p>
+                                        @endif
+                                    </article>
+                                @endforeach
+                            </div>
+                        @else
+                            <div class="kb-empty-card mt-0">
+                                <div class="kb-empty-title">Медіа ще не додані</div>
+                                <p class="kb-empty-copy mb-0">Додай фото, колажі або палітри, які AI зможе надсилати клієнту.</p>
+                            </div>
+                        @endif
                     </section>
                 </div>
 
@@ -583,7 +798,20 @@
                                                 <h3 class="kb-rule-title">{{ $rule->title }}</h3>
                                                 <div class="small text-muted mt-1">{{ $rule->code }}</div>
                                             </div>
-                                            <div class="kb-badge-row">
+                                            <div class="kb-inline-actions">
+                                                <button type="button"
+                                                        class="btn btn-outline-secondary kb-inline-btn"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#ruleEditModal{{ $rule->id }}">
+                                                    Редагувати
+                                                </button>
+                                                <form method="POST"
+                                                      action="{{ route('settings.ai.knowledge.rules.destroy', $rule) }}"
+                                                      onsubmit="return confirm('Видалити правило «{{ $rule->title }}»?');">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button type="submit" class="btn btn-outline-danger kb-inline-btn">Видалити</button>
+                                                </form>
                                                 <span class="kb-badge {{ $rule->is_active ? 'success' : 'muted' }}">
                                                     {{ $rule->is_active ? 'Активне' : 'Пауза' }}
                                                 </span>
@@ -614,6 +842,7 @@
             <form method="POST" action="{{ route('settings.ai.knowledge.topics.store') }}" class="modal-content">
                 @csrf
                 <input type="hidden" name="_form" value="topic_create">
+                <input type="hidden" name="_modal_id" value="topicCreateModal">
                 <div class="modal-header">
                     <h5 class="modal-title" id="topicCreateModalLabel">Нова тема</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрити"></button>
@@ -653,6 +882,7 @@
             <form method="POST" action="{{ route('settings.ai.knowledge.keywords.store') }}" class="modal-content">
                 @csrf
                 <input type="hidden" name="_form" value="keyword_create">
+                <input type="hidden" name="_modal_id" value="keywordCreateModal">
                 <div class="modal-header">
                     <h5 class="modal-title" id="keywordCreateModalLabel">Нове ключове слово</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрити"></button>
@@ -710,6 +940,7 @@
             <form method="POST" action="{{ route('settings.ai.knowledge.topicProducts.store') }}" class="modal-content">
                 @csrf
                 <input type="hidden" name="_form" value="topic_product_create">
+                <input type="hidden" name="_modal_id" value="topicProductCreateModal">
                 <div class="modal-header">
                     <h5 class="modal-title" id="topicProductCreateModalLabel">Прив’язати товар до теми</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрити"></button>
@@ -767,6 +998,7 @@
             <form method="POST" action="{{ route('settings.ai.knowledge.media.store') }}" class="modal-content">
                 @csrf
                 <input type="hidden" name="_form" value="topic_media_create">
+                <input type="hidden" name="_modal_id" value="topicMediaCreateModal">
                 <div class="modal-header">
                     <h5 class="modal-title" id="topicMediaCreateModalLabel">Додати медіа</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрити"></button>
@@ -842,6 +1074,7 @@
             <form method="POST" action="{{ route('settings.ai.knowledge.rules.store') }}" class="modal-content">
                 @csrf
                 <input type="hidden" name="_form" value="rule_create">
+                <input type="hidden" name="_modal_id" value="ruleCreateModal">
                 <div class="modal-header">
                     <h5 class="modal-title" id="ruleCreateModalLabel">Нове правило відповіді</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрити"></button>
@@ -880,15 +1113,281 @@
         </div>
     </div>
 
+    @foreach($topics as $topic)
+        <div class="modal fade kb-modal" id="topicEditModal{{ $topic->id }}" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+                <form method="POST" action="{{ route('settings.ai.knowledge.topics.update', $topic) }}" class="modal-content">
+                    @csrf
+                    @method('PUT')
+                    <input type="hidden" name="_form" value="topic_edit">
+                    <input type="hidden" name="_modal_id" value="topicEditModal{{ $topic->id }}">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Редагування теми</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрити"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label class="form-label">Назва теми</label>
+                                <input type="text" class="form-control" name="name" value="{{ old('_modal_id') === 'topicEditModal'.$topic->id ? old('name') : $topic->name }}" required>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Інструкція для AI</label>
+                                <textarea class="form-control" name="instruction" rows="4">{{ old('_modal_id') === 'topicEditModal'.$topic->id ? old('instruction') : $topic->instruction }}</textarea>
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <label class="form-label">Пріоритет</label>
+                                <input type="number" class="form-control" name="priority" min="0" max="10000" value="{{ old('_modal_id') === 'topicEditModal'.$topic->id ? old('priority') : $topic->priority }}" required>
+                            </div>
+                            <div class="col-12 col-md-8 d-flex align-items-end">
+                                <div class="form-check form-switch mb-2">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="topic-edit-active-{{ $topic->id }}" name="is_active" value="1" @checked(old('_modal_id') === 'topicEditModal'.$topic->id ? old('is_active') : $topic->is_active)>
+                                    <label class="form-check-label ms-2" for="topic-edit-active-{{ $topic->id }}">Тема активна</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Скасувати</button>
+                        <button type="submit" class="btn btn-primary">Оновити тему</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    @endforeach
+
+    @foreach($keywords as $keyword)
+        <div class="modal fade kb-modal" id="keywordEditModal{{ $keyword->id }}" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+                <form method="POST" action="{{ route('settings.ai.knowledge.keywords.update', $keyword) }}" class="modal-content">
+                    @csrf
+                    @method('PUT')
+                    <input type="hidden" name="_form" value="keyword_edit">
+                    <input type="hidden" name="_modal_id" value="keywordEditModal{{ $keyword->id }}">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Редагування ключового слова</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрити"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label class="form-label">Тема</label>
+                                <select class="form-select" name="topic_id" required>
+                                    @foreach($topics as $topic)
+                                        <option value="{{ $topic->id }}" @selected((string) (old('_modal_id') === 'keywordEditModal'.$keyword->id ? old('topic_id') : $keyword->topic_id) === (string) $topic->id)>
+                                            {{ $topic->name }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Фраза</label>
+                                <input type="text" class="form-control" name="phrase" value="{{ old('_modal_id') === 'keywordEditModal'.$keyword->id ? old('phrase') : $keyword->phrase }}" required>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label class="form-label">Тип збігу</label>
+                                <select class="form-select" name="match_type" required>
+                                    <option value="positive" @selected((old('_modal_id') === 'keywordEditModal'.$keyword->id ? old('match_type') : $keyword->match_type) === 'positive')>Позитивний</option>
+                                    <option value="negative" @selected((old('_modal_id') === 'keywordEditModal'.$keyword->id ? old('match_type') : $keyword->match_type) === 'negative')>Негативний</option>
+                                </select>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label class="form-label">Вага</label>
+                                <input type="number" class="form-control" name="weight" min="1" max="10000" value="{{ old('_modal_id') === 'keywordEditModal'.$keyword->id ? old('weight') : $keyword->weight }}" required>
+                            </div>
+                            <div class="col-12">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="keyword-edit-active-{{ $keyword->id }}" name="is_active" value="1" @checked(old('_modal_id') === 'keywordEditModal'.$keyword->id ? old('is_active') : $keyword->is_active)>
+                                    <label class="form-check-label ms-2" for="keyword-edit-active-{{ $keyword->id }}">Ключове слово активне</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Скасувати</button>
+                        <button type="submit" class="btn btn-primary">Оновити слово</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    @endforeach
+
+    @foreach($topicProducts as $topicProduct)
+        <div class="modal fade kb-modal" id="topicProductEditModal{{ $topicProduct->id }}" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+                <form method="POST" action="{{ route('settings.ai.knowledge.topicProducts.update', $topicProduct) }}" class="modal-content">
+                    @csrf
+                    @method('PUT')
+                    <input type="hidden" name="_form" value="topic_product_edit">
+                    <input type="hidden" name="_modal_id" value="topicProductEditModal{{ $topicProduct->id }}">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Редагування прив’язки товару</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрити"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label class="form-label">Тема</label>
+                                <select class="form-select" name="topic_id" required>
+                                    @foreach($topics as $topic)
+                                        <option value="{{ $topic->id }}" @selected((string) (old('_modal_id') === 'topicProductEditModal'.$topicProduct->id ? old('topic_id') : $topicProduct->topic_id) === (string) $topic->id)>
+                                            {{ $topic->name }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Товар</label>
+                                <select class="form-select" name="product_id" required>
+                                    @foreach($products as $product)
+                                        <option value="{{ $product->id }}" @selected((string) (old('_modal_id') === 'topicProductEditModal'.$topicProduct->id ? old('product_id') : $topicProduct->product_id) === (string) $product->id)>
+                                            {{ $product->title }}@if($product->sku) (SKU: {{ $product->sku }})@endif
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label class="form-label">Порядок</label>
+                                <input type="number" class="form-control" name="sort_order" min="0" max="10000" value="{{ old('_modal_id') === 'topicProductEditModal'.$topicProduct->id ? old('sort_order') : $topicProduct->sort_order }}" required>
+                            </div>
+                            <div class="col-12 col-md-6 d-flex align-items-end">
+                                <div class="form-check form-switch mb-2">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="topic-product-edit-active-{{ $topicProduct->id }}" name="is_active" value="1" @checked(old('_modal_id') === 'topicProductEditModal'.$topicProduct->id ? old('is_active') : $topicProduct->is_active)>
+                                    <label class="form-check-label ms-2" for="topic-product-edit-active-{{ $topicProduct->id }}">Прив’язка активна</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Скасувати</button>
+                        <button type="submit" class="btn btn-primary">Оновити прив’язку</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    @endforeach
+
+    @foreach($topicMedia as $media)
+        <div class="modal fade kb-modal" id="topicMediaEditModal{{ $media->id }}" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+                <form method="POST" action="{{ route('settings.ai.knowledge.media.update', $media) }}" class="modal-content">
+                    @csrf
+                    @method('PUT')
+                    <input type="hidden" name="_form" value="topic_media_edit">
+                    <input type="hidden" name="_modal_id" value="topicMediaEditModal{{ $media->id }}">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Редагування медіа</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрити"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label class="form-label">Тема</label>
+                                <select class="form-select" name="topic_id" required>
+                                    @foreach($topics as $topic)
+                                        <option value="{{ $topic->id }}" @selected((string) (old('_modal_id') === 'topicMediaEditModal'.$media->id ? old('topic_id') : $media->topic_id) === (string) $topic->id)>
+                                            {{ $topic->name }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Назва / мітка</label>
+                                <input type="text" class="form-control" name="label" value="{{ old('_modal_id') === 'topicMediaEditModal'.$media->id ? old('label') : $media->label }}" required>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label class="form-label">Тип медіа</label>
+                                <select class="form-select" name="media_type" required>
+                                    @foreach(['image' => 'Зображення', 'size_chart' => 'Таблиця розмірів', 'palette' => 'Палітра', 'promo' => 'Промо', 'collage' => 'Колаж'] as $value => $label)
+                                        <option value="{{ $value }}" @selected((old('_modal_id') === 'topicMediaEditModal'.$media->id ? old('media_type') : $media->media_type) === $value)>{{ $label }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label class="form-label">Порядок</label>
+                                <input type="number" class="form-control" name="sort_order" min="0" max="10000" value="{{ old('_modal_id') === 'topicMediaEditModal'.$media->id ? old('sort_order') : $media->sort_order }}" required>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Файл з галереї</label>
+                                <select class="form-select" name="saved_file_id">
+                                    <option value="">Не обрано</option>
+                                    @foreach($savedFiles as $savedFile)
+                                        <option value="{{ $savedFile->id }}" @selected((string) (old('_modal_id') === 'topicMediaEditModal'.$media->id ? old('saved_file_id') : $media->saved_file_id) === (string) $savedFile->id)>
+                                            {{ $savedFile->filename }}@if($savedFile->type) ({{ $savedFile->type }})@endif
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">URL</label>
+                                <input type="url" class="form-control" name="url" value="{{ old('_modal_id') === 'topicMediaEditModal'.$media->id ? old('url') : $media->url }}">
+                            </div>
+                            <div class="col-12">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="topic-media-edit-active-{{ $media->id }}" name="is_active" value="1" @checked(old('_modal_id') === 'topicMediaEditModal'.$media->id ? old('is_active') : $media->is_active)>
+                                    <label class="form-check-label ms-2" for="topic-media-edit-active-{{ $media->id }}">Медіа активне</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Скасувати</button>
+                        <button type="submit" class="btn btn-primary">Оновити медіа</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    @endforeach
+
+    @foreach($rules as $rule)
+        <div class="modal fade kb-modal" id="ruleEditModal{{ $rule->id }}" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+                <form method="POST" action="{{ route('settings.ai.knowledge.rules.update', $rule) }}" class="modal-content">
+                    @csrf
+                    @method('PUT')
+                    <input type="hidden" name="_form" value="rule_edit">
+                    <input type="hidden" name="_modal_id" value="ruleEditModal{{ $rule->id }}">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Редагування правила</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрити"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row g-3">
+                            <div class="col-12 col-md-4">
+                                <label class="form-label">Код</label>
+                                <input type="text" class="form-control" name="code" value="{{ old('_modal_id') === 'ruleEditModal'.$rule->id ? old('code') : $rule->code }}" required>
+                            </div>
+                            <div class="col-12 col-md-8">
+                                <label class="form-label">Назва</label>
+                                <input type="text" class="form-control" name="title" value="{{ old('_modal_id') === 'ruleEditModal'.$rule->id ? old('title') : $rule->title }}" required>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Інструкція</label>
+                                <textarea class="form-control" name="instruction" rows="5" required>{{ old('_modal_id') === 'ruleEditModal'.$rule->id ? old('instruction') : $rule->instruction }}</textarea>
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <label class="form-label">Пріоритет</label>
+                                <input type="number" class="form-control" name="priority" min="0" max="10000" value="{{ old('_modal_id') === 'ruleEditModal'.$rule->id ? old('priority') : $rule->priority }}" required>
+                            </div>
+                            <div class="col-12 col-md-8 d-flex align-items-end">
+                                <div class="form-check form-switch mb-2">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="rule-edit-active-{{ $rule->id }}" name="is_active" value="1" @checked(old('_modal_id') === 'ruleEditModal'.$rule->id ? old('is_active') : $rule->is_active)>
+                                    <label class="form-check-label ms-2" for="rule-edit-active-{{ $rule->id }}">Правило активне</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Скасувати</button>
+                        <button type="submit" class="btn btn-primary">Оновити правило</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    @endforeach
+
     @php
-        $formModalMap = [
-            'topic_create' => 'topicCreateModal',
-            'keyword_create' => 'keywordCreateModal',
-            'topic_product_create' => 'topicProductCreateModal',
-            'topic_media_create' => 'topicMediaCreateModal',
-            'rule_create' => 'ruleCreateModal',
-        ];
-        $autoOpenModalId = $formModalMap[old('_form')] ?? null;
+        $autoOpenModalId = old('_modal_id');
     @endphp
 
     @if($autoOpenModalId)
