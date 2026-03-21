@@ -79,6 +79,23 @@ class ChatAiKnowledgeBaseController extends Controller
             ->orderBy('title')
             ->get(['id', 'code', 'title', 'instruction', 'priority', 'is_active']);
 
+        $recommendedTopics = [
+            'Домашні тапки',
+            'Тапки з хутром',
+            'Резинові тапки',
+            'Дитячі тапки',
+            'Капці для вулиці',
+        ];
+
+        $recommendedRules = [
+            'Привітання',
+            'Запит ціни',
+            'Запит фото',
+            'Запит розміру',
+            'Потрібен менеджер',
+            'Конфліктний клієнт',
+        ];
+
         $products = Product::query()
             ->where('is_active', true)
             ->orderBy('title')
@@ -101,6 +118,8 @@ class ChatAiKnowledgeBaseController extends Controller
             'rules',
             'products',
             'savedFiles',
+            'recommendedTopics',
+            'recommendedRules',
         ));
     }
 

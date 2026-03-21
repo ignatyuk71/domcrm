@@ -1,90 +1,381 @@
 <x-app-layout>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
     <style>
-        .kb-page {
-            max-width: 1480px;
+        :root {
+            --kb-font: 'Plus Jakarta Sans', sans-serif;
+            --kb-bg: #f5f7fb;
+            --kb-surface: #ffffff;
+            --kb-surface-soft: #f8faff;
+            --kb-border: #e3e9f4;
+            --kb-border-strong: #d4ddef;
+            --kb-text: #182133;
+            --kb-muted: #70809a;
+            --kb-primary: #635bff;
+            --kb-primary-soft: rgba(99, 91, 255, 0.10);
+            --kb-success: #16a34a;
+            --kb-success-soft: rgba(22, 163, 74, 0.10);
+            --kb-warning: #c27a1a;
+            --kb-warning-soft: rgba(194, 122, 26, 0.10);
+            --kb-danger: #dc2626;
+            --kb-danger-soft: rgba(220, 38, 38, 0.08);
+            --kb-shadow: 0 18px 40px -30px rgba(15, 23, 42, 0.22);
+            --kb-shadow-hover: 0 24px 48px -28px rgba(15, 23, 42, 0.28);
+            --kb-radius-xl: 24px;
+            --kb-radius-lg: 20px;
+            --kb-radius-md: 16px;
+            --kb-radius-sm: 12px;
         }
 
-        .kb-card {
-            border: 1px solid #d9e1f0;
-            border-radius: 16px;
-            box-shadow: 0 10px 24px -20px rgba(15, 23, 42, 0.35);
-            background: #fff;
+        body {
+            font-family: var(--kb-font) !important;
+            background:
+                radial-gradient(circle at 0% 0%, rgba(99, 91, 255, 0.05), transparent 25%),
+                radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.04), transparent 20%),
+                var(--kb-bg);
+            color: var(--kb-text);
+        }
+
+        .kb-page {
+            max-width: 1460px;
+        }
+
+        .kb-card,
+        .kb-stat,
+        .kb-step,
+        .kb-topic-item,
+        .kb-rule-item,
+        .kb-empty-card,
+        .kb-mini-card {
+            background: var(--kb-surface);
+            border: 1px solid var(--kb-border);
+            border-radius: var(--kb-radius-lg);
+            box-shadow: var(--kb-shadow);
+        }
+
+        .kb-stat:hover,
+        .kb-topic-item:hover,
+        .kb-rule-item:hover,
+        .kb-empty-card:hover,
+        .kb-mini-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--kb-shadow-hover);
+        }
+
+        .kb-stats {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 1rem;
         }
 
         .kb-stat {
-            border: 1px solid #d9e1f0;
-            border-radius: 14px;
-            background: #fff;
-            padding: .95rem 1rem;
+            padding: 1.15rem 1.2rem;
+            transition: all .18s ease;
         }
 
-        .kb-stat .label {
-            color: #5b6d8b;
-            font-size: .77rem;
-            font-weight: 700;
+        .kb-stat-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: .75rem;
+            margin-bottom: .9rem;
+        }
+
+        .kb-stat-label {
+            color: var(--kb-muted);
             text-transform: uppercase;
             letter-spacing: .08em;
+            font-size: .76rem;
+            font-weight: 800;
         }
 
-        .kb-stat .value {
-            font-size: 1.75rem;
+        .kb-stat-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 14px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--kb-primary-soft);
+            color: var(--kb-primary);
+        }
+
+        .kb-stat-value {
+            font-size: 2rem;
+            line-height: 1;
             font-weight: 800;
-            line-height: 1.1;
-            margin-top: .35rem;
+            letter-spacing: -.05em;
+            margin-bottom: .35rem;
+        }
+
+        .kb-stat-copy {
+            color: var(--kb-muted);
+            font-size: .92rem;
+        }
+
+        .kb-section {
+            padding: 1.35rem;
+        }
+
+        .kb-section-head {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1rem;
+            margin-bottom: 1rem;
         }
 
         .kb-section-title {
-            font-size: 1.15rem;
+            font-size: 1.3rem;
             font-weight: 800;
+            letter-spacing: -.03em;
             margin: 0;
-            color: #162039;
         }
 
-        .kb-section-subtitle {
+        .kb-section-copy {
+            color: var(--kb-muted);
+            font-size: .94rem;
+            line-height: 1.7;
             margin: .35rem 0 0;
-            color: #60708d;
-            font-size: .95rem;
+            max-width: 760px;
         }
 
-        .kb-table th {
-            font-size: .78rem;
-            text-transform: uppercase;
-            letter-spacing: .07em;
-            color: #60708d;
-            border-top: 0;
-            white-space: nowrap;
-        }
-
-        .kb-table td {
-            vertical-align: middle;
+        .kb-badge-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .55rem;
         }
 
         .kb-badge {
-            padding: .34rem .62rem;
-            font-size: .73rem;
+            display: inline-flex;
+            align-items: center;
+            gap: .4rem;
+            min-height: 34px;
+            padding: .45rem .72rem;
             border-radius: 999px;
+            font-size: .76rem;
             font-weight: 700;
+            border: 1px solid transparent;
+        }
+
+        .kb-badge.primary {
+            background: var(--kb-primary-soft);
+            color: var(--kb-primary);
+        }
+
+        .kb-badge.success {
+            background: var(--kb-success-soft);
+            color: var(--kb-success);
+        }
+
+        .kb-badge.warning {
+            background: var(--kb-warning-soft);
+            color: var(--kb-warning);
+        }
+
+        .kb-badge.muted {
+            background: #eef2f8;
+            color: #5f6f88;
+        }
+
+        .kb-topic-list,
+        .kb-rule-list {
+            display: flex;
+            flex-direction: column;
+            gap: .85rem;
+        }
+
+        .kb-topic-item,
+        .kb-rule-item,
+        .kb-mini-card {
+            padding: 1rem;
+            transition: all .18s ease;
+        }
+
+        .kb-topic-head,
+        .kb-rule-head {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: .75rem;
+            margin-bottom: .8rem;
+        }
+
+        .kb-topic-title,
+        .kb-rule-title {
+            font-size: 1rem;
+            font-weight: 800;
+            letter-spacing: -.02em;
+            margin: 0;
+        }
+
+        .kb-topic-copy,
+        .kb-rule-copy {
+            color: var(--kb-muted);
+            font-size: .93rem;
+            line-height: 1.75;
+            margin: 0;
+        }
+
+        .kb-empty-card {
+            padding: 1.8rem 1.3rem;
+            border-style: dashed;
+            background: linear-gradient(180deg, #fbfcff 0%, #f6f9ff 100%);
+            text-align: center;
+        }
+
+        .kb-empty-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 18px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--kb-primary-soft);
+            color: var(--kb-primary);
+            font-size: 1.35rem;
+            margin-bottom: .9rem;
+        }
+
+        .kb-empty-title {
+            font-size: 1.15rem;
+            font-weight: 800;
+            letter-spacing: -.03em;
+            margin-bottom: .55rem;
+        }
+
+        .kb-empty-copy {
+            color: var(--kb-muted);
+            line-height: 1.75;
+            margin: 0 auto 1rem;
+            max-width: 540px;
+        }
+
+        .kb-action-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .55rem;
+        }
+
+        .kb-action-btn {
+            border-radius: 12px;
+            font-size: .86rem;
+            font-weight: 700;
+            padding: .54rem .9rem;
+            border: 1px solid var(--kb-border-strong);
+            background: #fff;
+            color: var(--kb-text);
+            transition: all .16s ease;
+        }
+
+        .kb-action-btn:hover,
+        .kb-action-btn:focus {
+            border-color: rgba(99, 91, 255, 0.45);
+            color: var(--kb-primary);
+            box-shadow: 0 10px 20px -18px rgba(99, 91, 255, 0.65);
+        }
+
+        .kb-action-btn.primary {
+            background: var(--kb-primary);
+            border-color: var(--kb-primary);
+            color: #fff;
+        }
+
+        .kb-action-btn.primary:hover,
+        .kb-action-btn.primary:focus {
+            background: #5146ff;
+            border-color: #5146ff;
+            color: #fff;
+        }
+
+        .kb-modal .modal-content {
+            border: 1px solid var(--kb-border);
+            border-radius: 18px;
+            box-shadow: var(--kb-shadow-hover);
+        }
+
+        .kb-modal .modal-header {
+            border-bottom: 1px solid var(--kb-border);
+            padding: 1rem 1.15rem;
+        }
+
+        .kb-modal .modal-title {
+            font-size: 1rem;
+            font-weight: 800;
+            letter-spacing: -.02em;
+        }
+
+        .kb-modal .modal-body {
+            padding: 1rem 1.15rem;
+        }
+
+        .kb-modal .modal-footer {
+            border-top: 1px solid var(--kb-border);
+            padding: .9rem 1.15rem 1rem;
+        }
+
+        .kb-modal .form-label {
+            font-size: .78rem;
+            font-weight: 700;
+            color: var(--kb-muted);
+            margin-bottom: .35rem;
+            text-transform: uppercase;
+            letter-spacing: .06em;
+        }
+
+        .kb-modal .form-control,
+        .kb-modal .form-select {
+            border-radius: 12px;
+            border-color: var(--kb-border-strong);
+            min-height: 44px;
+        }
+
+        .kb-modal .form-control:focus,
+        .kb-modal .form-select:focus {
+            border-color: rgba(99, 91, 255, 0.45);
+            box-shadow: 0 0 0 .22rem rgba(99, 91, 255, 0.12);
+        }
+
+        .kb-modal .form-check-label {
+            color: var(--kb-text);
+            font-size: .9rem;
+        }
+
+        @media (max-width: 1399.98px) {
+            .kb-stats {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 991.98px) {
+            .kb-section {
+                padding: 1.2rem;
+            }
+        }
+
+        @media (max-width: 767.98px) {
+            .kb-stats {
+                grid-template-columns: repeat(1, minmax(0, 1fr));
+            }
         }
     </style>
 
-    <div class="py-3 py-md-4 px-3 px-md-4">
+    <div class="py-4 px-3 px-md-4">
         <div class="container-fluid kb-page">
-            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
-                <div>
-                    <h1 class="h4 mb-1 fw-bold text-dark">База знань AI</h1>
-                    <p class="text-muted mb-0">Робоча адмінка для таблиць `chat_ai_topics`, `chat_ai_topic_keywords`, `chat_ai_topic_products`, `chat_ai_topic_media`, `chat_ai_response_rules`.</p>
-                </div>
-                <a href="{{ route('settings.ai.index') }}" class="btn btn-outline-secondary">Повернутись у Система AI</a>
-            </div>
-
             @if(session('success'))
-                <div class="alert alert-success mb-3">{{ session('success') }}</div>
+                <div class="alert alert-success border-0 shadow-sm mb-4" role="alert">
+                    {{ session('success') }}
+                </div>
             @endif
 
             @if($errors->any())
-                <div class="alert alert-danger mb-3">
-                    <div class="fw-bold mb-1">Є помилки у формі:</div>
-                    <ul class="mb-0">
+                <div class="alert alert-danger border-0 shadow-sm mb-4" role="alert">
+                    <div class="fw-semibold mb-1">Помилка збереження</div>
+                    <ul class="mb-0 ps-3">
                         @foreach($errors->all() as $error)
                             <li>{{ $error }}</li>
                         @endforeach
@@ -92,590 +383,521 @@
                 </div>
             @endif
 
-            <section class="row g-3 mb-4">
-                <div class="col-6 col-lg-2">
-                    <div class="kb-stat">
-                        <div class="label">AI статус</div>
-                        <div class="value">{{ $isAiEnabled ? 'ON' : 'OFF' }}</div>
+            <section class="kb-stats mb-4">
+                <article class="kb-stat">
+                    <div class="kb-stat-head">
+                        <div class="kb-stat-label">Теми</div>
+                        <span class="kb-stat-icon"><i class="bi bi-diagram-3"></i></span>
                     </div>
-                </div>
-                <div class="col-6 col-lg-2">
-                    <div class="kb-stat">
-                        <div class="label">Теми</div>
-                        <div class="value">{{ $stats['topics_total'] }}</div>
+                    <div class="kb-stat-value">{{ $stats['topics_total'] }}</div>
+                    <div class="kb-stat-copy">Активних: {{ $stats['topics_active'] }}</div>
+                </article>
+
+                <article class="kb-stat">
+                    <div class="kb-stat-head">
+                        <div class="kb-stat-label">Ключові слова</div>
+                        <span class="kb-stat-icon"><i class="bi bi-tag"></i></span>
                     </div>
-                </div>
-                <div class="col-6 col-lg-2">
-                    <div class="kb-stat">
-                        <div class="label">Ключові слова</div>
-                        <div class="value">{{ $stats['keywords_total'] }}</div>
+                    <div class="kb-stat-value">{{ $stats['keywords_total'] }}</div>
+                    <div class="kb-stat-copy">Позитивні та негативні</div>
+                </article>
+
+                <article class="kb-stat">
+                    <div class="kb-stat-head">
+                        <div class="kb-stat-label">Товари</div>
+                        <span class="kb-stat-icon"><i class="bi bi-box-seam"></i></span>
                     </div>
-                </div>
-                <div class="col-6 col-lg-2">
-                    <div class="kb-stat">
-                        <div class="label">Товари</div>
-                        <div class="value">{{ $stats['linked_products_total'] }}</div>
+                    <div class="kb-stat-value">{{ $stats['linked_products_total'] }}</div>
+                    <div class="kb-stat-copy">Прив’язані до тем</div>
+                </article>
+
+                <article class="kb-stat">
+                    <div class="kb-stat-head">
+                        <div class="kb-stat-label">Сценарії</div>
+                        <span class="kb-stat-icon"><i class="bi bi-chat-square-text"></i></span>
                     </div>
-                </div>
-                <div class="col-6 col-lg-2">
-                    <div class="kb-stat">
-                        <div class="label">Медіа</div>
-                        <div class="value">{{ $stats['media_total'] }}</div>
-                    </div>
-                </div>
-                <div class="col-6 col-lg-2">
-                    <div class="kb-stat">
-                        <div class="label">Сценарії</div>
-                        <div class="value">{{ $stats['rules_total'] }}</div>
-                    </div>
-                </div>
+                    <div class="kb-stat-value">{{ $stats['rules_total'] }}</div>
+                    <div class="kb-stat-copy">Активних: {{ $stats['rules_active'] }}</div>
+                </article>
             </section>
 
-            <section class="kb-card p-3 p-md-4 mb-4" id="topics">
-                <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
-                    <div>
-                        <h2 class="kb-section-title">Теми (`chat_ai_topics`)</h2>
-                        <p class="kb-section-subtitle">Групи контексту для AI: домашні, резинові, дитячі тощо.</p>
-                    </div>
-                </div>
-
-                <form method="POST" action="{{ route('settings.ai.knowledge.topics.store') }}" class="row g-2 mb-3">
-                    @csrf
-                    <div class="col-12 col-xl-3">
-                        <input type="text" name="name" class="form-control" placeholder="Назва теми" required>
-                    </div>
-                    <div class="col-12 col-xl-5">
-                        <input type="text" name="instruction" class="form-control" placeholder="Інструкція для AI (коротко)">
-                    </div>
-                    <div class="col-6 col-xl-2">
-                        <input type="number" name="priority" class="form-control" placeholder="Пріоритет" value="100" min="0" max="10000" required>
-                    </div>
-                    <div class="col-6 col-xl-2">
-                        <div class="form-check form-switch mt-2">
-                            <input type="hidden" name="is_active" value="0">
-                            <input class="form-check-input" type="checkbox" name="is_active" value="1" checked id="new-topic-active">
-                            <label class="form-check-label" for="new-topic-active">Активна</label>
+            <div class="row g-4">
+                <div class="col-12">
+                    <section class="kb-card kb-section">
+                        <div class="kb-section-head">
+                            <div>
+                                <h2 class="kb-section-title">Теми</h2>
+                                <p class="kb-section-copy">Групи або контексти, з якими працює AI.</p>
+                            </div>
+                            <div class="kb-action-buttons">
+                                <button type="button"
+                                        class="btn kb-action-btn primary"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#topicCreateModal">
+                                    <i class="bi bi-plus-lg me-1"></i>Додати тему
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                    <div class="col-12">
-                        <button type="submit" class="btn btn-primary">Додати тему</button>
-                    </div>
-                </form>
 
-                <div class="table-responsive">
-                    <table class="table kb-table align-middle mb-0">
-                        <thead>
-                            <tr>
-                                <th>#</th>
-                                <th>Назва</th>
-                                <th>Інструкція</th>
-                                <th>Пріоритет</th>
-                                <th>Статус</th>
-                                <th>Дії</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @forelse($topics as $topic)
-                                <tr>
-                                    <td>{{ $topic->id }}</td>
-                                    <td colspan="4">
-                                        <form method="POST" action="{{ route('settings.ai.knowledge.topics.update', $topic) }}" class="row g-2">
-                                            @csrf
-                                            @method('PUT')
-                                            <div class="col-12 col-xl-3">
-                                                <input type="text" name="name" class="form-control form-control-sm" value="{{ $topic->name }}" required>
-                                            </div>
-                                            <div class="col-12 col-xl-5">
-                                                <input type="text" name="instruction" class="form-control form-control-sm" value="{{ $topic->instruction }}">
-                                            </div>
-                                            <div class="col-6 col-xl-2">
-                                                <input type="number" name="priority" class="form-control form-control-sm" value="{{ $topic->priority }}" min="0" max="10000" required>
-                                            </div>
-                                            <div class="col-6 col-xl-2">
-                                                <div class="form-check form-switch mt-1">
-                                                    <input type="hidden" name="is_active" value="0">
-                                                    <input class="form-check-input" type="checkbox" name="is_active" value="1" {{ $topic->is_active ? 'checked' : '' }}>
-                                                    <label class="form-check-label small">Активна</label>
+                        @if($topics->isNotEmpty())
+                            <div class="kb-topic-list">
+                                @foreach($topics as $topic)
+                                    <article class="kb-topic-item">
+                                        <div class="kb-topic-head">
+                                            <div>
+                                                <h3 class="kb-topic-title">{{ $topic->name }}</h3>
+                                                <div class="kb-badge-row mt-2">
+                                                    <span class="kb-badge {{ $topic->is_active ? 'success' : 'muted' }}">
+                                                        {{ $topic->is_active ? 'Активна' : 'Пауза' }}
+                                                    </span>
+                                                    <span class="kb-badge primary">Пріоритет {{ $topic->priority }}</span>
                                                 </div>
                                             </div>
-                                            <div class="col-12">
-                                                <button type="submit" class="btn btn-sm btn-outline-primary">Оновити</button>
-                                            </div>
-                                        </form>
-                                    </td>
-                                    <td>
-                                        <form method="POST" action="{{ route('settings.ai.knowledge.topics.destroy', $topic) }}" onsubmit="return confirm('Видалити тему?')">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button type="submit" class="btn btn-sm btn-outline-danger">Видалити</button>
-                                        </form>
-                                    </td>
-                                </tr>
-                            @empty
-                                <tr>
-                                    <td colspan="6" class="text-center text-muted py-4">Теми ще не додані.</td>
-                                </tr>
-                            @endforelse
-                        </tbody>
-                    </table>
+
+                                        </div>
+
+                                        <p class="kb-topic-copy">
+                                            {{ $topic->instruction ?: 'Інструкція ще не додана.' }}
+                                        </p>
+                                    </article>
+                                @endforeach
+                            </div>
+                        @else
+                            <div class="kb-empty-card">
+                                <div class="kb-empty-icon">
+                                    <i class="bi bi-diagram-3"></i>
+                                </div>
+                                <div class="kb-empty-title">Теми ще не створені</div>
+                                <p class="kb-empty-copy">
+                                    Почни з базових тем, щоб AI відразу розумів, що саме показувати клієнту.
+                                </p>
+                                <div class="kb-badge-row justify-content-center">
+                                    @foreach($recommendedTopics as $topic)
+                                        <span class="kb-badge primary">{{ $topic }}</span>
+                                    @endforeach
+                                </div>
+                            </div>
+                        @endif
+                    </section>
                 </div>
-            </section>
 
-            <section class="kb-card p-3 p-md-4 mb-4" id="keywords">
-                <h2 class="kb-section-title mb-1">Ключові слова (`chat_ai_topic_keywords`)</h2>
-                <p class="kb-section-subtitle mb-3">Позитивні/негативні слова, за якими AI визначає контекст.</p>
-
-                <form method="POST" action="{{ route('settings.ai.knowledge.keywords.store') }}" class="row g-2 mb-3">
-                    @csrf
-                    <div class="col-12 col-xl-3">
-                        <select name="topic_id" class="form-select" required>
-                            <option value="">Оберіть тему</option>
-                            @foreach($topics as $topic)
-                                <option value="{{ $topic->id }}">{{ $topic->name }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="col-12 col-xl-4">
-                        <input type="text" name="phrase" class="form-control" placeholder="Фраза" required>
-                    </div>
-                    <div class="col-6 col-xl-2">
-                        <select name="match_type" class="form-select" required>
-                            <option value="positive">positive</option>
-                            <option value="negative">negative</option>
-                        </select>
-                    </div>
-                    <div class="col-6 col-xl-1">
-                        <input type="number" name="weight" class="form-control" value="100" min="1" max="10000" required>
-                    </div>
-                    <div class="col-6 col-xl-1">
-                        <div class="form-check form-switch mt-2">
-                            <input type="hidden" name="is_active" value="0">
-                            <input class="form-check-input" type="checkbox" name="is_active" value="1" checked>
+                <div class="col-12 col-xl-6">
+                    <section class="kb-card kb-section h-100">
+                        <div class="kb-section-head">
+                            <div>
+                                <h2 class="kb-section-title">Ключові слова</h2>
+                                <p class="kb-section-copy">Позитивні й негативні ключові слова для тем.</p>
+                            </div>
+                            <div class="kb-action-buttons">
+                                <button type="button"
+                                        class="btn kb-action-btn"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#keywordCreateModal">
+                                    <i class="bi bi-plus-lg me-1"></i>Додати слово
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                    <div class="col-6 col-xl-1">
-                        <button type="submit" class="btn btn-primary w-100">+</button>
-                    </div>
-                </form>
 
-                <div class="table-responsive">
-                    <table class="table kb-table align-middle mb-0">
-                        <thead>
-                            <tr>
-                                <th>#</th>
-                                <th>Тема</th>
-                                <th>Фраза</th>
-                                <th>Тип</th>
-                                <th>Вага</th>
-                                <th>Статус</th>
-                                <th>Дії</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @forelse($keywords as $keyword)
-                                <tr>
-                                    <td>{{ $keyword->id }}</td>
-                                    <td>{{ $keyword->topic?->name }}</td>
-                                    <td colspan="4">
-                                        <form method="POST" action="{{ route('settings.ai.knowledge.keywords.update', $keyword) }}" class="row g-2">
-                                            @csrf
-                                            @method('PUT')
-                                            <div class="col-12 col-xl-3">
-                                                <select name="topic_id" class="form-select form-select-sm" required>
-                                                    @foreach($topics as $topic)
-                                                        <option value="{{ $topic->id }}" {{ (int) $keyword->topic_id === (int) $topic->id ? 'selected' : '' }}>
-                                                            {{ $topic->name }}
-                                                        </option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
-                                            <div class="col-12 col-xl-4">
-                                                <input type="text" name="phrase" class="form-control form-control-sm" value="{{ $keyword->phrase }}" required>
-                                            </div>
-                                            <div class="col-4 col-xl-2">
-                                                <select name="match_type" class="form-select form-select-sm" required>
-                                                    <option value="positive" {{ $keyword->match_type === 'positive' ? 'selected' : '' }}>positive</option>
-                                                    <option value="negative" {{ $keyword->match_type === 'negative' ? 'selected' : '' }}>negative</option>
-                                                </select>
-                                            </div>
-                                            <div class="col-4 col-xl-1">
-                                                <input type="number" name="weight" class="form-control form-control-sm" value="{{ $keyword->weight }}" min="1" max="10000" required>
-                                            </div>
-                                            <div class="col-4 col-xl-2">
-                                                <div class="form-check form-switch mt-1">
-                                                    <input type="hidden" name="is_active" value="0">
-                                                    <input class="form-check-input" type="checkbox" name="is_active" value="1" {{ $keyword->is_active ? 'checked' : '' }}>
-                                                    <label class="form-check-label small">Активне</label>
-                                                </div>
-                                            </div>
-                                            <div class="col-12">
-                                                <button type="submit" class="btn btn-sm btn-outline-primary">Оновити</button>
-                                            </div>
-                                        </form>
-                                    </td>
-                                    <td>
-                                        <form method="POST" action="{{ route('settings.ai.knowledge.keywords.destroy', $keyword) }}" onsubmit="return confirm('Видалити ключове слово?')">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button type="submit" class="btn btn-sm btn-outline-danger">Видалити</button>
-                                        </form>
-                                    </td>
-                                </tr>
-                            @empty
-                                <tr>
-                                    <td colspan="7" class="text-center text-muted py-4">Ключових слів ще немає.</td>
-                                </tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-
-            <section class="kb-card p-3 p-md-4 mb-4" id="topic-products">
-                <h2 class="kb-section-title mb-1">Привʼязані товари (`chat_ai_topic_products`)</h2>
-                <p class="kb-section-subtitle mb-3">Які товари AI використовує в кожній темі.</p>
-
-                <form method="POST" action="{{ route('settings.ai.knowledge.topicProducts.store') }}" class="row g-2 mb-3">
-                    @csrf
-                    <div class="col-12 col-xl-3">
-                        <select name="topic_id" class="form-select" required>
-                            <option value="">Оберіть тему</option>
-                            @foreach($topics as $topic)
-                                <option value="{{ $topic->id }}">{{ $topic->name }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="col-12 col-xl-6">
-                        <select name="product_id" class="form-select" required>
-                            <option value="">Оберіть товар</option>
-                            @foreach($products as $product)
-                                <option value="{{ $product->id }}">
-                                    {{ $product->title }} @if($product->sku) ({{ $product->sku }}) @endif @if(!is_null($product->sale_price)) — {{ $product->sale_price }} грн @endif
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="col-4 col-xl-1">
-                        <input type="number" name="sort_order" class="form-control" value="0" min="0" max="10000" required>
-                    </div>
-                    <div class="col-4 col-xl-1">
-                        <div class="form-check form-switch mt-2">
-                            <input type="hidden" name="is_active" value="0">
-                            <input class="form-check-input" type="checkbox" name="is_active" value="1" checked>
+                        <div class="row g-3">
+                            <div class="col-12 col-md-6">
+                                <article class="kb-mini-card h-100">
+                                    <div class="kb-stat-label mb-3">Позитивні збіги</div>
+                                    <div class="kb-stat-value">{{ $stats['keywords_total'] }}</div>
+                                    <div class="kb-stat-copy">Слова, які запускають тему.</div>
+                                </article>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <article class="kb-mini-card h-100">
+                                    <div class="kb-stat-label mb-3">Роль</div>
+                                        <div class="kb-stat-copy">Слова і фрази, за якими AI знаходить або відсікає тему.</div>
+                                </article>
+                            </div>
                         </div>
-                    </div>
-                    <div class="col-4 col-xl-1">
-                        <button type="submit" class="btn btn-primary w-100">+</button>
-                    </div>
-                </form>
-
-                <div class="table-responsive">
-                    <table class="table kb-table align-middle mb-0">
-                        <thead>
-                            <tr>
-                                <th>#</th>
-                                <th>Тема</th>
-                                <th>Товар</th>
-                                <th>Порядок</th>
-                                <th>Статус</th>
-                                <th>Дії</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @forelse($topicProducts as $item)
-                                <tr>
-                                    <td>{{ $item->id }}</td>
-                                    <td>{{ $item->topic?->name }}</td>
-                                    <td>{{ $item->product?->title }}</td>
-                                    <td colspan="2">
-                                        <form method="POST" action="{{ route('settings.ai.knowledge.topicProducts.update', $item) }}" class="row g-2">
-                                            @csrf
-                                            @method('PUT')
-                                            <div class="col-12 col-xl-4">
-                                                <select name="topic_id" class="form-select form-select-sm" required>
-                                                    @foreach($topics as $topic)
-                                                        <option value="{{ $topic->id }}" {{ (int) $item->topic_id === (int) $topic->id ? 'selected' : '' }}>
-                                                            {{ $topic->name }}
-                                                        </option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
-                                            <div class="col-12 col-xl-5">
-                                                <select name="product_id" class="form-select form-select-sm" required>
-                                                    @foreach($products as $product)
-                                                        <option value="{{ $product->id }}" {{ (int) $item->product_id === (int) $product->id ? 'selected' : '' }}>
-                                                            {{ $product->title }}
-                                                        </option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
-                                            <div class="col-4 col-xl-1">
-                                                <input type="number" name="sort_order" class="form-control form-control-sm" value="{{ $item->sort_order }}" min="0" max="10000" required>
-                                            </div>
-                                            <div class="col-4 col-xl-2">
-                                                <div class="form-check form-switch mt-1">
-                                                    <input type="hidden" name="is_active" value="0">
-                                                    <input class="form-check-input" type="checkbox" name="is_active" value="1" {{ $item->is_active ? 'checked' : '' }}>
-                                                    <label class="form-check-label small">Активне</label>
-                                                </div>
-                                            </div>
-                                            <div class="col-12">
-                                                <button type="submit" class="btn btn-sm btn-outline-primary">Оновити</button>
-                                            </div>
-                                        </form>
-                                    </td>
-                                    <td>
-                                        <form method="POST" action="{{ route('settings.ai.knowledge.topicProducts.destroy', $item) }}" onsubmit="return confirm('Видалити привʼязку товару?')">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button type="submit" class="btn btn-sm btn-outline-danger">Видалити</button>
-                                        </form>
-                                    </td>
-                                </tr>
-                            @empty
-                                <tr>
-                                    <td colspan="6" class="text-center text-muted py-4">Привʼязаних товарів ще немає.</td>
-                                </tr>
-                            @endforelse
-                        </tbody>
-                    </table>
+                    </section>
                 </div>
-            </section>
 
-            <section class="kb-card p-3 p-md-4 mb-4" id="media">
-                <h2 class="kb-section-title mb-1">Медіа тем (`chat_ai_topic_media`)</h2>
-                <p class="kb-section-subtitle mb-3">Колажі, палітри, size chart, promo та звичайні зображення для тем.</p>
-
-                <form method="POST" action="{{ route('settings.ai.knowledge.media.store') }}" class="row g-2 mb-3">
-                    @csrf
-                    <div class="col-12 col-xl-3">
-                        <select name="topic_id" class="form-select" required>
-                            <option value="">Оберіть тему</option>
-                            @foreach($topics as $topic)
-                                <option value="{{ $topic->id }}">{{ $topic->name }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="col-12 col-xl-3">
-                        <select name="saved_file_id" class="form-select">
-                            <option value="">Файл з галереї (необовʼязково)</option>
-                            @foreach($savedFiles as $file)
-                                <option value="{{ $file->id }}">{{ $file->filename }} @if($file->type) ({{ $file->type }}) @endif</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="col-12 col-xl-2">
-                        <input type="text" name="label" class="form-control" placeholder="Назва медіа" required>
-                    </div>
-                    <div class="col-6 col-xl-2">
-                        <select name="media_type" class="form-select" required>
-                            <option value="image">image</option>
-                            <option value="size_chart">size_chart</option>
-                            <option value="palette">palette</option>
-                            <option value="promo">promo</option>
-                            <option value="collage">collage</option>
-                        </select>
-                    </div>
-                    <div class="col-6 col-xl-2">
-                        <input type="url" name="url" class="form-control" placeholder="URL (необовʼязково)">
-                    </div>
-                    <div class="col-4 col-xl-1">
-                        <input type="number" name="sort_order" class="form-control" value="0" min="0" max="10000" required>
-                    </div>
-                    <div class="col-4 col-xl-1">
-                        <div class="form-check form-switch mt-2">
-                            <input type="hidden" name="is_active" value="0">
-                            <input class="form-check-input" type="checkbox" name="is_active" value="1" checked>
+                <div class="col-12 col-xl-6">
+                    <section class="kb-card kb-section h-100">
+                        <div class="kb-section-head">
+                            <div>
+                                <h2 class="kb-section-title">Прив’язані товари</h2>
+                                <p class="kb-section-copy">Товари каталогу, які належать до конкретної теми.</p>
+                            </div>
+                            <div class="kb-action-buttons">
+                                <button type="button"
+                                        class="btn kb-action-btn"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#topicProductCreateModal">
+                                    <i class="bi bi-plus-lg me-1"></i>Додати товар
+                                </button>
+                                <button type="button"
+                                        class="btn kb-action-btn"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#topicMediaCreateModal">
+                                    <i class="bi bi-plus-lg me-1"></i>Додати медіа
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                    <div class="col-4 col-xl-1">
-                        <button type="submit" class="btn btn-primary w-100">+</button>
-                    </div>
-                </form>
 
-                <div class="table-responsive">
-                    <table class="table kb-table align-middle mb-0">
-                        <thead>
-                            <tr>
-                                <th>#</th>
-                                <th>Тема</th>
-                                <th>Медіа</th>
-                                <th>Тип</th>
-                                <th>Порядок</th>
-                                <th>Статус</th>
-                                <th>Дії</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @forelse($topicMedia as $media)
-                                <tr>
-                                    <td>{{ $media->id }}</td>
-                                    <td>{{ $media->topic?->name }}</td>
-                                    <td>
-                                        <div class="small fw-semibold">{{ $media->label }}</div>
-                                        <div class="small text-muted">file: {{ $media->saved_file_id ?: '—' }}</div>
-                                        <div class="small text-truncate" style="max-width: 260px;">{{ $media->url ?: ($media->savedFile?->url ?: '—') }}</div>
-                                    </td>
-                                    <td colspan="3">
-                                        <form method="POST" action="{{ route('settings.ai.knowledge.media.update', $media) }}" class="row g-2">
-                                            @csrf
-                                            @method('PUT')
-                                            <div class="col-12 col-xl-3">
-                                                <select name="topic_id" class="form-select form-select-sm" required>
-                                                    @foreach($topics as $topic)
-                                                        <option value="{{ $topic->id }}" {{ (int) $media->topic_id === (int) $topic->id ? 'selected' : '' }}>
-                                                            {{ $topic->name }}
-                                                        </option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
-                                            <div class="col-12 col-xl-3">
-                                                <select name="saved_file_id" class="form-select form-select-sm">
-                                                    <option value="">Без файлу</option>
-                                                    @foreach($savedFiles as $file)
-                                                        <option value="{{ $file->id }}" {{ (int) $media->saved_file_id === (int) $file->id ? 'selected' : '' }}>
-                                                            {{ $file->filename }}
-                                                        </option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
-                                            <div class="col-12 col-xl-2">
-                                                <input type="text" name="label" class="form-control form-control-sm" value="{{ $media->label }}" required>
-                                            </div>
-                                            <div class="col-6 col-xl-2">
-                                                <select name="media_type" class="form-select form-select-sm" required>
-                                                    @foreach(['image','size_chart','palette','promo','collage'] as $type)
-                                                        <option value="{{ $type }}" {{ $media->media_type === $type ? 'selected' : '' }}>{{ $type }}</option>
-                                                    @endforeach
-                                                </select>
-                                            </div>
-                                            <div class="col-6 col-xl-2">
-                                                <input type="url" name="url" class="form-control form-control-sm" value="{{ $media->url }}">
-                                            </div>
-                                            <div class="col-4 col-xl-1">
-                                                <input type="number" name="sort_order" class="form-control form-control-sm" value="{{ $media->sort_order }}" min="0" max="10000" required>
-                                            </div>
-                                            <div class="col-4 col-xl-2">
-                                                <div class="form-check form-switch mt-1">
-                                                    <input type="hidden" name="is_active" value="0">
-                                                    <input class="form-check-input" type="checkbox" name="is_active" value="1" {{ $media->is_active ? 'checked' : '' }}>
-                                                    <label class="form-check-label small">Активне</label>
-                                                </div>
-                                            </div>
-                                            <div class="col-12">
-                                                <button type="submit" class="btn btn-sm btn-outline-primary">Оновити</button>
-                                            </div>
-                                        </form>
-                                    </td>
-                                    <td>
-                                        <form method="POST" action="{{ route('settings.ai.knowledge.media.destroy', $media) }}" onsubmit="return confirm('Видалити медіа?')">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button type="submit" class="btn btn-sm btn-outline-danger">Видалити</button>
-                                        </form>
-                                    </td>
-                                </tr>
-                            @empty
-                                <tr>
-                                    <td colspan="7" class="text-center text-muted py-4">Медіа ще не додано.</td>
-                                </tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-
-            <section class="kb-card p-3 p-md-4" id="rules">
-                <h2 class="kb-section-title mb-1">Сценарії (`chat_ai_response_rules`)</h2>
-                <p class="kb-section-subtitle mb-3">Що робить AI в типових кейсах: ціна, розмір, фото, handoff, конфлікт.</p>
-
-                <form method="POST" action="{{ route('settings.ai.knowledge.rules.store') }}" class="row g-2 mb-3">
-                    @csrf
-                    <div class="col-12 col-xl-2">
-                        <input type="text" name="code" class="form-control" placeholder="code (price_request)" required>
-                    </div>
-                    <div class="col-12 col-xl-3">
-                        <input type="text" name="title" class="form-control" placeholder="Назва правила" required>
-                    </div>
-                    <div class="col-12 col-xl-4">
-                        <input type="text" name="instruction" class="form-control" placeholder="Інструкція для AI" required>
-                    </div>
-                    <div class="col-4 col-xl-1">
-                        <input type="number" name="priority" class="form-control" value="100" min="0" max="10000" required>
-                    </div>
-                    <div class="col-4 col-xl-1">
-                        <div class="form-check form-switch mt-2">
-                            <input type="hidden" name="is_active" value="0">
-                            <input class="form-check-input" type="checkbox" name="is_active" value="1" checked>
+                        <div class="row g-3">
+                            <div class="col-12 col-md-6">
+                                <article class="kb-mini-card h-100">
+                                    <div class="kb-stat-label mb-3">Прив’язані товари</div>
+                                    <div class="kb-stat-value">{{ $stats['linked_products_total'] }}</div>
+                                    <div class="kb-stat-copy">Товари з каталогу, без дублювання даних.</div>
+                                </article>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <article class="kb-mini-card h-100">
+                                    <div class="kb-stat-label mb-3">Роль</div>
+                                        <div class="kb-stat-copy">Товари, які підтягуються в тему як опорні дані.</div>
+                                </article>
+                            </div>
                         </div>
-                    </div>
-                    <div class="col-4 col-xl-1">
-                        <button type="submit" class="btn btn-primary w-100">+</button>
-                    </div>
-                </form>
-
-                <div class="table-responsive">
-                    <table class="table kb-table align-middle mb-0">
-                        <thead>
-                            <tr>
-                                <th>#</th>
-                                <th>Code</th>
-                                <th>Правило</th>
-                                <th>Пріоритет</th>
-                                <th>Статус</th>
-                                <th>Дії</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @forelse($rules as $rule)
-                                <tr>
-                                    <td>{{ $rule->id }}</td>
-                                    <td><code>{{ $rule->code }}</code></td>
-                                    <td colspan="3">
-                                        <form method="POST" action="{{ route('settings.ai.knowledge.rules.update', $rule) }}" class="row g-2">
-                                            @csrf
-                                            @method('PUT')
-                                            <div class="col-12 col-xl-2">
-                                                <input type="text" name="code" class="form-control form-control-sm" value="{{ $rule->code }}" required>
-                                            </div>
-                                            <div class="col-12 col-xl-3">
-                                                <input type="text" name="title" class="form-control form-control-sm" value="{{ $rule->title }}" required>
-                                            </div>
-                                            <div class="col-12 col-xl-4">
-                                                <input type="text" name="instruction" class="form-control form-control-sm" value="{{ $rule->instruction }}" required>
-                                            </div>
-                                            <div class="col-4 col-xl-1">
-                                                <input type="number" name="priority" class="form-control form-control-sm" value="{{ $rule->priority }}" min="0" max="10000" required>
-                                            </div>
-                                            <div class="col-4 col-xl-2">
-                                                <div class="form-check form-switch mt-1">
-                                                    <input type="hidden" name="is_active" value="0">
-                                                    <input class="form-check-input" type="checkbox" name="is_active" value="1" {{ $rule->is_active ? 'checked' : '' }}>
-                                                    <label class="form-check-label small">Активне</label>
-                                                </div>
-                                            </div>
-                                            <div class="col-12">
-                                                <button type="submit" class="btn btn-sm btn-outline-primary">Оновити</button>
-                                            </div>
-                                        </form>
-                                    </td>
-                                    <td>
-                                        <form method="POST" action="{{ route('settings.ai.knowledge.rules.destroy', $rule) }}" onsubmit="return confirm('Видалити сценарій?')">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button type="submit" class="btn btn-sm btn-outline-danger">Видалити</button>
-                                        </form>
-                                    </td>
-                                </tr>
-                            @empty
-                                <tr>
-                                    <td colspan="6" class="text-center text-muted py-4">Сценарії ще не додані.</td>
-                                </tr>
-                            @endforelse
-                        </tbody>
-                    </table>
+                    </section>
                 </div>
-            </section>
+
+                <div class="col-12">
+                    <section class="kb-card kb-section">
+                        <div class="kb-section-head">
+                            <div>
+                                <h2 class="kb-section-title">Правила відповіді</h2>
+                                <p class="kb-section-copy">Правила поведінки AI для типових ситуацій.</p>
+                            </div>
+                            <div class="kb-action-buttons">
+                                <button type="button"
+                                        class="btn kb-action-btn"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#ruleCreateModal">
+                                    <i class="bi bi-plus-lg me-1"></i>Додати правило
+                                </button>
+                            </div>
+                        </div>
+
+                        @if($rules->isNotEmpty())
+                            <div class="kb-rule-list">
+                                @foreach($rules as $rule)
+                                    <article class="kb-rule-item">
+                                        <div class="kb-rule-head">
+                                            <div>
+                                                <h3 class="kb-rule-title">{{ $rule->title }}</h3>
+                                                <div class="small text-muted mt-1">{{ $rule->code }}</div>
+                                            </div>
+                                            <div class="kb-badge-row">
+                                                <span class="kb-badge {{ $rule->is_active ? 'success' : 'muted' }}">
+                                                    {{ $rule->is_active ? 'Активне' : 'Пауза' }}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <p class="kb-rule-copy">
+                                            {{ \Illuminate\Support\Str::limit($rule->instruction, 150) }}
+                                        </p>
+                                    </article>
+                                @endforeach
+                            </div>
+                        @else
+                            <div class="kb-badge-row">
+                                @foreach($recommendedRules as $rule)
+                                    <span class="kb-badge muted">{{ $rule }}</span>
+                                @endforeach
+                            </div>
+                        @endif
+                    </section>
+                </div>
+            </div>
         </div>
     </div>
+
+    <div class="modal fade kb-modal" id="topicCreateModal" tabindex="-1" aria-labelledby="topicCreateModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <form method="POST" action="{{ route('settings.ai.knowledge.topics.store') }}" class="modal-content">
+                @csrf
+                <input type="hidden" name="_form" value="topic_create">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="topicCreateModalLabel">Нова тема</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрити"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label for="topic-name" class="form-label">Назва теми</label>
+                            <input type="text" class="form-control" id="topic-name" name="name" value="{{ old('_form') === 'topic_create' ? old('name') : '' }}" required>
+                        </div>
+                        <div class="col-12">
+                            <label for="topic-instruction" class="form-label">Інструкція для AI</label>
+                            <textarea class="form-control" id="topic-instruction" name="instruction" rows="4" placeholder="Коротко: коли ця тема підходить, що показувати, чого уникати.">{{ old('_form') === 'topic_create' ? old('instruction') : '' }}</textarea>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label for="topic-priority" class="form-label">Пріоритет</label>
+                            <input type="number" class="form-control" id="topic-priority" name="priority" min="0" max="10000" value="{{ old('_form') === 'topic_create' ? old('priority', 100) : 100 }}" required>
+                        </div>
+                        <div class="col-12 col-md-8 d-flex align-items-end">
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" role="switch" id="topic-active" name="is_active" value="1" @checked(old('_form') === 'topic_create' ? old('is_active') : true)>
+                                <label class="form-check-label ms-2" for="topic-active">Тема активна</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Скасувати</button>
+                    <button type="submit" class="btn btn-primary">Зберегти тему</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal fade kb-modal" id="keywordCreateModal" tabindex="-1" aria-labelledby="keywordCreateModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <form method="POST" action="{{ route('settings.ai.knowledge.keywords.store') }}" class="modal-content">
+                @csrf
+                <input type="hidden" name="_form" value="keyword_create">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="keywordCreateModalLabel">Нове ключове слово</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрити"></button>
+                </div>
+                <div class="modal-body">
+                    @if($topics->isEmpty())
+                        <div class="alert alert-warning mb-0">Спочатку додай хоча б одну тему.</div>
+                    @else
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label for="keyword-topic" class="form-label">Тема</label>
+                                <select class="form-select" id="keyword-topic" name="topic_id" required>
+                                    <option value="">Оберіть тему</option>
+                                    @foreach($topics as $topic)
+                                        <option value="{{ $topic->id }}" @selected(old('_form') === 'keyword_create' && (string) old('topic_id') === (string) $topic->id)>
+                                            {{ $topic->name }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label for="keyword-phrase" class="form-label">Фраза</label>
+                                <input type="text" class="form-control" id="keyword-phrase" name="phrase" value="{{ old('_form') === 'keyword_create' ? old('phrase') : '' }}" required>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="keyword-match-type" class="form-label">Тип збігу</label>
+                                <select class="form-select" id="keyword-match-type" name="match_type" required>
+                                    <option value="positive" @selected(old('_form') === 'keyword_create' ? old('match_type', 'positive') === 'positive' : true)>Позитивний</option>
+                                    <option value="negative" @selected(old('_form') === 'keyword_create' && old('match_type') === 'negative')>Негативний</option>
+                                </select>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="keyword-weight" class="form-label">Вага</label>
+                                <input type="number" class="form-control" id="keyword-weight" name="weight" min="1" max="10000" value="{{ old('_form') === 'keyword_create' ? old('weight', 100) : 100 }}" required>
+                            </div>
+                            <div class="col-12">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="keyword-active" name="is_active" value="1" @checked(old('_form') === 'keyword_create' ? old('is_active') : true)>
+                                    <label class="form-check-label ms-2" for="keyword-active">Ключове слово активне</label>
+                                </div>
+                            </div>
+                        </div>
+                    @endif
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Скасувати</button>
+                    <button type="submit" class="btn btn-primary" @disabled($topics->isEmpty())>Зберегти слово</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal fade kb-modal" id="topicProductCreateModal" tabindex="-1" aria-labelledby="topicProductCreateModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <form method="POST" action="{{ route('settings.ai.knowledge.topicProducts.store') }}" class="modal-content">
+                @csrf
+                <input type="hidden" name="_form" value="topic_product_create">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="topicProductCreateModalLabel">Прив’язати товар до теми</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрити"></button>
+                </div>
+                <div class="modal-body">
+                    @if($topics->isEmpty() || $products->isEmpty())
+                        <div class="alert alert-warning mb-0">Потрібно мати активні теми і товари в каталозі.</div>
+                    @else
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label for="topic-product-topic" class="form-label">Тема</label>
+                                <select class="form-select" id="topic-product-topic" name="topic_id" required>
+                                    <option value="">Оберіть тему</option>
+                                    @foreach($topics as $topic)
+                                        <option value="{{ $topic->id }}" @selected(old('_form') === 'topic_product_create' && (string) old('topic_id') === (string) $topic->id)>
+                                            {{ $topic->name }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label for="topic-product-product" class="form-label">Товар</label>
+                                <select class="form-select" id="topic-product-product" name="product_id" required>
+                                    <option value="">Оберіть товар</option>
+                                    @foreach($products as $product)
+                                        <option value="{{ $product->id }}" @selected(old('_form') === 'topic_product_create' && (string) old('product_id') === (string) $product->id)>
+                                            {{ $product->title }}@if($product->sku) (SKU: {{ $product->sku }})@endif
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="topic-product-sort" class="form-label">Порядок</label>
+                                <input type="number" class="form-control" id="topic-product-sort" name="sort_order" min="0" max="10000" value="{{ old('_form') === 'topic_product_create' ? old('sort_order', 100) : 100 }}" required>
+                            </div>
+                            <div class="col-12 col-md-6 d-flex align-items-end">
+                                <div class="form-check form-switch mb-2">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="topic-product-active" name="is_active" value="1" @checked(old('_form') === 'topic_product_create' ? old('is_active') : true)>
+                                    <label class="form-check-label ms-2" for="topic-product-active">Прив’язка активна</label>
+                                </div>
+                            </div>
+                        </div>
+                    @endif
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Скасувати</button>
+                    <button type="submit" class="btn btn-primary" @disabled($topics->isEmpty() || $products->isEmpty())>Зберегти прив’язку</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal fade kb-modal" id="topicMediaCreateModal" tabindex="-1" aria-labelledby="topicMediaCreateModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <form method="POST" action="{{ route('settings.ai.knowledge.media.store') }}" class="modal-content">
+                @csrf
+                <input type="hidden" name="_form" value="topic_media_create">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="topicMediaCreateModalLabel">Додати медіа</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрити"></button>
+                </div>
+                <div class="modal-body">
+                    @if($topics->isEmpty())
+                        <div class="alert alert-warning mb-0">Спочатку додай тему, до якої треба прив’язати медіа.</div>
+                    @else
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label for="media-topic" class="form-label">Тема</label>
+                                <select class="form-select" id="media-topic" name="topic_id" required>
+                                    <option value="">Оберіть тему</option>
+                                    @foreach($topics as $topic)
+                                        <option value="{{ $topic->id }}" @selected(old('_form') === 'topic_media_create' && (string) old('topic_id') === (string) $topic->id)>
+                                            {{ $topic->name }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label for="media-label" class="form-label">Назва / мітка</label>
+                                <input type="text" class="form-control" id="media-label" name="label" value="{{ old('_form') === 'topic_media_create' ? old('label') : '' }}" required>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="media-type" class="form-label">Тип медіа</label>
+                                <select class="form-select" id="media-type" name="media_type" required>
+                                    <option value="image" @selected(old('_form') === 'topic_media_create' ? old('media_type', 'image') === 'image' : true)>Зображення</option>
+                                    <option value="size_chart" @selected(old('_form') === 'topic_media_create' && old('media_type') === 'size_chart')>Таблиця розмірів</option>
+                                    <option value="palette" @selected(old('_form') === 'topic_media_create' && old('media_type') === 'palette')>Палітра</option>
+                                    <option value="promo" @selected(old('_form') === 'topic_media_create' && old('media_type') === 'promo')>Промо</option>
+                                    <option value="collage" @selected(old('_form') === 'topic_media_create' && old('media_type') === 'collage')>Колаж</option>
+                                </select>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label for="media-sort-order" class="form-label">Порядок</label>
+                                <input type="number" class="form-control" id="media-sort-order" name="sort_order" min="0" max="10000" value="{{ old('_form') === 'topic_media_create' ? old('sort_order', 100) : 100 }}" required>
+                            </div>
+                            <div class="col-12">
+                                <label for="media-file" class="form-label">Файл з галереї (необовʼязково)</label>
+                                <select class="form-select" id="media-file" name="saved_file_id">
+                                    <option value="">Не обрано</option>
+                                    @foreach($savedFiles as $savedFile)
+                                        <option value="{{ $savedFile->id }}" @selected(old('_form') === 'topic_media_create' && (string) old('saved_file_id') === (string) $savedFile->id)>
+                                            {{ $savedFile->filename }}@if($savedFile->type) ({{ $savedFile->type }})@endif
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label for="media-url" class="form-label">URL (необовʼязково)</label>
+                                <input type="url" class="form-control" id="media-url" name="url" value="{{ old('_form') === 'topic_media_create' ? old('url') : '' }}" placeholder="https://...">
+                            </div>
+                            <div class="col-12">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="media-active" name="is_active" value="1" @checked(old('_form') === 'topic_media_create' ? old('is_active') : true)>
+                                    <label class="form-check-label ms-2" for="media-active">Медіа активне</label>
+                                </div>
+                            </div>
+                        </div>
+                    @endif
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Скасувати</button>
+                    <button type="submit" class="btn btn-primary" @disabled($topics->isEmpty())>Зберегти медіа</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal fade kb-modal" id="ruleCreateModal" tabindex="-1" aria-labelledby="ruleCreateModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <form method="POST" action="{{ route('settings.ai.knowledge.rules.store') }}" class="modal-content">
+                @csrf
+                <input type="hidden" name="_form" value="rule_create">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="ruleCreateModalLabel">Нове правило відповіді</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрити"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-12 col-md-4">
+                            <label for="rule-code" class="form-label">Код</label>
+                            <input type="text" class="form-control" id="rule-code" name="code" value="{{ old('_form') === 'rule_create' ? old('code') : '' }}" placeholder="photo_request" required>
+                        </div>
+                        <div class="col-12 col-md-8">
+                            <label for="rule-title" class="form-label">Назва</label>
+                            <input type="text" class="form-control" id="rule-title" name="title" value="{{ old('_form') === 'rule_create' ? old('title') : '' }}" required>
+                        </div>
+                        <div class="col-12">
+                            <label for="rule-instruction" class="form-label">Інструкція</label>
+                            <textarea class="form-control" id="rule-instruction" name="instruction" rows="5" required>{{ old('_form') === 'rule_create' ? old('instruction') : '' }}</textarea>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <label for="rule-priority" class="form-label">Пріоритет</label>
+                            <input type="number" class="form-control" id="rule-priority" name="priority" min="0" max="10000" value="{{ old('_form') === 'rule_create' ? old('priority', 100) : 100 }}" required>
+                        </div>
+                        <div class="col-12 col-md-8 d-flex align-items-end">
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" role="switch" id="rule-active" name="is_active" value="1" @checked(old('_form') === 'rule_create' ? old('is_active') : true)>
+                                <label class="form-check-label ms-2" for="rule-active">Правило активне</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Скасувати</button>
+                    <button type="submit" class="btn btn-primary">Зберегти правило</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    @php
+        $formModalMap = [
+            'topic_create' => 'topicCreateModal',
+            'keyword_create' => 'keywordCreateModal',
+            'topic_product_create' => 'topicProductCreateModal',
+            'topic_media_create' => 'topicMediaCreateModal',
+            'rule_create' => 'ruleCreateModal',
+        ];
+        $autoOpenModalId = $formModalMap[old('_form')] ?? null;
+    @endphp
+
+    @if($autoOpenModalId)
+        <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                const modalElement = document.getElementById('{{ $autoOpenModalId }}');
+                if (!modalElement || !window.bootstrap) return;
+                window.bootstrap.Modal.getOrCreateInstance(modalElement).show();
+            });
+        </script>
+    @endif
 </x-app-layout>
