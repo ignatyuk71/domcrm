@@ -90,6 +90,28 @@ return [
     'chat_ai' => [
         'enabled' => filter_var(env('CHAT_AI_ENABLED', true), FILTER_VALIDATE_BOOL),
         'max_messages' => (int) env('CHAT_AI_MAX_MESSAGES', 12),
+        'available_models' => [
+            [
+                'value' => 'gpt-4.1-mini',
+                'label' => 'GPT-4.1 Mini',
+                'description' => 'Рекомендовано для першої лінії: швидко і дешевше.',
+            ],
+            [
+                'value' => 'gpt-4.1',
+                'label' => 'GPT-4.1',
+                'description' => 'Сильніша модель для складніших діалогів.',
+            ],
+            [
+                'value' => 'gpt-4o-mini',
+                'label' => 'GPT-4o Mini',
+                'description' => 'Легша універсальна модель для простих сценаріїв.',
+            ],
+            [
+                'value' => 'gpt-4o',
+                'label' => 'GPT-4o',
+                'description' => 'Потужніша універсальна модель, але дорожча.',
+            ],
+        ],
     ],
 
 ];

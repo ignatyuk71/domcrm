@@ -84,8 +84,19 @@
 
             <div class="field">
               <label>Модель</label>
-              <input v-model.trim="form.model" type="text" :placeholder="meta.default_model || 'gpt-4.1-mini'" />
-              <p class="field-help">Можна лишити стандартну модель або задати свою.</p>
+              <select v-model="form.model" class="model-select">
+                <option
+                  v-for="model in modelOptions"
+                  :key="model.value"
+                  :value="model.value"
+                >
+                  {{ model.label }}
+                </option>
+              </select>
+              <p class="field-help">Модель вибирається зі списку, щоб команда не вводила її вручну.</p>
+              <div v-if="selectedModelMeta?.description" class="model-note">
+                {{ selectedModelMeta.description }}
+              </div>
             </div>
 
             <div class="field">
@@ -216,7 +227,7 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import http from '@/crm/api/http';
 
 const loading = ref(false);
@@ -242,7 +253,33 @@ const meta = reactive({
   api_key_source: '.env',
   default_model: 'gpt-4.1-mini',
   default_max_messages: 12,
+  available_models: [
+    {
+      value: 'gpt-4.1-mini',
+      label: 'GPT-4.1 Mini',
+      description: 'Рекомендовано для першої лінії: швидко і дешевше.',
+    },
+  ],
 });
+
+const modelOptions = computed(() => {
+  const items = Array.isArray(meta.available_models) ? [...meta.available_models] : [];
+  const currentValue = String(form.model || '').trim();
+
+  if (currentValue !== '' && !items.some((item) => item?.value === currentValue)) {
+    items.unshift({
+      value: currentValue,
+      label: `${currentValue} (поточна)`,
+      description: 'Поточне значення не входить у стандартний список, але буде збережене.',
+    });
+  }
+
+  return items;
+});
+
+const selectedModelMeta = computed(() => (
+  modelOptions.value.find((item) => item.value === form.model) || null
+));
 
 function setFlash(message, type = 'success') {
   flashMessage.value = message || '';
@@ -250,17 +287,17 @@ function setFlash(message, type = 'success') {
 }
 
 function fillForm(settings = {}, metaPayload = {}) {
+  Object.assign(meta, metaPayload || {});
+
   form.enabled = Boolean(settings.enabled);
   form.assistant_name = settings.assistant_name || '';
-  form.model = settings.model || '';
+  form.model = settings.model || meta.default_model || 'gpt-4.1-mini';
   form.max_messages = Number(settings.max_messages || 12);
   form.reply_style = settings.reply_style || '';
   form.company_context = settings.company_context || '';
   form.qualification_fields = Array.isArray(settings.qualification_fields) ? [...settings.qualification_fields] : [];
   form.handoff_rules = settings.handoff_rules || '';
   form.knowledge_base = settings.knowledge_base || '';
-
-  Object.assign(meta, metaPayload || {});
 }
 
 async function loadData() {
@@ -622,6 +659,7 @@ onMounted(loadData);
 }
 
 .field input,
+.field select,
 .field textarea,
 .field-block textarea,
 .inline-adder input {
@@ -642,6 +680,20 @@ onMounted(loadData);
   resize: vertical;
 }
 
+.field select {
+  appearance: none;
+  padding-right: 48px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, #64748b 50%),
+    linear-gradient(135deg, #64748b 50%, transparent 50%);
+  background-position:
+    calc(100% - 22px) calc(50% - 2px),
+    calc(100% - 16px) calc(50% - 2px);
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+  cursor: pointer;
+}
+
 .field input::placeholder,
 .field textarea::placeholder,
 .field-block textarea::placeholder,
@@ -650,11 +702,22 @@ onMounted(loadData);
 }
 
 .field input:focus,
+.field select:focus,
 .field textarea:focus,
 .field-block textarea:focus,
 .inline-adder input:focus {
   border-color: #60a5fa;
   box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.14);
+}
+
+.model-note {
+  padding: 10px 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 14px;
+  background: #f8fbff;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #1e3a8a;
 }
 
 .chip-panel {

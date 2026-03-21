@@ -48,6 +48,7 @@ class ChatAiSettingsService
                 'api_key_source' => '.env',
                 'default_model' => (string) config('services.openai.model', 'gpt-4.1-mini'),
                 'default_max_messages' => (int) config('services.chat_ai.max_messages', 12),
+                'available_models' => $this->availableModels(),
             ],
         ];
     }
@@ -96,6 +97,40 @@ class ChatAiSettingsService
             'qualification_fields' => ['імʼя', 'телефон', 'товар', 'бюджет', 'термін', 'місто'],
             'handoff_rules' => "Точна ціна\nЗнижка\nОплата\nЖивий менеджер\nНестандартний запит\nСкарга або конфлікт",
         ];
+    }
+
+    /**
+     * @return array<int, array{value: string, label: string, description: string}>
+     */
+    private function availableModels(): array
+    {
+        $items = config('services.chat_ai.available_models', []);
+        $normalized = [];
+
+        foreach ($items as $item) {
+            $value = trim((string) data_get($item, 'value'));
+            if ($value === '') {
+                continue;
+            }
+
+            $normalized[] = [
+                'value' => $value,
+                'label' => trim((string) data_get($item, 'label')) ?: $value,
+                'description' => trim((string) data_get($item, 'description')),
+            ];
+        }
+
+        if ($normalized === []) {
+            return [
+                [
+                    'value' => 'gpt-4.1-mini',
+                    'label' => 'GPT-4.1 Mini',
+                    'description' => 'Рекомендовано для першої лінії: швидко і дешевше.',
+                ],
+            ];
+        }
+
+        return $normalized;
     }
 
     /**
