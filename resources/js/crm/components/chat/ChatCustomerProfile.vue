@@ -215,6 +215,98 @@
           </div>
         </div>
 
+        <div class="ai-settings-container">
+          <div class="section-header">
+            <span class="section-title">AI first line</span>
+            <span class="counter-badge" :class="conversationAiEnabled ? 'counter-badge--success' : 'counter-badge--neutral'">
+              {{ conversationAiEnabled ? 'ON' : 'OFF' }}
+            </span>
+          </div>
+
+          <div class="ai-settings-card" :class="{ 'is-active': aiPanelOpen }">
+            <button class="ai-settings-header" type="button" @click="aiPanelOpen = !aiPanelOpen">
+              <div class="header-left">
+                <div class="order-id-row">
+                  <span class="id-text">AI у цьому чаті</span>
+                  <span class="date-text">{{ aiRuntime.assistant_name || 'DomCRM AI' }}</span>
+                </div>
+
+                <div class="ai-pill-row">
+                  <span class="status-badge" :class="conversationAiEnabled ? 'status-on' : 'status-off'">
+                    {{ conversationAiEnabled ? 'Увімкнено' : 'Вимкнено' }}
+                  </span>
+                  <span class="status-badge status-model">{{ aiRuntime.model || 'Модель не задано' }}</span>
+                </div>
+              </div>
+
+              <div class="header-right">
+                <div class="toggle-btn">
+                  <i class="bi bi-chevron-down"></i>
+                </div>
+              </div>
+            </button>
+
+            <div class="ai-settings-body-wrapper">
+              <div class="ai-settings-body">
+                <div v-if="aiRuntimeLoading" class="ai-inline-loader">
+                  <span class="loader-mini"></span>
+                  <span>Завантаження налаштувань...</span>
+                </div>
+
+                <template v-else>
+                  <div class="ai-control-row">
+                    <div class="ai-control-copy">
+                      <strong>Автовідповідь у цьому діалозі</strong>
+                      <span v-if="!globalAiEnabled">Глобально AI вимкнений у системі. Увімкни в налаштуваннях AI.</span>
+                      <span v-else>Коли увімкнено, AI відповідає на вхідні повідомлення клієнта.</span>
+                    </div>
+
+                    <label class="ai-switch" :class="{ 'is-disabled': aiActionLoading || !globalAiEnabled }">
+                      <input
+                        type="checkbox"
+                        :checked="conversationAiEnabled"
+                        :disabled="aiActionLoading || !globalAiEnabled"
+                        @change="onConversationAiToggle"
+                      >
+                      <span class="ai-switch-track"></span>
+                    </label>
+                  </div>
+
+                  <div class="ai-kv-grid">
+                    <div class="ai-kv-item">
+                      <span class="ai-kv-label">Модель</span>
+                      <span class="ai-kv-value">{{ aiRuntime.model || '—' }}</span>
+                    </div>
+                    <div class="ai-kv-item">
+                      <span class="ai-kv-label">Повідомлень у контексті</span>
+                      <span class="ai-kv-value">{{ aiRuntime.max_messages || 12 }}</span>
+                    </div>
+                  </div>
+
+                  <div v-if="props.customer?.ai?.handoff_reason" class="ai-handoff-note">
+                    <i class="bi bi-person-raised-hand"></i>
+                    <span>Причина передачі менеджеру: {{ props.customer.ai.handoff_reason }}</span>
+                  </div>
+
+                  <div class="ai-actions-row">
+                    <button
+                      type="button"
+                      class="btn-ai-secondary"
+                      :disabled="aiActionLoading"
+                      @click="takeoverToManager"
+                    >
+                      <span v-if="aiActionLoading" class="loader-mini"></span>
+                      Передати менеджеру
+                    </button>
+
+                    <a href="/settings/ai" class="btn-ai-link">Налаштування AI</a>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
 
     </div>
@@ -258,9 +350,19 @@ const isOrderSaving = ref(false);
 const historyOrders = ref([]);
 const historyLoading = ref(false);
 const historyReady = ref(false);
+const aiPanelOpen = ref(false);
+const aiRuntimeLoading = ref(false);
+const aiActionLoading = ref(false);
+const aiRuntime = reactive({
+  enabled: false,
+  assistant_name: '',
+  model: '',
+  max_messages: 12,
+});
 const placeholderThumb = 'https://via.placeholder.com/48x48?text=%20';
 const avatarFailed = ref(false);
 let historyRequestToken = 0;
+let aiSettingsRequestToken = 0;
 
 // Refs для скролу
 const profileContainer = ref(null);
@@ -380,6 +482,20 @@ const displayInitial = computed(() => (displayName.value ? displayName.value[0].
 const avatarUrl = computed(() => props.customer?.fb_profile_pic || props.customer?.customer_avatar || '');
 const safeAvatarUrl = computed(() => (avatarFailed.value ? '' : avatarUrl.value));
 const isInstagram = computed(() => (props.customer?.source || props.customer?.platform) === 'instagram' || !!props.customer?.instagram_user_id);
+const globalAiEnabled = computed(() => {
+  if (typeof props.customer?.ai?.global_enabled === 'boolean') {
+    return props.customer.ai.global_enabled;
+  }
+
+  return Boolean(aiRuntime.enabled);
+});
+const conversationAiEnabled = computed(() => {
+  if (typeof props.customer?.ai?.enabled === 'boolean') {
+    return props.customer.ai.enabled;
+  }
+
+  return globalAiEnabled.value;
+});
 
 function syncFormFromCustomer(customer, { resetPanels = false } = {}) {
   if (!customer) {
@@ -413,6 +529,8 @@ watch(
 
     if (id !== oldId) {
       await loadCustomerHistory(id);
+      aiPanelOpen.value = false;
+      await loadAiRuntimeSettings();
     }
   },
   { immediate: true }
@@ -469,6 +587,97 @@ const loadCustomerHistory = async (id) => {
       historyLoading.value = false;
       historyReady.value = true;
     }
+  }
+};
+
+const loadAiRuntimeSettings = async () => {
+  const requestToken = ++aiSettingsRequestToken;
+  aiRuntimeLoading.value = true;
+
+  try {
+    const { data } = await axios.get('/settings/ai', {
+      headers: { Accept: 'application/json' },
+    });
+
+    if (requestToken !== aiSettingsRequestToken) {
+      return;
+    }
+
+    const settings = data?.settings || {};
+    aiRuntime.enabled = Boolean(settings.enabled);
+    aiRuntime.assistant_name = settings.assistant_name || '';
+    aiRuntime.model = settings.model || '';
+    aiRuntime.max_messages = Number(settings.max_messages || 12);
+  } catch (e) {
+    console.error('Не вдалося завантажити AI налаштування', e);
+  } finally {
+    if (requestToken === aiSettingsRequestToken) {
+      aiRuntimeLoading.value = false;
+    }
+  }
+};
+
+const applyConversationSnapshot = (snapshot) => {
+  if (!props.customer || !snapshot) {
+    return;
+  }
+
+  Object.assign(props.customer, snapshot);
+};
+
+const onConversationAiToggle = async (event) => {
+  const enabled = Boolean(event?.target?.checked);
+
+  if (!props.customer?.conversation_id) {
+    showToast('Для цього чату немає conversation_id.', 'error');
+    return;
+  }
+
+  aiActionLoading.value = true;
+  try {
+    const { data } = await axios.patch(`/api/chat/conversations/${props.customer.conversation_id}/ai`, {
+      enabled,
+    });
+
+    if (data?.conversation) {
+      applyConversationSnapshot(data.conversation);
+    } else if (props.customer) {
+      props.customer.ai = data?.ai || { enabled };
+    }
+
+    showToast(enabled ? 'AI увімкнено для цього діалогу.' : 'AI вимкнено для цього діалогу.');
+  } catch (e) {
+    console.error('Не вдалося оновити AI стан діалогу', e);
+    showToast('Не вдалося змінити стан AI.', 'error');
+  } finally {
+    aiActionLoading.value = false;
+  }
+};
+
+const takeoverToManager = async () => {
+  if (!props.customer?.conversation_id) {
+    showToast('Для цього чату немає conversation_id.', 'error');
+    return;
+  }
+
+  aiActionLoading.value = true;
+  try {
+    const { data } = await axios.post(`/api/chat/conversations/${props.customer.conversation_id}/takeover`, {
+      reason: 'Передано менеджеру вручну',
+    });
+
+    if (data?.conversation) {
+      applyConversationSnapshot(data.conversation);
+    } else if (props.customer) {
+      props.customer.ai = data?.ai || { enabled: false };
+    }
+
+    showToast('Діалог передано менеджеру.');
+  } catch (e) {
+    console.error('Не вдалося передати діалог менеджеру', e);
+    showToast('Не вдалося передати менеджеру.', 'error');
+  } finally {
+    aiActionLoading.value = false;
   }
 };
 
@@ -787,6 +996,8 @@ const handleOrderClose = () => {
 .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding: 0 4px; }
 .section-title { font-size: 12px; font-weight: 800; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.05em; }
 .counter-badge { background: #f1f5f9; color: #475569; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
+.counter-badge--success { background: #dcfce7; color: #15803d; }
+.counter-badge--neutral { background: #e2e8f0; color: #475569; }
 .empty-history { text-align: center; padding: 24px; border: 1px dashed #e2e8f0; border-radius: 12px; color: #94a3b8; }
 .empty-icon { font-size: 24px; margin-bottom: 8px; opacity: 0.5; }
 .orders-list { display: flex; flex-direction: column; gap: 12px; }
@@ -824,6 +1035,42 @@ const handleOrderClose = () => {
 .price { font-weight: 600; color: #475569; }
 .btn-full-order { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 8px; background: white; border: 1px solid #cbd5e1; border-radius: 8px; color: #4f46e5; font-size: 12px; font-weight: 600; text-decoration: none; transition: all 0.2s; }
 .btn-full-order:hover { background: #eef2ff; border-color: #6366f1; }
+.ai-settings-container { margin-top: 18px; }
+.ai-settings-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; transition: all 0.2s ease; }
+.ai-settings-card.is-active { border-color: #cbd5e1; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
+.ai-settings-header { width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #fff; border: none; cursor: pointer; text-align: left; }
+.ai-settings-body-wrapper { max-height: 0; overflow: hidden; transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1); background: #f8fafc; }
+.ai-settings-card.is-active .ai-settings-body-wrapper { max-height: 520px; border-top: 1px solid #f1f5f9; }
+.ai-settings-body { padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+.ai-pill-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.status-badge.status-on { background: #dcfce7; color: #15803d; }
+.status-badge.status-off { background: #f1f5f9; color: #64748b; }
+.status-badge.status-model { background: #eef2ff; color: #4f46e5; }
+.ai-control-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; }
+.ai-control-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ai-control-copy strong { font-size: 12px; color: #0f172a; }
+.ai-control-copy span { font-size: 11px; color: #64748b; line-height: 1.35; }
+.ai-switch { display: inline-flex; align-items: center; cursor: pointer; }
+.ai-switch.is-disabled { cursor: not-allowed; opacity: 0.65; }
+.ai-switch input { display: none; }
+.ai-switch-track { width: 46px; height: 26px; border-radius: 999px; background: #cbd5e1; position: relative; transition: all 0.2s ease; }
+.ai-switch-track::after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: all 0.2s ease; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.25); }
+.ai-switch input:checked + .ai-switch-track { background: #22c55e; }
+.ai-switch input:checked + .ai-switch-track::after { transform: translateX(20px); }
+.ai-kv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ai-kv-item { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+.ai-kv-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8; font-weight: 700; }
+.ai-kv-value { font-size: 13px; font-weight: 700; color: #0f172a; }
+.ai-handoff-note { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #854d0e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 9px 10px; }
+.ai-actions-row { display: flex; gap: 8px; }
+.btn-ai-secondary, .btn-ai-link { height: 38px; border-radius: 8px; padding: 0 12px; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; }
+.btn-ai-secondary { border: 1px solid #cbd5e1; background: #fff; color: #1e293b; cursor: pointer; flex: 1; }
+.btn-ai-secondary:hover:not(:disabled) { background: #f8fafc; border-color: #94a3b8; }
+.btn-ai-secondary:disabled { opacity: 0.7; cursor: not-allowed; }
+.btn-ai-link { border: 1px solid #dbeafe; background: #eff6ff; color: #1d4ed8; }
+.btn-ai-link:hover { background: #dbeafe; }
+.ai-inline-loader { display: inline-flex; align-items: center; gap: 8px; color: #64748b; font-size: 12px; }
+.loader-mini { width: 14px; height: 14px; border: 2px solid #cbd5e1; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; }
 
 .profile-mobile-header { display: none; margin-bottom: 12px; }
 .profile-back-btn { display: inline-flex; align-items: center; gap: 8px; border: 1px solid #e2e8f0; background: #f8fafc; color: #334155; border-radius: 10px; height: 40px; padding: 0 12px; font-size: 14px; font-weight: 600; cursor: pointer; }
@@ -890,6 +1137,14 @@ const handleOrderClose = () => {
 
   .profile-mobile-header {
     display: flex;
+  }
+
+  .ai-kv-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ai-actions-row {
+    flex-direction: column;
   }
 }
 
