@@ -1124,11 +1124,10 @@ class ChatAiAssistantService
         $lastMessage = null;
 
         if ($attachments !== []) {
-            foreach ($attachments as $index => $attachment) {
-                $text = $index === 0 ? $replyText : '';
+            foreach ($attachments as $attachment) {
                 $metaResult = $this->metaService->sendMessage(
                     $customer,
-                    $text,
+                    '',
                     [$attachment['meta_payload']],
                     $contact->platform,
                     $contact->external_user_id
@@ -1143,7 +1142,7 @@ class ChatAiAssistantService
                     'external_message_id' => $metaResult['message_id'] ?? null,
                     'delivery_status' => 'sent',
                     'source' => 'system',
-                    'text' => $text !== '' ? $text : null,
+                    'text' => null,
                     'sent_at' => $sentAt,
                     'meta' => [
                         'ai_generated' => true,
@@ -1153,6 +1152,38 @@ class ChatAiAssistantService
                         'lead_status' => $leadStatus,
                     ],
                 ], [$attachment['stored_attachment']]);
+
+                $conversation = $this->chatService->updateConversationAfterMessage($conversation, $lastMessage, false);
+            }
+
+            if (trim($replyText) !== '') {
+                $metaResult = $this->metaService->sendMessage(
+                    $customer,
+                    $replyText,
+                    [],
+                    $contact->platform,
+                    $contact->external_user_id
+                );
+
+                if (!$metaResult) {
+                    throw new RuntimeException('Meta API не прийняв текст після вкладень AI.');
+                }
+
+                $lastMessage = $this->chatService->storeMessage($conversation, [
+                    'direction' => 'outbound',
+                    'external_message_id' => $metaResult['message_id'] ?? null,
+                    'delivery_status' => 'sent',
+                    'source' => 'system',
+                    'text' => $replyText,
+                    'sent_at' => $sentAt,
+                    'meta' => [
+                        'ai_generated' => true,
+                        'provider' => 'openai',
+                        'model' => $model,
+                        'handoff_required' => $handoffRequired,
+                        'lead_status' => $leadStatus,
+                    ],
+                ]);
 
                 $conversation = $this->chatService->updateConversationAfterMessage($conversation, $lastMessage, false);
             }
