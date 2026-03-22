@@ -4,8 +4,6 @@ namespace App\Services;
 
 use App\Models\ChatConversation;
 use App\Models\ChatMessage;
-use App\Models\ChatAiResponseRule;
-use App\Models\ChatAiTopic;
 use App\Models\ChatStage;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
@@ -161,7 +159,6 @@ class ChatAiAssistantService
 
         $runtimeSettings = $this->chatAiSettings->resolveRuntimeSettings();
         $currentState = $this->getState($conversation);
-        $knowledgeContext = $this->resolveKnowledgeContext($message);
 
         $this->storeState($conversation, [
             'enabled' => $currentState['enabled'],
@@ -175,8 +172,8 @@ class ChatAiAssistantService
 
         try {
             $decision = $this->openAiResponses->createStructuredResponse(
-                $this->buildInstructions($runtimeSettings, $knowledgeContext),
-                $this->buildInput($conversation, $message, $runtimeSettings, $knowledgeContext),
+                $this->buildInstructions($runtimeSettings),
+                $this->buildInput($conversation, $message, $runtimeSettings),
                 $this->decisionSchema(),
                 'chat_first_line_triage',
                 (string) $runtimeSettings['model']
@@ -207,11 +204,6 @@ class ChatAiAssistantService
         $replyText = $this->sanitizeReplyText((string) ($decision['reply_text'] ?? ''));
         $handoffRequired = (bool) ($decision['handoff_required'] ?? false);
         $shouldReply = (bool) ($decision['should_reply'] ?? false) && $replyText !== '';
-        $replyAttachments = $this->resolveReplyAttachments(
-            $decision['attachment_urls'] ?? [],
-            $knowledgeContext,
-            $message
-        );
         $summary = $this->normalizeSummary($decision);
         $lead = $this->normalizeLeadPayload($decision['collected_data'] ?? []);
         $leadStatus = $this->normalizeLeadStatus((string) ($decision['lead_status'] ?? 'new'));
@@ -225,8 +217,7 @@ class ChatAiAssistantService
                     $replyText,
                     $handoffRequired,
                     $leadStatus,
-                    (string) $runtimeSettings['model'],
-                    $replyAttachments
+                    (string) $runtimeSettings['model']
                 );
                 $conversation = $this->freshConversation($conversation);
             }
@@ -411,9 +402,8 @@ class ChatAiAssistantService
 
     /**
      * @param  array<string, mixed>  $settings
-     * @param  array<string, mixed>  $knowledgeContext
      */
-    private function buildInstructions(array $settings, array $knowledgeContext): string
+    private function buildInstructions(array $settings): string
     {
         $instructions = [
             'Ти ' . $settings['assistant_name'] . ', AI-асистент першої лінії для CRM інтернет-магазину.',
@@ -445,48 +435,20 @@ class ChatAiAssistantService
             $instructions[] = 'База знань: ' . $this->limitText((string) $settings['knowledge_base'], 4000);
         }
 
-        if (!empty($knowledgeContext['rules'])) {
-            $instructions[] = 'Активні сценарії відповіді (обовʼязково дотримуйся):';
-            foreach ($knowledgeContext['rules'] as $rule) {
-                $instructions[] = '- ' . $rule['code'] . ': ' . $this->limitText((string) $rule['instruction'], 260);
-            }
-        }
-
-        if (!empty($knowledgeContext['selected_topic'])) {
-            $topic = $knowledgeContext['selected_topic'];
-            $instructions[] = 'Поточна тема запиту: ' . $topic['name'] . '.';
-            if (!empty($topic['instruction'])) {
-                $instructions[] = 'Інструкція теми: ' . $this->limitText((string) $topic['instruction'], 900);
-            }
-            $instructions[] = 'Не змішуй з іншими темами та не вигадуй дані поза контекстом.';
-        } else {
-            $instructions[] = 'Якщо тема не визначена, спочатку уточни тип товару одним коротким питанням.';
-        }
-
-        $instructions[] = 'Для фото використовуй тільки URL з релевантного медіа-контексту.';
-        $instructions[] = 'Для ціни та розмірів використовуй тільки релевантні товари з контексту.';
-        $instructions[] = 'Коли клієнт просить показати/надіслати фото, заповнюй attachment_urls релевантними URL тільки з цього контексту.';
-        $instructions[] = 'Якщо фото не запитували або URL немає в контексті, поверни attachment_urls як порожній масив.';
-
         return implode("\n", $instructions);
     }
 
     /**
      * @param  array<string, mixed>  $settings
-     * @param  array<string, mixed>  $knowledgeContext
      */
-    private function buildInput(
-        ChatConversation $conversation,
-        ChatMessage $message,
-        array $settings,
-        array $knowledgeContext
-    ): string {
+    private function buildInput(ChatConversation $conversation, ChatMessage $message, array $settings): string
+    {
         $customer = $conversation->customer;
         $contact = $conversation->contact;
         $state = $this->getState($conversation);
         $transcript = $this->buildTranscript($conversation, (int) $settings['max_messages']);
 
-        $input = [
+        return implode("\n", [
             'Канал: ' . ($contact?->platform === 'instagram' ? 'Instagram' : 'Messenger'),
             'Клієнт: ' . $this->chatService->resolveDisplayName($contact, $customer),
             'Телефон у CRM: ' . ($customer?->phone ?: 'немає'),
@@ -494,531 +456,9 @@ class ChatAiAssistantService
             'Поточний етап: ' . ($conversation->stage?->name ?: 'Без етапу'),
             'Поточний AI summary: ' . ($state['summary'] ?: 'немає'),
             'Останнє вхідне повідомлення: ' . $this->formatLatestInbound($message),
-        ];
-
-        if (!empty($knowledgeContext['selected_topic'])) {
-            $topic = $knowledgeContext['selected_topic'];
-            $input[] = 'Знайдена тема: ' . $topic['name'];
-
-            if (!empty($knowledgeContext['matched_positive'])) {
-                $input[] = 'Збіги за ключовими словами: ' . implode(', ', $knowledgeContext['matched_positive']);
-            }
-
-            if (!empty($knowledgeContext['products'])) {
-                $input[] = 'Релевантні товари теми:';
-                foreach ($knowledgeContext['products'] as $idx => $product) {
-                    $parts = [$product['title']];
-
-                    if ($product['price'] !== null) {
-                        $parts[] = 'ціна ' . $this->formatPrice((float) $product['price']) . ' грн';
-                    }
-
-                    if ($product['sizes'] !== []) {
-                        $parts[] = 'розміри ' . implode(', ', $product['sizes']);
-                    }
-
-                    if ($product['sku'] !== '') {
-                        $parts[] = 'SKU ' . $product['sku'];
-                    }
-
-                    if ($product['photo_url'] !== '') {
-                        $parts[] = 'фото ' . $product['photo_url'];
-                    }
-
-                    $input[] = ($idx + 1) . '. ' . implode('; ', $parts);
-                }
-            }
-
-            if (!empty($knowledgeContext['media'])) {
-                $input[] = 'Релевантні медіа теми (можна давати URL клієнту):';
-                foreach ($knowledgeContext['media'] as $idx => $media) {
-                    $input[] = ($idx + 1) . '. '
-                        . $media['label'] . ' | '
-                        . $media['media_type'] . ' | '
-                        . $media['url'];
-                }
-            }
-        } else {
-            $input[] = 'Тема не визначена. Якщо запит нечіткий, уточни тип товару.';
-        }
-
-        $input[] = 'Останні повідомлення:';
-        $input = [...$input, ...$transcript];
-
-        return implode("\n", $input);
-    }
-
-    /**
-     * @param  mixed  $attachmentUrls
-     * @param  array<string, mixed>  $knowledgeContext
-     * @return array<int, array{meta_payload: array<string, string>, stored_attachment: array<string, mixed>}>
-     */
-    private function resolveReplyAttachments(
-        mixed $attachmentUrls,
-        array $knowledgeContext,
-        ChatMessage $message
-    ): array {
-        $allowedMap = $this->allowedAttachmentMap($knowledgeContext);
-        if ($allowedMap === []) {
-            return [];
-        }
-
-        $photoRequested = $this->isPhotoIntent($message);
-        if (!$photoRequested) {
-            return [];
-        }
-
-        $selected = [];
-        foreach ((array) $attachmentUrls as $rawUrl) {
-            if (!is_string($rawUrl)) {
-                continue;
-            }
-
-            $normalizedUrl = $this->normalizeAttachmentUrl($rawUrl);
-            if ($normalizedUrl === '' || !isset($allowedMap[$normalizedUrl])) {
-                continue;
-            }
-
-            $selected[$normalizedUrl] = $normalizedUrl;
-        }
-
-        if ($selected === []) {
-            foreach ($this->fallbackAttachmentCandidates($message, $knowledgeContext) as $candidateUrl) {
-                $normalizedUrl = $this->normalizeAttachmentUrl($candidateUrl);
-                if ($normalizedUrl === '' || !isset($allowedMap[$normalizedUrl])) {
-                    continue;
-                }
-
-                $selected[$normalizedUrl] = $normalizedUrl;
-            }
-        }
-
-        return array_map(
-            fn (string $url) => $this->buildAttachmentPayload($url),
-            array_values($selected)
-        );
-    }
-
-    /**
-     * @param  array<string, mixed>  $knowledgeContext
-     * @return array<string, string>
-     */
-    private function allowedAttachmentMap(array $knowledgeContext): array
-    {
-        $map = [];
-
-        foreach ((array) ($knowledgeContext['media'] ?? []) as $media) {
-            $url = $this->normalizeAttachmentUrl((string) ($media['url'] ?? ''));
-            if ($url === '') {
-                continue;
-            }
-            $map[$url] = $url;
-        }
-
-        foreach ((array) ($knowledgeContext['products'] ?? []) as $product) {
-            $url = $this->normalizeAttachmentUrl((string) ($product['photo_url'] ?? ''));
-            if ($url === '') {
-                continue;
-            }
-            $map[$url] = $url;
-        }
-
-        return $map;
-    }
-
-    /**
-     * @param  array<string, mixed>  $knowledgeContext
-     * @return array<int, string>
-     */
-    private function fallbackAttachmentCandidates(ChatMessage $message, array $knowledgeContext): array
-    {
-        $query = $this->normalizeForMatch((string) $message->text);
-        $tokens = array_values(array_filter(
-            preg_split('/[\s,.;:!?()"\'«»\-\/]+/u', $query) ?: [],
-            fn (string $token) => mb_strlen($token) >= 4
-        ));
-
-        $scored = [];
-        foreach ((array) ($knowledgeContext['products'] ?? []) as $index => $product) {
-            $url = trim((string) ($product['photo_url'] ?? ''));
-            if ($url === '') {
-                continue;
-            }
-
-            $score = 1;
-            $title = $this->normalizeForMatch((string) ($product['title'] ?? ''));
-            $sku = $this->normalizeForMatch((string) ($product['sku'] ?? ''));
-
-            foreach ($tokens as $token) {
-                if ($title !== '' && Str::contains($title, $token)) {
-                    $score += 5;
-                }
-                if ($sku !== '' && Str::contains($sku, $token)) {
-                    $score += 8;
-                }
-            }
-
-            $scored[] = [
-                'url' => $url,
-                'score' => $score,
-                'order' => (int) $index,
-            ];
-        }
-
-        foreach ((array) ($knowledgeContext['media'] ?? []) as $index => $media) {
-            $url = trim((string) ($media['url'] ?? ''));
-            if ($url === '') {
-                continue;
-            }
-
-            $score = 1;
-            $label = $this->normalizeForMatch((string) ($media['label'] ?? ''));
-            $type = $this->normalizeForMatch((string) ($media['media_type'] ?? ''));
-
-            foreach ($tokens as $token) {
-                if ($label !== '' && Str::contains($label, $token)) {
-                    $score += 4;
-                }
-                if ($type !== '' && Str::contains($type, $token)) {
-                    $score += 2;
-                }
-            }
-
-            $scored[] = [
-                'url' => $url,
-                'score' => $score,
-                'order' => 1000 + (int) $index,
-            ];
-        }
-
-        usort($scored, function (array $left, array $right) {
-            return [$right['score'], $left['order']] <=> [$left['score'], $right['order']];
-        });
-
-        $candidates = [];
-        foreach ($scored as $item) {
-            $normalizedUrl = $this->normalizeAttachmentUrl((string) ($item['url'] ?? ''));
-            if ($normalizedUrl === '' || isset($candidates[$normalizedUrl])) {
-                continue;
-            }
-            $candidates[$normalizedUrl] = $normalizedUrl;
-        }
-
-        return array_values($candidates);
-    }
-
-    private function normalizeAttachmentUrl(string $url): string
-    {
-        $url = trim($url);
-        if ($url === '') {
-            return '';
-        }
-
-        if (!str_starts_with($url, 'http')) {
-            return url(ltrim($url, '/'));
-        }
-
-        return $url;
-    }
-
-    private function isPhotoIntent(ChatMessage $message): bool
-    {
-        $source = $this->normalizeForMatch((string) $message->text);
-        if ($source === '') {
-            return false;
-        }
-
-        $needles = [
-            'фото',
-            'показ',
-            'побач',
-            'картин',
-            'зображ',
-            'колаж',
-            'палітр',
-            'скинь',
-            'надішл',
-        ];
-
-        foreach ($needles as $needle) {
-            if (Str::contains($source, $needle)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * @return array{meta_payload: array<string, string>, stored_attachment: array<string, mixed>}
-     */
-    private function buildAttachmentPayload(string $url): array
-    {
-        $attachmentType = $this->inferAttachmentTypeByUrl($url);
-
-        return [
-            'meta_payload' => [
-                'type' => $attachmentType,
-                'url' => $url,
-            ],
-            'stored_attachment' => [
-                'type' => $attachmentType,
-                'url' => $url,
-                'meta' => [
-                    'source' => 'ai_knowledge',
-                ],
-            ],
-        ];
-    }
-
-    private function inferAttachmentTypeByUrl(string $url): string
-    {
-        $path = strtolower(parse_url($url, PHP_URL_PATH) ?? $url);
-        if (preg_match('/\.(mp4|mov|webm)$/i', $path)) {
-            return 'video';
-        }
-        if (preg_match('/\.(mp3|wav|ogg)$/i', $path)) {
-            return 'audio';
-        }
-        if (preg_match('/\.(pdf|doc|docx|xls|xlsx)$/i', $path)) {
-            return 'file';
-        }
-
-        return 'image';
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function resolveKnowledgeContext(ChatMessage $message): array
-    {
-        $rules = ChatAiResponseRule::query()
-            ->where('is_active', true)
-            ->orderBy('priority')
-            ->orderBy('id')
-            ->get(['code', 'title', 'instruction'])
-            ->map(fn (ChatAiResponseRule $rule) => [
-                'code' => (string) $rule->code,
-                'title' => (string) $rule->title,
-                'instruction' => (string) $rule->instruction,
-            ])
-            ->values()
-            ->all();
-
-        $topics = ChatAiTopic::query()
-            ->where('is_active', true)
-            ->with([
-                'keywords' => fn ($query) => $query
-                    ->where('is_active', true)
-                    ->orderByDesc('weight')
-                    ->select(['id', 'topic_id', 'phrase', 'match_type', 'weight']),
-                'topicProducts' => fn ($query) => $query
-                    ->where('is_active', true)
-                    ->orderBy('sort_order')
-                    ->with([
-                        'product' => fn ($productQuery) => $productQuery
-                            ->where('is_active', true)
-                            ->with([
-                                'variants' => fn ($variantQuery) => $variantQuery
-                                    ->where('is_active', true)
-                                    ->orderBy('size')
-                                    ->select(['id', 'product_id', 'size', 'stock_qty', 'is_active']),
-                            ])
-                            ->select(['id', 'title', 'sku', 'sale_price', 'is_active', 'main_photo_path']),
-                    ])
-                    ->select(['id', 'topic_id', 'product_id', 'sort_order', 'is_active']),
-                'mediaItems' => fn ($query) => $query
-                    ->where('is_active', true)
-                    ->orderBy('sort_order')
-                    ->with('savedFile:id,filename,url,type')
-                    ->select(['id', 'topic_id', 'saved_file_id', 'label', 'media_type', 'url', 'sort_order', 'is_active']),
-            ])
-            ->orderBy('priority')
-            ->orderBy('name')
-            ->get(['id', 'name', 'instruction', 'priority', 'is_active']);
-
-        if ($topics->isEmpty()) {
-            return [
-                'selected_topic' => null,
-                'matched_positive' => [],
-                'products' => [],
-                'media' => [],
-                'rules' => $rules,
-            ];
-        }
-
-        $matchSource = $this->normalizeForMatch($this->extractMessageForMatching($message));
-        $scored = $topics->map(function (ChatAiTopic $topic) use ($matchSource) {
-            $score = 0;
-            $positive = [];
-
-            foreach ($topic->keywords as $keyword) {
-                $phrase = $this->normalizeForMatch((string) $keyword->phrase);
-                if ($phrase === '' || !Str::contains($matchSource, $phrase)) {
-                    continue;
-                }
-
-                $weight = max(1, (int) $keyword->weight);
-                if ($keyword->match_type === 'negative') {
-                    $score -= ($weight * 2);
-                    continue;
-                }
-
-                $score += $weight;
-                $positive[] = (string) $keyword->phrase;
-            }
-
-            $topicName = $this->normalizeForMatch((string) $topic->name);
-            if ($topicName !== '' && Str::contains($matchSource, $topicName)) {
-                $score += 25;
-            }
-
-            return [
-                'topic' => $topic,
-                'score' => $score,
-                'positive' => array_values(array_unique($positive)),
-            ];
-        })->sortByDesc('score')->values();
-
-        $selected = $scored->first(fn (array $row) => $row['score'] > 0);
-        if ($selected === null && $topics->count() === 1) {
-            $selected = [
-                'topic' => $topics->first(),
-                'score' => 0,
-                'positive' => [],
-            ];
-        }
-
-        if ($selected === null) {
-            return [
-                'selected_topic' => null,
-                'matched_positive' => [],
-                'products' => [],
-                'media' => [],
-                'rules' => $rules,
-            ];
-        }
-
-        /** @var ChatAiTopic $selectedTopic */
-        $selectedTopic = $selected['topic'];
-
-        return [
-            'selected_topic' => [
-                'id' => $selectedTopic->id,
-                'name' => (string) $selectedTopic->name,
-                'instruction' => (string) ($selectedTopic->instruction ?? ''),
-            ],
-            'matched_positive' => array_slice($selected['positive'], 0, 6),
-            'products' => $this->topicProductsPayload($selectedTopic),
-            'media' => $this->topicMediaPayload($selectedTopic),
-            'rules' => $rules,
-        ];
-    }
-
-    /**
-     * @return array<int, array<string, mixed>>
-     */
-    private function topicProductsPayload(ChatAiTopic $topic): array
-    {
-        $items = [];
-
-        foreach ($topic->topicProducts as $topicProduct) {
-            $product = $topicProduct->product;
-            if (!$product) {
-                continue;
-            }
-
-            $sizes = $product->variants
-                ->filter(fn ($variant) => (bool) $variant->is_active && (int) $variant->stock_qty > 0)
-                ->pluck('size')
-                ->filter()
-                ->unique()
-                ->values()
-                ->all();
-
-            if ($sizes === []) {
-                $sizes = $product->variants
-                    ->filter(fn ($variant) => (bool) $variant->is_active)
-                    ->pluck('size')
-                    ->filter()
-                    ->unique()
-                    ->values()
-                    ->all();
-            }
-
-            $items[] = [
-                'title' => (string) $product->title,
-                'sku' => (string) ($product->sku ?? ''),
-                'price' => $product->sale_price !== null ? (float) $product->sale_price : null,
-                'sizes' => $sizes,
-                'photo_url' => (string) ($product->main_photo_url ?? ''),
-            ];
-
-            if (count($items) >= 10) {
-                break;
-            }
-        }
-
-        return $items;
-    }
-
-    /**
-     * @return array<int, array<string, string>>
-     */
-    private function topicMediaPayload(ChatAiTopic $topic): array
-    {
-        $items = [];
-
-        foreach ($topic->mediaItems as $mediaItem) {
-            $url = trim((string) ($mediaItem->url ?: ($mediaItem->savedFile?->url ?? '')));
-            if ($url === '') {
-                continue;
-            }
-
-            $items[] = [
-                'label' => (string) $mediaItem->label,
-                'media_type' => (string) $mediaItem->media_type,
-                'url' => $url,
-            ];
-
-            if (count($items) >= 10) {
-                break;
-            }
-        }
-
-        return $items;
-    }
-
-    private function extractMessageForMatching(ChatMessage $message): string
-    {
-        $text = trim((string) $message->text);
-        if ($text !== '') {
-            return $text;
-        }
-
-        if ($message->attachments->isNotEmpty()) {
-            $types = $message->attachments
-                ->pluck('attachment_type')
-                ->filter()
-                ->implode(' ');
-
-            return $types !== '' ? $types : '[вкладення]';
-        }
-
-        return '';
-    }
-
-    private function normalizeForMatch(string $value): string
-    {
-        $normalized = mb_strtolower($value);
-        $normalized = preg_replace('/\s+/u', ' ', $normalized) ?? $normalized;
-
-        return trim($normalized);
-    }
-
-    private function formatPrice(float $value): string
-    {
-        return rtrim(rtrim(number_format($value, 2, '.', ''), '0'), '.');
+            'Останні повідомлення:',
+            ...$transcript,
+        ]);
     }
 
     private function formatLatestInbound(ChatMessage $message): string
@@ -1081,12 +521,6 @@ class ChatAiAssistantService
                     ],
                     'additionalProperties' => false,
                 ],
-                'attachment_urls' => [
-                    'type' => 'array',
-                    'items' => [
-                        'type' => 'string',
-                    ],
-                ],
             ],
             'required' => [
                 'should_reply',
@@ -1096,7 +530,6 @@ class ChatAiAssistantService
                 'summary',
                 'lead_status',
                 'collected_data',
-                'attachment_urls',
             ],
             'additionalProperties' => false,
         ];
@@ -1107,8 +540,7 @@ class ChatAiAssistantService
         string $replyText,
         bool $handoffRequired,
         string $leadStatus,
-        string $model,
-        array $attachments = []
+        string $model
     ): ?ChatMessage {
         $customer = $conversation->customer;
         $contact = $conversation->contact;
@@ -1117,110 +549,41 @@ class ChatAiAssistantService
             throw new RuntimeException('Для AI-відповіді не вистачає customer/contact.');
         }
 
-        $sentAt = now(config('app.timezone', 'Europe/Kyiv'));
-        $lastMessage = null;
+        $metaResult = $this->metaService->sendMessage(
+            $customer,
+            $replyText,
+            [],
+            $contact->platform,
+            $contact->external_user_id
+        );
 
-        if ($attachments !== []) {
-            foreach ($attachments as $attachment) {
-                $metaResult = $this->metaService->sendMessage(
-                    $customer,
-                    '',
-                    [$attachment['meta_payload']],
-                    $contact->platform,
-                    $contact->external_user_id
-                );
-
-                if (!$metaResult) {
-                    throw new RuntimeException('Meta API не прийняв AI-повідомлення з вкладенням.');
-                }
-
-                $lastMessage = $this->chatService->storeMessage($conversation, [
-                    'direction' => 'outbound',
-                    'external_message_id' => $metaResult['message_id'] ?? null,
-                    'delivery_status' => 'sent',
-                    'source' => 'system',
-                    'text' => null,
-                    'sent_at' => $sentAt,
-                    'meta' => [
-                        'ai_generated' => true,
-                        'provider' => 'openai',
-                        'model' => $model,
-                        'handoff_required' => $handoffRequired,
-                        'lead_status' => $leadStatus,
-                    ],
-                ], [$attachment['stored_attachment']]);
-
-                $conversation = $this->chatService->updateConversationAfterMessage($conversation, $lastMessage, false);
-            }
-
-            if (trim($replyText) !== '') {
-                $metaResult = $this->metaService->sendMessage(
-                    $customer,
-                    $replyText,
-                    [],
-                    $contact->platform,
-                    $contact->external_user_id
-                );
-
-                if (!$metaResult) {
-                    throw new RuntimeException('Meta API не прийняв текст після вкладень AI.');
-                }
-
-                $lastMessage = $this->chatService->storeMessage($conversation, [
-                    'direction' => 'outbound',
-                    'external_message_id' => $metaResult['message_id'] ?? null,
-                    'delivery_status' => 'sent',
-                    'source' => 'system',
-                    'text' => $replyText,
-                    'sent_at' => $sentAt,
-                    'meta' => [
-                        'ai_generated' => true,
-                        'provider' => 'openai',
-                        'model' => $model,
-                        'handoff_required' => $handoffRequired,
-                        'lead_status' => $leadStatus,
-                    ],
-                ]);
-
-                $conversation = $this->chatService->updateConversationAfterMessage($conversation, $lastMessage, false);
-            }
-        } else {
-            $metaResult = $this->metaService->sendMessage(
-                $customer,
-                $replyText,
-                [],
-                $contact->platform,
-                $contact->external_user_id
-            );
-
-            if (!$metaResult) {
-                throw new RuntimeException('Meta API не прийняв AI-повідомлення.');
-            }
-
-            $lastMessage = $this->chatService->storeMessage($conversation, [
-                'direction' => 'outbound',
-                'external_message_id' => $metaResult['message_id'] ?? null,
-                'delivery_status' => 'sent',
-                'source' => 'system',
-                'text' => $replyText,
-                'sent_at' => $sentAt,
-                'meta' => [
-                    'ai_generated' => true,
-                    'provider' => 'openai',
-                    'model' => $model,
-                    'handoff_required' => $handoffRequired,
-                    'lead_status' => $leadStatus,
-                ],
-            ]);
-
-            $conversation = $this->chatService->updateConversationAfterMessage($conversation, $lastMessage, false);
+        if (!$metaResult) {
+            throw new RuntimeException('Meta API не прийняв AI-повідомлення.');
         }
+
+        $message = $this->chatService->storeMessage($conversation, [
+            'direction' => 'outbound',
+            'external_message_id' => $metaResult['message_id'] ?? null,
+            'delivery_status' => 'sent',
+            'source' => 'system',
+            'text' => $replyText,
+            'sent_at' => now(config('app.timezone', 'Europe/Kyiv')),
+            'meta' => [
+                'ai_generated' => true,
+                'provider' => 'openai',
+                'model' => $model,
+                'handoff_required' => $handoffRequired,
+                'lead_status' => $leadStatus,
+            ],
+        ]);
+
+        $conversation = $this->chatService->updateConversationAfterMessage($conversation, $message, false);
 
         if ($handoffRequired) {
             $this->moveConversationToStage($conversation, 'new');
         }
 
-        return $lastMessage;
+        return $message;
     }
 
     private function moveConversationToStage(ChatConversation $conversation, string $stageCode): void
