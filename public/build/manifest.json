@@ -21,7 +21,7 @@
     ]
   },
   "resources/js/app.js": {
-    "file": "assets/app-tlQtvVxP.js",
+    "file": "assets/app-DHbX4GQd.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true,
@@ -37,7 +37,7 @@
     ]
   },
   "resources/js/crm/index.js": {
-    "file": "assets/index-XeRrcvQd.js",
+    "file": "assets/index-B5KSSIkw.js",
     "name": "index",
     "src": "resources/js/crm/index.js",
     "isEntry": true,
@@ -45,7 +45,7 @@
       "_index-B9ygI19o.js"
     ],
     "css": [
-      "assets/index-DLRAjrP6.css"
+      "assets/index-CjWVrT9V.css"
     ]
   }
 }
