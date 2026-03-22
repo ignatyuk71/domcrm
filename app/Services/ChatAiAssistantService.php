@@ -466,7 +466,7 @@ class ChatAiAssistantService
 
         $instructions[] = 'Для фото використовуй тільки URL з релевантного медіа-контексту.';
         $instructions[] = 'Для ціни та розмірів використовуй тільки релевантні товари з контексту.';
-        $instructions[] = 'Коли клієнт просить показати/надіслати фото, заповнюй attachment_urls (1-3 URL) тільки з цього контексту.';
+        $instructions[] = 'Коли клієнт просить показати/надіслати фото, заповнюй attachment_urls релевантними URL тільки з цього контексту.';
         $instructions[] = 'Якщо фото не запитували або URL немає в контексті, поверни attachment_urls як порожній масив.';
 
         return implode("\n", $instructions);
@@ -577,9 +577,6 @@ class ChatAiAssistantService
             }
 
             $selected[$normalizedUrl] = $normalizedUrl;
-            if (count($selected) >= 3) {
-                break;
-            }
         }
 
         if ($selected === [] && $this->isPhotoIntent($message, $replyText)) {
@@ -590,9 +587,6 @@ class ChatAiAssistantService
                 }
 
                 $selected[$normalizedUrl] = $normalizedUrl;
-                if (count($selected) >= 3) {
-                    break;
-                }
             }
         }
 
