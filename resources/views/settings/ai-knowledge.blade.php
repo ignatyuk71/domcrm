@@ -453,13 +453,6 @@
             color: var(--kb-text);
         }
 
-        .kb-topic-browser-copy {
-            color: var(--kb-muted);
-            font-size: .9rem;
-            line-height: 1.55;
-            margin: 0 0 .8rem;
-        }
-
         .kb-modal-section {
             margin-top: 1rem;
         }
@@ -732,9 +725,6 @@
                                             data-bs-toggle="modal"
                                             data-bs-target="#topicInventoryModal{{ $topic->id }}">
                                         <div class="kb-topic-browser-title">{{ $topic->name }}</div>
-                                        <p class="kb-topic-browser-copy">
-                                            {{ $topic->instruction ? \Illuminate\Support\Str::limit($topic->instruction, 120) : 'Тема без короткого опису.' }}
-                                        </p>
                                         <div class="kb-badge-row">
                                             <span class="kb-badge primary">{{ $topic->linked_products_count }} товарів</span>
                                             <span class="kb-badge muted">{{ $topic->linked_media_count }} медіа</span>
