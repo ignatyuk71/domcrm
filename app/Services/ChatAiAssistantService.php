@@ -243,7 +243,9 @@ class ChatAiAssistantService
         $knowledgeContext['next_required_slot'] = $this->determineNextRequiredSlot($knowledgeContext, $salesSlots, $message);
         $knowledgeContext['order_ready'] = $this->isOrderReady($knowledgeContext, $salesSlots);
 
-        $replyText = $this->sanitizeReplyText((string) ($decision['reply_text'] ?? ''));
+        $rawReplyText = (string) ($decision['reply_text'] ?? '');
+        $inlineAttachmentUrls = $this->extractInlineAttachmentUrls($rawReplyText, $knowledgeContext);
+        $replyText = $this->sanitizeReplyText($rawReplyText);
         $replyText = $this->enforceSalesReplyText($replyText, $knowledgeContext);
         $replyText = $this->fallbackReplyText($replyText, $knowledgeContext);
         $handoffRequired = (bool) ($decision['handoff_required'] ?? false);
@@ -256,7 +258,10 @@ class ChatAiAssistantService
             || (bool) ($knowledgeContext['order_ready'] ?? false);
         $shouldReply = ((bool) ($decision['should_reply'] ?? false) || $mustReply) && $replyText !== '';
         $replyAttachments = $this->resolveReplyAttachments(
-            $decision['attachment_urls'] ?? [],
+            array_values(array_unique(array_merge(
+                array_values(array_filter((array) ($decision['attachment_urls'] ?? []), 'is_string')),
+                $inlineAttachmentUrls
+            ))),
             $knowledgeContext,
             $message
         );
@@ -539,6 +544,7 @@ class ChatAiAssistantService
         $instructions[] = 'Для ціни та розмірів використовуй тільки релевантні товари з контексту.';
         $instructions[] = 'Коли клієнт просить показати/надіслати фото, заповнюй attachment_urls релевантними URL тільки з цього контексту.';
         $instructions[] = 'Якщо фото не запитували або URL немає в контексті, поверни attachment_urls як порожній масив.';
+        $instructions[] = 'Не вставляй URL, markdown-посилання або текст виду [фото](url) у reply_text. Усі зображення передавай тільки через attachment_urls.';
 
         if ((bool) ($knowledgeContext['requires_model_choice'] ?? false)) {
             $instructions[] = 'Зараз модель не визначена. Потрібно коротко уточнити, яку саме модель клієнт має на увазі.';
@@ -2808,9 +2814,58 @@ class ChatAiAssistantService
 
     private function sanitizeReplyText(string $text): string
     {
+        $text = preg_replace('/!\[[^\]]*]\((https?:\/\/[^\s)]+)\)/ui', ' ', $text);
+        $text = preg_replace_callback(
+            '/\[([^\]]+)]\((https?:\/\/[^\s)]+)\)/ui',
+            function (array $matches): string {
+                $label = trim((string) ($matches[1] ?? ''));
+                $normalized = $this->normalizeForMatch($label);
+
+                return in_array($normalized, ['фото', 'photo', 'image', 'img', 'картинка', 'зображення'], true)
+                    ? ' '
+                    : $label;
+            },
+            $text
+        );
+        $text = preg_replace('/https?:\/\/\S+/ui', ' ', $text);
+        $text = preg_replace('/\(\s*\)/u', ' ', $text);
+        $text = preg_replace('/\[\s*]/u', ' ', $text);
+        $text = preg_replace('/:\s*[—-]\s*/u', '. ', $text);
+        $text = preg_replace('/\s+([,.;:!?])/u', '$1', $text);
+        $text = preg_replace('/([:;,-])\s*[.]/u', '$1', $text);
         $text = preg_replace('/\s+/u', ' ', trim($text));
 
         return $this->limitText((string) $text, 600);
+    }
+
+    /**
+     * @param  array<string, mixed>  $knowledgeContext
+     * @return array<int, string>
+     */
+    private function extractInlineAttachmentUrls(string $replyText, array $knowledgeContext): array
+    {
+        if ($replyText === '') {
+            return [];
+        }
+
+        $allowedMap = $this->allowedAttachmentMap($knowledgeContext);
+        if ($allowedMap === []) {
+            return [];
+        }
+
+        preg_match_all('/https?:\/\/[^\s)]+/ui', $replyText, $matches);
+        $urls = [];
+
+        foreach ((array) ($matches[0] ?? []) as $url) {
+            $normalizedUrl = $this->normalizeAttachmentUrl((string) $url);
+            if ($normalizedUrl === '' || !isset($allowedMap[$normalizedUrl])) {
+                continue;
+            }
+
+            $urls[$normalizedUrl] = $normalizedUrl;
+        }
+
+        return array_values($urls);
     }
 
     private function limitText(string $value, int $limit): string
