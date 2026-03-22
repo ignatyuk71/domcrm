@@ -210,8 +210,7 @@ class ChatAiAssistantService
         $replyAttachments = $this->resolveReplyAttachments(
             $decision['attachment_urls'] ?? [],
             $knowledgeContext,
-            $message,
-            $replyText
+            $message
         );
         $summary = $this->normalizeSummary($decision);
         $lead = $this->normalizeLeadPayload($decision['collected_data'] ?? []);
@@ -557,11 +556,15 @@ class ChatAiAssistantService
     private function resolveReplyAttachments(
         mixed $attachmentUrls,
         array $knowledgeContext,
-        ChatMessage $message,
-        string $replyText
+        ChatMessage $message
     ): array {
         $allowedMap = $this->allowedAttachmentMap($knowledgeContext);
         if ($allowedMap === []) {
+            return [];
+        }
+
+        $photoRequested = $this->isPhotoIntent($message);
+        if (!$photoRequested) {
             return [];
         }
 
@@ -579,7 +582,7 @@ class ChatAiAssistantService
             $selected[$normalizedUrl] = $normalizedUrl;
         }
 
-        if ($selected === [] && $this->isPhotoIntent($message, $replyText)) {
+        if ($selected === []) {
             foreach ($this->fallbackAttachmentCandidates($message, $knowledgeContext) as $candidateUrl) {
                 $normalizedUrl = $this->normalizeAttachmentUrl($candidateUrl);
                 if ($normalizedUrl === '' || !isset($allowedMap[$normalizedUrl])) {
@@ -718,9 +721,9 @@ class ChatAiAssistantService
         return $url;
     }
 
-    private function isPhotoIntent(ChatMessage $message, string $replyText): bool
+    private function isPhotoIntent(ChatMessage $message): bool
     {
-        $source = $this->normalizeForMatch(trim((string) $message->text . ' ' . $replyText));
+        $source = $this->normalizeForMatch((string) $message->text);
         if ($source === '') {
             return false;
         }
