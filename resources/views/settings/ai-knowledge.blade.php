@@ -470,6 +470,74 @@
             margin-bottom: .65rem;
         }
 
+        .kb-toast-container {
+            position: fixed;
+            top: 1.25rem;
+            right: 1.25rem;
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            gap: .75rem;
+            max-width: min(420px, calc(100vw - 2rem));
+        }
+
+        .kb-toast {
+            border: 1px solid var(--kb-border);
+            border-radius: 18px;
+            box-shadow: var(--kb-shadow-hover);
+            background: #fff;
+            overflow: hidden;
+        }
+
+        .kb-toast.toast-success {
+            border-color: rgba(22, 163, 74, 0.16);
+        }
+
+        .kb-toast.toast-danger {
+            border-color: rgba(220, 38, 38, 0.16);
+        }
+
+        .kb-toast .toast-body {
+            display: flex;
+            align-items: flex-start;
+            gap: .75rem;
+            padding: 1rem 1.05rem;
+            color: var(--kb-text);
+        }
+
+        .kb-toast-icon {
+            width: 38px;
+            height: 38px;
+            flex: 0 0 38px;
+            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .kb-toast.toast-success .kb-toast-icon {
+            background: var(--kb-success-soft);
+            color: var(--kb-success);
+        }
+
+        .kb-toast.toast-danger .kb-toast-icon {
+            background: var(--kb-danger-soft);
+            color: var(--kb-danger);
+        }
+
+        .kb-toast-title {
+            font-size: .95rem;
+            font-weight: 800;
+            letter-spacing: -.02em;
+            margin-bottom: .2rem;
+        }
+
+        .kb-toast-copy {
+            color: var(--kb-muted);
+            font-size: .9rem;
+            line-height: 1.55;
+        }
+
         @media (max-width: 1399.98px) {
             .kb-stats {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -497,8 +565,9 @@
         }
     </style>
 
-    <div class="py-4 px-3 px-md-4">
-        <div class="container-fluid kb-page">
+    <div id="kb-page-root">
+        <div class="py-4 px-3 px-md-4">
+            <div class="container-fluid kb-page">
             @if(session('success'))
                 <div class="alert alert-success border-0 shadow-sm mb-4" role="alert">
                     {{ session('success') }}
@@ -807,9 +876,8 @@
                 </div>
             </div>
         </div>
-    </div>
 
-    <div class="modal fade kb-modal" id="topicCreateModal" tabindex="-1" aria-labelledby="topicCreateModalLabel" aria-hidden="true">
+        <div class="modal fade kb-modal" id="topicCreateModal" tabindex="-1" aria-labelledby="topicCreateModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
             <form method="POST" action="{{ route('settings.ai.knowledge.topics.store') }}" class="modal-content">
                 @csrf
@@ -1508,6 +1576,9 @@
             </div>
         </div>
     @endforeach
+    </div>
+
+    <div id="kb-toast-container" class="kb-toast-container" aria-live="polite" aria-atomic="true"></div>
 
     @php
         $autoOpenModalId = old('_modal_id');
@@ -1527,32 +1598,281 @@
         document.addEventListener('DOMContentLoaded', function () {
             if (!window.bootstrap) return;
 
-            document.querySelectorAll('.js-topic-prefill').forEach(function (button) {
-                button.addEventListener('click', function () {
-                    const targetModalId = this.dataset.openPrefillModal;
-                    const topicId = this.dataset.topicId;
-                    const currentModalElement = this.closest('.modal');
-                    const targetModalElement = document.getElementById(targetModalId);
+            const pageRootSelector = '#kb-page-root';
+            const toastContainer = document.getElementById('kb-toast-container');
 
-                    if (!targetModalElement) return;
+            const getModalInstance = function (modalElement) {
+                return modalElement ? window.bootstrap.Modal.getOrCreateInstance(modalElement) : null;
+            };
 
-                    const topicSelect = targetModalElement.querySelector('select[name="topic_id"]');
-                    if (topicSelect && topicId) {
-                        topicSelect.value = topicId;
-                    }
+            const showKnowledgeToast = function (message, type) {
+                if (!toastContainer || !message) {
+                    return;
+                }
 
-                    const showTargetModal = function () {
-                        window.bootstrap.Modal.getOrCreateInstance(targetModalElement).show();
-                    };
+                const normalizedType = type === 'danger' ? 'danger' : 'success';
+                const icon = normalizedType === 'danger'
+                    ? 'bi-exclamation-octagon'
+                    : 'bi-check2-circle';
+                const title = normalizedType === 'danger'
+                    ? 'Помилка'
+                    : 'Готово';
 
-                    if (currentModalElement) {
-                        currentModalElement.addEventListener('hidden.bs.modal', showTargetModal, { once: true });
-                        window.bootstrap.Modal.getOrCreateInstance(currentModalElement).hide();
+                const toastElement = document.createElement('div');
+                toastElement.className = 'toast kb-toast toast-' + normalizedType;
+                toastElement.role = 'alert';
+                toastElement.ariaLive = 'assertive';
+                toastElement.ariaAtomic = 'true';
+
+                const toastBody = document.createElement('div');
+                toastBody.className = 'toast-body';
+
+                const iconWrap = document.createElement('span');
+                iconWrap.className = 'kb-toast-icon';
+                iconWrap.innerHTML = '<i class="bi ' + icon + '"></i>';
+
+                const contentWrap = document.createElement('div');
+                contentWrap.className = 'flex-grow-1';
+
+                const titleElement = document.createElement('div');
+                titleElement.className = 'kb-toast-title';
+                titleElement.textContent = title;
+
+                const messageElement = document.createElement('div');
+                messageElement.className = 'kb-toast-copy';
+                messageElement.textContent = message;
+
+                const closeButton = document.createElement('button');
+                closeButton.type = 'button';
+                closeButton.className = 'btn-close ms-2';
+                closeButton.setAttribute('data-bs-dismiss', 'toast');
+                closeButton.setAttribute('aria-label', 'Закрити');
+
+                contentWrap.appendChild(titleElement);
+                contentWrap.appendChild(messageElement);
+                toastBody.appendChild(iconWrap);
+                toastBody.appendChild(contentWrap);
+                toastBody.appendChild(closeButton);
+                toastElement.appendChild(toastBody);
+
+                toastContainer.appendChild(toastElement);
+
+                const toastInstance = new window.bootstrap.Toast(toastElement, {
+                    autohide: true,
+                    delay: normalizedType === 'danger' ? 5000 : 3200,
+                });
+
+                toastElement.addEventListener('hidden.bs.toast', function () {
+                    toastElement.remove();
+                }, { once: true });
+
+                toastInstance.show();
+            };
+
+            const clearFormErrors = function (form) {
+                form.querySelectorAll('.is-invalid').forEach(function (field) {
+                    field.classList.remove('is-invalid');
+                });
+
+                form.querySelectorAll('.kb-invalid-feedback').forEach(function (feedback) {
+                    feedback.remove();
+                });
+            };
+
+            const applyFormErrors = function (form, errors) {
+                clearFormErrors(form);
+
+                Object.entries(errors || {}).forEach(function ([fieldName, messages]) {
+                    const field = Array.from(form.elements).find(function (element) {
+                        return element.name === fieldName;
+                    });
+
+                    if (!field) {
                         return;
                     }
 
-                    showTargetModal();
+                    field.classList.add('is-invalid');
+
+                    const feedback = document.createElement('div');
+                    feedback.className = 'invalid-feedback d-block kb-invalid-feedback';
+                    feedback.textContent = Array.isArray(messages) ? messages[0] : messages;
+
+                    const feedbackTarget = field.closest('.form-check') || field;
+                    feedbackTarget.insertAdjacentElement('afterend', feedback);
                 });
+            };
+
+            const getFirstErrorMessage = function (errors) {
+                const firstEntry = Object.values(errors || {}).find(function (messages) {
+                    return Array.isArray(messages) && messages.length;
+                });
+
+                return firstEntry ? firstEntry[0] : null;
+            };
+
+            const hideModalElement = function (modalElement) {
+                return new Promise(function (resolve) {
+                    if (!modalElement || !modalElement.classList.contains('show')) {
+                        resolve();
+                        return;
+                    }
+
+                    modalElement.addEventListener('hidden.bs.modal', function () {
+                        resolve();
+                    }, { once: true });
+
+                    getModalInstance(modalElement)?.hide();
+                });
+            };
+
+            const hideVisibleKnowledgeModals = async function () {
+                const visibleModals = Array.from(document.querySelectorAll(pageRootSelector + ' .modal.show'));
+
+                for (const modalElement of visibleModals) {
+                    await hideModalElement(modalElement);
+                }
+
+                document.querySelectorAll('.modal-backdrop').forEach(function (backdrop) {
+                    backdrop.remove();
+                });
+
+                document.body.classList.remove('modal-open');
+                document.body.style.removeProperty('padding-right');
+            };
+
+            const refreshKnowledgeRoot = async function (openModalId) {
+                const response = await fetch(window.location.href, {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                });
+
+                if (!response.ok) {
+                    throw new Error('reload_failed');
+                }
+
+                const html = await response.text();
+                const parser = new DOMParser();
+                const documentFragment = parser.parseFromString(html, 'text/html');
+                const nextRoot = documentFragment.querySelector(pageRootSelector);
+                const currentRoot = document.querySelector(pageRootSelector);
+
+                if (!nextRoot || !currentRoot) {
+                    throw new Error('root_not_found');
+                }
+
+                currentRoot.innerHTML = nextRoot.innerHTML;
+
+                if (openModalId) {
+                    const modalElement = document.getElementById(openModalId);
+
+                    if (modalElement) {
+                        getModalInstance(modalElement)?.show();
+                    }
+                }
+            };
+
+            document.addEventListener('click', function (event) {
+                const prefillButton = event.target.closest('.js-topic-prefill');
+
+                if (!prefillButton) {
+                    return;
+                }
+
+                const targetModalId = prefillButton.dataset.openPrefillModal;
+                const topicId = prefillButton.dataset.topicId;
+                const currentModalElement = prefillButton.closest('.modal');
+                const targetModalElement = document.getElementById(targetModalId);
+
+                if (!targetModalElement) {
+                    return;
+                }
+
+                const topicSelect = targetModalElement.querySelector('select[name="topic_id"]');
+                if (topicSelect && topicId) {
+                    topicSelect.value = topicId;
+                }
+
+                const showTargetModal = function () {
+                    getModalInstance(targetModalElement)?.show();
+                };
+
+                if (currentModalElement) {
+                    currentModalElement.addEventListener('hidden.bs.modal', showTargetModal, { once: true });
+                    getModalInstance(currentModalElement)?.hide();
+                    return;
+                }
+
+                showTargetModal();
+            });
+
+            document.addEventListener('submit', async function (event) {
+                const form = event.target;
+
+                if (!(form instanceof HTMLFormElement) || !form.closest(pageRootSelector)) {
+                    return;
+                }
+
+                if ((form.method || '').toUpperCase() !== 'POST') {
+                    return;
+                }
+
+                event.preventDefault();
+
+                if (form.dataset.kbSubmitting === '1') {
+                    return;
+                }
+
+                const submitButton = event.submitter instanceof HTMLButtonElement
+                    ? event.submitter
+                    : form.querySelector('button[type="submit"]');
+
+                form.dataset.kbSubmitting = '1';
+                clearFormErrors(form);
+
+                if (submitButton) {
+                    submitButton.disabled = true;
+                }
+
+                try {
+                    const response = await fetch(form.action, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                        body: new FormData(form),
+                    });
+
+                    const isJson = (response.headers.get('content-type') || '').includes('application/json');
+                    const payload = isJson ? await response.json() : null;
+
+                    if (response.ok) {
+                        await hideVisibleKnowledgeModals();
+                        await refreshKnowledgeRoot(payload?.open_modal_id || null);
+                        showKnowledgeToast(payload?.message || 'Збережено.', 'success');
+                        return;
+                    }
+
+                    if (response.status === 422 && payload?.errors) {
+                        applyFormErrors(form, payload.errors);
+                        showKnowledgeToast(
+                            getFirstErrorMessage(payload.errors) || 'Перевір дані у формі.',
+                            'danger'
+                        );
+                        return;
+                    }
+
+                    showKnowledgeToast(payload?.message || 'Сталася помилка сервера. Спробуй ще раз.', 'danger');
+                } catch (error) {
+                    showKnowledgeToast('Не вдалося зберегти зміни. Спробуй ще раз.', 'danger');
+                } finally {
+                    form.dataset.kbSubmitting = '0';
+
+                    if (submitButton) {
+                        submitButton.disabled = false;
+                    }
+                }
             });
         });
     </script>

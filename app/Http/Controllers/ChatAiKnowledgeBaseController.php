@@ -11,12 +11,34 @@ use App\Models\ChatAiTopicProduct;
 use App\Models\Product;
 use App\Models\SavedFile;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 class ChatAiKnowledgeBaseController extends Controller
 {
+    private function respond(Request $request, string $message, ?string $openModalId = null): RedirectResponse|JsonResponse
+    {
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => $message,
+                'open_modal_id' => $openModalId,
+            ]);
+        }
+
+        return back()->with('success', $message);
+    }
+
+    private function topicInventoryModalId(?int $topicId): ?string
+    {
+        if (!$topicId) {
+            return null;
+        }
+
+        return 'topicInventoryModal' . $topicId;
+    }
+
     public function index(): View
     {
         $settings = ChatAiSetting::current();
@@ -135,7 +157,7 @@ class ChatAiKnowledgeBaseController extends Controller
         ));
     }
 
-    public function storeTopic(Request $request): RedirectResponse
+    public function storeTopic(Request $request): RedirectResponse|JsonResponse
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255', 'unique:chat_ai_topics,name'],
@@ -151,10 +173,10 @@ class ChatAiKnowledgeBaseController extends Controller
             'is_active' => (bool) ($data['is_active'] ?? false),
         ]);
 
-        return back()->with('success', 'Тему додано.');
+        return $this->respond($request, 'Тему додано.');
     }
 
-    public function updateTopic(Request $request, ChatAiTopic $topic): RedirectResponse
+    public function updateTopic(Request $request, ChatAiTopic $topic): RedirectResponse|JsonResponse
     {
         $data = $request->validate([
             'name' => [
@@ -175,16 +197,16 @@ class ChatAiKnowledgeBaseController extends Controller
             'is_active' => (bool) ($data['is_active'] ?? false),
         ]);
 
-        return back()->with('success', 'Тему оновлено.');
+        return $this->respond($request, 'Тему оновлено.');
     }
 
-    public function destroyTopic(ChatAiTopic $topic): RedirectResponse
+    public function destroyTopic(Request $request, ChatAiTopic $topic): RedirectResponse|JsonResponse
     {
         $topic->delete();
-        return back()->with('success', 'Тему видалено.');
+        return $this->respond($request, 'Тему видалено.');
     }
 
-    public function storeKeyword(Request $request): RedirectResponse
+    public function storeKeyword(Request $request): RedirectResponse|JsonResponse
     {
         $data = $request->validate([
             'topic_id' => ['required', 'exists:chat_ai_topics,id'],
@@ -202,10 +224,10 @@ class ChatAiKnowledgeBaseController extends Controller
             'is_active' => (bool) ($data['is_active'] ?? false),
         ]);
 
-        return back()->with('success', 'Ключове слово додано.');
+        return $this->respond($request, 'Ключове слово додано.');
     }
 
-    public function updateKeyword(Request $request, ChatAiTopicKeyword $keyword): RedirectResponse
+    public function updateKeyword(Request $request, ChatAiTopicKeyword $keyword): RedirectResponse|JsonResponse
     {
         $data = $request->validate([
             'topic_id' => ['required', 'exists:chat_ai_topics,id'],
@@ -223,16 +245,16 @@ class ChatAiKnowledgeBaseController extends Controller
             'is_active' => (bool) ($data['is_active'] ?? false),
         ]);
 
-        return back()->with('success', 'Ключове слово оновлено.');
+        return $this->respond($request, 'Ключове слово оновлено.');
     }
 
-    public function destroyKeyword(ChatAiTopicKeyword $keyword): RedirectResponse
+    public function destroyKeyword(Request $request, ChatAiTopicKeyword $keyword): RedirectResponse|JsonResponse
     {
         $keyword->delete();
-        return back()->with('success', 'Ключове слово видалено.');
+        return $this->respond($request, 'Ключове слово видалено.');
     }
 
-    public function storeTopicProduct(Request $request): RedirectResponse
+    public function storeTopicProduct(Request $request): RedirectResponse|JsonResponse
     {
         $data = $request->validate([
             'topic_id' => ['required', 'exists:chat_ai_topics,id'],
@@ -255,10 +277,14 @@ class ChatAiKnowledgeBaseController extends Controller
             'is_active' => (bool) ($data['is_active'] ?? false),
         ]);
 
-        return back()->with('success', 'Товар привʼязано до теми.');
+        return $this->respond(
+            $request,
+            'Товар привʼязано до теми.',
+            $this->topicInventoryModalId((int) $data['topic_id'])
+        );
     }
 
-    public function updateTopicProduct(Request $request, ChatAiTopicProduct $topicProduct): RedirectResponse
+    public function updateTopicProduct(Request $request, ChatAiTopicProduct $topicProduct): RedirectResponse|JsonResponse
     {
         $data = $request->validate([
             'topic_id' => ['required', 'exists:chat_ai_topics,id'],
@@ -282,16 +308,25 @@ class ChatAiKnowledgeBaseController extends Controller
             'is_active' => (bool) ($data['is_active'] ?? false),
         ]);
 
-        return back()->with('success', 'Привʼязку товару оновлено.');
+        return $this->respond(
+            $request,
+            'Привʼязку товару оновлено.',
+            $this->topicInventoryModalId((int) $data['topic_id'])
+        );
     }
 
-    public function destroyTopicProduct(ChatAiTopicProduct $topicProduct): RedirectResponse
+    public function destroyTopicProduct(Request $request, ChatAiTopicProduct $topicProduct): RedirectResponse|JsonResponse
     {
+        $topicId = $topicProduct->topic_id;
         $topicProduct->delete();
-        return back()->with('success', 'Привʼязку товару видалено.');
+        return $this->respond(
+            $request,
+            'Привʼязку товару видалено.',
+            $this->topicInventoryModalId($topicId)
+        );
     }
 
-    public function storeMedia(Request $request): RedirectResponse
+    public function storeMedia(Request $request): RedirectResponse|JsonResponse
     {
         $data = $request->validate([
             'topic_id' => ['required', 'exists:chat_ai_topics,id'],
@@ -313,10 +348,14 @@ class ChatAiKnowledgeBaseController extends Controller
             'is_active' => (bool) ($data['is_active'] ?? false),
         ]);
 
-        return back()->with('success', 'Медіа додано.');
+        return $this->respond(
+            $request,
+            'Медіа додано.',
+            $this->topicInventoryModalId((int) $data['topic_id'])
+        );
     }
 
-    public function updateMedia(Request $request, ChatAiTopicMedia $media): RedirectResponse
+    public function updateMedia(Request $request, ChatAiTopicMedia $media): RedirectResponse|JsonResponse
     {
         $data = $request->validate([
             'topic_id' => ['required', 'exists:chat_ai_topics,id'],
@@ -338,16 +377,25 @@ class ChatAiKnowledgeBaseController extends Controller
             'is_active' => (bool) ($data['is_active'] ?? false),
         ]);
 
-        return back()->with('success', 'Медіа оновлено.');
+        return $this->respond(
+            $request,
+            'Медіа оновлено.',
+            $this->topicInventoryModalId((int) $data['topic_id'])
+        );
     }
 
-    public function destroyMedia(ChatAiTopicMedia $media): RedirectResponse
+    public function destroyMedia(Request $request, ChatAiTopicMedia $media): RedirectResponse|JsonResponse
     {
+        $topicId = $media->topic_id;
         $media->delete();
-        return back()->with('success', 'Медіа видалено.');
+        return $this->respond(
+            $request,
+            'Медіа видалено.',
+            $this->topicInventoryModalId($topicId)
+        );
     }
 
-    public function storeRule(Request $request): RedirectResponse
+    public function storeRule(Request $request): RedirectResponse|JsonResponse
     {
         $data = $request->validate([
             'code' => ['required', 'string', 'max:100', 'unique:chat_ai_response_rules,code'],
@@ -365,10 +413,10 @@ class ChatAiKnowledgeBaseController extends Controller
             'is_active' => (bool) ($data['is_active'] ?? false),
         ]);
 
-        return back()->with('success', 'Сценарій додано.');
+        return $this->respond($request, 'Сценарій додано.');
     }
 
-    public function updateRule(Request $request, ChatAiResponseRule $rule): RedirectResponse
+    public function updateRule(Request $request, ChatAiResponseRule $rule): RedirectResponse|JsonResponse
     {
         $data = $request->validate([
             'code' => [
@@ -391,12 +439,12 @@ class ChatAiKnowledgeBaseController extends Controller
             'is_active' => (bool) ($data['is_active'] ?? false),
         ]);
 
-        return back()->with('success', 'Сценарій оновлено.');
+        return $this->respond($request, 'Сценарій оновлено.');
     }
 
-    public function destroyRule(ChatAiResponseRule $rule): RedirectResponse
+    public function destroyRule(Request $request, ChatAiResponseRule $rule): RedirectResponse|JsonResponse
     {
         $rule->delete();
-        return back()->with('success', 'Сценарій видалено.');
+        return $this->respond($request, 'Сценарій видалено.');
     }
 }
