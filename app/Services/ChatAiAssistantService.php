@@ -598,6 +598,7 @@ class ChatAiAssistantService
         }
 
         $query = $this->normalizeText($messageText);
+        $visualPreferenceStems = $this->extractVisualPreferenceStems($query);
         $tokens = collect(preg_split('/[^[:alnum:]]+/u', $query))
             ->filter(fn ($token) => mb_strlen((string) $token) >= 4)
             ->values();
@@ -619,11 +620,25 @@ class ChatAiAssistantService
                     }
                 }
 
+                foreach ($this->extractVisualPreferenceStems($query) as $stem) {
+                    if ($label !== '' && str_contains($label, $stem)) {
+                        $score += 90;
+                    }
+                }
+
                 if (
                     in_array(($item['media_type'] ?? ''), ['collage', 'palette'], true)
                     && (str_contains($query, 'колаж') || str_contains($query, 'палiтр') || str_contains($query, 'палітр'))
                 ) {
                     $score += 40;
+                }
+
+                if (
+                    $label !== ''
+                    && $this->extractVisualPreferenceStems($query) !== []
+                    && in_array((string) ($item['media_type'] ?? ''), ['collage', 'palette'], true)
+                ) {
+                    $score -= 50;
                 }
 
                 $item['score'] = $score;
@@ -652,6 +667,10 @@ class ChatAiAssistantService
             return ($specificMedia->isNotEmpty() ? $specificMedia : $positive)
                 ->take(3)
                 ->values();
+        }
+
+        if ($visualPreferenceStems !== []) {
+            return collect();
         }
 
         return $ranked->take(3)->values();
@@ -771,6 +790,7 @@ class ChatAiAssistantService
             'Фото надсилаються окремо системою. У тексті не вставляй URL.',
             'Якщо клієнт просить фото і в контексті медіа відсутні — коротко повідом, що немає підготовлених фото, і запропонуй близьку тему або менеджера.',
             'Якщо клієнт просить показати всі варіанти — у тексті підтвердь, що показуєш всі доступні для поточної теми.',
+            'Якщо клієнт просить конкретний колір або варіант, а точних медіа в контексті немає, не пиши, що надсилаєш його фото.',
             'У блоці "Стан слотів замовлення" вже є зібрані поля. Не перепитуй те, що вже заповнено.',
             'Якщо система вказала "Наступний слот для уточнення", постав тільки одне коротке питання саме про нього.',
             'Не проси кілька полів в одному повідомленні. Один крок = одне уточнення.',
@@ -1241,12 +1261,13 @@ class ChatAiAssistantService
     private function extractCityValue(string $text, ?string $previousNextSlot): ?string
     {
         $trimmed = trim((string) preg_replace('/\s+/u', ' ', $text));
+        $normalizedTrimmed = $this->normalizeText($trimmed);
 
         if (preg_match('/^([^,]{2,50}),\s*(?:нова пошта|відділен|поштомат)/iu', $trimmed, $match)) {
             return $this->normalizeSlotValue('city', $match[1]);
         }
 
-        if (preg_match('/(?:місто|м\.?)\s*([[:alpha:]\-\'’`ʼ ]{2,40})/iu', $trimmed, $match)) {
+        if (preg_match('/(?:\bмісто\b|\bм\.)\s*([[:alpha:]\-\'’`ʼ ]{2,40})/iu', $trimmed, $match)) {
             return $this->normalizeSlotValue('city', $match[1]);
         }
 
@@ -1268,6 +1289,7 @@ class ChatAiAssistantService
             || $wordCount < 1
             || $wordCount > 3
             || (bool) preg_match('/^(я|хочу|мені|потріб|добре|так|ні|ок|гаразд)\b/u', $normalizedCandidate)
+            || $this->containsLocationNoise($normalizedTrimmed)
             || (bool) preg_match('/(відділен|нова пошта|поштомат|розм|біл|чорн|сір|рожев)/u', $normalizedCandidate)
             || !preg_match('/^[[:alpha:]\-\'’`ʼ ]+$/u', $candidate)
         ) {
@@ -1280,12 +1302,17 @@ class ChatAiAssistantService
     private function extractDeliveryValue(string $text, ?string $previousNextSlot): ?string
     {
         $trimmed = trim((string) preg_replace('/\s+/u', ' ', $text));
+        $normalizedTrimmed = $this->normalizeText($trimmed);
+
+        if ($this->containsLocationNoise($normalizedTrimmed)) {
+            return null;
+        }
 
         if (preg_match('/((?:нова пошта|укрпошта)?\s*(?:відділення|відд\.?|поштомат)\s*№?\s*\d{1,4})/iu', $trimmed, $match)) {
             return $this->normalizeSlotValue('delivery', $match[1]);
         }
 
-        if (preg_match('/((?:вул\.?|вулиця|проспект|просп\.?|буд\.?|будинок)[^,\n]{0,120})/iu', $trimmed, $match)) {
+        if (preg_match('/((?:\bвул\.?\b|\bвулиця\b|\bпроспект\b|\bпросп\.?\b)\s*[^,\n]{0,120}\d[\w\/-]*)/iu', $trimmed, $match)) {
             return $this->normalizeSlotValue('delivery', $match[1]);
         }
 
@@ -1293,7 +1320,12 @@ class ChatAiAssistantService
             return $this->normalizeSlotValue('delivery', "Відділення {$match[0]}");
         }
 
-        if ($previousNextSlot === 'delivery' && preg_match('/\d/u', $trimmed)) {
+        $hasDeliveryCue = (bool) preg_match(
+            '/(відділен|поштомат|нова пошта|укрпошта|адрес|\bвул\.?\b|\bвулиця\b|\bбуд\.?\b|\bбудинок\b|\bпроспект\b|\bпросп\.?\b)/u',
+            $normalizedTrimmed
+        );
+
+        if ($previousNextSlot === 'delivery' && $hasDeliveryCue && !str_contains($trimmed, '?')) {
             return $this->normalizeSlotValue('delivery', $trimmed);
         }
 
@@ -1303,23 +1335,7 @@ class ChatAiAssistantService
     private function extractColorValue(string $text, ?string $previousNextSlot): ?string
     {
         $normalized = $this->normalizeText($text);
-        $colorMap = [
-            'біл' => 'Білий',
-            'чорн' => 'Чорний',
-            'сір' => 'Сірий',
-            'рожев' => 'Рожевий',
-            'блакит' => 'Блакитний',
-            'син' => 'Синій',
-            'червон' => 'Червоний',
-            'коричн' => 'Коричневий',
-            'беж' => 'Бежевий',
-            'молоч' => 'Молочний',
-            'пудр' => 'Пудровий',
-            'малин' => 'Малиновий',
-            'електрик' => 'Електрик',
-            'капучин' => 'Капучино',
-            'зелен' => 'Зелений',
-        ];
+        $colorMap = $this->colorStemMap();
 
         foreach ($colorMap as $needle => $label) {
             if (str_contains($normalized, $needle)) {
@@ -1345,6 +1361,54 @@ class ChatAiAssistantService
         }
 
         return $this->normalizeSlotValue('color', $candidate);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function colorStemMap(): array
+    {
+        return [
+            'біл' => 'Білий',
+            'чорн' => 'Чорний',
+            'сір' => 'Сірий',
+            'рожев' => 'Рожевий',
+            'блакит' => 'Блакитний',
+            'син' => 'Синій',
+            'червон' => 'Червоний',
+            'коричн' => 'Коричневий',
+            'беж' => 'Бежевий',
+            'молоч' => 'Молочний',
+            'пудр' => 'Пудровий',
+            'малин' => 'Малиновий',
+            'електрик' => 'Електрик',
+            'капучин' => 'Капучино',
+            'зелен' => 'Зелений',
+        ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function extractVisualPreferenceStems(string $text): array
+    {
+        $normalized = $this->normalizeText($text);
+        if ($normalized === '') {
+            return [];
+        }
+
+        return collect(array_keys($this->colorStemMap()))
+            ->filter(fn (string $stem) => str_contains($normalized, $stem))
+            ->values()
+            ->all();
+    }
+
+    private function containsLocationNoise(string $text): bool
+    {
+        return (bool) preg_match(
+            '/(фото|фотк|покажи|показ|побачити|колаж|кольор|варіант|модель|сір|коричн|блакит|рожев|червон|малинов|електрик|капучин|чорн|біл|можна|ходити|на вулиц|ціна)/u',
+            $text
+        );
     }
 
     /**
