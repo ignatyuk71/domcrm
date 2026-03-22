@@ -296,16 +296,6 @@
 
                   <div class="ai-qualification-block">
                     <span class="ai-qualification-title">Поля для збору</span>
-                    <div class="ai-qualification-list">
-                      <span
-                        v-for="field in qualificationFields"
-                        :key="field"
-                        class="ai-qualification-label"
-                        :class="isFieldCollected(field) ? 'is-filled' : 'is-empty'"
-                      >
-                        {{ field }}
-                      </span>
-                    </div>
 
                     <div class="ai-collected-list">
                       <span class="ai-collected-title">Вже зібрано</span>
@@ -314,7 +304,7 @@
                           <strong>{{ row.field }}:</strong> {{ row.value }}
                         </li>
                       </ul>
-                      <span v-else class="ai-qualification-collected">Ще немає зібраних полів.</span>
+                      <span v-else class="ai-qualification-collected">Ще нічого не зібрано.</span>
                     </div>
                   </div>
                 </template>
@@ -608,10 +598,6 @@ const resolveFieldValue = (field) => {
   }
 
   return '';
-};
-
-const isFieldCollected = (field) => {
-  return resolveFieldValue(field) !== '';
 };
 
 function syncFormFromCustomer(customer, { resetPanels = false } = {}) {
@@ -1179,10 +1165,6 @@ const handleOrderClose = () => {
 .ai-switch input:checked + .ai-switch-track::after { transform: translateX(20px); }
 .ai-qualification-block { display: flex; flex-direction: column; gap: 8px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; }
 .ai-qualification-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8; font-weight: 700; }
-.ai-qualification-list { display: flex; flex-wrap: wrap; gap: 6px; }
-.ai-qualification-label { font-size: 11px; font-weight: 700; border-radius: 999px; padding: 4px 10px; border: 1px solid #cbd5e1; background: #f8fafc; color: #475569; }
-.ai-qualification-label.is-filled { background: #dcfce7; border-color: #bbf7d0; color: #15803d; }
-.ai-qualification-label.is-empty { background: #f8fafc; border-color: #cbd5e1; color: #64748b; }
 .ai-qualification-collected { font-size: 11px; color: #64748b; }
 .ai-collected-list { display: flex; flex-direction: column; gap: 6px; margin-top: 2px; }
 .ai-collected-title { font-size: 11px; font-weight: 700; color: #475569; }
