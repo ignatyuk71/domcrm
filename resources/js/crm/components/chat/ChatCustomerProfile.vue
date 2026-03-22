@@ -272,23 +272,6 @@
                     </label>
                   </div>
 
-                  <div class="ai-qualification-block">
-                    <span class="ai-qualification-title">Поля для збору</span>
-                    <div class="ai-qualification-list">
-                      <span
-                        v-for="field in qualificationFields"
-                        :key="field"
-                        class="ai-qualification-label"
-                        :class="isFieldCollected(field) ? 'is-filled' : 'is-empty'"
-                      >
-                        {{ field }}
-                      </span>
-                    </div>
-                    <span class="ai-qualification-collected">
-                      Вже зібрано: {{ collectedFieldsText }}
-                    </span>
-                  </div>
-
                   <div class="ai-status-note" :class="aiStatusClass">
                     <i class="bi" :class="aiStatusIcon"></i>
                     <span>{{ aiStatusNote }}</span>
@@ -309,6 +292,30 @@
                       <span v-if="aiActionLoading" class="loader-mini"></span>
                       Передати менеджеру
                     </button>
+                  </div>
+
+                  <div class="ai-qualification-block">
+                    <span class="ai-qualification-title">Поля для збору</span>
+                    <div class="ai-qualification-list">
+                      <span
+                        v-for="field in qualificationFields"
+                        :key="field"
+                        class="ai-qualification-label"
+                        :class="isFieldCollected(field) ? 'is-filled' : 'is-empty'"
+                      >
+                        {{ field }}
+                      </span>
+                    </div>
+
+                    <div class="ai-collected-list">
+                      <span class="ai-collected-title">Вже зібрано</span>
+                      <ul v-if="collectedFieldRows.length > 0" class="ai-collected-items">
+                        <li v-for="row in collectedFieldRows" :key="row.field">
+                          <strong>{{ row.field }}:</strong> {{ row.value }}
+                        </li>
+                      </ul>
+                      <span v-else class="ai-qualification-collected">Ще немає зібраних полів.</span>
+                    </div>
                   </div>
                 </template>
               </div>
@@ -521,9 +528,13 @@ const qualificationFields = computed(() => {
 
   return ['імʼя', 'телефон', 'товар', 'бюджет', 'термін', 'місто'];
 });
-const collectedFieldsText = computed(() => {
-  const collected = qualificationFields.value.filter((field) => isFieldCollected(field));
-  return collected.length > 0 ? collected.join(', ') : 'нічого';
+const collectedFieldRows = computed(() => {
+  return qualificationFields.value
+    .map((field) => ({
+      field,
+      value: resolveFieldValue(field),
+    }))
+    .filter((row) => row.value !== '');
 });
 const aiStatusNote = computed(() => {
   const lastError = String(props.customer?.ai?.last_error || '').trim();
@@ -580,22 +591,27 @@ const normalizeFieldKey = (value) => String(value || '')
   .replace(/’/g, "'")
   .trim();
 
-const isFieldCollected = (field) => {
+const resolveFieldValue = (field) => {
   const key = normalizeFieldKey(field);
 
   if (key.includes('ім') || key.includes('прізв')) {
-    return Boolean(form.first_name.trim() && form.last_name.trim());
+    const fullName = `${form.first_name || ''} ${form.last_name || ''}`.trim();
+    return fullName;
   }
 
   if (key.includes('тел')) {
-    return Boolean(form.phone && isPhoneValid.value);
+    return isPhoneValid.value ? form.phone : '';
   }
 
   if (key.includes('email') || key.includes('e-mail') || key.includes('емейл') || key.includes('пошта')) {
-    return Boolean(String(form.email || '').trim());
+    return String(form.email || '').trim();
   }
 
-  return false;
+  return '';
+};
+
+const isFieldCollected = (field) => {
+  return resolveFieldValue(field) !== '';
 };
 
 function syncFormFromCustomer(customer, { resetPanels = false } = {}) {
@@ -1168,6 +1184,11 @@ const handleOrderClose = () => {
 .ai-qualification-label.is-filled { background: #dcfce7; border-color: #bbf7d0; color: #15803d; }
 .ai-qualification-label.is-empty { background: #f8fafc; border-color: #cbd5e1; color: #64748b; }
 .ai-qualification-collected { font-size: 11px; color: #64748b; }
+.ai-collected-list { display: flex; flex-direction: column; gap: 6px; margin-top: 2px; }
+.ai-collected-title { font-size: 11px; font-weight: 700; color: #475569; }
+.ai-collected-items { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.ai-collected-items li { font-size: 12px; color: #334155; line-height: 1.35; }
+.ai-collected-items li strong { color: #0f172a; font-weight: 700; }
 .ai-status-note { display: flex; align-items: flex-start; gap: 8px; border-radius: 10px; padding: 9px 10px; font-size: 12px; line-height: 1.4; border: 1px solid #bfdbfe; background: #eff6ff; color: #1e3a8a; }
 .ai-status-note.is-warning { background: #fffbeb; border-color: #fde68a; color: #854d0e; }
 .ai-status-note.is-error { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
