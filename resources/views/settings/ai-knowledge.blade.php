@@ -422,6 +422,61 @@
             gap: 1rem;
         }
 
+        .kb-topic-browser {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 1rem;
+        }
+
+        .kb-topic-browser-item {
+            width: 100%;
+            text-align: left;
+            border: 1px solid var(--kb-border);
+            border-radius: 18px;
+            background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+            padding: 1.05rem;
+            transition: all .18s ease;
+            box-shadow: var(--kb-shadow);
+        }
+
+        .kb-topic-browser-item:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--kb-shadow-hover);
+            border-color: rgba(99, 91, 255, 0.35);
+        }
+
+        .kb-topic-browser-title {
+            font-size: 1.02rem;
+            font-weight: 800;
+            letter-spacing: -.02em;
+            margin-bottom: .4rem;
+            color: var(--kb-text);
+        }
+
+        .kb-topic-browser-copy {
+            color: var(--kb-muted);
+            font-size: .9rem;
+            line-height: 1.55;
+            margin: 0 0 .8rem;
+        }
+
+        .kb-modal-section {
+            margin-top: 1rem;
+        }
+
+        .kb-modal-section:first-child {
+            margin-top: 0;
+        }
+
+        .kb-modal-section-title {
+            font-size: .82rem;
+            font-weight: 800;
+            color: var(--kb-muted);
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            margin-bottom: .65rem;
+        }
+
         @media (max-width: 1399.98px) {
             .kb-stats {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -436,6 +491,10 @@
             .kb-grid-two {
                 grid-template-columns: repeat(1, minmax(0, 1fr));
             }
+
+            .kb-topic-browser {
+                grid-template-columns: repeat(1, minmax(0, 1fr));
+            }
         }
 
         @media (max-width: 767.98px) {
@@ -447,11 +506,6 @@
 
     <div class="py-4 px-3 px-md-4">
         <div class="container-fluid kb-page">
-            @php
-                $positiveKeywordsCount = $keywords->where('match_type', 'positive')->count();
-                $negativeKeywordsCount = $keywords->where('match_type', 'negative')->count();
-            @endphp
-
             @if(session('success'))
                 <div class="alert alert-success border-0 shadow-sm mb-4" role="alert">
                     {{ session('success') }}
@@ -669,104 +723,32 @@
                             </div>
                         </div>
 
-                        <div class="kb-list-section-label">Товари тем</div>
-                        @if($topicProducts->isNotEmpty())
-                            <div class="kb-data-list mt-0">
-                                @foreach($topicProducts as $topicProduct)
-                                    <article class="kb-data-item">
-                                        <div class="kb-data-head">
-                                            <div>
-                                                <h3 class="kb-data-title">{{ $topicProduct->product?->title ?: 'Товар не знайдено' }}</h3>
-                                                <div class="kb-data-subtitle">
-                                                    Тема: {{ $topicProduct->topic?->name ?: 'Не знайдено' }}
-                                                    @if($topicProduct->product?->sku)
-                                                        • SKU: {{ $topicProduct->product->sku }}
-                                                    @endif
-                                                </div>
-                                            </div>
-                                            <div class="kb-inline-actions">
-                                                <button type="button"
-                                                        class="btn btn-outline-secondary kb-inline-btn"
-                                                        data-bs-toggle="modal"
-                                                        data-bs-target="#topicProductEditModal{{ $topicProduct->id }}">
-                                                    Редагувати
-                                                </button>
-                                                <form method="POST"
-                                                      action="{{ route('settings.ai.knowledge.topicProducts.destroy', $topicProduct) }}"
-                                                      onsubmit="return confirm('Видалити прив’язку товару?');">
-                                                    @csrf
-                                                    @method('DELETE')
-                                                    <button type="submit" class="btn btn-outline-danger kb-inline-btn">Видалити</button>
-                                                </form>
-                                            </div>
-                                        </div>
+                        <div class="kb-list-section-label">Теми</div>
+                        @if($topics->isNotEmpty())
+                            <div class="kb-topic-browser">
+                                @foreach($topics as $topic)
+                                    <button type="button"
+                                            class="kb-topic-browser-item"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#topicInventoryModal{{ $topic->id }}">
+                                        <div class="kb-topic-browser-title">{{ $topic->name }}</div>
+                                        <p class="kb-topic-browser-copy">
+                                            {{ $topic->instruction ? \Illuminate\Support\Str::limit($topic->instruction, 120) : 'Тема без короткого опису.' }}
+                                        </p>
                                         <div class="kb-badge-row">
-                                            <span class="kb-badge primary">Порядок {{ $topicProduct->sort_order }}</span>
-                                            @if(!is_null($topicProduct->product?->sale_price))
-                                                <span class="kb-badge muted">{{ number_format((float) $topicProduct->product->sale_price, 0, ',', ' ') }} грн</span>
-                                            @endif
-                                            <span class="kb-badge {{ $topicProduct->is_active ? 'success' : 'muted' }}">
-                                                {{ $topicProduct->is_active ? 'Активна прив’язка' : 'Пауза' }}
+                                            <span class="kb-badge primary">{{ $topic->linked_products_count }} товарів</span>
+                                            <span class="kb-badge muted">{{ $topic->linked_media_count }} медіа</span>
+                                            <span class="kb-badge {{ $topic->is_active ? 'success' : 'muted' }}">
+                                                {{ $topic->is_active ? 'Активна' : 'Пауза' }}
                                             </span>
                                         </div>
-                                    </article>
+                                    </button>
                                 @endforeach
                             </div>
                         @else
                             <div class="kb-empty-card mt-0">
-                                <div class="kb-empty-title">Товарів у темах ще немає</div>
-                                <p class="kb-empty-copy mb-0">Прив’яжи реальні позиції каталогу, щоб AI показував правильні моделі.</p>
-                            </div>
-                        @endif
-
-                        <div class="kb-list-section-label">Медіа тем</div>
-                        @if($topicMedia->isNotEmpty())
-                            <div class="kb-data-list mt-0">
-                                @foreach($topicMedia as $media)
-                                    <article class="kb-data-item">
-                                        <div class="kb-data-head">
-                                            <div>
-                                                <h3 class="kb-data-title">{{ $media->label }}</h3>
-                                                <div class="kb-data-subtitle">
-                                                    Тема: {{ $media->topic?->name ?: 'Не знайдено' }}
-                                                    @if($media->savedFile?->filename)
-                                                        • Файл: {{ $media->savedFile->filename }}
-                                                    @endif
-                                                </div>
-                                            </div>
-                                            <div class="kb-inline-actions">
-                                                <button type="button"
-                                                        class="btn btn-outline-secondary kb-inline-btn"
-                                                        data-bs-toggle="modal"
-                                                        data-bs-target="#topicMediaEditModal{{ $media->id }}">
-                                                    Редагувати
-                                                </button>
-                                                <form method="POST"
-                                                      action="{{ route('settings.ai.knowledge.media.destroy', $media) }}"
-                                                      onsubmit="return confirm('Видалити медіа «{{ $media->label }}»?');">
-                                                    @csrf
-                                                    @method('DELETE')
-                                                    <button type="submit" class="btn btn-outline-danger kb-inline-btn">Видалити</button>
-                                                </form>
-                                            </div>
-                                        </div>
-                                        <div class="kb-badge-row mb-2">
-                                            <span class="kb-badge primary">{{ $media->media_type }}</span>
-                                            <span class="kb-badge primary">Порядок {{ $media->sort_order }}</span>
-                                            <span class="kb-badge {{ $media->is_active ? 'success' : 'muted' }}">
-                                                {{ $media->is_active ? 'Активне' : 'Пауза' }}
-                                            </span>
-                                        </div>
-                                        @if($media->url)
-                                            <p class="kb-data-copy">{{ $media->url }}</p>
-                                        @endif
-                                    </article>
-                                @endforeach
-                            </div>
-                        @else
-                            <div class="kb-empty-card mt-0">
-                                <div class="kb-empty-title">Медіа ще не додані</div>
-                                <p class="kb-empty-copy mb-0">Додай фото, колажі або палітри, які AI зможе надсилати клієнту.</p>
+                                <div class="kb-empty-title">Тем ще немає</div>
+                                <p class="kb-empty-copy mb-0">Спочатку створи теми, а потім прив’язуй до них товари та медіа.</p>
                             </div>
                         @endif
                     </section>
@@ -949,6 +931,11 @@
                     @if($topics->isEmpty() || $products->isEmpty())
                         <div class="alert alert-warning mb-0">Потрібно мати активні теми і товари в каталозі.</div>
                     @else
+                        @if(old('_modal_id') === 'topicProductCreateModal' && $errors->has('product_id'))
+                            <div class="alert alert-danger">
+                                {{ $errors->first('product_id') }}
+                            </div>
+                        @endif
                         <div class="row g-3">
                             <div class="col-12">
                                 <label for="topic-product-topic" class="form-label">Тема</label>
@@ -1068,6 +1055,152 @@
             </form>
         </div>
     </div>
+
+    @foreach($topics as $topic)
+        <div class="modal fade kb-modal" id="topicInventoryModal{{ $topic->id }}" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <div>
+                            <h5 class="modal-title">{{ $topic->name }}</h5>
+                            @if($topic->instruction)
+                                <div class="text-muted small mt-1">{{ \Illuminate\Support\Str::limit($topic->instruction, 160) }}</div>
+                            @endif
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрити"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="d-flex flex-wrap gap-2 mb-3">
+                            <button type="button"
+                                    class="btn btn-primary js-topic-prefill"
+                                    data-open-prefill-modal="topicProductCreateModal"
+                                    data-topic-id="{{ $topic->id }}">
+                                <i class="bi bi-plus-lg me-1"></i>Додати товар
+                            </button>
+                            <button type="button"
+                                    class="btn btn-outline-secondary js-topic-prefill"
+                                    data-open-prefill-modal="topicMediaCreateModal"
+                                    data-topic-id="{{ $topic->id }}">
+                                <i class="bi bi-plus-lg me-1"></i>Додати медіа
+                            </button>
+                        </div>
+
+                        <section class="kb-modal-section">
+                            <div class="kb-modal-section-title">Товари теми</div>
+                            @if($topic->topicProducts->isNotEmpty())
+                                <div class="kb-data-list mt-0">
+                                    @foreach($topic->topicProducts as $topicProduct)
+                                        <article class="kb-data-item">
+                                            <div class="kb-data-head">
+                                                <div>
+                                                    <h3 class="kb-data-title">{{ $topicProduct->product?->title ?: 'Товар не знайдено' }}</h3>
+                                                    <div class="kb-data-subtitle">
+                                                        @if($topicProduct->product?->sku)
+                                                            SKU: {{ $topicProduct->product->sku }}
+                                                        @else
+                                                            Без SKU
+                                                        @endif
+                                                    </div>
+                                                </div>
+                                                <div class="kb-inline-actions">
+                                                    <button type="button"
+                                                            class="btn btn-outline-secondary kb-inline-btn"
+                                                            data-bs-toggle="modal"
+                                                            data-bs-target="#topicProductEditModal{{ $topicProduct->id }}">
+                                                        Редагувати
+                                                    </button>
+                                                    <form method="POST"
+                                                          action="{{ route('settings.ai.knowledge.topicProducts.destroy', $topicProduct) }}"
+                                                          onsubmit="return confirm('Видалити прив’язку товару?');">
+                                                        @csrf
+                                                        @method('DELETE')
+                                                        <button type="submit" class="btn btn-outline-danger kb-inline-btn">Видалити</button>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                            <div class="kb-badge-row">
+                                                <span class="kb-badge primary">Порядок {{ $topicProduct->sort_order }}</span>
+                                                @if(!is_null($topicProduct->product?->sale_price))
+                                                    <span class="kb-badge muted">{{ number_format((float) $topicProduct->product->sale_price, 0, ',', ' ') }} грн</span>
+                                                @endif
+                                                <span class="kb-badge {{ $topicProduct->is_active ? 'success' : 'muted' }}">
+                                                    {{ $topicProduct->is_active ? 'Активна прив’язка' : 'Пауза' }}
+                                                </span>
+                                            </div>
+                                        </article>
+                                    @endforeach
+                                </div>
+                            @else
+                                <div class="kb-empty-card mt-0">
+                                    <div class="kb-empty-title">У цій темі ще немає товарів</div>
+                                    <p class="kb-empty-copy mb-0">Додай товари саме до цієї теми, щоб AI показував їх клієнту.</p>
+                                </div>
+                            @endif
+                        </section>
+
+                        <section class="kb-modal-section">
+                            <div class="kb-modal-section-title">Медіа теми</div>
+                            @if($topic->mediaItems->isNotEmpty())
+                                <div class="kb-data-list mt-0">
+                                    @foreach($topic->mediaItems as $media)
+                                        <article class="kb-data-item">
+                                            <div class="kb-data-head">
+                                                <div>
+                                                    <h3 class="kb-data-title">{{ $media->label }}</h3>
+                                                    <div class="kb-data-subtitle">
+                                                        @if($media->savedFile?->filename)
+                                                            Файл: {{ $media->savedFile->filename }}
+                                                        @elseif($media->url)
+                                                            URL додано вручну
+                                                        @else
+                                                            Без прив’язаного файлу
+                                                        @endif
+                                                    </div>
+                                                </div>
+                                                <div class="kb-inline-actions">
+                                                    <button type="button"
+                                                            class="btn btn-outline-secondary kb-inline-btn"
+                                                            data-bs-toggle="modal"
+                                                            data-bs-target="#topicMediaEditModal{{ $media->id }}">
+                                                        Редагувати
+                                                    </button>
+                                                    <form method="POST"
+                                                          action="{{ route('settings.ai.knowledge.media.destroy', $media) }}"
+                                                          onsubmit="return confirm('Видалити медіа «{{ $media->label }}»?');">
+                                                        @csrf
+                                                        @method('DELETE')
+                                                        <button type="submit" class="btn btn-outline-danger kb-inline-btn">Видалити</button>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                            <div class="kb-badge-row mb-2">
+                                                <span class="kb-badge primary">{{ $media->media_type }}</span>
+                                                <span class="kb-badge primary">Порядок {{ $media->sort_order }}</span>
+                                                <span class="kb-badge {{ $media->is_active ? 'success' : 'muted' }}">
+                                                    {{ $media->is_active ? 'Активне' : 'Пауза' }}
+                                                </span>
+                                            </div>
+                                            @if($media->url)
+                                                <p class="kb-data-copy">{{ $media->url }}</p>
+                                            @endif
+                                        </article>
+                                    @endforeach
+                                </div>
+                            @else
+                                <div class="kb-empty-card mt-0">
+                                    <div class="kb-empty-title">У цій темі ще немає медіа</div>
+                                    <p class="kb-empty-copy mb-0">Додай фото, колажі або палітри, які підходять саме до цієї теми.</p>
+                                </div>
+                            @endif
+                        </section>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Закрити</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endforeach
 
     <div class="modal fade kb-modal" id="ruleCreateModal" tabindex="-1" aria-labelledby="ruleCreateModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
@@ -1399,4 +1532,38 @@
             });
         </script>
     @endif
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            if (!window.bootstrap) return;
+
+            document.querySelectorAll('.js-topic-prefill').forEach(function (button) {
+                button.addEventListener('click', function () {
+                    const targetModalId = this.dataset.openPrefillModal;
+                    const topicId = this.dataset.topicId;
+                    const currentModalElement = this.closest('.modal');
+                    const targetModalElement = document.getElementById(targetModalId);
+
+                    if (!targetModalElement) return;
+
+                    const topicSelect = targetModalElement.querySelector('select[name="topic_id"]');
+                    if (topicSelect && topicId) {
+                        topicSelect.value = topicId;
+                    }
+
+                    const showTargetModal = function () {
+                        window.bootstrap.Modal.getOrCreateInstance(targetModalElement).show();
+                    };
+
+                    if (currentModalElement) {
+                        currentModalElement.addEventListener('hidden.bs.modal', showTargetModal, { once: true });
+                        window.bootstrap.Modal.getOrCreateInstance(currentModalElement).hide();
+                        return;
+                    }
+
+                    showTargetModal();
+                });
+            });
+        });
+    </script>
 </x-app-layout>

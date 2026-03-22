@@ -33,6 +33,16 @@ class ChatAiKnowledgeBaseController extends Controller
         ];
 
         $topics = ChatAiTopic::query()
+            ->with([
+                'topicProducts' => fn ($query) => $query
+                    ->with('product:id,title,sku,sale_price,is_active')
+                    ->orderBy('sort_order')
+                    ->orderByDesc('is_active'),
+                'mediaItems' => fn ($query) => $query
+                    ->with('savedFile:id,filename,url,type')
+                    ->orderBy('sort_order')
+                    ->orderByDesc('is_active'),
+            ])
             ->withCount([
                 'keywords as positive_keywords_count' => fn ($query) => $query
                     ->where('match_type', 'positive')
@@ -41,6 +51,8 @@ class ChatAiKnowledgeBaseController extends Controller
                     ->where('match_type', 'negative')
                     ->where('is_active', true),
                 'topicProducts as linked_products_count' => fn ($query) => $query
+                    ->where('is_active', true),
+                'mediaItems as linked_media_count' => fn ($query) => $query
                     ->where('is_active', true),
             ])
             ->orderByDesc('is_active')
@@ -224,25 +236,26 @@ class ChatAiKnowledgeBaseController extends Controller
     {
         $data = $request->validate([
             'topic_id' => ['required', 'exists:chat_ai_topics,id'],
-            'product_id' => ['required', 'exists:products,id'],
+            'product_id' => [
+                'required',
+                'exists:products,id',
+                Rule::unique('chat_ai_topic_products', 'product_id')
+                    ->where(fn ($query) => $query->where('topic_id', $request->input('topic_id'))),
+            ],
             'sort_order' => ['required', 'integer', 'min:0', 'max:10000'],
             'is_active' => ['nullable', 'boolean'],
+        ], [
+            'product_id.unique' => 'Цей товар уже є у списку цієї теми. Виберіть інший товар.',
         ]);
 
-        $topicProduct = ChatAiTopicProduct::query()->updateOrCreate([
+        ChatAiTopicProduct::query()->create([
             'topic_id' => $data['topic_id'],
             'product_id' => $data['product_id'],
-        ], [
             'sort_order' => $data['sort_order'],
             'is_active' => (bool) ($data['is_active'] ?? false),
         ]);
 
-        return back()->with(
-            'success',
-            $topicProduct->wasRecentlyCreated
-                ? 'Товар привʼязано до теми.'
-                : 'Привʼязка вже існувала, параметри оновлено.'
-        );
+        return back()->with('success', 'Товар привʼязано до теми.');
     }
 
     public function updateTopicProduct(Request $request, ChatAiTopicProduct $topicProduct): RedirectResponse
@@ -258,6 +271,8 @@ class ChatAiKnowledgeBaseController extends Controller
             ],
             'sort_order' => ['required', 'integer', 'min:0', 'max:10000'],
             'is_active' => ['nullable', 'boolean'],
+        ], [
+            'product_id.unique' => 'Цей товар уже є у списку цієї теми. Виберіть інший товар.',
         ]);
 
         $topicProduct->update([
