@@ -3,11 +3,9 @@
 namespace App\Http\Controllers\Facebook;
 
 use App\Http\Controllers\Controller;
-use App\Jobs\ProcessChatAiReplyJob;
 use App\Models\ChatContact;
 use App\Models\ChatMessage;
 use App\Models\MetaConnection;
-use App\Services\ChatAiAssistantService;
 use App\Services\ChatService;
 use App\Services\MetaService;
 use Carbon\Carbon;
@@ -44,8 +42,7 @@ class WebhookController extends Controller
     public function handle(
         Request $request,
         MetaService $metaService,
-        ChatService $chatService,
-        ChatAiAssistantService $chatAiAssistant
+        ChatService $chatService
     )
     {
         if (!$this->verifySignature($request)) {
@@ -62,7 +59,7 @@ class WebhookController extends Controller
             foreach ($request->input('entry', []) as $entry) {
                 foreach ($entry['messaging'] ?? [] as $event) {
                     if (isset($event['message'])) {
-                        $this->processMessage($event, $platform, $metaService, $chatService, $chatAiAssistant);
+                        $this->processMessage($event, $platform, $metaService, $chatService);
                         continue;
                     }
 
@@ -133,8 +130,7 @@ class WebhookController extends Controller
         array $event,
         string $platform,
         MetaService $metaService,
-        ChatService $chatService,
-        ChatAiAssistantService $chatAiAssistant
+        ChatService $chatService
     ): void {
         $message = $event['message'] ?? null;
         if (!$message) {
@@ -256,10 +252,6 @@ class WebhookController extends Controller
 
         $conversation = $chatService->updateConversationAfterMessage($conversation, $storedMessage, !$isEcho);
 
-        if (!$isEcho) {
-            $chatAiAssistant->queueInboundMessage($conversation, $storedMessage);
-            ProcessChatAiReplyJob::dispatch($conversation->id, $storedMessage->id)->onQueue('default');
-        }
     }
 
     private function processReadReceipt(array $event, string $platform): void

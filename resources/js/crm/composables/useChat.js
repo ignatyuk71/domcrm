@@ -9,8 +9,6 @@ import {
   markRead as apiMarkRead,
   refreshCustomerProfile as apiRefreshCustomerProfile,
   sendMessage as apiSendMessage,
-  takeOverConversation as apiTakeOverConversation,
-  updateConversationAiState as apiUpdateConversationAiState,
   updateConversationStage as apiUpdateConversationStage,
 } from '@/crm/services/chatApi';
 
@@ -462,34 +460,6 @@ export function useChat() {
     }
   }
 
-  async function updateAiState(conversationId, enabled) {
-    if (!conversationId) {
-      return;
-    }
-
-    try {
-      const { data } = await apiUpdateConversationAiState(conversationId, enabled);
-      patchConversationSnapshot(data?.data || null);
-    } catch (e) {
-      console.error('Не вдалося оновити стан AI', e);
-      error.value = 'Не вдалося оновити стан AI';
-    }
-  }
-
-  async function takeOverConversation(conversationId) {
-    if (!conversationId) {
-      return;
-    }
-
-    try {
-      const { data } = await apiTakeOverConversation(conversationId);
-      patchConversationSnapshot(data?.data || null);
-    } catch (e) {
-      console.error('Не вдалося забрати чат менеджеру', e);
-      error.value = 'Не вдалося забрати чат менеджеру';
-    }
-  }
-
   async function ensureConversation(customerId, platform = null) {
     if (!customerId) {
       return null;
@@ -542,8 +512,6 @@ export function useChat() {
     startPolling,
     stopPolling,
     updateStage,
-    updateAiState,
-    takeOverConversation,
     ensureConversation,
   };
 }

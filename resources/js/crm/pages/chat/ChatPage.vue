@@ -63,8 +63,6 @@
         :customer="activeChat"
         @close="closeProfile"
         @update-stage="handleUpdateStage"
-        @toggle-ai="handleToggleAi"
-        @takeover-ai="handleTakeoverAi"
       />
     </template>
   </ChatLayout>
@@ -108,8 +106,6 @@ const {
   forceSync,
   stopPolling,
   updateStage,
-  updateAiState,
-  takeOverConversation,
   ensureConversation,
 } = useChat();
 
@@ -218,14 +214,6 @@ async function handleDeleteConversation() {
 
 function handleUpdateStage({ conversationId, stage }) {
   updateStage(conversationId, stage);
-}
-
-function handleToggleAi({ conversationId, enabled }) {
-  updateAiState(conversationId, enabled);
-}
-
-function handleTakeoverAi(conversationId) {
-  takeOverConversation(conversationId);
 }
 
 function openMobileList() {
