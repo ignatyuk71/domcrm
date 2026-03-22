@@ -15,19 +15,6 @@ use RuntimeException;
 class ChatAiAssistantService
 {
     private const META_KEY = 'ai';
-    private const SALES_STATES = [
-        'idle',
-        'intent',
-        'product',
-        'variant',
-        'stock',
-        'qty',
-        'delivery',
-        'payment',
-        'contact',
-        'confirm',
-        'handoff',
-    ];
 
     public function __construct(
         private readonly OpenAiResponsesService $openAiResponses,
@@ -141,12 +128,6 @@ class ChatAiAssistantService
             'last_processed_message_id' => $state['last_processed_message_id'],
             'last_reply_message_id' => $state['last_reply_message_id'],
             'model' => $state['model'],
-            'sales_state' => $state['sales_state'],
-            'selected_topic_id' => $state['selected_topic_id'],
-            'selected_product_id' => $state['selected_product_id'],
-            'offered_models' => $state['offered_models'],
-            'sales_slots' => $state['sales_slots'],
-            'next_required_slot' => $state['next_required_slot'],
         ];
     }
 
@@ -180,11 +161,7 @@ class ChatAiAssistantService
 
         $runtimeSettings = $this->chatAiSettings->resolveRuntimeSettings();
         $currentState = $this->getState($conversation);
-        $knowledgeContext = $this->resolveKnowledgeContext($message, $currentState);
-        $salesSlots = $this->resolveSalesSlots($conversation, $message, $knowledgeContext, $currentState);
-        $knowledgeContext['sales_slots'] = $salesSlots;
-        $knowledgeContext['next_required_slot'] = $this->determineNextRequiredSlot($knowledgeContext, $salesSlots, $message);
-        $knowledgeContext['order_ready'] = $this->isOrderReady($knowledgeContext, $salesSlots);
+        $knowledgeContext = $this->resolveKnowledgeContext($message);
 
         $this->storeState($conversation, [
             'enabled' => $currentState['enabled'],
@@ -194,12 +171,6 @@ class ChatAiAssistantService
             'updated_at' => now()->toDateTimeString(),
             'summary' => $currentState['summary'],
             'lead' => $currentState['lead'],
-            'sales_state' => $currentState['sales_state'],
-            'selected_topic_id' => $currentState['selected_topic_id'],
-            'selected_product_id' => $currentState['selected_product_id'],
-            'offered_models' => $currentState['offered_models'],
-            'sales_slots' => $currentState['sales_slots'],
-            'next_required_slot' => $currentState['next_required_slot'],
         ]);
 
         try {
@@ -233,52 +204,18 @@ class ChatAiAssistantService
             return;
         }
 
-        $salesSlots = $this->mergeSalesSlots(
-            $salesSlots,
-            $decision['sales_slots'] ?? [],
-            $knowledgeContext,
-            $conversation
-        );
-        $knowledgeContext['sales_slots'] = $salesSlots;
-        $knowledgeContext['next_required_slot'] = $this->determineNextRequiredSlot($knowledgeContext, $salesSlots, $message);
-        $knowledgeContext['order_ready'] = $this->isOrderReady($knowledgeContext, $salesSlots);
-
-        $rawReplyText = (string) ($decision['reply_text'] ?? '');
-        $inlineAttachmentUrls = $this->extractInlineAttachmentUrls($rawReplyText, $knowledgeContext);
-        $replyText = $this->sanitizeReplyText($rawReplyText);
-        $replyText = $this->enforceSalesReplyText($replyText, $knowledgeContext);
-        $replyText = $this->fallbackReplyText($replyText, $knowledgeContext);
+        $replyText = $this->sanitizeReplyText((string) ($decision['reply_text'] ?? ''));
         $handoffRequired = (bool) ($decision['handoff_required'] ?? false);
-        if ((bool) ($knowledgeContext['order_ready'] ?? false)) {
-            $handoffRequired = true;
-        }
-        $mustReply = (bool) ($knowledgeContext['requires_model_choice'] ?? false)
-            || (bool) ($knowledgeContext['requires_size_chart'] ?? false)
-            || !empty($knowledgeContext['next_required_slot'])
-            || (bool) ($knowledgeContext['order_ready'] ?? false);
-        $shouldReply = ((bool) ($decision['should_reply'] ?? false) || $mustReply) && $replyText !== '';
+        $shouldReply = (bool) ($decision['should_reply'] ?? false) && $replyText !== '';
         $replyAttachments = $this->resolveReplyAttachments(
-            array_values(array_unique(array_merge(
-                array_values(array_filter((array) ($decision['attachment_urls'] ?? []), 'is_string')),
-                $inlineAttachmentUrls
-            ))),
+            $decision['attachment_urls'] ?? [],
             $knowledgeContext,
             $message
         );
         $summary = $this->normalizeSummary($decision);
-        $lead = $this->mergeLeadWithSalesSlots(
-            $this->normalizeLeadPayload($decision['collected_data'] ?? []),
-            $salesSlots,
-            $knowledgeContext
-        );
+        $lead = $this->normalizeLeadPayload($decision['collected_data'] ?? []);
         $leadStatus = $this->normalizeLeadStatus((string) ($decision['lead_status'] ?? 'new'));
-        if ((bool) ($knowledgeContext['order_ready'] ?? false)) {
-            $leadStatus = 'handoff';
-        }
         $handoffReason = trim((string) ($decision['handoff_reason'] ?? ''));
-        if ($handoffRequired && $handoffReason === '') {
-            $handoffReason = 'AI зібрав основні дані замовлення, потрібне оформлення менеджером.';
-        }
         $sentMessage = null;
 
         try {
@@ -307,7 +244,6 @@ class ChatAiAssistantService
         $status = $handoffRequired
             ? 'handoff'
             : ($sentMessage ? 'replied' : 'idle');
-        $salesStatePatch = $this->buildSalesStatePatch($currentState, $knowledgeContext, $handoffRequired);
 
         $this->storeState($conversation, [
             'status' => $status,
@@ -323,7 +259,6 @@ class ChatAiAssistantService
             'last_error' => '',
             'model' => (string) $runtimeSettings['model'],
             'updated_at' => now()->toDateTimeString(),
-            ...$salesStatePatch,
         ]);
 
         if ($handoffRequired) {
@@ -363,12 +298,6 @@ class ChatAiAssistantService
             'paused_at' => (string) ($stored['paused_at'] ?? ''),
             'paused_by_user_id' => isset($stored['paused_by_user_id']) ? (int) $stored['paused_by_user_id'] : null,
             'model' => (string) ($stored['model'] ?? config('services.openai.model', 'gpt-4.1-mini')),
-            'sales_state' => $this->normalizeSalesState((string) ($stored['sales_state'] ?? 'idle')),
-            'selected_topic_id' => isset($stored['selected_topic_id']) ? (int) $stored['selected_topic_id'] : null,
-            'selected_product_id' => isset($stored['selected_product_id']) ? (int) $stored['selected_product_id'] : null,
-            'offered_models' => $this->normalizeOfferedModels($stored['offered_models'] ?? []),
-            'sales_slots' => $this->normalizeSalesSlots($stored['sales_slots'] ?? []),
-            'next_required_slot' => $this->normalizeSalesSlotKey($stored['next_required_slot'] ?? null),
         ];
     }
 
@@ -382,12 +311,6 @@ class ChatAiAssistantService
 
         $next = array_merge($current, $state);
         $next['lead'] = $this->normalizeLeadPayload($next['lead'] ?? []);
-        $next['sales_state'] = $this->normalizeSalesState((string) ($next['sales_state'] ?? 'idle'));
-        $next['selected_topic_id'] = isset($next['selected_topic_id']) ? (int) $next['selected_topic_id'] : null;
-        $next['selected_product_id'] = isset($next['selected_product_id']) ? (int) $next['selected_product_id'] : null;
-        $next['offered_models'] = $this->normalizeOfferedModels($next['offered_models'] ?? []);
-        $next['sales_slots'] = $this->normalizeSalesSlots($next['sales_slots'] ?? []);
-        $next['next_required_slot'] = $this->normalizeSalesSlotKey($next['next_required_slot'] ?? null);
         $meta[self::META_KEY] = $next;
 
         $conversation->meta = $meta;
@@ -537,38 +460,13 @@ class ChatAiAssistantService
             }
             $instructions[] = 'Не змішуй з іншими темами та не вигадуй дані поза контекстом.';
         } else {
-            $instructions[] = 'Якщо тема не визначена, спочатку уточни модель/тип товару одним коротким питанням.';
+            $instructions[] = 'Якщо тема не визначена, спочатку уточни тип товару одним коротким питанням.';
         }
 
         $instructions[] = 'Для фото використовуй тільки URL з релевантного медіа-контексту.';
         $instructions[] = 'Для ціни та розмірів використовуй тільки релевантні товари з контексту.';
         $instructions[] = 'Коли клієнт просить показати/надіслати фото, заповнюй attachment_urls релевантними URL тільки з цього контексту.';
         $instructions[] = 'Якщо фото не запитували або URL немає в контексті, поверни attachment_urls як порожній масив.';
-        $instructions[] = 'Не вставляй URL, markdown-посилання або текст виду [фото](url) у reply_text. Усі зображення передавай тільки через attachment_urls.';
-
-        if ((bool) ($knowledgeContext['requires_model_choice'] ?? false)) {
-            $instructions[] = 'Зараз модель не визначена. Потрібно коротко уточнити, яку саме модель клієнт має на увазі.';
-            $instructions[] = 'Сформуй відповідь у форматі: привітання + прохання вибрати модель (номер) + прохання написати розмір.';
-            $instructions[] = 'Для цього кроку handoff_required має бути false.';
-            $instructions[] = 'Не додавай attachment_urls, якщо клієнт окремо не просив показати фото.';
-        }
-
-        if ((bool) ($knowledgeContext['requires_size_chart'] ?? false)) {
-            $instructions[] = 'Клієнт питає про розмір для вже обраної моделі.';
-            $instructions[] = 'Коротко поясни, як вибрати розмір, і додай у attachment_urls релевантну size_chart.';
-        }
-
-        $instructions[] = 'Працюй як slot-асистент замовлення. Не став більше одного нового питання в одній відповіді.';
-        if (!empty($knowledgeContext['sales_slots'])) {
-            $instructions[] = 'Поточні sales slots: ' . $this->formatSalesSlotsForPrompt($knowledgeContext['sales_slots']);
-        }
-        if (!empty($knowledgeContext['next_required_slot'])) {
-            $instructions[] = 'Бракує слота: ' . $this->humanSalesSlotLabel((string) $knowledgeContext['next_required_slot']) . '.';
-            $instructions[] = 'Постав тільки одне коротке питання саме про цей слот.';
-        }
-        if ((bool) ($knowledgeContext['order_ready'] ?? false)) {
-            $instructions[] = 'Усі основні слоти замовлення зібрані. Сформуй коротке підтвердження замовлення і постав handoff_required=true.';
-        }
 
         return implode("\n", $instructions);
     }
@@ -595,13 +493,6 @@ class ChatAiAssistantService
             'Email у CRM: ' . ($customer?->email ?: 'немає'),
             'Поточний етап: ' . ($conversation->stage?->name ?: 'Без етапу'),
             'Поточний AI summary: ' . ($state['summary'] ?: 'немає'),
-            'Поточний sales state: ' . ((string) ($state['sales_state'] ?? 'idle')),
-            'Намір клієнта: ' . ((string) ($knowledgeContext['intent'] ?? 'unknown')),
-            'Поточні sales slots: ' . $this->formatSalesSlotsForPrompt($knowledgeContext['sales_slots'] ?? []),
-            'Наступний слот: ' . ($knowledgeContext['next_required_slot']
-                ? $this->humanSalesSlotLabel((string) $knowledgeContext['next_required_slot'])
-                : 'немає'),
-            'Замовлення зібрано: ' . ((bool) ($knowledgeContext['order_ready'] ?? false) ? 'так' : 'ні'),
             'Останнє вхідне повідомлення: ' . $this->formatLatestInbound($message),
         ];
 
@@ -647,81 +538,8 @@ class ChatAiAssistantService
                         . $media['url'];
                 }
             }
-
-            if (!empty($knowledgeContext['selected_product'])) {
-                $selectedProduct = $knowledgeContext['selected_product'];
-                $selectedProductParts = [
-                    (string) ($selectedProduct['title'] ?? ''),
-                ];
-
-                if (!empty($selectedProduct['sku'])) {
-                    $selectedProductParts[] = 'SKU ' . $selectedProduct['sku'];
-                }
-
-                if (array_key_exists('price', $selectedProduct) && $selectedProduct['price'] !== null) {
-                    $selectedProductParts[] = 'ціна ' . $this->formatPrice((float) $selectedProduct['price']) . ' грн';
-                }
-
-                if (!empty($selectedProduct['sizes']) && is_array($selectedProduct['sizes'])) {
-                    $selectedProductParts[] = 'розміри ' . implode(', ', $selectedProduct['sizes']);
-                }
-
-                $input[] = 'Поточна обрана модель: ' . implode('; ', array_filter($selectedProductParts));
-            }
-
-            if (!empty($knowledgeContext['model_choices'])) {
-                $input[] = 'Список моделей для вибору (проси номер моделі):';
-                foreach ($knowledgeContext['model_choices'] as $modelChoice) {
-                    $parts = [
-                        '#' . (int) ($modelChoice['number'] ?? 0),
-                        (string) ($modelChoice['title'] ?? ''),
-                    ];
-
-                    if (!empty($modelChoice['sku'])) {
-                        $parts[] = 'SKU ' . $modelChoice['sku'];
-                    }
-
-                    if (array_key_exists('price', $modelChoice) && $modelChoice['price'] !== null) {
-                        $parts[] = 'ціна ' . $this->formatPrice((float) $modelChoice['price']) . ' грн';
-                    }
-
-                    if (!empty($modelChoice['sizes']) && is_array($modelChoice['sizes'])) {
-                        $parts[] = 'розміри ' . implode(', ', $modelChoice['sizes']);
-                    }
-
-                    $input[] = implode('; ', array_filter($parts));
-                }
-            }
-
-            if (!empty($knowledgeContext['showcase_media'])) {
-                $input[] = 'showcase_media (доступні колажі/вітрина):';
-                foreach ($knowledgeContext['showcase_media'] as $idx => $media) {
-                    $input[] = ($idx + 1) . '. '
-                        . ((string) ($media['label'] ?? ''))
-                        . ' | ' . ((string) ($media['media_type'] ?? ''))
-                        . ' | ' . ((string) ($media['url'] ?? ''));
-                }
-            }
-
-            if (!empty($knowledgeContext['size_chart_media'])) {
-                $input[] = 'size_chart_media (доступні розмірні сітки):';
-                foreach ($knowledgeContext['size_chart_media'] as $idx => $media) {
-                    $input[] = ($idx + 1) . '. '
-                        . ((string) ($media['label'] ?? ''))
-                        . ' | ' . ((string) ($media['media_type'] ?? ''))
-                        . ' | ' . ((string) ($media['url'] ?? ''));
-                }
-            }
         } else {
             $input[] = 'Тема не визначена. Якщо запит нечіткий, уточни тип товару.';
-        }
-
-        if ((bool) ($knowledgeContext['requires_model_choice'] ?? false)) {
-            $input[] = 'Системна задача: тема/модель не визначена, потрібно уточнити модель і попросити номер.';
-        }
-
-        if ((bool) ($knowledgeContext['requires_size_chart'] ?? false)) {
-            $input[] = 'Системна задача: поясни підбір розміру та додай size_chart у attachment_urls.';
         }
 
         $input[] = 'Останні повідомлення:';
@@ -746,53 +564,32 @@ class ChatAiAssistantService
         }
 
         $photoRequested = $this->isPhotoIntent($message);
-        $forceSizeChart = (bool) ($knowledgeContext['requires_size_chart'] ?? false)
-            && !empty($knowledgeContext['size_chart_media']);
-
-        if (!$photoRequested && !$forceSizeChart) {
+        if (!$photoRequested) {
             return [];
         }
 
-        $maxAttachments = $forceSizeChart
-            ? max(1, count((array) ($knowledgeContext['size_chart_media'] ?? [])))
-            : max(1, count((array) $attachmentUrls));
         $selected = [];
-        $appendUrl = function (string $rawUrl) use (&$selected, $allowedMap, $maxAttachments): void {
-            if (count($selected) >= $maxAttachments) {
-                return;
-            }
-
-            $normalizedUrl = $this->normalizeAttachmentUrl($rawUrl);
-            if ($normalizedUrl === '' || !isset($allowedMap[$normalizedUrl])) {
-                return;
-            }
-
-            $selected[$normalizedUrl] = $normalizedUrl;
-        };
-
         foreach ((array) $attachmentUrls as $rawUrl) {
             if (!is_string($rawUrl)) {
                 continue;
             }
 
-            $appendUrl($rawUrl);
-        }
-
-        if ($forceSizeChart) {
-            foreach ((array) ($knowledgeContext['size_chart_media'] ?? []) as $mediaItem) {
-                $appendUrl((string) ($mediaItem['url'] ?? ''));
+            $normalizedUrl = $this->normalizeAttachmentUrl($rawUrl);
+            if ($normalizedUrl === '' || !isset($allowedMap[$normalizedUrl])) {
+                continue;
             }
+
+            $selected[$normalizedUrl] = $normalizedUrl;
         }
 
-        if ($photoRequested) {
-            foreach ((array) ($knowledgeContext['showcase_media'] ?? []) as $mediaItem) {
-                $appendUrl((string) ($mediaItem['url'] ?? ''));
-            }
-        }
-
-        if ($selected === [] || (!$forceSizeChart && count($selected) < $maxAttachments)) {
+        if ($selected === []) {
             foreach ($this->fallbackAttachmentCandidates($message, $knowledgeContext) as $candidateUrl) {
-                $appendUrl($candidateUrl);
+                $normalizedUrl = $this->normalizeAttachmentUrl($candidateUrl);
+                if ($normalizedUrl === '' || !isset($allowedMap[$normalizedUrl])) {
+                    continue;
+                }
+
+                $selected[$normalizedUrl] = $normalizedUrl;
             }
         }
 
@@ -818,38 +615,12 @@ class ChatAiAssistantService
             $map[$url] = $url;
         }
 
-        foreach ((array) ($knowledgeContext['showcase_media'] ?? []) as $media) {
-            $url = $this->normalizeAttachmentUrl((string) ($media['url'] ?? ''));
-            if ($url === '') {
-                continue;
-            }
-            $map[$url] = $url;
-        }
-
-        foreach ((array) ($knowledgeContext['size_chart_media'] ?? []) as $media) {
-            $url = $this->normalizeAttachmentUrl((string) ($media['url'] ?? ''));
-            if ($url === '') {
-                continue;
-            }
-            $map[$url] = $url;
-        }
-
         foreach ((array) ($knowledgeContext['products'] ?? []) as $product) {
             $url = $this->normalizeAttachmentUrl((string) ($product['photo_url'] ?? ''));
             if ($url === '') {
                 continue;
             }
             $map[$url] = $url;
-        }
-
-        foreach ((array) ($knowledgeContext['model_choices'] ?? []) as $modelChoice) {
-            foreach (['photo_url', 'collage_url'] as $field) {
-                $url = $this->normalizeAttachmentUrl((string) ($modelChoice[$field] ?? ''));
-                if ($url === '') {
-                    continue;
-                }
-                $map[$url] = $url;
-            }
         }
 
         return $map;
@@ -1019,7 +790,7 @@ class ChatAiAssistantService
     /**
      * @return array<string, mixed>
      */
-    private function resolveKnowledgeContext(ChatMessage $message, array $state): array
+    private function resolveKnowledgeContext(ChatMessage $message): array
     {
         $rules = ChatAiResponseRule::query()
             ->where('is_active', true)
@@ -1066,26 +837,17 @@ class ChatAiAssistantService
             ->orderBy('name')
             ->get(['id', 'name', 'instruction', 'priority', 'is_active']);
 
-        $matchSource = $this->normalizeForMatch($this->extractMessageForMatching($message));
-        $intent = $this->detectSalesIntent($matchSource);
-
         if ($topics->isEmpty()) {
             return [
-                'intent' => $intent,
                 'selected_topic' => null,
-                'selected_product' => null,
                 'matched_positive' => [],
                 'products' => [],
                 'media' => [],
-                'model_choices' => [],
-                'showcase_media' => [],
-                'size_chart_media' => [],
-                'requires_model_choice' => false,
-                'requires_size_chart' => false,
                 'rules' => $rules,
             ];
         }
 
+        $matchSource = $this->normalizeForMatch($this->extractMessageForMatching($message));
         $scored = $topics->map(function (ChatAiTopic $topic) use ($matchSource) {
             $score = 0;
             $positive = [];
@@ -1118,480 +880,39 @@ class ChatAiAssistantService
             ];
         })->sortByDesc('score')->values();
 
-        $bestPositive = $scored->first(fn (array $row) => $row['score'] > 0);
-        $stateTopic = null;
-        if (!empty($state['selected_topic_id'])) {
-            $stateTopic = $topics->firstWhere('id', (int) $state['selected_topic_id']);
+        $selected = $scored->first(fn (array $row) => $row['score'] > 0);
+        if ($selected === null && $topics->count() === 1) {
+            $selected = [
+                'topic' => $topics->first(),
+                'score' => 0,
+                'positive' => [],
+            ];
         }
 
-        $selectedFromOffer = $this->resolveOfferedModelSelection($matchSource, (array) ($state['offered_models'] ?? []));
-        $selectedTopic = null;
-
-        if ($selectedFromOffer !== null && !empty($selectedFromOffer['topic_id'])) {
-            $selectedTopic = $topics->firstWhere('id', (int) $selectedFromOffer['topic_id']);
-        }
-
-        if ($selectedTopic === null && $bestPositive !== null) {
-            $bestTopic = $bestPositive['topic'];
-            if (
-                $stateTopic === null
-                || (int) $bestPositive['score'] >= 6
-                || (int) $bestTopic->id === (int) $stateTopic->id
-            ) {
-                $selectedTopic = $bestTopic;
-            }
-        }
-
-        if ($selectedTopic === null && $stateTopic !== null) {
-            $selectedTopic = $stateTopic;
-        }
-
-        if ($selectedTopic === null && $bestPositive !== null) {
-            $selectedTopic = $bestPositive['topic'];
-        }
-
-        if ($selectedTopic === null && $topics->count() === 1) {
-            $selectedTopic = $topics->first();
-        }
-
-        if ($selectedTopic === null && $intent !== 'unknown') {
-            $selectedTopic = $topics->first();
-        }
-
-        if ($selectedTopic === null) {
+        if ($selected === null) {
             return [
-                'intent' => $intent,
                 'selected_topic' => null,
-                'selected_product' => null,
                 'matched_positive' => [],
                 'products' => [],
                 'media' => [],
-                'model_choices' => [],
-                'showcase_media' => [],
-                'size_chart_media' => [],
-                'requires_model_choice' => false,
-                'requires_size_chart' => false,
                 'rules' => $rules,
             ];
         }
 
-        $selectedRow = $scored->first(fn (array $row) => (int) $row['topic']->id === (int) $selectedTopic->id);
-        $matchedPositive = is_array($selectedRow['positive'] ?? null) ? $selectedRow['positive'] : [];
-        $products = $this->topicProductsPayload($selectedTopic);
-        $media = $this->topicMediaPayload($selectedTopic);
-        $selectedTopicPayload = [
-            'id' => (int) $selectedTopic->id,
-            'name' => (string) $selectedTopic->name,
-            'instruction' => (string) ($selectedTopic->instruction ?? ''),
-        ];
-
-        $modelChoices = $this->buildModelChoices($products, $selectedTopicPayload);
-        $selectedProduct = $this->resolveSelectedProduct($products, $matchSource, $selectedFromOffer, $state);
-        $showcaseMedia = $this->resolveShowcaseMedia($media, $products);
-        $sizeChartMedia = $this->resolveSizeChartMedia($media, $selectedProduct);
-
-        $requiresModelChoice = $selectedProduct === null
-            && $this->intentNeedsModelChoice($intent)
-            && count($modelChoices) > 1;
-
-        if ($requiresModelChoice) {
-            $selectedProduct = null;
-        }
-
-        $requiresSizeChart = $selectedProduct !== null
-            && $sizeChartMedia !== []
-            && (
-                $intent === 'size'
-                || $this->looksLikeSizeValue($matchSource)
-            );
+        /** @var ChatAiTopic $selectedTopic */
+        $selectedTopic = $selected['topic'];
 
         return [
-            'intent' => $intent,
-            'selected_topic' => $selectedTopicPayload,
-            'selected_product' => $selectedProduct,
-            'matched_positive' => array_slice($matchedPositive, 0, 6),
-            'products' => $products,
-            'media' => $media,
-            'model_choices' => $modelChoices,
-            'showcase_media' => $showcaseMedia,
-            'size_chart_media' => $sizeChartMedia,
-            'requires_model_choice' => $requiresModelChoice,
-            'requires_size_chart' => $requiresSizeChart,
+            'selected_topic' => [
+                'id' => $selectedTopic->id,
+                'name' => (string) $selectedTopic->name,
+                'instruction' => (string) ($selectedTopic->instruction ?? ''),
+            ],
+            'matched_positive' => array_slice($selected['positive'], 0, 6),
+            'products' => $this->topicProductsPayload($selectedTopic),
+            'media' => $this->topicMediaPayload($selectedTopic),
             'rules' => $rules,
         ];
-    }
-
-    private function detectSalesIntent(string $matchSource): string
-    {
-        if ($matchSource === '') {
-            return 'unknown';
-        }
-
-        if ($this->containsAny($matchSource, ['модел', 'варіант', 'асортимент', 'каталог', 'що є'])) {
-            return 'catalog';
-        }
-
-        if ($this->containsAny($matchSource, ['ціна', 'скільки', 'вартіст', 'кошту'])) {
-            return 'price';
-        }
-
-        if ($this->containsAny($matchSource, ['розмір', 'розмірн', 'стоп', 'см', 'устілк']) || $this->looksLikeSizeValue($matchSource)) {
-            return 'size';
-        }
-
-        if ($this->containsAny($matchSource, ['фото', 'картин', 'зображ', 'покаж', 'колаж', 'скинь', 'надішл'])) {
-            return 'photo';
-        }
-
-        if ($this->containsAny($matchSource, ['куп', 'замов', 'оформ', 'брон'])) {
-            return 'order';
-        }
-
-        if ($this->containsAny($matchSource, ['достав', 'місто', 'нова пошта', 'укрпошта'])) {
-            return 'delivery';
-        }
-
-        if ($this->containsAny($matchSource, ['оплат', 'передоплат', 'накладен'])) {
-            return 'payment';
-        }
-
-        if ($this->containsAny($matchSource, ['наявн', 'є в наяв', 'в наяв'])) {
-            return 'availability';
-        }
-
-        return 'unknown';
-    }
-
-    private function intentNeedsModelChoice(string $intent): bool
-    {
-        return in_array($intent, ['catalog', 'price', 'size', 'photo', 'order', 'delivery', 'payment', 'availability'], true);
-    }
-
-    /**
-     * @param  array<int, array<string, mixed>>  $offeredModels
-     * @return array<string, mixed>|null
-     */
-    private function resolveOfferedModelSelection(string $matchSource, array $offeredModels): ?array
-    {
-        $normalized = $this->normalizeOfferedModels($offeredModels);
-        if ($normalized === [] || $matchSource === '') {
-            return null;
-        }
-
-        $selectedNumber = $this->extractModelChoiceNumber($matchSource);
-        if ($selectedNumber !== null) {
-            foreach ($normalized as $item) {
-                if ((int) ($item['number'] ?? 0) === $selectedNumber) {
-                    return $item;
-                }
-            }
-        }
-
-        foreach ($normalized as $item) {
-            $sku = $this->normalizeForMatch((string) ($item['sku'] ?? ''));
-            if ($sku !== '' && Str::contains($matchSource, $sku)) {
-                return $item;
-            }
-
-            $title = $this->normalizeForMatch((string) ($item['title'] ?? ''));
-            if ($title !== '' && Str::contains($matchSource, $title)) {
-                return $item;
-            }
-        }
-
-        return null;
-    }
-
-    private function extractModelChoiceNumber(string $matchSource): ?int
-    {
-        if ($matchSource === '') {
-            return null;
-        }
-
-        if (preg_match('/(?:модель|номер|№|#)\s*([1-9][0-9]?)/u', $matchSource, $matches) === 1) {
-            return (int) $matches[1];
-        }
-
-        if (preg_match('/^\s*([1-9][0-9]?)\s*$/u', $matchSource, $matches) === 1) {
-            return (int) $matches[1];
-        }
-
-        if (preg_match('/\b([1-9][0-9]?)\b/u', $matchSource, $matches) === 1) {
-            return (int) $matches[1];
-        }
-
-        return null;
-    }
-
-    /**
-     * @param  array<int, array<string, mixed>>  $products
-     * @param  array<string, mixed>|null  $selectedFromOffer
-     * @param  array<string, mixed>  $state
-     * @return array<string, mixed>|null
-     */
-    private function resolveSelectedProduct(
-        array $products,
-        string $matchSource,
-        ?array $selectedFromOffer,
-        array $state
-    ): ?array {
-        if ($products === []) {
-            return null;
-        }
-
-        if ($selectedFromOffer !== null && !empty($selectedFromOffer['product_id'])) {
-            $fromOffer = collect($products)->first(
-                fn (array $product) => (int) ($product['id'] ?? 0) === (int) $selectedFromOffer['product_id']
-            );
-            if ($fromOffer !== null) {
-                return $fromOffer;
-            }
-        }
-
-        $matchedByText = $this->matchProductBySource($products, $matchSource);
-        if ($matchedByText !== null) {
-            return $matchedByText;
-        }
-
-        if (!empty($state['selected_product_id'])) {
-            $fromState = collect($products)->first(
-                fn (array $product) => (int) ($product['id'] ?? 0) === (int) $state['selected_product_id']
-            );
-            if ($fromState !== null) {
-                return $fromState;
-            }
-        }
-
-        if (count($products) === 1) {
-            return $products[0];
-        }
-
-        return null;
-    }
-
-    /**
-     * @param  array<int, array<string, mixed>>  $products
-     * @return array<string, mixed>|null
-     */
-    private function matchProductBySource(array $products, string $matchSource): ?array
-    {
-        if ($matchSource === '') {
-            return null;
-        }
-
-        $tokens = array_values(array_filter(
-            preg_split('/[\s,.;:!?()"\'«»\-\/]+/u', $matchSource) ?: [],
-            fn (string $token) => mb_strlen($token) >= 3
-        ));
-
-        $best = null;
-        $bestScore = 0;
-
-        foreach ($products as $product) {
-            $score = 0;
-            $title = $this->normalizeForMatch((string) ($product['title'] ?? ''));
-            $sku = $this->normalizeForMatch((string) ($product['sku'] ?? ''));
-
-            if ($sku !== '' && Str::contains($matchSource, $sku)) {
-                $score += 20;
-            }
-
-            if ($title !== '' && Str::contains($matchSource, $title)) {
-                $score += 16;
-            }
-
-            foreach ($tokens as $token) {
-                if ($title !== '' && Str::contains($title, $token)) {
-                    $score += 3;
-                }
-                if ($sku !== '' && Str::contains($sku, $token)) {
-                    $score += 6;
-                }
-            }
-
-            if ($score > $bestScore) {
-                $bestScore = $score;
-                $best = $product;
-            }
-        }
-
-        return $bestScore >= 8 ? $best : null;
-    }
-
-    /**
-     * @param  array<int, array<string, mixed>>  $products
-     * @param  array<string, mixed>|null  $selectedTopic
-     * @return array<int, array<string, mixed>>
-     */
-    private function buildModelChoices(array $products, ?array $selectedTopic): array
-    {
-        $models = [];
-
-        foreach ($products as $index => $product) {
-            $models[] = [
-                'number' => $index + 1,
-                'topic_id' => (int) ($selectedTopic['id'] ?? ($product['topic_id'] ?? 0)) ?: null,
-                'topic_name' => (string) ($selectedTopic['name'] ?? ''),
-                'product_id' => isset($product['id']) ? (int) $product['id'] : null,
-                'title' => (string) ($product['title'] ?? ''),
-                'sku' => (string) ($product['sku'] ?? ''),
-                'price' => array_key_exists('price', $product) && $product['price'] !== null
-                    ? (float) $product['price']
-                    : null,
-                'sizes' => is_array($product['sizes'] ?? null) ? $product['sizes'] : [],
-                'photo_url' => (string) ($product['photo_url'] ?? ''),
-            ];
-        }
-
-        return $this->normalizeOfferedModels($models);
-    }
-
-    /**
-     * @param  array<int, array<string, mixed>>  $media
-     * @param  array<int, array<string, mixed>>  $products
-     * @return array<int, array<string, string>>
-     */
-    private function resolveShowcaseMedia(array $media, array $products): array
-    {
-        $items = [];
-        $acceptedTypes = ['collage', 'palette', 'promo', 'image'];
-
-        foreach ($acceptedTypes as $type) {
-            foreach ($media as $mediaItem) {
-                if ((string) ($mediaItem['media_type'] ?? '') !== $type) {
-                    continue;
-                }
-
-                $url = $this->normalizeAttachmentUrl((string) ($mediaItem['url'] ?? ''));
-                if ($url === '' || isset($items[$url])) {
-                    continue;
-                }
-
-                $items[$url] = [
-                    'label' => (string) ($mediaItem['label'] ?? ''),
-                    'media_type' => (string) ($mediaItem['media_type'] ?? 'image'),
-                    'url' => $url,
-                ];
-
-            }
-        }
-
-        foreach ($products as $product) {
-            $url = $this->normalizeAttachmentUrl((string) ($product['photo_url'] ?? ''));
-            if ($url === '' || isset($items[$url])) {
-                continue;
-            }
-
-            $items[$url] = [
-                'label' => (string) ($product['title'] ?? 'Модель'),
-                'media_type' => 'image',
-                'url' => $url,
-            ];
-
-        }
-
-        return array_values($items);
-    }
-
-    /**
-     * @param  array<int, array<string, mixed>>  $media
-     * @param  array<string, mixed>|null  $selectedProduct
-     * @return array<int, array<string, string>>
-     */
-    private function resolveSizeChartMedia(array $media, ?array $selectedProduct): array
-    {
-        $sizeCharts = array_values(array_filter(
-            $media,
-            fn (array $mediaItem) => (string) ($mediaItem['media_type'] ?? '') === 'size_chart'
-        ));
-
-        if ($sizeCharts === []) {
-            return [];
-        }
-
-        if ($selectedProduct === null) {
-            $result = [];
-            foreach (array_slice($sizeCharts, 0, 2) as $item) {
-                $url = $this->normalizeAttachmentUrl((string) ($item['url'] ?? ''));
-                if ($url === '') {
-                    continue;
-                }
-                $result[] = [
-                    'label' => (string) ($item['label'] ?? ''),
-                    'media_type' => 'size_chart',
-                    'url' => $url,
-                ];
-            }
-
-            return $result;
-        }
-
-        $title = $this->normalizeForMatch((string) ($selectedProduct['title'] ?? ''));
-        $sku = $this->normalizeForMatch((string) ($selectedProduct['sku'] ?? ''));
-
-        usort($sizeCharts, function (array $left, array $right) use ($title, $sku) {
-            $leftLabel = $this->normalizeForMatch((string) ($left['label'] ?? ''));
-            $rightLabel = $this->normalizeForMatch((string) ($right['label'] ?? ''));
-
-            $leftScore = 0;
-            $rightScore = 0;
-
-            if ($title !== '' && Str::contains($leftLabel, $title)) {
-                $leftScore += 6;
-            }
-            if ($title !== '' && Str::contains($rightLabel, $title)) {
-                $rightScore += 6;
-            }
-
-            if ($sku !== '' && Str::contains($leftLabel, $sku)) {
-                $leftScore += 8;
-            }
-            if ($sku !== '' && Str::contains($rightLabel, $sku)) {
-                $rightScore += 8;
-            }
-
-            return $rightScore <=> $leftScore;
-        });
-
-        $result = [];
-        foreach ($sizeCharts as $item) {
-            $url = $this->normalizeAttachmentUrl((string) ($item['url'] ?? ''));
-            if ($url === '' || isset($result[$url])) {
-                continue;
-            }
-
-            $result[$url] = [
-                'label' => (string) ($item['label'] ?? ''),
-                'media_type' => 'size_chart',
-                'url' => $url,
-            ];
-
-            if (count($result) >= 2) {
-                break;
-            }
-        }
-
-        return array_values($result);
-    }
-
-    private function looksLikeSizeValue(string $matchSource): bool
-    {
-        return preg_match('/\b(3[0-9]|4[0-7])\b/u', $matchSource) === 1
-            || preg_match('/\b\d{1,2}(?:[.,]\d)?\s*(см|cm)\b/u', $matchSource) === 1;
-    }
-
-    /**
-     * @param  array<int, string>  $needles
-     */
-    private function containsAny(string $source, array $needles): bool
-    {
-        foreach ($needles as $needle) {
-            if (Str::contains($source, $needle)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /**
@@ -1626,8 +947,6 @@ class ChatAiAssistantService
             }
 
             $items[] = [
-                'id' => (int) $product->id,
-                'topic_id' => (int) $topic->id,
                 'title' => (string) $product->title,
                 'sku' => (string) ($product->sku ?? ''),
                 'price' => $product->sale_price !== null ? (float) $product->sale_price : null,
@@ -1762,30 +1081,6 @@ class ChatAiAssistantService
                     ],
                     'additionalProperties' => false,
                 ],
-                'sales_slots' => [
-                    'type' => 'object',
-                    'properties' => [
-                        'size' => ['type' => 'string'],
-                        'color' => ['type' => 'string'],
-                        'qty' => ['type' => 'string'],
-                        'city' => ['type' => 'string'],
-                        'warehouse_address' => ['type' => 'string'],
-                        'payment_method' => ['type' => 'string'],
-                        'name' => ['type' => 'string'],
-                        'phone' => ['type' => 'string'],
-                    ],
-                    'required' => [
-                        'size',
-                        'color',
-                        'qty',
-                        'city',
-                        'warehouse_address',
-                        'payment_method',
-                        'name',
-                        'phone',
-                    ],
-                    'additionalProperties' => false,
-                ],
                 'attachment_urls' => [
                     'type' => 'array',
                     'items' => [
@@ -1801,7 +1096,6 @@ class ChatAiAssistantService
                 'summary',
                 'lead_status',
                 'collected_data',
-                'sales_slots',
                 'attachment_urls',
             ],
             'additionalProperties' => false,
@@ -1943,894 +1237,6 @@ class ChatAiAssistantService
         $conversation->save();
     }
 
-    private function normalizeSalesState(string $state): string
-    {
-        $state = match ($state) {
-            'await_model' => 'product',
-            'await_variant' => 'variant',
-            'await_qty' => 'qty',
-            'await_delivery' => 'delivery',
-            'await_payment' => 'payment',
-            'await_contact' => 'contact',
-            'confirm_order' => 'confirm',
-            default => $state,
-        };
-
-        return in_array($state, self::SALES_STATES, true) ? $state : 'idle';
-    }
-
-    private function normalizeSalesSlotKey(mixed $slot): ?string
-    {
-        if (!is_string($slot)) {
-            return null;
-        }
-
-        $slot = trim($slot);
-        $allowed = [
-            'product_id',
-            'size',
-            'color',
-            'qty',
-            'city',
-            'warehouse_address',
-            'payment_method',
-            'name',
-            'phone',
-        ];
-
-        return in_array($slot, $allowed, true) ? $slot : null;
-    }
-
-    /**
-     * @param  mixed  $slots
-     * @return array<string, mixed>
-     */
-    private function normalizeSalesSlots(mixed $slots): array
-    {
-        $slots = is_array($slots) ? $slots : [];
-        $qty = null;
-        if (isset($slots['qty'])) {
-            if (is_numeric($slots['qty'])) {
-                $qty = max(1, (int) $slots['qty']);
-            } elseif (is_string($slots['qty']) && preg_match('/\d+/u', $slots['qty'], $matches) === 1) {
-                $qty = max(1, (int) $matches[0]);
-            }
-        }
-
-        $productId = isset($slots['product_id']) ? (int) $slots['product_id'] : null;
-        $productId = $productId && $productId > 0 ? $productId : null;
-
-        return [
-            'product_id' => $productId,
-            'size' => $this->limitText((string) ($slots['size'] ?? ''), 64),
-            'color' => $this->limitText((string) ($slots['color'] ?? ''), 64),
-            'qty' => $qty,
-            'city' => $this->limitText((string) ($slots['city'] ?? ''), 120),
-            'warehouse_address' => $this->limitText((string) ($slots['warehouse_address'] ?? ''), 255),
-            'payment_method' => $this->limitText((string) ($slots['payment_method'] ?? ''), 120),
-            'name' => $this->limitText((string) ($slots['name'] ?? ''), 120),
-            'phone' => $this->limitText((string) ($slots['phone'] ?? ''), 64),
-        ];
-    }
-
-    /**
-     * @param  array<string, mixed>  $slots
-     */
-    private function formatSalesSlotsForPrompt(array $slots): string
-    {
-        $slots = $this->normalizeSalesSlots($slots);
-        $parts = [];
-
-        foreach ($slots as $key => $value) {
-            if ($value === null || $value === '') {
-                continue;
-            }
-
-            $parts[] = $key . '=' . (is_int($value) ? $value : $this->limitText((string) $value, 80));
-        }
-
-        return $parts === [] ? 'порожньо' : implode('; ', $parts);
-    }
-
-    private function humanSalesSlotLabel(string $slot): string
-    {
-        return match ($slot) {
-            'product_id' => 'модель товару',
-            'size' => 'розмір',
-            'color' => 'колір',
-            'qty' => 'кількість',
-            'city' => 'місто',
-            'warehouse_address' => 'відділення, поштомат або адреса',
-            'payment_method' => 'спосіб оплати',
-            'name' => 'імʼя отримувача',
-            'phone' => 'номер телефону',
-            default => $slot,
-        };
-    }
-
-    /**
-     * @param  mixed  $offeredModels
-     * @return array<int, array<string, mixed>>
-     */
-    private function normalizeOfferedModels(mixed $offeredModels): array
-    {
-        if (!is_array($offeredModels)) {
-            return [];
-        }
-
-        $normalized = [];
-        foreach ($offeredModels as $item) {
-            if (!is_array($item)) {
-                continue;
-            }
-
-            $number = isset($item['number']) ? (int) $item['number'] : (count($normalized) + 1);
-            if ($number < 1 || $number > 99 || isset($normalized[$number])) {
-                continue;
-            }
-
-            $sizes = array_values(array_unique(array_filter(array_map(
-                fn ($size) => $this->limitText((string) $size, 16),
-                is_array($item['sizes'] ?? null) ? $item['sizes'] : []
-            ))));
-
-            $price = null;
-            if (array_key_exists('price', $item) && is_numeric($item['price'])) {
-                $price = (float) $item['price'];
-            }
-
-            $topicId = isset($item['topic_id']) ? (int) $item['topic_id'] : null;
-            $productId = isset($item['product_id']) ? (int) $item['product_id'] : null;
-            $topicId = $topicId && $topicId > 0 ? $topicId : null;
-            $productId = $productId && $productId > 0 ? $productId : null;
-
-            $normalized[$number] = [
-                'number' => $number,
-                'topic_id' => $topicId,
-                'topic_name' => $this->limitText((string) ($item['topic_name'] ?? ''), 120),
-                'product_id' => $productId,
-                'title' => $this->limitText((string) ($item['title'] ?? ''), 180),
-                'sku' => $this->limitText((string) ($item['sku'] ?? ''), 80),
-                'price' => $price,
-                'sizes' => $sizes,
-                'photo_url' => $this->normalizeAttachmentUrl((string) ($item['photo_url'] ?? '')),
-                'collage_url' => $this->normalizeAttachmentUrl((string) ($item['collage_url'] ?? '')),
-            ];
-        }
-
-        ksort($normalized);
-
-        return array_values($normalized);
-    }
-
-    /**
-     * @param  array<string, mixed>  $knowledgeContext
-     * @param  array<string, mixed>  $state
-     * @return array<string, mixed>
-     */
-    private function resolveSalesSlots(
-        ChatConversation $conversation,
-        ChatMessage $message,
-        array $knowledgeContext,
-        array $state
-    ): array {
-        $slots = $this->normalizeSalesSlots($state['sales_slots'] ?? []);
-        $customer = $conversation->customer;
-        $lead = is_array($state['lead'] ?? null) ? $state['lead'] : [];
-        $matchSource = $this->normalizeForMatch((string) $message->text);
-
-        if ($customer) {
-            if ($slots['name'] === '') {
-                $slots['name'] = $this->limitText((string) ($customer->full_name ?? ''), 120);
-            }
-            if ($slots['phone'] === '') {
-                $slots['phone'] = $this->limitText((string) ($customer->phone ?? ''), 64);
-            }
-        }
-
-        if ($slots['name'] === '' && !empty($lead['customer_name'])) {
-            $slots['name'] = $this->limitText((string) $lead['customer_name'], 120);
-        }
-        if ($slots['phone'] === '' && !empty($lead['phone'])) {
-            $slots['phone'] = $this->limitText((string) $lead['phone'], 64);
-        }
-        if ($slots['city'] === '' && !empty($lead['city'])) {
-            $slots['city'] = $this->limitText((string) $lead['city'], 120);
-        }
-
-        if (!empty($knowledgeContext['selected_product']['id'])) {
-            $slots['product_id'] = (int) $knowledgeContext['selected_product']['id'];
-        }
-
-        $matchedSize = $this->extractMatchedSize($matchSource, $knowledgeContext);
-        if ($matchedSize !== null) {
-            $slots['size'] = $matchedSize;
-        } elseif ($slots['size'] === '') {
-            $rawSize = $this->extractRawSizeFromMessage($matchSource);
-            if ($rawSize !== null) {
-                $slots['size'] = $rawSize;
-            }
-        }
-
-        $color = $this->extractColorFromMessage($matchSource);
-        if ($color !== null) {
-            $slots['color'] = $color;
-        }
-
-        $qty = $this->extractQtyFromMessage((string) $message->text);
-        if ($qty !== null) {
-            $slots['qty'] = $qty;
-        }
-
-        $paymentMethod = $this->extractPaymentMethodFromMessage($matchSource);
-        if ($paymentMethod !== null) {
-            $slots['payment_method'] = $paymentMethod;
-        }
-
-        $phone = $this->extractPhoneFromMessage((string) $message->text);
-        if ($phone !== null) {
-            $slots['phone'] = $phone;
-        }
-
-        $name = $this->extractNameFromMessage((string) $message->text);
-        if ($name !== null) {
-            $slots['name'] = $name;
-        }
-
-        $city = $this->extractCityFromMessage((string) $message->text);
-        if ($city !== null) {
-            $slots['city'] = $city;
-        }
-
-        $warehouseAddress = $this->extractWarehouseAddressFromMessage((string) $message->text);
-        if ($warehouseAddress !== null) {
-            $slots['warehouse_address'] = $warehouseAddress;
-        }
-
-        return $this->normalizeSalesSlots($slots);
-    }
-
-    /**
-     * @param  array<string, mixed>  $currentSlots
-     * @param  mixed  $decisionSlots
-     * @param  array<string, mixed>  $knowledgeContext
-     * @return array<string, mixed>
-     */
-    private function mergeSalesSlots(
-        array $currentSlots,
-        mixed $decisionSlots,
-        array $knowledgeContext,
-        ChatConversation $conversation
-    ): array {
-        $slots = $this->normalizeSalesSlots($currentSlots);
-        $decisionSlots = $this->normalizeSalesSlots($decisionSlots);
-
-        foreach ($decisionSlots as $key => $value) {
-            if ($key === 'product_id') {
-                continue;
-            }
-            if ($value === null || $value === '') {
-                continue;
-            }
-            $slots[$key] = $value;
-        }
-
-        if (!empty($knowledgeContext['selected_product']['id'])) {
-            $slots['product_id'] = (int) $knowledgeContext['selected_product']['id'];
-        }
-
-        if ($slots['name'] === '' && $conversation->customer) {
-            $slots['name'] = $this->limitText((string) ($conversation->customer->full_name ?? ''), 120);
-        }
-        if ($slots['phone'] === '' && $conversation->customer) {
-            $slots['phone'] = $this->limitText((string) ($conversation->customer->phone ?? ''), 64);
-        }
-
-        if ($slots['size'] !== '') {
-            $matchedSize = $this->extractMatchedSize(
-                $this->normalizeForMatch((string) $slots['size']),
-                $knowledgeContext
-            );
-            if ($matchedSize !== null) {
-                $slots['size'] = $matchedSize;
-            }
-        }
-
-        return $this->normalizeSalesSlots($slots);
-    }
-
-    /**
-     * @param  array<string, mixed>  $knowledgeContext
-     * @param  array<string, mixed>  $salesSlots
-     */
-    private function determineNextRequiredSlot(
-        array $knowledgeContext,
-        array $salesSlots,
-        ?ChatMessage $message = null
-    ): ?string {
-        $salesSlots = $this->normalizeSalesSlots($salesSlots);
-        $source = $message ? $this->normalizeForMatch((string) $message->text) : '';
-
-        if ($this->shouldCollectVariantBeforeModel($knowledgeContext, $salesSlots, $source)) {
-            return $this->looksLikeColorPreference($source) ? 'color' : 'size';
-        }
-
-        if ((bool) ($knowledgeContext['requires_model_choice'] ?? false) || empty($salesSlots['product_id'])) {
-            return 'product_id';
-        }
-
-        if (!$this->isSelectedSizeValid($knowledgeContext, $salesSlots)) {
-            return 'size';
-        }
-
-        if ($salesSlots['color'] === '' && ($source !== '' && Str::contains($source, 'колір'))) {
-            return 'color';
-        }
-
-        if ($salesSlots['qty'] === null) {
-            return 'qty';
-        }
-
-        if ($salesSlots['city'] === '') {
-            return 'city';
-        }
-
-        if ($salesSlots['warehouse_address'] === '') {
-            return 'warehouse_address';
-        }
-
-        if ($salesSlots['payment_method'] === '') {
-            return 'payment_method';
-        }
-
-        if ($salesSlots['name'] === '') {
-            return 'name';
-        }
-
-        if ($salesSlots['phone'] === '') {
-            return 'phone';
-        }
-
-        return null;
-    }
-
-    /**
-     * @param  array<string, mixed>  $knowledgeContext
-     * @param  array<string, mixed>  $salesSlots
-     */
-    private function isOrderReady(array $knowledgeContext, array $salesSlots): bool
-    {
-        return !empty($salesSlots['product_id'])
-            && $this->determineNextRequiredSlot($knowledgeContext, $salesSlots) === null;
-    }
-
-    /**
-     * @param  array<string, mixed>  $knowledgeContext
-     * @param  array<string, mixed>  $salesSlots
-     */
-    private function isSelectedSizeValid(array $knowledgeContext, array $salesSlots): bool
-    {
-        $size = trim((string) ($salesSlots['size'] ?? ''));
-        if ($size === '') {
-            return false;
-        }
-
-        $candidateSizes = array_values(array_filter((array) data_get($knowledgeContext, 'selected_product.sizes', [])));
-        if ($candidateSizes === []) {
-            return true;
-        }
-
-        return $this->extractMatchedSize($this->normalizeForMatch($size), $knowledgeContext) !== null;
-    }
-
-    /**
-     * @param  array<string, mixed>  $knowledgeContext
-     */
-    private function extractMatchedSize(string $matchSource, array $knowledgeContext): ?string
-    {
-        $candidateSizes = array_values(array_filter((array) data_get($knowledgeContext, 'selected_product.sizes', [])));
-        if ($candidateSizes === []) {
-            return null;
-        }
-
-        $best = null;
-        $bestScore = 0;
-        foreach ($candidateSizes as $candidate) {
-            $score = 0;
-            $candidate = (string) $candidate;
-            $candidateNormalized = $this->normalizeForMatch($candidate);
-            if ($candidateNormalized !== '' && Str::contains($matchSource, $candidateNormalized)) {
-                $score += 100;
-            }
-
-            foreach ($this->sizeTokensFromString($candidateNormalized) as $token) {
-                if ($token !== '' && Str::contains($matchSource, $token)) {
-                    $score += mb_strlen($token) >= 4 ? 20 : 10;
-                }
-            }
-
-            if ($score > $bestScore) {
-                $bestScore = $score;
-                $best = $candidate;
-            }
-        }
-
-        return $bestScore >= 10 ? $best : null;
-    }
-
-    /**
-     * @return array<int, string>
-     */
-    private function sizeTokensFromString(string $value): array
-    {
-        preg_match_all('/\d{1,2}(?:\/\d{1,2})?(?:[.,]\d)?/u', $value, $matches);
-
-        return array_values(array_unique(array_filter($matches[0] ?? [])));
-    }
-
-    private function extractRawSizeFromMessage(string $matchSource): ?string
-    {
-        if (preg_match('/\b\d{1,2}\/\d{1,2}\b/u', $matchSource, $matches) === 1) {
-            return $matches[0];
-        }
-
-        if (preg_match('/\b(3[0-9]|4[0-7])\b/u', $matchSource, $matches) === 1) {
-            return $matches[0];
-        }
-
-        if (preg_match('/\b\d{1,2}(?:[.,]\d)?\s*(?:см|cm)\b/u', $matchSource, $matches) === 1) {
-            return str_replace('cm', 'см', $matches[0]);
-        }
-
-        return null;
-    }
-
-    private function extractColorFromMessage(string $matchSource): ?string
-    {
-        $colors = [
-            'чорний',
-            'білий',
-            'сірий',
-            'бежевий',
-            'коричневий',
-            'рожевий',
-            'червоний',
-            'синій',
-            'голубий',
-            'зелений',
-            'жовтий',
-            'молочний',
-            'бордовий',
-        ];
-
-        foreach ($colors as $color) {
-            if (Str::contains($matchSource, $color)) {
-                return $color;
-            }
-        }
-
-        return null;
-    }
-
-    private function extractQtyFromMessage(string $source): ?int
-    {
-        if (preg_match('/\b(\d{1,2})\s*(?:пар|пара|пари|шт|штук)\b/ui', $source, $matches) === 1) {
-            return max(1, (int) $matches[1]);
-        }
-
-        $source = $this->normalizeForMatch($source);
-        $map = [
-            'одну пару' => 1,
-            'одна пара' => 1,
-            'дві пари' => 2,
-            'три пари' => 3,
-            'чотири пари' => 4,
-            'пʼять пар' => 5,
-            "п'ять пар" => 5,
-        ];
-
-        foreach ($map as $phrase => $qty) {
-            if (Str::contains($source, $phrase)) {
-                return $qty;
-            }
-        }
-
-        return null;
-    }
-
-    private function extractPaymentMethodFromMessage(string $matchSource): ?string
-    {
-        if ($this->containsAny($matchSource, ['післяплат', 'накладен'])) {
-            return 'післяплата';
-        }
-
-        if ($this->containsAny($matchSource, ['картою', 'на карт', 'повна оплат', 'оплата онлайн'])) {
-            return 'повна оплата';
-        }
-
-        return null;
-    }
-
-    private function extractPhoneFromMessage(string $text): ?string
-    {
-        if (preg_match('/(?:\+?38)?[\s\-\(]*0\d{2}[\s\-\)]*\d{3}[\s\-]*\d{2}[\s\-]*\d{2}/u', $text, $matches) !== 1) {
-            return null;
-        }
-
-        return $this->limitText(trim((string) $matches[0]), 64);
-    }
-
-    private function extractNameFromMessage(string $text): ?string
-    {
-        if (preg_match('/(?:мене звати|я\s+)([А-ЯІЇЄҐA-Z][а-яіїєґa-z\'’\-]+)/u', $text, $matches) === 1) {
-            return $this->limitText((string) $matches[1], 120);
-        }
-
-        return null;
-    }
-
-    private function extractCityFromMessage(string $text): ?string
-    {
-        if (preg_match('/(?:м\.|місто)\s*([А-ЯІЇЄҐA-Z][а-яіїєґa-z\'’\-]+)/u', $text, $matches) === 1) {
-            return $this->limitText((string) $matches[1], 120);
-        }
-
-        return null;
-    }
-
-    private function extractWarehouseAddressFromMessage(string $text): ?string
-    {
-        if (preg_match('/(відділення\s*\d+|поштомат\s*\d+|вул\.[^,.]+(?:\d+)?)/ui', $text, $matches) === 1) {
-            return $this->limitText(trim((string) $matches[1]), 255);
-        }
-
-        return null;
-    }
-
-    /**
-     * @param  array<string, string>  $lead
-     * @param  array<string, mixed>  $salesSlots
-     * @param  array<string, mixed>  $knowledgeContext
-     * @return array<string, string>
-     */
-    private function mergeLeadWithSalesSlots(array $lead, array $salesSlots, array $knowledgeContext): array
-    {
-        $salesSlots = $this->normalizeSalesSlots($salesSlots);
-        $lead['customer_name'] = $lead['customer_name'] !== '' ? $lead['customer_name'] : (string) $salesSlots['name'];
-        $lead['phone'] = $lead['phone'] !== '' ? $lead['phone'] : (string) $salesSlots['phone'];
-        $lead['city'] = $lead['city'] !== '' ? $lead['city'] : (string) $salesSlots['city'];
-
-        if ($lead['product_interest'] === '' && !empty($knowledgeContext['selected_product']['title'])) {
-            $lead['product_interest'] = $this->limitText((string) $knowledgeContext['selected_product']['title'], 255);
-        }
-
-        $noteParts = array_filter([
-            $salesSlots['size'] !== '' ? 'розмір: ' . $salesSlots['size'] : '',
-            $salesSlots['color'] !== '' ? 'колір: ' . $salesSlots['color'] : '',
-            $salesSlots['qty'] !== null ? 'кількість: ' . $salesSlots['qty'] : '',
-            $salesSlots['warehouse_address'] !== '' ? 'доставка: ' . $salesSlots['warehouse_address'] : '',
-            $salesSlots['payment_method'] !== '' ? 'оплата: ' . $salesSlots['payment_method'] : '',
-        ]);
-
-        if ($lead['notes'] === '' && $noteParts !== []) {
-            $lead['notes'] = $this->limitText(implode('; ', $noteParts), 500);
-        }
-
-        return $this->normalizeLeadPayload($lead);
-    }
-
-    /**
-     * @param  array<string, mixed>  $knowledgeContext
-     * @param  array<string, mixed>  $salesSlots
-     */
-    private function buildConfirmationReply(array $knowledgeContext, array $salesSlots): string
-    {
-        $salesSlots = $this->normalizeSalesSlots($salesSlots);
-        $productTitle = (string) data_get($knowledgeContext, 'selected_product.title', 'обрана модель');
-        $parts = [
-            'Підтверджую замовлення: ' . $this->limitText($productTitle, 120),
-        ];
-
-        if ($salesSlots['size'] !== '') {
-            $parts[] = 'розмір ' . $salesSlots['size'];
-        }
-        if ($salesSlots['color'] !== '') {
-            $parts[] = 'колір ' . $salesSlots['color'];
-        }
-        if ($salesSlots['qty'] !== null) {
-            $parts[] = 'кількість ' . $salesSlots['qty'];
-        }
-        if ($salesSlots['city'] !== '') {
-            $parts[] = 'місто ' . $salesSlots['city'];
-        }
-        if ($salesSlots['warehouse_address'] !== '') {
-            $parts[] = $salesSlots['warehouse_address'];
-        }
-        if ($salesSlots['payment_method'] !== '') {
-            $parts[] = 'оплата ' . $salesSlots['payment_method'];
-        }
-
-        $text = implode(', ', $parts) . '. Передаю замовлення менеджеру для оформлення.';
-
-        return $this->limitText($text, 600);
-    }
-
-    /**
-     * @param  array<string, mixed>  $knowledgeContext
-     * @param  array<string, mixed>  $salesSlots
-     */
-    private function buildNextSlotQuestion(array $knowledgeContext, array $salesSlots, string $slot): string
-    {
-        $salesSlots = $this->normalizeSalesSlots($salesSlots);
-
-        return match ($slot) {
-            'product_id' => 'Добрий день! Уточніть, будь ласка, яка саме модель вас цікавить. Напишіть номер моделі та ваш розмір.',
-            'size' => (bool) ($knowledgeContext['requires_size_chart'] ?? false)
-                ? 'Надсилаю розмірну сітку у вкладенні. Напишіть, будь ласка, ваш розмір або довжину стопи в см.'
-                : (
-                    empty($salesSlots['product_id']) && !empty($knowledgeContext['selected_topic']['id'])
-                        ? 'Теплі моделі є. Напишіть, будь ласка, який розмір вам потрібен, і підберу варіанти.'
-                        : 'Напишіть, будь ласка, який саме розмір вам потрібен.'
-                ),
-            'color' => empty($salesSlots['product_id']) && !empty($knowledgeContext['selected_topic']['id'])
-                ? 'Підкажіть, будь ласка, який колір вам потрібен, і підберу варіанти.'
-                : 'Підкажіть, будь ласка, який колір вам потрібен.',
-            'qty' => $salesSlots['size'] !== '' && !empty($knowledgeContext['selected_product']['title'])
-                ? 'Розмір ' . $salesSlots['size'] . ' для моделі "' . $this->limitText((string) $knowledgeContext['selected_product']['title'], 80) . '" прийняв. Скільки пар потрібно?'
-                : 'Скільки пар вам потрібно?',
-            'city' => 'Підкажіть, будь ласка, в яке місто відправляти замовлення.',
-            'warehouse_address' => 'Напишіть, будь ласка, відділення, поштомат або повну адресу доставки.',
-            'payment_method' => 'Який спосіб оплати вам зручний: післяплата чи повна оплата?',
-            'name' => 'На яке імʼя оформити замовлення?',
-            'phone' => 'Напишіть, будь ласка, номер телефону для оформлення замовлення.',
-            default => '',
-        };
-    }
-
-    /**
-     * @param  array<string, mixed>  $knowledgeContext
-     */
-    private function enforceSalesReplyText(string $replyText, array $knowledgeContext): string
-    {
-        if ((bool) ($knowledgeContext['order_ready'] ?? false)) {
-            return $this->buildConfirmationReply(
-                $knowledgeContext,
-                (array) ($knowledgeContext['sales_slots'] ?? [])
-            );
-        }
-
-        if ($replyText === '') {
-            return $replyText;
-        }
-
-        if (!empty($knowledgeContext['next_required_slot']) && mb_substr_count($replyText, '?') > 1) {
-            return $this->buildNextSlotQuestion(
-                $knowledgeContext,
-                (array) ($knowledgeContext['sales_slots'] ?? []),
-                (string) $knowledgeContext['next_required_slot']
-            );
-        }
-
-        return $replyText;
-    }
-
-    /**
-     * @param  array<string, mixed>  $knowledgeContext
-     */
-    private function fallbackReplyText(string $replyText, array $knowledgeContext): string
-    {
-        if ($replyText !== '') {
-            return $replyText;
-        }
-
-        if ((bool) ($knowledgeContext['order_ready'] ?? false)) {
-            return $this->buildConfirmationReply(
-                $knowledgeContext,
-                (array) ($knowledgeContext['sales_slots'] ?? [])
-            );
-        }
-
-        if ((bool) ($knowledgeContext['requires_model_choice'] ?? false)) {
-            $choices = (array) ($knowledgeContext['model_choices'] ?? []);
-            $labels = [];
-            foreach ($choices as $choice) {
-                $number = (int) ($choice['number'] ?? 0);
-                if ($number <= 0) {
-                    continue;
-                }
-                $labels[] = '#' . $number . ' ' . $this->limitText((string) ($choice['title'] ?? ''), 40);
-            }
-
-            $suffix = $labels !== []
-                ? ' Доступні моделі: ' . implode(', ', $labels) . '.'
-                : '';
-
-            return $this->limitText(
-                'Добрий день! Уточніть, будь ласка, яка саме модель вас цікавить. Напишіть номер моделі та ваш розмір.' . $suffix,
-                600
-            );
-        }
-
-        if (!empty($knowledgeContext['next_required_slot'])) {
-            return $this->limitText(
-                $this->buildNextSlotQuestion(
-                    $knowledgeContext,
-                    (array) ($knowledgeContext['sales_slots'] ?? []),
-                    (string) $knowledgeContext['next_required_slot']
-                ),
-                600
-            );
-        }
-
-        if ((bool) ($knowledgeContext['requires_size_chart'] ?? false)) {
-            $productTitle = $this->limitText((string) data_get($knowledgeContext, 'selected_product.title', ''), 120);
-            $prefix = $productTitle !== '' ? ('Для моделі "' . $productTitle . '" ') : '';
-
-            return $this->limitText(
-                $prefix . 'надсилаю розмірну сітку у вкладенні. Напишіть ваш розмір або довжину стопи в см.',
-                600
-            );
-        }
-
-        return $replyText;
-    }
-
-    /**
-     * @param  array<string, mixed>  $knowledgeContext
-     * @param  array<string, mixed>  $salesSlots
-     */
-    private function shouldCollectVariantBeforeModel(array $knowledgeContext, array $salesSlots, string $source): bool
-    {
-        if ($source === '' || !empty($salesSlots['product_id'])) {
-            return false;
-        }
-
-        if (empty($knowledgeContext['selected_topic']['id'])) {
-            return false;
-        }
-
-        if ($this->looksLikeSizeValue($source)) {
-            return true;
-        }
-
-        if ($this->containsAny($source, [
-            'нічого не обираю',
-            'не обираю',
-            'інша модель',
-            'інший варіант',
-            'щось інше',
-            'тепл',
-            'мяк',
-            'м’я',
-            "м'я",
-            'хутр',
-            'мех',
-            'домашн',
-        ])) {
-            return true;
-        }
-
-        return $this->looksLikeColorPreference($source);
-    }
-
-    private function looksLikeColorPreference(string $source): bool
-    {
-        if ($source === '') {
-            return false;
-        }
-
-        return $this->containsAny($source, [
-            'колір',
-            'кольор',
-            'сір',
-            'чорн',
-            'біли',
-            'блакит',
-            'червон',
-            'рожев',
-            'корич',
-            'капуч',
-            'електрик',
-            'малинов',
-        ]);
-    }
-
-    /**
-     * @param  array<string, mixed>  $currentState
-     * @param  array<string, mixed>  $knowledgeContext
-     * @return array<string, mixed>
-     */
-    private function buildSalesStatePatch(array $currentState, array $knowledgeContext, bool $handoffRequired): array
-    {
-        $patch = [
-            'sales_state' => $this->normalizeSalesState((string) ($currentState['sales_state'] ?? 'idle')),
-            'selected_topic_id' => isset($currentState['selected_topic_id']) ? (int) $currentState['selected_topic_id'] : null,
-            'selected_product_id' => isset($currentState['selected_product_id']) ? (int) $currentState['selected_product_id'] : null,
-            'offered_models' => $this->normalizeOfferedModels($currentState['offered_models'] ?? []),
-            'sales_slots' => $this->normalizeSalesSlots($knowledgeContext['sales_slots'] ?? ($currentState['sales_slots'] ?? [])),
-            'next_required_slot' => $this->normalizeSalesSlotKey($knowledgeContext['next_required_slot'] ?? null),
-        ];
-
-        if ($handoffRequired) {
-            $patch['sales_state'] = 'handoff';
-
-            return $patch;
-        }
-
-        if (!empty($knowledgeContext['selected_topic']['id'])) {
-            $patch['selected_topic_id'] = (int) $knowledgeContext['selected_topic']['id'];
-        }
-
-        if (!empty($knowledgeContext['selected_product']['id'])) {
-            $patch['selected_product_id'] = (int) $knowledgeContext['selected_product']['id'];
-        }
-
-        $modelChoices = $this->normalizeOfferedModels($knowledgeContext['model_choices'] ?? []);
-        if ((bool) ($knowledgeContext['requires_model_choice'] ?? false)) {
-            $patch['sales_state'] = 'product';
-            $patch['selected_product_id'] = null;
-            $patch['offered_models'] = $modelChoices;
-            $patch['next_required_slot'] = 'product_id';
-
-            return $patch;
-        }
-
-        $patch['offered_models'] = $modelChoices;
-
-        if ((bool) ($knowledgeContext['order_ready'] ?? false)) {
-            $patch['sales_state'] = 'confirm';
-
-            return $patch;
-        }
-
-        $nextRequiredSlot = $this->normalizeSalesSlotKey($knowledgeContext['next_required_slot'] ?? null);
-        if ($nextRequiredSlot === 'size' || $nextRequiredSlot === 'color') {
-            $patch['sales_state'] = 'variant';
-
-            return $patch;
-        }
-
-        if ($nextRequiredSlot === 'qty') {
-            $patch['sales_state'] = 'stock';
-
-            return $patch;
-        }
-
-        if ($nextRequiredSlot === 'city' || $nextRequiredSlot === 'warehouse_address') {
-            $patch['sales_state'] = 'delivery';
-
-            return $patch;
-        }
-
-        if ($nextRequiredSlot === 'payment_method') {
-            $patch['sales_state'] = 'payment';
-
-            return $patch;
-        }
-
-        if ($nextRequiredSlot === 'name' || $nextRequiredSlot === 'phone') {
-            $patch['sales_state'] = 'contact';
-
-            return $patch;
-        }
-
-        if (!empty($patch['selected_product_id'])) {
-            $patch['sales_state'] = 'variant';
-
-            return $patch;
-        }
-
-        if (!empty($patch['selected_topic_id'])) {
-            $patch['sales_state'] = 'product';
-
-            return $patch;
-        }
-
-        $patch['sales_state'] = 'intent';
-
-        return $patch;
-    }
-
     private function normalizeLeadStatus(string $leadStatus): string
     {
         return in_array($leadStatus, ['new', 'qualifying', 'qualified', 'handoff', 'support', 'spam'], true)
@@ -2878,58 +1284,9 @@ class ChatAiAssistantService
 
     private function sanitizeReplyText(string $text): string
     {
-        $text = preg_replace('/!\[[^\]]*]\((https?:\/\/[^\s)]+)\)/ui', ' ', $text);
-        $text = preg_replace_callback(
-            '/\[([^\]]+)]\((https?:\/\/[^\s)]+)\)/ui',
-            function (array $matches): string {
-                $label = trim((string) ($matches[1] ?? ''));
-                $normalized = $this->normalizeForMatch($label);
-
-                return in_array($normalized, ['фото', 'photo', 'image', 'img', 'картинка', 'зображення'], true)
-                    ? ' '
-                    : $label;
-            },
-            $text
-        );
-        $text = preg_replace('/https?:\/\/\S+/ui', ' ', $text);
-        $text = preg_replace('/\(\s*\)/u', ' ', $text);
-        $text = preg_replace('/\[\s*]/u', ' ', $text);
-        $text = preg_replace('/:\s*[—-]\s*/u', '. ', $text);
-        $text = preg_replace('/\s+([,.;:!?])/u', '$1', $text);
-        $text = preg_replace('/([:;,-])\s*[.]/u', '$1', $text);
         $text = preg_replace('/\s+/u', ' ', trim($text));
 
         return $this->limitText((string) $text, 600);
-    }
-
-    /**
-     * @param  array<string, mixed>  $knowledgeContext
-     * @return array<int, string>
-     */
-    private function extractInlineAttachmentUrls(string $replyText, array $knowledgeContext): array
-    {
-        if ($replyText === '') {
-            return [];
-        }
-
-        $allowedMap = $this->allowedAttachmentMap($knowledgeContext);
-        if ($allowedMap === []) {
-            return [];
-        }
-
-        preg_match_all('/https?:\/\/[^\s)]+/ui', $replyText, $matches);
-        $urls = [];
-
-        foreach ((array) ($matches[0] ?? []) as $url) {
-            $normalizedUrl = $this->normalizeAttachmentUrl((string) $url);
-            if ($normalizedUrl === '' || !isset($allowedMap[$normalizedUrl])) {
-                continue;
-            }
-
-            $urls[$normalizedUrl] = $normalizedUrl;
-        }
-
-        return array_values($urls);
     }
 
     private function limitText(string $value, int $limit): string
