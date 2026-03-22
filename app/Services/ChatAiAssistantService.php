@@ -749,7 +749,13 @@ class ChatAiAssistantService
             return [];
         }
 
-        $maxAttachments = $forceSizeChart ? 1 : 5;
+        $maxAttachments = $forceSizeChart
+            ? max(1, count((array) ($knowledgeContext['size_chart_media'] ?? [])))
+            : (
+                $forceShowcase
+                    ? max(1, count((array) ($knowledgeContext['showcase_media'] ?? [])))
+                    : max(1, count((array) $attachmentUrls))
+            );
         $selected = [];
         $appendUrl = function (string $rawUrl) use (&$selected, $allowedMap, $maxAttachments): void {
             if (count($selected) >= $maxAttachments) {
@@ -1421,7 +1427,7 @@ class ChatAiAssistantService
     {
         $models = [];
 
-        foreach (array_slice($products, 0, 8) as $index => $product) {
+        foreach ($products as $index => $product) {
             $models[] = [
                 'number' => $index + 1,
                 'topic_id' => (int) ($selectedTopic['id'] ?? ($product['topic_id'] ?? 0)) ?: null,
@@ -1467,9 +1473,6 @@ class ChatAiAssistantService
                     'url' => $url,
                 ];
 
-                if (count($items) >= 5) {
-                    return array_values($items);
-                }
             }
         }
 
@@ -1485,9 +1488,6 @@ class ChatAiAssistantService
                 'url' => $url,
             ];
 
-            if (count($items) >= 5) {
-                break;
-            }
         }
 
         return array_values($items);
@@ -2621,7 +2621,7 @@ class ChatAiAssistantService
         }
 
         if ((bool) ($knowledgeContext['requires_model_choice'] ?? false)) {
-            $choices = array_slice((array) ($knowledgeContext['model_choices'] ?? []), 0, 5);
+            $choices = (array) ($knowledgeContext['model_choices'] ?? []);
             $labels = [];
             foreach ($choices as $choice) {
                 $number = (int) ($choice['number'] ?? 0);
