@@ -66,50 +66,58 @@ class ChatAiAssistantService
             $conversation
         );
         $topic = $topicMatch['topic'];
+        $isTopicUnclear = $topic === null;
 
         $products = $topic ? $this->resolveTopicProducts($topic, $requestedSize) : collect();
         $mediaCandidates = $topic ? $this->resolveTopicMedia($topic, $products) : collect();
         $isPhotoRequest = $this->isPhotoRequest((string) ($message->text ?? ''));
         $isAllPhotosRequest = $isPhotoRequest && $this->isAllPhotosRequest((string) ($message->text ?? ''));
-        $selectedMedia = $isPhotoRequest
-            ? $this->selectMediaForReply($mediaCandidates, (string) ($message->text ?? ''), $isAllPhotosRequest)
-            : collect();
+        $selectedMedia = collect();
 
-        try {
-            $reply = $this->buildReply(
-                $message,
-                $settings,
-                $rules,
-                $topic,
-                $products,
-                $selectedMedia,
-                $requestedSize,
-                $isPhotoRequest,
-                $isAllPhotosRequest
-            );
-        } catch (\Throwable $e) {
-            Log::warning('AI: помилка генерації відповіді', [
-                'conversation_id' => $conversation?->id,
-                'message_id' => $message->id,
-                'error' => $e->getMessage(),
-            ]);
+        if ($isTopicUnclear) {
+            $selectedMedia = $this->resolveAllTopicsOverviewMedia($topics);
+            $reply = $this->buildUnknownTopicReply($selectedMedia->isNotEmpty());
+        } else {
+            $selectedMedia = $isPhotoRequest
+                ? $this->selectMediaForReply($mediaCandidates, (string) ($message->text ?? ''), $isAllPhotosRequest)
+                : collect();
 
-            $this->markMessageAiState($message, [
-                'status' => 'error',
-                'reason' => 'openai_failed',
-                'error' => Str::limit($e->getMessage(), 250),
-            ]);
-            $this->setConversationAiStatus($conversation, [
-                'status_code' => 'openai_failed',
-                'status_note' => 'AI не зміг сформувати відповідь. Потрібна перевірка менеджером.',
-                'last_error' => Str::limit($e->getMessage(), 250),
-            ]);
+            try {
+                $reply = $this->buildReply(
+                    $message,
+                    $settings,
+                    $rules,
+                    $topic,
+                    $products,
+                    $selectedMedia,
+                    $requestedSize,
+                    $isPhotoRequest,
+                    $isAllPhotosRequest
+                );
+            } catch (\Throwable $e) {
+                Log::warning('AI: помилка генерації відповіді', [
+                    'conversation_id' => $conversation?->id,
+                    'message_id' => $message->id,
+                    'error' => $e->getMessage(),
+                ]);
 
-            return ['status' => 'error', 'reason' => 'openai_failed'];
+                $this->markMessageAiState($message, [
+                    'status' => 'error',
+                    'reason' => 'openai_failed',
+                    'error' => Str::limit($e->getMessage(), 250),
+                ]);
+                $this->setConversationAiStatus($conversation, [
+                    'status_code' => 'openai_failed',
+                    'status_note' => 'AI не зміг сформувати відповідь. Потрібна перевірка менеджером.',
+                    'last_error' => Str::limit($e->getMessage(), 250),
+                ]);
+
+                return ['status' => 'error', 'reason' => 'openai_failed'];
+            }
         }
 
         $sentMediaCount = 0;
-        if ($isPhotoRequest && $selectedMedia->isNotEmpty()) {
+        if (($isPhotoRequest || $isTopicUnclear) && $selectedMedia->isNotEmpty()) {
             $sentMediaCount = $this->sendMediaMessages($conversation, $selectedMedia);
         }
 
@@ -132,18 +140,23 @@ class ChatAiAssistantService
                 'last_error' => null,
             ]);
         } else {
-            $this->syncConversationAiContext($conversation, $topic, [
-                'status_code' => 'replied',
-                'status_note' => $this->buildRuntimeStatusNote(
+            $statusNote = $isTopicUnclear
+                ? $this->buildUnknownTopicStatusNote($sentMediaCount)
+                : $this->buildRuntimeStatusNote(
                     $topic,
                     $requestedSize,
                     $isPhotoRequest,
                     $sentMediaCount
-                ),
+                );
+
+            $this->syncConversationAiContext($conversation, $topic, [
+                'status_code' => $isTopicUnclear ? 'topic_overview' : 'replied',
+                'status_note' => $statusNote,
                 'last_error' => null,
                 'last_requested_size' => $requestedSize,
                 'last_photo_request' => $isPhotoRequest,
                 'last_all_photo_request' => $isAllPhotosRequest,
+                'topic_unresolved' => $isTopicUnclear,
             ]);
         }
 
@@ -158,6 +171,7 @@ class ChatAiAssistantService
             'sent_text' => $sentText,
             'handoff' => $handoff,
             'handoff_reason' => trim((string) ($reply['handoff_reason'] ?? '')),
+            'topic_unresolved' => $isTopicUnclear,
         ]);
 
         return [
@@ -451,6 +465,78 @@ class ChatAiAssistantService
     }
 
     /**
+     * @param  Collection<int, ChatAiTopic>  $topics
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function resolveAllTopicsOverviewMedia(Collection $topics): Collection
+    {
+        $overview = collect();
+
+        foreach ($topics as $topic) {
+            $selected = null;
+
+            $preferredMedia = $topic->mediaItems
+                ->first(fn ($item) => in_array((string) $item->media_type, ['collage', 'palette'], true))
+                ?: $topic->mediaItems->first();
+
+            if ($preferredMedia) {
+                $selected = [
+                    'source' => 'topic_overview_media',
+                    'topic_media_id' => (int) $preferredMedia->id,
+                    'media_type' => (string) $preferredMedia->media_type,
+                    'label' => trim((string) $preferredMedia->label) !== ''
+                        ? trim((string) $preferredMedia->label)
+                        : "Тема: {$topic->name}",
+                    'url' => $this->absoluteUrl($preferredMedia->url ?: $preferredMedia->savedFile?->url),
+                    'sort_order' => (int) $preferredMedia->sort_order,
+                ];
+            }
+
+            if (!$selected || trim((string) ($selected['url'] ?? '')) === '') {
+                $fallbackProduct = $topic->topicProducts
+                    ->filter(fn ($topicProduct) => $topicProduct->product !== null)
+                    ->sortBy('sort_order')
+                    ->first();
+
+                if ($fallbackProduct && $fallbackProduct->product) {
+                    $fallbackUrl = $this->absoluteUrl($fallbackProduct->product->main_photo_url);
+                    if ($fallbackUrl) {
+                        $selected = [
+                            'source' => 'topic_overview_product',
+                            'topic_media_id' => null,
+                            'media_type' => 'image',
+                            'label' => "Тема: {$topic->name}",
+                            'url' => $fallbackUrl,
+                            'sort_order' => (int) $fallbackProduct->sort_order,
+                            'topic_product_id' => (int) $fallbackProduct->id,
+                            'product_id' => (int) $fallbackProduct->product_id,
+                        ];
+                    }
+                }
+            }
+
+            if (!$selected || trim((string) ($selected['url'] ?? '')) === '') {
+                continue;
+            }
+
+            $selected['topic_id'] = (int) $topic->id;
+            $selected['topic_name'] = (string) $topic->name;
+            $selected['topic_priority'] = (int) $topic->priority;
+
+            $overview->push($selected);
+        }
+
+        return $overview
+            ->unique(fn (array $item) => (string) ($item['url'] ?? ''))
+            ->sortBy([
+                ['topic_priority', 'asc'],
+                ['sort_order', 'asc'],
+                ['topic_id', 'asc'],
+            ])
+            ->values();
+    }
+
+    /**
      * @param  Collection<int, array<string, mixed>>  $media
      * @return Collection<int, array<string, mixed>>
      */
@@ -709,6 +795,35 @@ class ChatAiAssistantService
         }
 
         return 'Дякую. Уточніть, будь ласка, який саме варіант вас цікавить: модель, розмір або колір.';
+    }
+
+    /**
+     * @return array{reply_text: string, handoff: bool, handoff_reason: string}
+     */
+    private function buildUnknownTopicReply(bool $hasOverviewMedia): array
+    {
+        if ($hasOverviewMedia) {
+            return [
+                'reply_text' => 'Вітаю! Надсилаю колажі доступних тем. Підкажіть, будь ласка, яка модель або тема вас цікавить, щоб показати актуальні варіанти в наявності.',
+                'handoff' => false,
+                'handoff_reason' => '',
+            ];
+        }
+
+        return [
+            'reply_text' => 'Вітаю! Поки не можу точно визначити тему. Напишіть, будь ласка, який тип тапок вас цікавить (домашні, з хутром, резинові чи дитячі), і одразу покажу варіанти.',
+            'handoff' => false,
+            'handoff_reason' => '',
+        ];
+    }
+
+    private function buildUnknownTopicStatusNote(int $sentMediaCount): string
+    {
+        if ($sentMediaCount > 0) {
+            return "Тема не визначена, AI надіслав {$sentMediaCount} колажів тем для вибору.";
+        }
+
+        return 'Тема не визначена, AI попросив клієнта обрати тему або модель.';
     }
 
     /**
