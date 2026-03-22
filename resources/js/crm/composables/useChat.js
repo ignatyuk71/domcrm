@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue';
 import {
   archiveConversation as apiArchiveConversation,
+  clearConversationHistory as apiClearConversationHistory,
   fetchNewMessages,
   forceSync as apiForceSync,
   getConversations,
@@ -33,6 +34,7 @@ export function useChat() {
   const isSending = ref(false);
   const isSyncing = ref(false);
   const isArchiving = ref(false);
+  const isClearingHistory = ref(false);
   const syncNotice = ref(null);
   const error = ref('');
   const currentPage = ref(1);
@@ -327,6 +329,33 @@ export function useChat() {
     }
   }
 
+  async function clearConversationHistory(conversationId) {
+    if (!conversationId || isClearingHistory.value) {
+      return;
+    }
+
+    isClearingHistory.value = true;
+    error.value = '';
+
+    try {
+      const { data } = await apiClearConversationHistory(conversationId);
+      messages.value = [];
+      patchConversationSnapshot(data?.conversation || null);
+      patchConversation(conversationId, (chat) => ({
+        ...chat,
+        last_message: null,
+        last_message_time: null,
+        unread_count: 0,
+      }));
+    } catch (e) {
+      console.error('Не вдалося очистити історію чату', e);
+      error.value = 'Не вдалося очистити історію чату';
+      throw e;
+    } finally {
+      isClearingHistory.value = false;
+    }
+  }
+
   async function forceSync(chat = activeChat.value) {
     if (!chat?.customer_id) {
       return;
@@ -499,6 +528,7 @@ export function useChat() {
     isSending,
     isSyncing,
     isArchiving,
+    isClearingHistory,
     syncNotice,
     error,
     currentPage,
@@ -508,6 +538,7 @@ export function useChat() {
     selectChat,
     sendMessage,
     archiveConversation,
+    clearConversationHistory,
     forceSync,
     startPolling,
     stopPolling,

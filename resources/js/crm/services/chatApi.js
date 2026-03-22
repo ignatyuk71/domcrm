@@ -26,6 +26,10 @@ export function archiveConversation(conversationId) {
   return axios.delete(`/api/chat/conversations/${conversationId}`);
 }
 
+export function clearConversationHistory(conversationId) {
+  return axios.delete(`/api/chat/conversations/${conversationId}/history`);
+}
+
 export function updateConversationTags(conversationId, tagIds) {
   return axios.patch(`/api/chat/conversations/${conversationId}/tags`, { tag_ids: tagIds });
 }

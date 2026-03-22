@@ -70,6 +70,16 @@
 
         <button
           type="button"
+          class="thread-action-btn thread-clear-btn"
+          :disabled="isClearingHistory || loading || !activeChat?.conversation_id"
+          title="Очистити історію в CRM"
+          @click="$emit('clear-history')"
+        >
+          <i class="bi bi-eraser"></i>
+        </button>
+
+        <button
+          type="button"
           class="thread-action-btn"
           :disabled="isArchiving"
           title="Прибрати з інбоксу"
@@ -86,12 +96,18 @@
           title="Оновити історію переписки"
           @click="$emit('force-sync')"
         >
-          <i class="bi bi-arrow-repeat"></i>
+          <span v-if="isSyncing" class="thread-btn-spinner" aria-hidden="true"></span>
+          <i v-else class="bi bi-arrow-repeat"></i>
         </button>
       </div>
     </header>
 
-    <div v-if="originContext || syncNotice" class="thread-context-stack">
+    <div v-if="originContext || syncNotice || isSyncing" class="thread-context-stack">
+      <div v-if="isSyncing" class="thread-sync-notice is-loading">
+        <span class="thread-inline-spinner" aria-hidden="true"></span>
+        <span>Оновлюємо історію переписки…</span>
+      </div>
+
       <div
         v-if="originContext"
         class="thread-origin-card"
@@ -205,6 +221,7 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
   isSyncing: { type: Boolean, default: false },
   isArchiving: { type: Boolean, default: false },
+  isClearingHistory: { type: Boolean, default: false },
   syncNotice: { type: Object, default: null },
 });
 
@@ -212,6 +229,7 @@ const emit = defineEmits([
   'send',
   'force-sync',
   'delete-conversation',
+  'clear-history',
   'open-list',
   'open-profile',
   'update-stage',
@@ -568,6 +586,12 @@ watch(
   color: #b91c1c;
 }
 
+.thread-sync-notice.is-loading {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
 .thread-user-block {
   min-width: 0;
   display: flex;
@@ -742,13 +766,42 @@ watch(
   height: 44px;
 }
 
+.thread-clear-btn {
+  color: #b45309;
+  border-color: #f3d5a6;
+  background: #fffaf0;
+}
+
 .thread-action-btn:hover {
   background: #f9fafb;
   border-color: #9ca3af;
 }
 
-.thread-action-btn.is-syncing i {
-  animation: spin 0.8s linear infinite;
+.thread-action-btn.thread-clear-btn:hover {
+  border-color: #d97706;
+  background: #fff7e8;
+}
+
+.thread-btn-spinner,
+.thread-inline-spinner {
+  display: inline-block;
+  border-radius: 50%;
+  border-style: solid;
+  border-color: currentColor;
+  border-right-color: transparent;
+  animation: spin 0.75s linear infinite;
+}
+
+.thread-btn-spinner {
+  width: 16px;
+  height: 16px;
+  border-width: 2px;
+}
+
+.thread-inline-spinner {
+  width: 14px;
+  height: 14px;
+  border-width: 2px;
 }
 
 .chat-thread-body {

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ChatContact;
 use App\Models\ChatConversation;
 use App\Models\ChatMessage;
+use App\Models\ChatMessageAttachment;
 use App\Models\ChatStage;
 use App\Models\Customer;
 use App\Services\ChatService;
@@ -12,7 +13,9 @@ use App\Services\MetaService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
 class ChatApiController extends Controller
@@ -109,6 +112,72 @@ class ChatApiController extends Controller
         ]);
 
         return response()->json(['success' => true]);
+    }
+
+    public function clearConversationHistory(ChatConversation $conversation): JsonResponse
+    {
+        try {
+            $filesToDelete = [];
+
+            DB::transaction(function () use ($conversation, &$filesToDelete): void {
+                $messageIdSubQuery = ChatMessage::query()
+                    ->select('id')
+                    ->where('conversation_id', $conversation->id);
+
+                $filesToDelete = ChatMessageAttachment::query()
+                    ->whereIn('message_id', $messageIdSubQuery)
+                    ->whereNotNull('storage_path')
+                    ->get(['storage_disk', 'storage_path'])
+                    ->map(static fn (ChatMessageAttachment $attachment) => [
+                        'disk' => (string) ($attachment->storage_disk ?: 'chat_uploads'),
+                        'path' => (string) $attachment->storage_path,
+                    ])
+                    ->filter(static fn (array $file) => trim($file['path']) !== '')
+                    ->values()
+                    ->all();
+
+                ChatMessage::query()
+                    ->where('conversation_id', $conversation->id)
+                    ->delete();
+
+                $conversation->update([
+                    'last_message_id' => null,
+                    'last_message_preview' => null,
+                    'last_message_at' => null,
+                    'last_inbound_at' => null,
+                    'last_outbound_at' => null,
+                    'unread_count' => 0,
+                    'status' => 'open',
+                    'closed_at' => null,
+                ]);
+            });
+
+            foreach ($filesToDelete as $file) {
+                $this->deleteAttachmentFile($file['disk'], $file['path']);
+            }
+
+            $freshConversation = $conversation->fresh([
+                'contact',
+                'customer',
+                'stage',
+                'assignedUser',
+                'lastMessage.attachments',
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'conversation' => $freshConversation
+                    ? $this->formatConversation($freshConversation)
+                    : null,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Chat clear history failed', [
+                'conversation_id' => $conversation->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json(['error' => 'Не вдалося очистити історію чату.'], 500);
+        }
     }
 
     public function showByCustomer(Request $request, int $customerId, MetaService $metaService): JsonResponse
@@ -719,6 +788,31 @@ class ChatApiController extends Controller
         }
 
         return $attachments;
+    }
+
+    private function deleteAttachmentFile(string $disk, string $path): void
+    {
+        $normalizedPath = ltrim($path, '/');
+        if ($normalizedPath === '') {
+            return;
+        }
+
+        try {
+            if (Storage::disk($disk)->exists($normalizedPath)) {
+                Storage::disk($disk)->delete($normalizedPath);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Не вдалося видалити вкладення з disk', [
+                'disk' => $disk,
+                'path' => $normalizedPath,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        $publicAbsolutePath = public_path('chat/' . $normalizedPath);
+        if (is_file($publicAbsolutePath)) {
+            @unlink($publicAbsolutePath);
+        }
     }
 
     private function inferRemoteAttachmentType(string $url): string

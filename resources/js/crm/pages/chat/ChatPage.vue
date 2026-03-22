@@ -46,10 +46,12 @@
         :is-sending="isSending"
         :is-syncing="isSyncing"
         :is-archiving="isArchiving"
+        :is-clearing-history="isClearingHistory"
         :sync-notice="syncNotice"
         :loading="isLoading"
         @send="handleSendMessage"
         @delete-conversation="handleDeleteConversation"
+        @clear-history="handleClearHistory"
         @force-sync="handleForceSync"
         @open-list="openMobileList"
         @open-profile="openProfile"
@@ -95,6 +97,7 @@ const {
   isSending,
   isSyncing,
   isArchiving,
+  isClearingHistory,
   syncNotice,
   currentPage,
   lastPage,
@@ -103,6 +106,7 @@ const {
   selectChat,
   sendMessage,
   archiveConversation,
+  clearConversationHistory,
   forceSync,
   stopPolling,
   updateStage,
@@ -210,6 +214,21 @@ async function handleDeleteConversation() {
   }
 
   await archiveConversation(activeChat.value.conversation_id);
+}
+
+async function handleClearHistory() {
+  if (!activeChat.value?.conversation_id) {
+    return;
+  }
+
+  const confirmed = window.confirm(
+    'Очистити всю історію цього чату в CRM? Повідомлення буде видалено без повернення.'
+  );
+  if (!confirmed) {
+    return;
+  }
+
+  await clearConversationHistory(activeChat.value.conversation_id);
 }
 
 function handleUpdateStage({ conversationId, stage }) {
