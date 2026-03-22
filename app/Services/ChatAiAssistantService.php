@@ -467,6 +467,7 @@ class ChatAiAssistantService
         $instructions[] = 'Для ціни та розмірів використовуй тільки релевантні товари з контексту.';
         $instructions[] = 'Коли клієнт просить показати/надіслати фото, заповнюй attachment_urls релевантними URL тільки з цього контексту.';
         $instructions[] = 'Якщо фото не запитували або URL немає в контексті, поверни attachment_urls як порожній масив.';
+        $instructions[] = 'Не нумеруй товари або медіа у відповіді клієнту і не проси вибрати номер.';
 
         return implode("\n", $instructions);
     }
@@ -531,8 +532,8 @@ class ChatAiAssistantService
 
             if (!empty($knowledgeContext['media'])) {
                 $input[] = 'Релевантні медіа теми (можна давати URL клієнту):';
-                foreach ($knowledgeContext['media'] as $idx => $media) {
-                    $input[] = ($idx + 1) . '. '
+                foreach ($knowledgeContext['media'] as $media) {
+                    $input[] = '- '
                         . $media['label'] . ' | '
                         . $media['media_type'] . ' | '
                         . $media['url'];
