@@ -59,6 +59,7 @@ class ChatAiAssistantService
         $rules = $this->loadActiveRules();
         $topics = $this->loadActiveTopics();
 
+        $normalizedMessageText = $this->normalizeText((string) ($message->text ?? ''));
         $requestedSize = $this->extractRequestedSize($message->text);
         $topicMatch = $this->matchTopic(
             $topics,
@@ -66,53 +67,74 @@ class ChatAiAssistantService
             $conversation
         );
         $topic = $topicMatch['topic'];
+        $topicScore = (int) ($topicMatch['score'] ?? 0);
         $isTopicUnclear = $topic === null;
 
         $products = $topic ? $this->resolveTopicProducts($topic, $requestedSize) : collect();
         $mediaCandidates = $topic ? $this->resolveTopicMedia($topic, $products) : collect();
         $isPhotoRequest = $this->isPhotoRequest((string) ($message->text ?? ''));
         $isAllPhotosRequest = $isPhotoRequest && $this->isAllPhotosRequest((string) ($message->text ?? ''));
-        $selectedMedia = $isTopicUnclear
+        $isBroadCatalogRequest = $this->isBroadCatalogRequest($normalizedMessageText);
+        $shouldSendOverviewMedia = $isTopicUnclear && ($isPhotoRequest || $isBroadCatalogRequest);
+        $slotState = $this->buildConversationSlotState(
+            $conversation,
+            $message,
+            $settings,
+            $topic,
+            $products,
+            $topicScore,
+            $requestedSize
+        );
+        $selectedMedia = $shouldSendOverviewMedia
             ? $this->resolveAllTopicsOverviewMedia($topics)
             : ($isPhotoRequest
                 ? $this->selectMediaForReply($mediaCandidates, (string) ($message->text ?? ''), $isAllPhotosRequest)
                 : collect());
 
-        try {
-            $reply = $this->buildReply(
-                $message,
-                $settings,
-                $rules,
-                $topic,
-                $products,
-                $selectedMedia,
-                $requestedSize,
-                $isPhotoRequest,
-                $isAllPhotosRequest
-            );
-        } catch (\Throwable $e) {
-            Log::warning('AI: помилка генерації відповіді', [
-                'conversation_id' => $conversation?->id,
-                'message_id' => $message->id,
-                'error' => $e->getMessage(),
-            ]);
+        if ($slotState['just_completed'] && $slotState['order_ready']) {
+            $reply = [
+                'reply_text' => $this->buildOrderReadyReply($slotState),
+                'handoff' => true,
+                'handoff_reason' => 'Зібрано всі дані для оформлення замовлення.',
+            ];
+        } else {
+            try {
+                $reply = $this->buildReply(
+                    $message,
+                    $settings,
+                    $rules,
+                    $topic,
+                    $products,
+                    $selectedMedia,
+                    $slotState,
+                    $requestedSize,
+                    $isPhotoRequest,
+                    $isAllPhotosRequest
+                );
+            } catch (\Throwable $e) {
+                Log::warning('AI: помилка генерації відповіді', [
+                    'conversation_id' => $conversation?->id,
+                    'message_id' => $message->id,
+                    'error' => $e->getMessage(),
+                ]);
 
-            $this->markMessageAiState($message, [
-                'status' => 'error',
-                'reason' => 'openai_failed',
-                'error' => Str::limit($e->getMessage(), 250),
-            ]);
-            $this->setConversationAiStatus($conversation, [
-                'status_code' => 'openai_failed',
-                'status_note' => 'AI не зміг сформувати відповідь. Потрібна перевірка менеджером.',
-                'last_error' => Str::limit($e->getMessage(), 250),
-            ]);
+                $this->markMessageAiState($message, [
+                    'status' => 'error',
+                    'reason' => 'openai_failed',
+                    'error' => Str::limit($e->getMessage(), 250),
+                ]);
+                $this->setConversationAiStatus($conversation, [
+                    'status_code' => 'openai_failed',
+                    'status_note' => 'AI не зміг сформувати відповідь. Потрібна перевірка менеджером.',
+                    'last_error' => Str::limit($e->getMessage(), 250),
+                ]);
 
-            return ['status' => 'error', 'reason' => 'openai_failed'];
+                return ['status' => 'error', 'reason' => 'openai_failed'];
+            }
         }
 
         $sentMediaCount = 0;
-        if (($isPhotoRequest || $isTopicUnclear) && $selectedMedia->isNotEmpty()) {
+        if (($isPhotoRequest || $shouldSendOverviewMedia) && $selectedMedia->isNotEmpty()) {
             $sentMediaCount = $this->sendMediaMessages($conversation, $selectedMedia);
         }
 
@@ -123,8 +145,34 @@ class ChatAiAssistantService
         }
 
         $handoff = (bool) ($reply['handoff'] ?? false);
+        $handoffReason = trim((string) ($reply['handoff_reason'] ?? ''));
+
+        $conversationAiContext = [
+            'status_code' => $isTopicUnclear ? 'topic_overview' : 'replied',
+            'status_note' => $isTopicUnclear
+                ? $this->buildUnknownTopicStatusNote($sentMediaCount)
+                : $this->buildRuntimeStatusNote(
+                    $topic,
+                    $requestedSize,
+                    $isPhotoRequest,
+                    $sentMediaCount
+                ),
+            'last_error' => null,
+            'last_requested_size' => $requestedSize,
+            'last_photo_request' => $isPhotoRequest,
+            'last_all_photo_request' => $isAllPhotosRequest,
+            'topic_unresolved' => $isTopicUnclear,
+            'slot_definitions' => $slotState['definitions'],
+            'slot_values' => $slotState['slots'],
+            'missing_slots' => $slotState['missing'],
+            'next_slot' => $slotState['next'],
+            'order_ready' => $slotState['order_ready'],
+            'slot_summary' => $slotState['summary'],
+            'updated_slots' => $slotState['updated_keys'],
+        ];
+
         if ($handoff) {
-            $handoffReason = trim((string) ($reply['handoff_reason'] ?? ''));
+            $this->syncConversationAiContext($conversation, $topic, $conversationAiContext);
             $this->setConversationAiEnabled($conversation, false, [
                 'handoff_reason' => $handoffReason,
                 'handoff_at' => now()->toIso8601String(),
@@ -135,24 +183,7 @@ class ChatAiAssistantService
                 'last_error' => null,
             ]);
         } else {
-            $statusNote = $isTopicUnclear
-                ? $this->buildUnknownTopicStatusNote($sentMediaCount)
-                : $this->buildRuntimeStatusNote(
-                    $topic,
-                    $requestedSize,
-                    $isPhotoRequest,
-                    $sentMediaCount
-                );
-
-            $this->syncConversationAiContext($conversation, $topic, [
-                'status_code' => $isTopicUnclear ? 'topic_overview' : 'replied',
-                'status_note' => $statusNote,
-                'last_error' => null,
-                'last_requested_size' => $requestedSize,
-                'last_photo_request' => $isPhotoRequest,
-                'last_all_photo_request' => $isAllPhotosRequest,
-                'topic_unresolved' => $isTopicUnclear,
-            ]);
+            $this->syncConversationAiContext($conversation, $topic, $conversationAiContext);
         }
 
         $this->markMessageAiState($message, [
@@ -165,8 +196,13 @@ class ChatAiAssistantService
             'sent_media_count' => $sentMediaCount,
             'sent_text' => $sentText,
             'handoff' => $handoff,
-            'handoff_reason' => trim((string) ($reply['handoff_reason'] ?? '')),
+            'handoff_reason' => $handoffReason,
             'topic_unresolved' => $isTopicUnclear,
+            'slot_updates' => $slotState['updated'],
+            'slot_values' => $slotState['slots'],
+            'missing_slots' => $slotState['missing'],
+            'next_slot' => $slotState['next'],
+            'order_ready' => $slotState['order_ready'],
         ]);
 
         return [
@@ -287,6 +323,7 @@ class ChatAiAssistantService
         }
 
         $normalizedText = $this->normalizeText($text);
+        $isBroadCatalogRequest = $this->isBroadCatalogRequest($normalizedText);
         $lastTopicId = (int) data_get($conversation->meta, 'ai.last_topic_id', 0);
 
         $bestTopic = null;
@@ -295,7 +332,7 @@ class ChatAiAssistantService
         foreach ($topics as $topic) {
             $score = 0;
 
-            if ($lastTopicId > 0 && $lastTopicId === (int) $topic->id) {
+            if (!$isBroadCatalogRequest && $lastTopicId > 0 && $lastTopicId === (int) $topic->id) {
                 $score += 40;
             }
 
@@ -334,6 +371,16 @@ class ChatAiAssistantService
 
         if (!$bestTopic) {
             return ['topic' => null, 'score' => 0];
+        }
+
+        // Якщо запит загальний ("які маєте", "що є в наявності"), не тягнемо попередню тему:
+        // потрібно показати оглядові варіанти.
+        if ($bestScore <= 0 && $isBroadCatalogRequest) {
+            return ['topic' => null, 'score' => $bestScore];
+        }
+
+        if ($bestScore <= 0 && $topics->count() === 1) {
+            return ['topic' => $topics->first(), 'score' => 1];
         }
 
         if ($bestScore <= 0 && $lastTopicId > 0) {
@@ -593,6 +640,20 @@ class ChatAiAssistantService
             return $ranked;
         }
 
+        $positive = $ranked
+            ->filter(fn (array $item) => (int) ($item['score'] ?? 0) > 0)
+            ->values();
+
+        if ($positive->isNotEmpty()) {
+            $specificMedia = $positive
+                ->reject(fn (array $item) => in_array((string) ($item['media_type'] ?? ''), ['collage', 'palette'], true))
+                ->values();
+
+            return ($specificMedia->isNotEmpty() ? $specificMedia : $positive)
+                ->take(3)
+                ->values();
+        }
+
         return $ranked->take(3)->values();
     }
 
@@ -600,6 +661,7 @@ class ChatAiAssistantService
      * @param  Collection<int, ChatAiResponseRule>  $rules
      * @param  Collection<int, array<string, mixed>>  $products
      * @param  Collection<int, array<string, mixed>>  $selectedMedia
+     * @param  array<string, mixed>  $slotState
      * @return array{reply_text: string, handoff: bool, handoff_reason: string}
      */
     private function buildReply(
@@ -609,19 +671,26 @@ class ChatAiAssistantService
         ?ChatAiTopic $topic,
         Collection $products,
         Collection $selectedMedia,
+        array $slotState,
         ?int $requestedSize,
         bool $isPhotoRequest,
         bool $isAllPhotosRequest
     ): array {
         $instructions = $this->buildSystemInstructions($settings, $rules);
+        $memory = $message->conversation
+            ? $this->buildConversationMemoryBlock($message->conversation)
+            : '';
         $history = $this->buildHistoryForPrompt(
             (int) $message->conversation_id,
             (int) ($settings['max_messages'] ?? 12)
         );
         $topicBlock = $this->buildTopicBlock($topic, $products, $selectedMedia, $requestedSize, $isPhotoRequest, $isAllPhotosRequest);
+        $slotBlock = $this->buildSlotStateBlock($slotState['definitions'], $slotState['slots'], $slotState['missing'], $slotState['next'], $slotState['order_ready']);
 
         $input = implode("\n\n", array_filter([
             'Останнє повідомлення клієнта: ' . trim((string) ($message->text ?? '')),
+            $memory,
+            $slotBlock,
             $topicBlock,
             'Історія діалогу:',
             $history,
@@ -702,6 +771,9 @@ class ChatAiAssistantService
             'Фото надсилаються окремо системою. У тексті не вставляй URL.',
             'Якщо клієнт просить фото і в контексті медіа відсутні — коротко повідом, що немає підготовлених фото, і запропонуй близьку тему або менеджера.',
             'Якщо клієнт просить показати всі варіанти — у тексті підтвердь, що показуєш всі доступні для поточної теми.',
+            'У блоці "Стан слотів замовлення" вже є зібрані поля. Не перепитуй те, що вже заповнено.',
+            'Якщо система вказала "Наступний слот для уточнення", постав тільки одне коротке питання саме про нього.',
+            'Не проси кілька полів в одному повідомленні. Один крок = одне уточнення.',
             $replyStyle !== '' ? "Стиль відповіді: {$replyStyle}" : null,
             $companyContext !== '' ? "Контекст компанії: {$companyContext}" : null,
             $knowledgeBase !== '' ? "Додаткова база знань: {$knowledgeBase}" : null,
@@ -717,7 +789,7 @@ class ChatAiAssistantService
             ->with('attachments')
             ->where('conversation_id', $conversationId)
             ->orderByDesc('id')
-            ->limit(max(4, min(30, $maxMessages)))
+            ->limit(max(8, min(60, $maxMessages * 2)))
             ->get()
             ->reverse()
             ->values();
@@ -737,6 +809,795 @@ class ChatAiAssistantService
                 return "{$role}: {$text}";
             })
             ->implode("\n");
+    }
+
+    private function buildConversationMemoryBlock(ChatConversation $conversation): string
+    {
+        $ai = is_array(data_get($conversation->meta, 'ai'))
+            ? data_get($conversation->meta, 'ai')
+            : [];
+
+        $lines = [];
+
+        $slotSummary = trim((string) ($ai['slot_summary'] ?? ''));
+        if ($slotSummary !== '') {
+            $lines[] = $slotSummary;
+        }
+
+        $lastTopicName = trim((string) ($ai['last_topic_name'] ?? ''));
+        if ($lastTopicName !== '' && !str_contains($slotSummary, $lastTopicName)) {
+            $lines[] = "Остання визначена тема: {$lastTopicName}";
+        }
+
+        $lastRequestedSize = isset($ai['last_requested_size'])
+            ? (int) $ai['last_requested_size']
+            : null;
+        if (
+            $lastRequestedSize !== null
+            && $lastRequestedSize >= 20
+            && $lastRequestedSize <= 55
+            && !str_contains($slotSummary, (string) $lastRequestedSize)
+        ) {
+            $lines[] = "Останній відомий розмір клієнта: {$lastRequestedSize}";
+        }
+
+        if ($lines === []) {
+            return '';
+        }
+
+        return "Коротка пам'ять діалогу:\n" . implode("\n", $lines);
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $products
+     * @return array{
+     *     definitions: array<string, array<string, mixed>>,
+     *     slots: array<string, mixed>,
+     *     missing: array<int, string>,
+     *     next: ?string,
+     *     order_ready: bool,
+     *     summary: string,
+     *     updated: array<string, mixed>,
+     *     updated_keys: array<int, string>,
+     *     just_completed: bool
+     * }
+     */
+    private function buildConversationSlotState(
+        ChatConversation $conversation,
+        ChatMessage $message,
+        array $settings,
+        ?ChatAiTopic $topic,
+        Collection $products,
+        int $topicScore,
+        ?int $requestedSize
+    ): array {
+        $definitions = $this->buildRequiredSlotDefinitions($settings);
+        $slots = $this->hydrateBaseSlotValues($this->loadStoredSlotValues($conversation), $conversation);
+        $previousMissing = $this->resolveMissingSlotKeys($definitions, $slots);
+        $previousOrderReady = (bool) data_get($conversation->meta, 'ai.order_ready', false);
+        $previousNextSlot = data_get($conversation->meta, 'ai.next_slot');
+
+        if (!is_string($previousNextSlot) || !array_key_exists($previousNextSlot, $definitions)) {
+            $previousNextSlot = $previousMissing[0] ?? null;
+        }
+
+        $candidateUpdates = $this->extractSlotUpdates(
+            $conversation,
+            $message,
+            $topic,
+            $products,
+            $topicScore,
+            $requestedSize,
+            $slots,
+            $previousNextSlot
+        );
+
+        $updated = [];
+
+        foreach ($candidateUpdates as $key => $value) {
+            if (!array_key_exists($key, $definitions)) {
+                continue;
+            }
+
+            $normalizedValue = $this->normalizeSlotValue($key, $value);
+            if ($normalizedValue === null) {
+                continue;
+            }
+
+            if ($this->slotValuesEqual($key, $slots[$key] ?? null, $normalizedValue)) {
+                continue;
+            }
+
+            $slots[$key] = $normalizedValue;
+            $updated[$key] = $normalizedValue;
+        }
+
+        $missing = $this->resolveMissingSlotKeys($definitions, $slots);
+        $nextSlot = $missing[0] ?? null;
+        $orderReady = $missing === [];
+
+        return [
+            'definitions' => $definitions,
+            'slots' => $slots,
+            'missing' => $missing,
+            'next' => $nextSlot,
+            'order_ready' => $orderReady,
+            'summary' => $this->buildSlotSummary($definitions, $slots, $missing, $nextSlot, $orderReady),
+            'updated' => $updated,
+            'updated_keys' => array_keys($updated),
+            'just_completed' => !$previousOrderReady && $orderReady,
+        ];
+    }
+
+    /**
+     * @return array<string, array<string, mixed>>
+     */
+    private function buildRequiredSlotDefinitions(array $settings): array
+    {
+        $baseDefinitions = [
+            'model' => ['key' => 'model', 'label' => 'Модель', 'required' => true],
+            'color' => ['key' => 'color', 'label' => 'Колір', 'required' => false],
+            'size' => ['key' => 'size', 'label' => 'Розмір', 'required' => true],
+            'quantity' => ['key' => 'quantity', 'label' => 'Кількість', 'required' => false],
+            'city' => ['key' => 'city', 'label' => 'Місто', 'required' => true],
+            'delivery' => ['key' => 'delivery', 'label' => 'Відділення / адреса', 'required' => true],
+            'customer_name' => ['key' => 'customer_name', 'label' => "Ім'я", 'required' => true],
+            'phone' => ['key' => 'phone', 'label' => 'Телефон', 'required' => true],
+            'payment' => ['key' => 'payment', 'label' => 'Оплата', 'required' => false],
+        ];
+        $orderedKeys = [];
+
+        foreach ((array) ($settings['qualification_fields'] ?? []) as $field) {
+            $slotKey = $this->mapQualificationFieldToSlot((string) $field);
+            if ($slotKey === null || !array_key_exists($slotKey, $baseDefinitions)) {
+                continue;
+            }
+
+            $baseDefinitions[$slotKey]['required'] = true;
+
+            if (!in_array($slotKey, $orderedKeys, true)) {
+                $orderedKeys[] = $slotKey;
+            }
+        }
+
+        $definitions = [];
+
+        foreach ($orderedKeys as $slotKey) {
+            $definitions[$slotKey] = $baseDefinitions[$slotKey];
+        }
+
+        foreach ($baseDefinitions as $slotKey => $definition) {
+            if (array_key_exists($slotKey, $definitions)) {
+                continue;
+            }
+
+            $definitions[$slotKey] = $definition;
+        }
+
+        return $definitions;
+    }
+
+    private function mapQualificationFieldToSlot(string $field): ?string
+    {
+        $normalized = $this->normalizeText($field);
+
+        return match (true) {
+            (bool) preg_match('/\b(товар|модел[ьяі]|продукт|варіант)\b/u', $normalized) => 'model',
+            (bool) preg_match('/\b(колір|цвет)\b/u', $normalized) => 'color',
+            (bool) preg_match('/\b(розмір|розм|size)\b/u', $normalized) => 'size',
+            (bool) preg_match('/\b(кількість|кільк|qty|пара|пар)\b/u', $normalized) => 'quantity',
+            (bool) preg_match('/\b(місто|город)\b/u', $normalized) => 'city',
+            (bool) preg_match('/\b(відділення|відділ|доставка|адреса|адрес|поштомат)\b/u', $normalized) => 'delivery',
+            (bool) preg_match('/\b(ім[\'’`ʼ]?я|имя|прізвище|отримувач)\b/u', $normalized) => 'customer_name',
+            (bool) preg_match('/\b(телефон|тел|номер)\b/u', $normalized) => 'phone',
+            (bool) preg_match('/\b(оплата|післяплата|карта|передоплата)\b/u', $normalized) => 'payment',
+            default => null,
+        };
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function loadStoredSlotValues(ChatConversation $conversation): array
+    {
+        $stored = data_get($conversation->meta, 'ai.slot_values');
+        if (!is_array($stored)) {
+            return [];
+        }
+
+        $result = [];
+
+        foreach ($stored as $key => $value) {
+            if (!is_string($key) || is_array($value) || is_object($value)) {
+                continue;
+            }
+
+            $result[$key] = $value;
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param  array<string, mixed>  $slots
+     * @return array<string, mixed>
+     */
+    private function hydrateBaseSlotValues(array $slots, ChatConversation $conversation): array
+    {
+        $customer = $conversation->customer;
+        $ai = is_array(data_get($conversation->meta, 'ai'))
+            ? data_get($conversation->meta, 'ai')
+            : [];
+
+        $fullName = trim(implode(' ', array_filter([
+            trim((string) ($customer?->first_name ?? '')),
+            trim((string) ($customer?->last_name ?? '')),
+        ])));
+
+        if ($fullName !== '' && !$this->hasSlotValue($slots['customer_name'] ?? null, 'customer_name')) {
+            $slots['customer_name'] = $fullName;
+        }
+
+        $phone = $this->normalizeSlotValue('phone', (string) ($customer?->phone ?? ''));
+        if ($phone !== null && !$this->hasSlotValue($slots['phone'] ?? null, 'phone')) {
+            $slots['phone'] = $phone;
+        }
+
+        $lastTopicName = trim((string) ($ai['last_topic_name'] ?? ''));
+        if ($lastTopicName !== '' && !$this->hasSlotValue($slots['model'] ?? null, 'model')) {
+            $slots['model'] = $lastTopicName;
+        }
+
+        $lastRequestedSize = isset($ai['last_requested_size'])
+            ? (int) $ai['last_requested_size']
+            : null;
+        if ($lastRequestedSize !== null && !$this->hasSlotValue($slots['size'] ?? null, 'size')) {
+            $slots['size'] = $lastRequestedSize;
+        }
+
+        foreach ($slots as $key => $value) {
+            $normalized = $this->normalizeSlotValue((string) $key, $value);
+            if ($normalized === null) {
+                unset($slots[$key]);
+                continue;
+            }
+
+            $slots[$key] = $normalized;
+        }
+
+        return $slots;
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $products
+     * @param  array<string, mixed>  $currentSlots
+     * @return array<string, mixed>
+     */
+    private function extractSlotUpdates(
+        ChatConversation $conversation,
+        ChatMessage $message,
+        ?ChatAiTopic $topic,
+        Collection $products,
+        int $topicScore,
+        ?int $requestedSize,
+        array $currentSlots,
+        ?string $previousNextSlot
+    ): array {
+        $text = trim((string) ($message->text ?? ''));
+        if ($text === '') {
+            return [];
+        }
+
+        $updates = [];
+
+        if ($topic !== null && ($topicScore > 0 || $products->isNotEmpty() || !$this->hasSlotValue($currentSlots['model'] ?? null, 'model'))) {
+            $updates['model'] = $topic->name;
+        }
+
+        if ($requestedSize !== null) {
+            $updates['size'] = $requestedSize;
+        }
+
+        if ($color = $this->extractColorValue($text, $previousNextSlot)) {
+            $updates['color'] = $color;
+        }
+
+        if ($quantity = $this->extractQuantityValue($text, $previousNextSlot)) {
+            $updates['quantity'] = $quantity;
+        }
+
+        if ($city = $this->extractCityValue($text, $previousNextSlot)) {
+            $updates['city'] = $city;
+        }
+
+        if ($delivery = $this->extractDeliveryValue($text, $previousNextSlot)) {
+            $updates['delivery'] = $delivery;
+        }
+
+        if ($phone = $this->extractPhoneValue($text)) {
+            $updates['phone'] = $phone;
+        }
+
+        if ($customerName = $this->extractCustomerNameValue($text, $previousNextSlot, $conversation)) {
+            $updates['customer_name'] = $customerName;
+        }
+
+        if ($payment = $this->extractPaymentValue($text)) {
+            $updates['payment'] = $payment;
+        }
+
+        return $updates;
+    }
+
+    private function extractPhoneValue(string $text): ?string
+    {
+        if (!preg_match_all('/(?:\+?\d[\d\-\(\)\s]{8,}\d)/u', $text, $matches)) {
+            return null;
+        }
+
+        foreach ($matches[0] as $candidate) {
+            $phone = $this->normalizeSlotValue('phone', $candidate);
+            if ($phone !== null) {
+                return $phone;
+            }
+        }
+
+        return null;
+    }
+
+    private function extractCustomerNameValue(string $text, ?string $previousNextSlot, ChatConversation $conversation): ?string
+    {
+        if (preg_match('/(?:мене звати|звати мене|моє ім[\'’`ʼ]я|мое имя|имя)\s+([[:alpha:]\-\'’`ʼ ]{2,60})/iu', $text, $match)) {
+            return $this->normalizeSlotValue('customer_name', $match[1]);
+        }
+
+        if ($previousNextSlot !== 'customer_name') {
+            return null;
+        }
+
+        if ($conversation->customer && trim((string) $conversation->customer->first_name) !== '') {
+            return null;
+        }
+
+        $candidate = trim((string) preg_replace('/[0-9,.;:\/]+/u', ' ', $text));
+        $candidate = trim((string) preg_replace('/\s+/u', ' ', $candidate));
+        $normalizedCandidate = $this->normalizeText($candidate);
+        $wordCount = count(array_filter(preg_split('/\s+/u', $candidate) ?: []));
+
+        if (preg_match('/^я\s+([[:alpha:]\-\'’`ʼ ]{2,60})$/iu', $candidate, $match)) {
+            $candidate = trim((string) $match[1]);
+            $normalizedCandidate = $this->normalizeText($candidate);
+            $wordCount = count(array_filter(preg_split('/\s+/u', $candidate) ?: []));
+        }
+
+        if (
+            $candidate === ''
+            || $wordCount < 1
+            || $wordCount > 3
+            || (bool) preg_match('/^(я|хочу|мені|потріб|добре|так|ні|ок|гаразд)\b/u', $normalizedCandidate)
+            || (bool) preg_match('/(відділен|нова пошта|поштомат|розм|біл|чорн|сір|рожев|київ|львів|дніпро|одеса)/u', $normalizedCandidate)
+            || !preg_match('/^[[:alpha:]\-\'’`ʼ ]+$/u', $candidate)
+        ) {
+            return null;
+        }
+
+        return $this->normalizeSlotValue('customer_name', $candidate);
+    }
+
+    private function extractPaymentValue(string $text): ?string
+    {
+        $normalized = $this->normalizeText($text);
+
+        return match (true) {
+            (bool) preg_match('/(передоплат|повна оплат|100%|предоплат)/u', $normalized) => 'Передоплата',
+            (bool) preg_match('/(післяплат|накладен|налож)/u', $normalized) => 'Післяплата',
+            (bool) preg_match('/(карт|онлайн|mono|monobank|на карту|по реквізит)/u', $normalized) => 'Оплата карткою',
+            (bool) preg_match('/(готівк|налич)/u', $normalized) => 'Готівка',
+            default => null,
+        };
+    }
+
+    private function extractQuantityValue(string $text, ?string $previousNextSlot): ?int
+    {
+        $normalized = $this->normalizeText($text);
+
+        if (preg_match('/(?:^|[^\d])([1-9]\d?)\s*(?:шт|штук|штуки|одиниц|пари|пара|пар)\b/u', $normalized, $match)) {
+            return (int) $match[1];
+        }
+
+        if (preg_match('/(?:x|х)\s*([1-9]\d?)/u', $normalized, $match)) {
+            return (int) $match[1];
+        }
+
+        $wordMap = [
+            'один' => 1,
+            'одна' => 1,
+            'одну' => 1,
+            'дві' => 2,
+            'два' => 2,
+            'три' => 3,
+            'чотири' => 4,
+            'пʼять' => 5,
+            "п'ять" => 5,
+            'пять' => 5,
+        ];
+
+        foreach ($wordMap as $word => $value) {
+            if (
+                preg_match('/\b' . preg_quote($word, '/') . '\b/u', $normalized)
+                && ($previousNextSlot === 'quantity' || str_contains($normalized, 'пар') || str_contains($normalized, 'штук'))
+            ) {
+                return $value;
+            }
+        }
+
+        if ($previousNextSlot === 'quantity' && preg_match('/^\s*([1-9]\d?)\s*$/u', $normalized, $match)) {
+            return (int) $match[1];
+        }
+
+        return null;
+    }
+
+    private function extractCityValue(string $text, ?string $previousNextSlot): ?string
+    {
+        $trimmed = trim((string) preg_replace('/\s+/u', ' ', $text));
+
+        if (preg_match('/^([^,]{2,50}),\s*(?:нова пошта|відділен|поштомат)/iu', $trimmed, $match)) {
+            return $this->normalizeSlotValue('city', $match[1]);
+        }
+
+        if (preg_match('/(?:місто|м\.?)\s*([[:alpha:]\-\'’`ʼ ]{2,40})/iu', $trimmed, $match)) {
+            return $this->normalizeSlotValue('city', $match[1]);
+        }
+
+        if (preg_match('/(?:доставка|відправка|нова пошта).{0,40}?\b(?:в|у)\s+([[:alpha:]\-\'’`ʼ ]{2,40})/iu', $trimmed, $match)) {
+            return $this->normalizeSlotValue('city', $match[1]);
+        }
+
+        if ($previousNextSlot !== 'city') {
+            return null;
+        }
+
+        $candidate = trim((string) preg_replace('/[0-9,.;:\/]+/u', ' ', $trimmed));
+        $candidate = trim((string) preg_replace('/\s+/u', ' ', $candidate));
+        $normalizedCandidate = $this->normalizeText($candidate);
+        $wordCount = count(array_filter(preg_split('/\s+/u', $candidate) ?: []));
+
+        if (
+            $candidate === ''
+            || $wordCount < 1
+            || $wordCount > 3
+            || (bool) preg_match('/^(я|хочу|мені|потріб|добре|так|ні|ок|гаразд)\b/u', $normalizedCandidate)
+            || (bool) preg_match('/(відділен|нова пошта|поштомат|розм|біл|чорн|сір|рожев)/u', $normalizedCandidate)
+            || !preg_match('/^[[:alpha:]\-\'’`ʼ ]+$/u', $candidate)
+        ) {
+            return null;
+        }
+
+        return $this->normalizeSlotValue('city', $candidate);
+    }
+
+    private function extractDeliveryValue(string $text, ?string $previousNextSlot): ?string
+    {
+        $trimmed = trim((string) preg_replace('/\s+/u', ' ', $text));
+
+        if (preg_match('/((?:нова пошта|укрпошта)?\s*(?:відділення|відд\.?|поштомат)\s*№?\s*\d{1,4})/iu', $trimmed, $match)) {
+            return $this->normalizeSlotValue('delivery', $match[1]);
+        }
+
+        if (preg_match('/((?:вул\.?|вулиця|проспект|просп\.?|буд\.?|будинок)[^,\n]{0,120})/iu', $trimmed, $match)) {
+            return $this->normalizeSlotValue('delivery', $match[1]);
+        }
+
+        if ($previousNextSlot === 'delivery' && preg_match('/^\s*\d{1,4}\s*$/u', $trimmed, $match)) {
+            return $this->normalizeSlotValue('delivery', "Відділення {$match[0]}");
+        }
+
+        if ($previousNextSlot === 'delivery' && preg_match('/\d/u', $trimmed)) {
+            return $this->normalizeSlotValue('delivery', $trimmed);
+        }
+
+        return null;
+    }
+
+    private function extractColorValue(string $text, ?string $previousNextSlot): ?string
+    {
+        $normalized = $this->normalizeText($text);
+        $colorMap = [
+            'біл' => 'Білий',
+            'чорн' => 'Чорний',
+            'сір' => 'Сірий',
+            'рожев' => 'Рожевий',
+            'блакит' => 'Блакитний',
+            'син' => 'Синій',
+            'червон' => 'Червоний',
+            'коричн' => 'Коричневий',
+            'беж' => 'Бежевий',
+            'молоч' => 'Молочний',
+            'пудр' => 'Пудровий',
+            'малин' => 'Малиновий',
+            'електрик' => 'Електрик',
+            'капучин' => 'Капучино',
+            'зелен' => 'Зелений',
+        ];
+
+        foreach ($colorMap as $needle => $label) {
+            if (str_contains($normalized, $needle)) {
+                return $label;
+            }
+        }
+
+        if ($previousNextSlot !== 'color') {
+            return null;
+        }
+
+        $candidate = trim((string) preg_replace('/[0-9,.;:\/]+/u', ' ', $text));
+        $candidate = trim((string) preg_replace('/\s+/u', ' ', $candidate));
+        $wordCount = count(array_filter(preg_split('/\s+/u', $candidate) ?: []));
+
+        if (
+            $candidate === ''
+            || $wordCount < 1
+            || $wordCount > 2
+            || !preg_match('/^[[:alpha:]\-\'’`ʼ ]+$/u', $candidate)
+        ) {
+            return null;
+        }
+
+        return $this->normalizeSlotValue('color', $candidate);
+    }
+
+    /**
+     * @param  array<string, array<string, mixed>>  $definitions
+     * @param  array<string, mixed>  $slots
+     * @return array<int, string>
+     */
+    private function resolveMissingSlotKeys(array $definitions, array $slots): array
+    {
+        $missing = [];
+
+        foreach ($definitions as $key => $definition) {
+            if (!(bool) ($definition['required'] ?? false)) {
+                continue;
+            }
+
+            if ($this->hasSlotValue($slots[$key] ?? null, $key)) {
+                continue;
+            }
+
+            $missing[] = $key;
+        }
+
+        return $missing;
+    }
+
+    /**
+     * @param  array<string, array<string, mixed>>  $definitions
+     * @param  array<string, mixed>  $slots
+     */
+    private function buildSlotSummary(
+        array $definitions,
+        array $slots,
+        array $missing,
+        ?string $nextSlot,
+        bool $orderReady
+    ): string {
+        $filled = collect($definitions)
+            ->map(function (array $definition, string $key) use ($slots) {
+                if (!$this->hasSlotValue($slots[$key] ?? null, $key)) {
+                    return null;
+                }
+
+                $label = (string) ($definition['label'] ?? $key);
+                $value = $this->formatSlotValue($key, $slots[$key] ?? null);
+
+                return $value !== '' ? "{$label}: {$value}" : null;
+            })
+            ->filter()
+            ->values()
+            ->implode('; ');
+
+        $missingLabels = collect($missing)
+            ->map(fn (string $key) => (string) ($definitions[$key]['label'] ?? $key))
+            ->implode(', ');
+
+        $parts = [];
+
+        if ($filled !== '') {
+            $parts[] = "Зібрано: {$filled}";
+        }
+
+        if ($missingLabels !== '') {
+            $parts[] = "Не вистачає: {$missingLabels}";
+        }
+
+        if ($nextSlot !== null && isset($definitions[$nextSlot])) {
+            $parts[] = 'Наступний слот: ' . $definitions[$nextSlot]['label'];
+        }
+
+        if ($orderReady) {
+            $parts[] = 'Усі обов’язкові дані зібрано';
+        }
+
+        return implode('. ', array_filter($parts));
+    }
+
+    /**
+     * @param  array<string, array<string, mixed>>  $definitions
+     * @param  array<string, mixed>  $slots
+     * @param  array<int, string>  $missing
+     */
+    private function buildSlotStateBlock(
+        array $definitions,
+        array $slots,
+        array $missing,
+        ?string $nextSlot,
+        bool $orderReady
+    ): string {
+        $lines = ['Стан слотів замовлення:'];
+
+        foreach ($definitions as $key => $definition) {
+            $label = (string) ($definition['label'] ?? $key);
+            $requiredLabel = (bool) ($definition['required'] ?? false) ? 'обов’язково' : 'необов’язково';
+            $value = $this->formatSlotValue($key, $slots[$key] ?? null);
+
+            $lines[] = "- {$label} ({$requiredLabel}): " . ($value !== '' ? $value : 'не зібрано');
+        }
+
+        if ($missing !== []) {
+            $missingLabels = collect($missing)
+                ->map(fn (string $key) => (string) ($definitions[$key]['label'] ?? $key))
+                ->implode(', ');
+
+            $lines[] = "Не вистачає: {$missingLabels}";
+        }
+
+        if ($nextSlot !== null && isset($definitions[$nextSlot])) {
+            $lines[] = 'Наступний слот для уточнення: ' . $definitions[$nextSlot]['label'];
+        }
+
+        $lines[] = $orderReady
+            ? 'Усі обов’язкові слоти зібрані: так'
+            : 'Усі обов’язкові слоти зібрані: ні';
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * @param  array<string, mixed>  $slotState
+     */
+    private function buildOrderReadyReply(array $slotState): string
+    {
+        $slots = is_array($slotState['slots'] ?? null)
+            ? $slotState['slots']
+            : [];
+
+        $parts = [];
+
+        foreach (['model', 'color', 'size', 'quantity', 'city', 'delivery', 'customer_name', 'phone', 'payment'] as $key) {
+            $value = $this->formatSlotValue($key, $slots[$key] ?? null);
+            if ($value === '') {
+                continue;
+            }
+
+            $label = match ($key) {
+                'model' => 'модель',
+                'color' => 'колір',
+                'size' => 'розмір',
+                'quantity' => 'кількість',
+                'city' => 'місто',
+                'delivery' => 'доставка',
+                'customer_name' => "ім'я",
+                'phone' => 'телефон',
+                'payment' => 'оплата',
+                default => $key,
+            };
+
+            $parts[] = "{$label}: {$value}";
+        }
+
+        $details = implode(', ', $parts);
+
+        return $details !== ''
+            ? "Дякую, зафіксував замовлення: {$details}. Передаю менеджеру для підтвердження."
+            : 'Дякую, дані для замовлення отримано. Передаю менеджеру для підтвердження.';
+    }
+
+    private function hasSlotValue(mixed $value, string $key): bool
+    {
+        return $this->normalizeSlotValue($key, $value) !== null;
+    }
+
+    private function slotValuesEqual(string $key, mixed $first, mixed $second): bool
+    {
+        return $this->normalizeSlotValue($key, $first) === $this->normalizeSlotValue($key, $second);
+    }
+
+    private function normalizeSlotValue(string $key, mixed $value): mixed
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        return match ($key) {
+            'size' => $this->normalizeSizeSlotValue($value),
+            'quantity' => $this->normalizeQuantitySlotValue($value),
+            'phone' => $this->normalizePhoneSlotValue($value),
+            'customer_name' => $this->normalizeHumanLabel($value, 80),
+            'city' => $this->normalizeHumanLabel($value, 80),
+            'color' => $this->normalizeHumanLabel($value, 40),
+            'payment' => $this->trimSlotString($value, 60),
+            'delivery' => $this->trimSlotString($value, 120),
+            'model' => $this->trimSlotString($value, 120),
+            default => $this->trimSlotString($value, 120),
+        };
+    }
+
+    private function normalizeSizeSlotValue(mixed $value): ?int
+    {
+        $number = (int) $value;
+
+        return $number >= 20 && $number <= 55 ? $number : null;
+    }
+
+    private function normalizeQuantitySlotValue(mixed $value): ?int
+    {
+        $number = (int) $value;
+
+        return $number >= 1 && $number <= 99 ? $number : null;
+    }
+
+    private function normalizePhoneSlotValue(mixed $value): ?string
+    {
+        $digits = preg_replace('/\D/u', '', (string) $value);
+        $digits = trim((string) $digits);
+
+        if ($digits === '') {
+            return null;
+        }
+
+        if (strlen($digits) === 10 && str_starts_with($digits, '0')) {
+            $digits = '38' . $digits;
+        }
+
+        if (strlen($digits) === 12 && str_starts_with($digits, '380')) {
+            return $digits;
+        }
+
+        return null;
+    }
+
+    private function normalizeHumanLabel(mixed $value, int $limit): ?string
+    {
+        $trimmed = $this->trimSlotString($value, $limit);
+        if ($trimmed === null) {
+            return null;
+        }
+
+        return mb_convert_case($trimmed, MB_CASE_TITLE, 'UTF-8');
+    }
+
+    private function trimSlotString(mixed $value, int $limit): ?string
+    {
+        $trimmed = trim((string) preg_replace('/\s+/u', ' ', (string) $value));
+        if ($trimmed === '') {
+            return null;
+        }
+
+        return Str::limit($trimmed, $limit, '');
+    }
+
+    private function formatSlotValue(string $key, mixed $value): string
+    {
+        $normalized = $this->normalizeSlotValue($key, $value);
+        if ($normalized === null) {
+            return '';
+        }
+
+        return match ($key) {
+            'quantity' => "{$normalized} шт.",
+            default => (string) $normalized,
+        };
     }
 
     /**
@@ -951,10 +1812,17 @@ class ChatAiAssistantService
 
         $ai['enabled'] = array_key_exists('enabled', $ai) ? (bool) $ai['enabled'] : true;
         $ai['last_reply_at'] = now()->toIso8601String();
-        $ai['last_topic_id'] = $topic?->id;
-        $ai['last_topic_name'] = $topic?->name;
+
+        if ($topic !== null) {
+            $ai['last_topic_id'] = $topic->id;
+            $ai['last_topic_name'] = $topic->name;
+        }
 
         foreach ($contextMeta as $key => $value) {
+            if ($key === 'last_requested_size' && $value === null) {
+                continue;
+            }
+
             $ai[$key] = $value;
         }
 
@@ -1051,10 +1919,23 @@ class ChatAiAssistantService
             return false;
         }
 
-        return (bool) preg_match(
-            '/(фото|фотк|покажи|покажiть|покажіть|побачити|скинь|надішли|надiшли|картин|зображ|колаж|палiтр|палітр)/u',
+        if ((bool) preg_match(
+            '/(фото|фотк|картин|зображ|колаж|палiтр|палітр)/u',
+            $normalized
+        )) {
+            return true;
+        }
+
+        $hasShowVerb = (bool) preg_match(
+            '/(покажи|покажiть|покажіть|показат|побачити|скинь|надішли|надiшли)/u',
             $normalized
         );
+        $hasVisualObject = (bool) preg_match(
+            '/(кольор|кольори|біл|чорн|сір|рожев|блакит|коричн|червон|малинов|електрик|капучин|модел|варіант|асортимент|в наявност|які є|якi є|яки є|що є|вигляд|вигляда)/u',
+            $normalized
+        );
+
+        return $hasShowVerb && $hasVisualObject;
     }
 
     private function isAllPhotosRequest(string $text): bool
@@ -1062,8 +1943,20 @@ class ChatAiAssistantService
         $normalized = $this->normalizeText($text);
 
         return (bool) preg_match(
-            '/(всi|всі|усi|усі|все|усе|які є|якi є|в наявностi|в наявності|весь асортимент)/u',
+            '/(всi|всі|усi|усі|все|усе|які є|якi є|яки є|в наявностi|в наявності|весь асортимент)/u',
             $normalized
+        );
+    }
+
+    private function isBroadCatalogRequest(string $normalizedText): bool
+    {
+        if ($normalizedText === '') {
+            return false;
+        }
+
+        return (bool) preg_match(
+            '/(які маєте|якi маєте|яки маєте|що маєте|які у вас є|якi у вас є|яки у вас є|що у вас є|які є|якi є|яки є|що є|в наявност|асортимент)/u',
+            $normalizedText
         );
     }
 
@@ -1074,7 +1967,17 @@ class ChatAiAssistantService
             return null;
         }
 
-        if (preg_match('/(?<!\d)([2-5]\d)(?!\d)/u', $normalized, $match)) {
+        if ($this->containsShippingNumberContext($normalized)) {
+            return null;
+        }
+
+        $isShortReply = count(array_filter(preg_split('/\s+/u', $normalized) ?: [])) <= 3;
+        $hasSizeCue = (bool) preg_match(
+            '/(розмір|розм|size|см|стоп|устілк|довжин|на ногу|по нозі|по стопі)/u',
+            $normalized
+        );
+
+        if (($isShortReply || $hasSizeCue) && preg_match('/(?<!\d)([2-5]\d)(?!\d)/u', $normalized, $match)) {
             $size = (int) $match[1];
             if ($size >= 20 && $size <= 55) {
                 return $size;
@@ -1082,6 +1985,14 @@ class ChatAiAssistantService
         }
 
         return null;
+    }
+
+    private function containsShippingNumberContext(string $text): bool
+    {
+        return (bool) preg_match(
+            '/(відділен|нова пошта|поштомат|адрес|вулиц|\bвул\.?|\bбуд\.?|будин|квартир|\bкв\.?|під[\'’`ʼ]?їзд|телефон|номер)/u',
+            $text
+        );
     }
 
     /**

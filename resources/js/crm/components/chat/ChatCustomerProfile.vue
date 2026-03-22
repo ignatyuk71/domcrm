@@ -295,16 +295,36 @@
                   </div>
 
                   <div class="ai-qualification-block">
-                    <span class="ai-qualification-title">Поля для збору</span>
+                    <div class="ai-qualification-head">
+                      <span class="ai-qualification-title">Поля для збору</span>
+                      <span v-if="aiOrderReady" class="ai-ready-badge">Усі дані зібрано</span>
+                    </div>
+
+                    <div v-if="aiSlotSummary" class="ai-slot-summary">
+                      {{ aiSlotSummary }}
+                    </div>
 
                     <div class="ai-collected-list">
                       <span class="ai-collected-title">Вже зібрано</span>
-                      <ul v-if="collectedFieldRows.length > 0" class="ai-collected-items">
-                        <li v-for="row in collectedFieldRows" :key="row.field">
+                      <ul v-if="visibleCollectedRows.length > 0" class="ai-collected-items">
+                        <li v-for="row in visibleCollectedRows" :key="row.field">
                           <strong>{{ row.field }}:</strong> {{ row.value }}
                         </li>
                       </ul>
                       <span v-else class="ai-qualification-collected">Ще нічого не зібрано.</span>
+                    </div>
+
+                    <div v-if="aiMissingSlotLabels.length > 0" class="ai-missing-list">
+                      <span class="ai-collected-title">Ще треба зібрати</span>
+                      <div class="ai-missing-badges">
+                        <span v-for="label in aiMissingSlotLabels" :key="label" class="ai-missing-badge">
+                          {{ label }}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div v-if="aiNextSlotLabel" class="ai-next-slot">
+                      <strong>Наступний крок:</strong> {{ aiNextSlotLabel }}
                     </div>
                   </div>
                 </template>
@@ -526,6 +546,34 @@ const collectedFieldRows = computed(() => {
     }))
     .filter((row) => row.value !== '');
 });
+const aiSlots = computed(() => (
+  Array.isArray(props.customer?.ai?.slots)
+    ? props.customer.ai.slots
+    : []
+));
+const aiCollectedSlotRows = computed(() => {
+  return aiSlots.value
+    .map((slot) => ({
+      field: String(slot?.label || slot?.key || '').trim(),
+      value: String(slot?.value_display ?? slot?.value ?? '').trim(),
+    }))
+    .filter((row) => row.field !== '' && row.value !== '');
+});
+const visibleCollectedRows = computed(() => {
+  return aiCollectedSlotRows.value.length > 0
+    ? aiCollectedSlotRows.value
+    : collectedFieldRows.value;
+});
+const aiMissingSlotLabels = computed(() => {
+  return Array.isArray(props.customer?.ai?.missing_slot_labels)
+    ? props.customer.ai.missing_slot_labels
+        .map((label) => String(label || '').trim())
+        .filter((label) => label !== '')
+    : [];
+});
+const aiNextSlotLabel = computed(() => String(props.customer?.ai?.next_slot_label || '').trim());
+const aiOrderReady = computed(() => Boolean(props.customer?.ai?.order_ready));
+const aiSlotSummary = computed(() => String(props.customer?.ai?.slot_summary || '').trim());
 const aiStatusNote = computed(() => {
   const lastError = String(props.customer?.ai?.last_error || '').trim();
   if (lastError !== '') {
@@ -1164,13 +1212,21 @@ const handleOrderClose = () => {
 .ai-switch input:checked + .ai-switch-track { background: #22c55e; }
 .ai-switch input:checked + .ai-switch-track::after { transform: translateX(20px); }
 .ai-qualification-block { display: flex; flex-direction: column; gap: 8px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; }
+.ai-qualification-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .ai-qualification-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8; font-weight: 700; }
+.ai-ready-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; color: #15803d; background: #dcfce7; border-radius: 999px; padding: 3px 8px; }
+.ai-slot-summary { font-size: 12px; line-height: 1.45; color: #334155; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px; }
 .ai-qualification-collected { font-size: 11px; color: #64748b; }
 .ai-collected-list { display: flex; flex-direction: column; gap: 6px; margin-top: 2px; }
 .ai-collected-title { font-size: 11px; font-weight: 700; color: #475569; }
 .ai-collected-items { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
 .ai-collected-items li { font-size: 12px; color: #334155; line-height: 1.35; }
 .ai-collected-items li strong { color: #0f172a; font-weight: 700; }
+.ai-missing-list { display: flex; flex-direction: column; gap: 6px; }
+.ai-missing-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.ai-missing-badge { display: inline-flex; align-items: center; min-height: 26px; padding: 0 10px; border-radius: 999px; background: #fff7ed; border: 1px solid #fdba74; color: #9a3412; font-size: 11px; font-weight: 700; }
+.ai-next-slot { font-size: 12px; line-height: 1.4; color: #1e3a8a; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 8px 10px; }
+.ai-next-slot strong { color: #1d4ed8; }
 .ai-status-note { display: flex; align-items: flex-start; gap: 8px; border-radius: 10px; padding: 9px 10px; font-size: 12px; line-height: 1.4; border: 1px solid #bfdbfe; background: #eff6ff; color: #1e3a8a; }
 .ai-status-note.is-warning { background: #fffbeb; border-color: #fde68a; color: #854d0e; }
 .ai-status-note.is-error { background: #fef2f2; border-color: #fecaca; color: #991b1b; }

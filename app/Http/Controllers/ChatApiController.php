@@ -784,12 +784,43 @@ class ChatApiController extends Controller
     }
 
     /**
-     * @return array{enabled: bool, global_enabled: bool, handoff_reason: ?string, status_note: ?string, status_code: ?string, last_error: ?string, last_topic_id: ?int, last_topic_name: ?string, last_reply_at: ?string, updated_at: ?string}
+     * @return array{
+     *     enabled: bool,
+     *     global_enabled: bool,
+     *     handoff_reason: ?string,
+     *     status_note: ?string,
+     *     status_code: ?string,
+     *     last_error: ?string,
+     *     last_topic_id: ?int,
+     *     last_topic_name: ?string,
+     *     last_reply_at: ?string,
+     *     updated_at: ?string,
+     *     slots: array<int, array<string, mixed>>,
+     *     missing_slots: array<int, string>,
+     *     missing_slot_labels: array<int, string>,
+     *     next_slot: ?string,
+     *     next_slot_label: ?string,
+     *     order_ready: bool,
+     *     slot_summary: ?string
+     * }
      */
     private function buildConversationAiState(ChatConversation $conversation): array
     {
         $meta = is_array($conversation->meta) ? $conversation->meta : [];
         $aiMeta = is_array(data_get($meta, 'ai')) ? data_get($meta, 'ai') : [];
+        $definitions = $this->normalizeConversationAiSlotDefinitions($aiMeta['slot_definitions'] ?? null);
+        $slotValues = is_array($aiMeta['slot_values'] ?? null) ? $aiMeta['slot_values'] : [];
+        $missingSlots = collect(is_array($aiMeta['missing_slots'] ?? null) ? $aiMeta['missing_slots'] : [])
+            ->filter(fn ($key) => is_string($key) && trim($key) !== '')
+            ->values()
+            ->all();
+        $nextSlot = is_string($aiMeta['next_slot'] ?? null)
+            ? trim((string) $aiMeta['next_slot'])
+            : null;
+
+        if ($nextSlot === '' || !array_key_exists($nextSlot, $definitions)) {
+            $nextSlot = null;
+        }
 
         $enabled = array_key_exists('enabled', $aiMeta)
             ? (bool) $aiMeta['enabled']
@@ -816,7 +847,148 @@ class ChatApiController extends Controller
                 : null,
             'last_reply_at' => isset($aiMeta['last_reply_at']) ? (string) $aiMeta['last_reply_at'] : null,
             'updated_at' => isset($aiMeta['updated_at']) ? (string) $aiMeta['updated_at'] : null,
+            'slots' => $this->buildConversationAiSlots($definitions, $slotValues, $missingSlots),
+            'missing_slots' => $missingSlots,
+            'missing_slot_labels' => collect($missingSlots)
+                ->map(fn (string $key) => (string) ($definitions[$key]['label'] ?? $this->humanizeAiSlotKey($key)))
+                ->values()
+                ->all(),
+            'next_slot' => $nextSlot,
+            'next_slot_label' => $nextSlot !== null
+                ? (string) ($definitions[$nextSlot]['label'] ?? $this->humanizeAiSlotKey($nextSlot))
+                : null,
+            'order_ready' => (bool) ($aiMeta['order_ready'] ?? false),
+            'slot_summary' => isset($aiMeta['slot_summary']) && trim((string) $aiMeta['slot_summary']) !== ''
+                ? trim((string) $aiMeta['slot_summary'])
+                : null,
         ];
+    }
+
+    /**
+     * @return array<string, array<string, mixed>>
+     */
+    private function defaultConversationAiSlotDefinitions(): array
+    {
+        return [
+            'model' => ['key' => 'model', 'label' => 'Модель', 'required' => true],
+            'color' => ['key' => 'color', 'label' => 'Колір', 'required' => false],
+            'size' => ['key' => 'size', 'label' => 'Розмір', 'required' => true],
+            'quantity' => ['key' => 'quantity', 'label' => 'Кількість', 'required' => false],
+            'city' => ['key' => 'city', 'label' => 'Місто', 'required' => true],
+            'delivery' => ['key' => 'delivery', 'label' => 'Відділення / адреса', 'required' => true],
+            'customer_name' => ['key' => 'customer_name', 'label' => "Ім'я", 'required' => true],
+            'phone' => ['key' => 'phone', 'label' => 'Телефон', 'required' => true],
+            'payment' => ['key' => 'payment', 'label' => 'Оплата', 'required' => false],
+        ];
+    }
+
+    /**
+     * @return array<string, array<string, mixed>>
+     */
+    private function normalizeConversationAiSlotDefinitions(mixed $definitions): array
+    {
+        $defaults = $this->defaultConversationAiSlotDefinitions();
+        $normalized = [];
+
+        if (!is_array($definitions)) {
+            return $defaults;
+        }
+
+        foreach ($definitions as $key => $definition) {
+            if (!is_array($definition)) {
+                continue;
+            }
+
+            $slotKey = is_string(data_get($definition, 'key')) && trim((string) data_get($definition, 'key')) !== ''
+                ? trim((string) data_get($definition, 'key'))
+                : (is_string($key) ? trim($key) : '');
+
+            if ($slotKey === '') {
+                continue;
+            }
+
+            $normalized[$slotKey] = [
+                'key' => $slotKey,
+                'label' => trim((string) data_get($definition, 'label')) ?: ($defaults[$slotKey]['label'] ?? $this->humanizeAiSlotKey($slotKey)),
+                'required' => (bool) data_get($definition, 'required', $defaults[$slotKey]['required'] ?? false),
+            ];
+        }
+
+        foreach ($defaults as $slotKey => $definition) {
+            if (array_key_exists($slotKey, $normalized)) {
+                continue;
+            }
+
+            $normalized[$slotKey] = $definition;
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param  array<string, array<string, mixed>>  $definitions
+     * @param  array<string, mixed>  $slotValues
+     * @param  array<int, string>  $missingSlots
+     * @return array<int, array<string, mixed>>
+     */
+    private function buildConversationAiSlots(array $definitions, array $slotValues, array $missingSlots): array
+    {
+        $missingLookup = array_fill_keys($missingSlots, true);
+        $keys = array_values(array_unique(array_merge(array_keys($definitions), array_keys($slotValues))));
+        $slots = [];
+
+        foreach ($keys as $key) {
+            if (!is_string($key) || trim($key) === '') {
+                continue;
+            }
+
+            $definition = $definitions[$key] ?? [
+                'key' => $key,
+                'label' => $this->humanizeAiSlotKey($key),
+                'required' => false,
+            ];
+            $value = $slotValues[$key] ?? null;
+            $valueDisplay = $this->formatConversationAiSlotValue($key, $value);
+
+            $slots[] = [
+                'key' => $key,
+                'label' => (string) ($definition['label'] ?? $this->humanizeAiSlotKey($key)),
+                'required' => (bool) ($definition['required'] ?? false),
+                'missing' => isset($missingLookup[$key]),
+                'value' => $value,
+                'value_display' => $valueDisplay !== '' ? $valueDisplay : null,
+            ];
+        }
+
+        return $slots;
+    }
+
+    private function formatConversationAiSlotValue(string $key, mixed $value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+
+        return match ($key) {
+            'quantity' => ((int) $value) > 0 ? ((int) $value) . ' шт.' : '',
+            default => trim((string) $value),
+        };
+    }
+
+    private function humanizeAiSlotKey(string $key): string
+    {
+        return match ($key) {
+            'customer_name' => "Ім'я",
+            'delivery' => 'Відділення / адреса',
+            'model' => 'Модель',
+            'color' => 'Колір',
+            'size' => 'Розмір',
+            'quantity' => 'Кількість',
+            'city' => 'Місто',
+            'phone' => 'Телефон',
+            'payment' => 'Оплата',
+            default => trim((string) preg_replace('/[_\-]+/u', ' ', $key)),
+        };
     }
 
     private function resolveGlobalAiEnabled(): bool
