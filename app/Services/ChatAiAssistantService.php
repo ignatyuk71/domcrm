@@ -207,6 +207,12 @@ class ChatAiAssistantService
         $replyText = $this->sanitizeReplyText((string) ($decision['reply_text'] ?? ''));
         $handoffRequired = (bool) ($decision['handoff_required'] ?? false);
         $shouldReply = (bool) ($decision['should_reply'] ?? false) && $replyText !== '';
+        $replyAttachments = $this->resolveReplyAttachments(
+            $decision['attachment_urls'] ?? [],
+            $knowledgeContext,
+            $message,
+            $replyText
+        );
         $summary = $this->normalizeSummary($decision);
         $lead = $this->normalizeLeadPayload($decision['collected_data'] ?? []);
         $leadStatus = $this->normalizeLeadStatus((string) ($decision['lead_status'] ?? 'new'));
@@ -220,7 +226,8 @@ class ChatAiAssistantService
                     $replyText,
                     $handoffRequired,
                     $leadStatus,
-                    (string) $runtimeSettings['model']
+                    (string) $runtimeSettings['model'],
+                    $replyAttachments
                 );
                 $conversation = $this->freshConversation($conversation);
             }
@@ -459,6 +466,8 @@ class ChatAiAssistantService
 
         $instructions[] = 'Для фото використовуй тільки URL з релевантного медіа-контексту.';
         $instructions[] = 'Для ціни та розмірів використовуй тільки релевантні товари з контексту.';
+        $instructions[] = 'Коли клієнт просить показати/надіслати фото, заповнюй attachment_urls (1-3 URL) тільки з цього контексту.';
+        $instructions[] = 'Якщо фото не запитували або URL немає в контексті, поверни attachment_urls як порожній масив.';
 
         return implode("\n", $instructions);
     }
@@ -538,6 +547,247 @@ class ChatAiAssistantService
         $input = [...$input, ...$transcript];
 
         return implode("\n", $input);
+    }
+
+    /**
+     * @param  mixed  $attachmentUrls
+     * @param  array<string, mixed>  $knowledgeContext
+     * @return array<int, array{meta_payload: array<string, string>, stored_attachment: array<string, mixed>}>
+     */
+    private function resolveReplyAttachments(
+        mixed $attachmentUrls,
+        array $knowledgeContext,
+        ChatMessage $message,
+        string $replyText
+    ): array {
+        $allowedMap = $this->allowedAttachmentMap($knowledgeContext);
+        if ($allowedMap === []) {
+            return [];
+        }
+
+        $selected = [];
+        foreach ((array) $attachmentUrls as $rawUrl) {
+            if (!is_string($rawUrl)) {
+                continue;
+            }
+
+            $normalizedUrl = $this->normalizeAttachmentUrl($rawUrl);
+            if ($normalizedUrl === '' || !isset($allowedMap[$normalizedUrl])) {
+                continue;
+            }
+
+            $selected[$normalizedUrl] = $normalizedUrl;
+            if (count($selected) >= 3) {
+                break;
+            }
+        }
+
+        if ($selected === [] && $this->isPhotoIntent($message, $replyText)) {
+            foreach ($this->fallbackAttachmentCandidates($message, $knowledgeContext) as $candidateUrl) {
+                $normalizedUrl = $this->normalizeAttachmentUrl($candidateUrl);
+                if ($normalizedUrl === '' || !isset($allowedMap[$normalizedUrl])) {
+                    continue;
+                }
+
+                $selected[$normalizedUrl] = $normalizedUrl;
+                if (count($selected) >= 3) {
+                    break;
+                }
+            }
+        }
+
+        return array_map(
+            fn (string $url) => $this->buildAttachmentPayload($url),
+            array_values($selected)
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $knowledgeContext
+     * @return array<string, string>
+     */
+    private function allowedAttachmentMap(array $knowledgeContext): array
+    {
+        $map = [];
+
+        foreach ((array) ($knowledgeContext['media'] ?? []) as $media) {
+            $url = $this->normalizeAttachmentUrl((string) ($media['url'] ?? ''));
+            if ($url === '') {
+                continue;
+            }
+            $map[$url] = $url;
+        }
+
+        foreach ((array) ($knowledgeContext['products'] ?? []) as $product) {
+            $url = $this->normalizeAttachmentUrl((string) ($product['photo_url'] ?? ''));
+            if ($url === '') {
+                continue;
+            }
+            $map[$url] = $url;
+        }
+
+        return $map;
+    }
+
+    /**
+     * @param  array<string, mixed>  $knowledgeContext
+     * @return array<int, string>
+     */
+    private function fallbackAttachmentCandidates(ChatMessage $message, array $knowledgeContext): array
+    {
+        $query = $this->normalizeForMatch((string) $message->text);
+        $tokens = array_values(array_filter(
+            preg_split('/[\s,.;:!?()"\'«»\-\/]+/u', $query) ?: [],
+            fn (string $token) => mb_strlen($token) >= 4
+        ));
+
+        $scored = [];
+        foreach ((array) ($knowledgeContext['products'] ?? []) as $index => $product) {
+            $url = trim((string) ($product['photo_url'] ?? ''));
+            if ($url === '') {
+                continue;
+            }
+
+            $score = 1;
+            $title = $this->normalizeForMatch((string) ($product['title'] ?? ''));
+            $sku = $this->normalizeForMatch((string) ($product['sku'] ?? ''));
+
+            foreach ($tokens as $token) {
+                if ($title !== '' && Str::contains($title, $token)) {
+                    $score += 5;
+                }
+                if ($sku !== '' && Str::contains($sku, $token)) {
+                    $score += 8;
+                }
+            }
+
+            $scored[] = [
+                'url' => $url,
+                'score' => $score,
+                'order' => (int) $index,
+            ];
+        }
+
+        foreach ((array) ($knowledgeContext['media'] ?? []) as $index => $media) {
+            $url = trim((string) ($media['url'] ?? ''));
+            if ($url === '') {
+                continue;
+            }
+
+            $score = 1;
+            $label = $this->normalizeForMatch((string) ($media['label'] ?? ''));
+            $type = $this->normalizeForMatch((string) ($media['media_type'] ?? ''));
+
+            foreach ($tokens as $token) {
+                if ($label !== '' && Str::contains($label, $token)) {
+                    $score += 4;
+                }
+                if ($type !== '' && Str::contains($type, $token)) {
+                    $score += 2;
+                }
+            }
+
+            $scored[] = [
+                'url' => $url,
+                'score' => $score,
+                'order' => 1000 + (int) $index,
+            ];
+        }
+
+        usort($scored, function (array $left, array $right) {
+            return [$right['score'], $left['order']] <=> [$left['score'], $right['order']];
+        });
+
+        $candidates = [];
+        foreach ($scored as $item) {
+            $normalizedUrl = $this->normalizeAttachmentUrl((string) ($item['url'] ?? ''));
+            if ($normalizedUrl === '' || isset($candidates[$normalizedUrl])) {
+                continue;
+            }
+            $candidates[$normalizedUrl] = $normalizedUrl;
+        }
+
+        return array_values($candidates);
+    }
+
+    private function normalizeAttachmentUrl(string $url): string
+    {
+        $url = trim($url);
+        if ($url === '') {
+            return '';
+        }
+
+        if (!str_starts_with($url, 'http')) {
+            return url(ltrim($url, '/'));
+        }
+
+        return $url;
+    }
+
+    private function isPhotoIntent(ChatMessage $message, string $replyText): bool
+    {
+        $source = $this->normalizeForMatch(trim((string) $message->text . ' ' . $replyText));
+        if ($source === '') {
+            return false;
+        }
+
+        $needles = [
+            'фото',
+            'показ',
+            'побач',
+            'картин',
+            'зображ',
+            'колаж',
+            'палітр',
+            'скинь',
+            'надішл',
+        ];
+
+        foreach ($needles as $needle) {
+            if (Str::contains($source, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return array{meta_payload: array<string, string>, stored_attachment: array<string, mixed>}
+     */
+    private function buildAttachmentPayload(string $url): array
+    {
+        $attachmentType = $this->inferAttachmentTypeByUrl($url);
+
+        return [
+            'meta_payload' => [
+                'type' => $attachmentType,
+                'url' => $url,
+            ],
+            'stored_attachment' => [
+                'type' => $attachmentType,
+                'url' => $url,
+                'meta' => [
+                    'source' => 'ai_knowledge',
+                ],
+            ],
+        ];
+    }
+
+    private function inferAttachmentTypeByUrl(string $url): string
+    {
+        $path = strtolower(parse_url($url, PHP_URL_PATH) ?? $url);
+        if (preg_match('/\.(mp4|mov|webm)$/i', $path)) {
+            return 'video';
+        }
+        if (preg_match('/\.(mp3|wav|ogg)$/i', $path)) {
+            return 'audio';
+        }
+        if (preg_match('/\.(pdf|doc|docx|xls|xlsx)$/i', $path)) {
+            return 'file';
+        }
+
+        return 'image';
     }
 
     /**
@@ -834,6 +1084,12 @@ class ChatAiAssistantService
                     ],
                     'additionalProperties' => false,
                 ],
+                'attachment_urls' => [
+                    'type' => 'array',
+                    'items' => [
+                        'type' => 'string',
+                    ],
+                ],
             ],
             'required' => [
                 'should_reply',
@@ -843,6 +1099,7 @@ class ChatAiAssistantService
                 'summary',
                 'lead_status',
                 'collected_data',
+                'attachment_urls',
             ],
             'additionalProperties' => false,
         ];
@@ -853,7 +1110,8 @@ class ChatAiAssistantService
         string $replyText,
         bool $handoffRequired,
         string $leadStatus,
-        string $model
+        string $model,
+        array $attachments = []
     ): ?ChatMessage {
         $customer = $conversation->customer;
         $contact = $conversation->contact;
@@ -862,41 +1120,79 @@ class ChatAiAssistantService
             throw new RuntimeException('Для AI-відповіді не вистачає customer/contact.');
         }
 
-        $metaResult = $this->metaService->sendMessage(
-            $customer,
-            $replyText,
-            [],
-            $contact->platform,
-            $contact->external_user_id
-        );
+        $sentAt = now(config('app.timezone', 'Europe/Kyiv'));
+        $lastMessage = null;
 
-        if (!$metaResult) {
-            throw new RuntimeException('Meta API не прийняв AI-повідомлення.');
+        if ($attachments !== []) {
+            foreach ($attachments as $index => $attachment) {
+                $text = $index === 0 ? $replyText : '';
+                $metaResult = $this->metaService->sendMessage(
+                    $customer,
+                    $text,
+                    [$attachment['meta_payload']],
+                    $contact->platform,
+                    $contact->external_user_id
+                );
+
+                if (!$metaResult) {
+                    throw new RuntimeException('Meta API не прийняв AI-повідомлення з вкладенням.');
+                }
+
+                $lastMessage = $this->chatService->storeMessage($conversation, [
+                    'direction' => 'outbound',
+                    'external_message_id' => $metaResult['message_id'] ?? null,
+                    'delivery_status' => 'sent',
+                    'source' => 'system',
+                    'text' => $text !== '' ? $text : null,
+                    'sent_at' => $sentAt,
+                    'meta' => [
+                        'ai_generated' => true,
+                        'provider' => 'openai',
+                        'model' => $model,
+                        'handoff_required' => $handoffRequired,
+                        'lead_status' => $leadStatus,
+                    ],
+                ], [$attachment['stored_attachment']]);
+
+                $conversation = $this->chatService->updateConversationAfterMessage($conversation, $lastMessage, false);
+            }
+        } else {
+            $metaResult = $this->metaService->sendMessage(
+                $customer,
+                $replyText,
+                [],
+                $contact->platform,
+                $contact->external_user_id
+            );
+
+            if (!$metaResult) {
+                throw new RuntimeException('Meta API не прийняв AI-повідомлення.');
+            }
+
+            $lastMessage = $this->chatService->storeMessage($conversation, [
+                'direction' => 'outbound',
+                'external_message_id' => $metaResult['message_id'] ?? null,
+                'delivery_status' => 'sent',
+                'source' => 'system',
+                'text' => $replyText,
+                'sent_at' => $sentAt,
+                'meta' => [
+                    'ai_generated' => true,
+                    'provider' => 'openai',
+                    'model' => $model,
+                    'handoff_required' => $handoffRequired,
+                    'lead_status' => $leadStatus,
+                ],
+            ]);
+
+            $conversation = $this->chatService->updateConversationAfterMessage($conversation, $lastMessage, false);
         }
-
-        $message = $this->chatService->storeMessage($conversation, [
-            'direction' => 'outbound',
-            'external_message_id' => $metaResult['message_id'] ?? null,
-            'delivery_status' => 'sent',
-            'source' => 'system',
-            'text' => $replyText,
-            'sent_at' => now(config('app.timezone', 'Europe/Kyiv')),
-            'meta' => [
-                'ai_generated' => true,
-                'provider' => 'openai',
-                'model' => $model,
-                'handoff_required' => $handoffRequired,
-                'lead_status' => $leadStatus,
-            ],
-        ]);
-
-        $conversation = $this->chatService->updateConversationAfterMessage($conversation, $message, false);
 
         if ($handoffRequired) {
             $this->moveConversationToStage($conversation, 'new');
         }
 
-        return $message;
+        return $lastMessage;
     }
 
     private function moveConversationToStage(ChatConversation $conversation, string $stageCode): void
