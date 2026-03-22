@@ -550,7 +550,7 @@ class ChatAiAssistantService
             $instructions[] = 'Зараз модель не визначена. Потрібно коротко уточнити, яку саме модель клієнт має на увазі.';
             $instructions[] = 'Сформуй відповідь у форматі: привітання + прохання вибрати модель (номер) + прохання написати розмір.';
             $instructions[] = 'Для цього кроку handoff_required має бути false.';
-            $instructions[] = 'Для цього кроку обовʼязково заповни attachment_urls колажами із списку showcase_media.';
+            $instructions[] = 'Не додавай attachment_urls, якщо клієнт окремо не просив показати фото.';
         }
 
         if ((bool) ($knowledgeContext['requires_size_chart'] ?? false)) {
@@ -746,22 +746,16 @@ class ChatAiAssistantService
         }
 
         $photoRequested = $this->isPhotoIntent($message);
-        $forceShowcase = (bool) ($knowledgeContext['requires_model_choice'] ?? false)
-            && !empty($knowledgeContext['showcase_media']);
         $forceSizeChart = (bool) ($knowledgeContext['requires_size_chart'] ?? false)
             && !empty($knowledgeContext['size_chart_media']);
 
-        if (!$photoRequested && !$forceShowcase && !$forceSizeChart) {
+        if (!$photoRequested && !$forceSizeChart) {
             return [];
         }
 
         $maxAttachments = $forceSizeChart
             ? max(1, count((array) ($knowledgeContext['size_chart_media'] ?? [])))
-            : (
-                $forceShowcase
-                    ? max(1, count((array) ($knowledgeContext['showcase_media'] ?? [])))
-                    : max(1, count((array) $attachmentUrls))
-            );
+            : max(1, count((array) $attachmentUrls));
         $selected = [];
         $appendUrl = function (string $rawUrl) use (&$selected, $allowedMap, $maxAttachments): void {
             if (count($selected) >= $maxAttachments) {
@@ -790,7 +784,7 @@ class ChatAiAssistantService
             }
         }
 
-        if ($forceShowcase) {
+        if ($photoRequested) {
             foreach ((array) ($knowledgeContext['showcase_media'] ?? []) as $mediaItem) {
                 $appendUrl((string) ($mediaItem['url'] ?? ''));
             }
