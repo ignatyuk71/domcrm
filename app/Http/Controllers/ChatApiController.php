@@ -784,7 +784,7 @@ class ChatApiController extends Controller
     }
 
     /**
-     * @return array{enabled: bool, global_enabled: bool, handoff_reason: ?string, updated_at: ?string}
+     * @return array{enabled: bool, global_enabled: bool, handoff_reason: ?string, status_note: ?string, status_code: ?string, last_error: ?string, last_topic_id: ?int, last_topic_name: ?string, last_reply_at: ?string, updated_at: ?string}
      */
     private function buildConversationAiState(ChatConversation $conversation): array
     {
@@ -801,6 +801,20 @@ class ChatApiController extends Controller
             'handoff_reason' => isset($aiMeta['handoff_reason']) && trim((string) $aiMeta['handoff_reason']) !== ''
                 ? trim((string) $aiMeta['handoff_reason'])
                 : null,
+            'status_note' => isset($aiMeta['status_note']) && trim((string) $aiMeta['status_note']) !== ''
+                ? trim((string) $aiMeta['status_note'])
+                : null,
+            'status_code' => isset($aiMeta['status_code']) && trim((string) $aiMeta['status_code']) !== ''
+                ? trim((string) $aiMeta['status_code'])
+                : null,
+            'last_error' => isset($aiMeta['last_error']) && trim((string) $aiMeta['last_error']) !== ''
+                ? trim((string) $aiMeta['last_error'])
+                : null,
+            'last_topic_id' => isset($aiMeta['last_topic_id']) ? (int) $aiMeta['last_topic_id'] : null,
+            'last_topic_name' => isset($aiMeta['last_topic_name']) && trim((string) $aiMeta['last_topic_name']) !== ''
+                ? trim((string) $aiMeta['last_topic_name'])
+                : null,
+            'last_reply_at' => isset($aiMeta['last_reply_at']) ? (string) $aiMeta['last_reply_at'] : null,
             'updated_at' => isset($aiMeta['updated_at']) ? (string) $aiMeta['updated_at'] : null,
         ];
     }
@@ -833,11 +847,16 @@ class ChatApiController extends Controller
         if ($enabled) {
             $aiMeta['handoff_reason'] = null;
             $aiMeta['handoff_at'] = null;
+            $aiMeta['status_code'] = 'enabled_by_manager';
+            $aiMeta['status_note'] = 'AI увімкнено менеджером для цього діалогу.';
+            $aiMeta['last_error'] = null;
         } else {
             $aiMeta['handoff_reason'] = trim((string) $reason) !== ''
                 ? trim((string) $reason)
                 : ($aiMeta['handoff_reason'] ?? 'Передано менеджеру');
             $aiMeta['handoff_at'] = now()->toIso8601String();
+            $aiMeta['status_code'] = 'handoff_manager';
+            $aiMeta['status_note'] = 'Діалог передано менеджеру.';
         }
 
         $meta['ai'] = $aiMeta;

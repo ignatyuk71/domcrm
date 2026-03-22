@@ -44,6 +44,12 @@ class ChatAiAssistantService
                 'status' => 'skipped',
                 'reason' => $skipReason,
             ]);
+            if ($message->conversation) {
+                $this->setConversationAiStatus($message->conversation, [
+                    'status_code' => "skip_{$skipReason}",
+                    'status_note' => $this->buildSkipStatusNote($skipReason),
+                ]);
+            }
 
             return ['status' => 'skip', 'reason' => $skipReason];
         }
@@ -93,6 +99,11 @@ class ChatAiAssistantService
                 'reason' => 'openai_failed',
                 'error' => Str::limit($e->getMessage(), 250),
             ]);
+            $this->setConversationAiStatus($conversation, [
+                'status_code' => 'openai_failed',
+                'status_note' => 'AI не зміг сформувати відповідь. Потрібна перевірка менеджером.',
+                'last_error' => Str::limit($e->getMessage(), 250),
+            ]);
 
             return ['status' => 'error', 'reason' => 'openai_failed'];
         }
@@ -110,12 +121,30 @@ class ChatAiAssistantService
 
         $handoff = (bool) ($reply['handoff'] ?? false);
         if ($handoff) {
+            $handoffReason = trim((string) ($reply['handoff_reason'] ?? ''));
             $this->setConversationAiEnabled($conversation, false, [
-                'handoff_reason' => trim((string) ($reply['handoff_reason'] ?? '')),
+                'handoff_reason' => $handoffReason,
                 'handoff_at' => now()->toIso8601String(),
+                'status_code' => 'handoff_ai',
+                'status_note' => $handoffReason !== ''
+                    ? "AI передав діалог менеджеру: {$handoffReason}"
+                    : 'AI передав діалог менеджеру.',
+                'last_error' => null,
             ]);
         } else {
-            $this->syncConversationAiContext($conversation, $topic?->id);
+            $this->syncConversationAiContext($conversation, $topic, [
+                'status_code' => 'replied',
+                'status_note' => $this->buildRuntimeStatusNote(
+                    $topic,
+                    $requestedSize,
+                    $isPhotoRequest,
+                    $sentMediaCount
+                ),
+                'last_error' => null,
+                'last_requested_size' => $requestedSize,
+                'last_photo_request' => $isPhotoRequest,
+                'last_all_photo_request' => $isAllPhotosRequest,
+            ]);
         }
 
         $this->markMessageAiState($message, [
@@ -824,14 +853,41 @@ class ChatAiAssistantService
         $conversation->save();
     }
 
-    private function syncConversationAiContext(ChatConversation $conversation, ?int $topicId): void
+    /**
+     * @param  array<string, mixed>  $contextMeta
+     */
+    private function syncConversationAiContext(ChatConversation $conversation, ?ChatAiTopic $topic, array $contextMeta = []): void
     {
         $meta = is_array($conversation->meta) ? $conversation->meta : [];
         $ai = is_array(data_get($meta, 'ai')) ? data_get($meta, 'ai') : [];
 
         $ai['enabled'] = array_key_exists('enabled', $ai) ? (bool) $ai['enabled'] : true;
         $ai['last_reply_at'] = now()->toIso8601String();
-        $ai['last_topic_id'] = $topicId;
+        $ai['last_topic_id'] = $topic?->id;
+        $ai['last_topic_name'] = $topic?->name;
+
+        foreach ($contextMeta as $key => $value) {
+            $ai[$key] = $value;
+        }
+
+        $meta['ai'] = $ai;
+        $conversation->meta = $meta;
+        $conversation->save();
+    }
+
+    /**
+     * @param  array<string, mixed>  $contextMeta
+     */
+    private function setConversationAiStatus(ChatConversation $conversation, array $contextMeta = []): void
+    {
+        $meta = is_array($conversation->meta) ? $conversation->meta : [];
+        $ai = is_array(data_get($meta, 'ai')) ? data_get($meta, 'ai') : [];
+
+        foreach ($contextMeta as $key => $value) {
+            $ai[$key] = $value;
+        }
+
+        $ai['updated_at'] = now()->toIso8601String();
 
         $meta['ai'] = $ai;
         $conversation->meta = $meta;
@@ -854,6 +910,50 @@ class ChatAiAssistantService
         $meta['ai'] = $ai;
         $message->meta = $meta;
         $message->save();
+    }
+
+    private function buildSkipStatusNote(string $skipReason): string
+    {
+        return match ($skipReason) {
+            'conversation_context_missing' => 'Немає повного контексту діалогу для AI.',
+            'not_inbound' => 'AI пропустив повідомлення, бо воно не вхідне.',
+            'conversation_not_open' => 'AI не відповідає, бо діалог закритий або в архіві.',
+            'openai_key_missing' => 'Відсутній OPENAI_API_KEY, AI тимчасово не працює.',
+            'ai_disabled_global' => 'AI глобально вимкнений у системі.',
+            'ai_disabled_conversation' => 'AI вимкнений для цього діалогу.',
+            'not_last_message' => 'Клієнт надіслав новіше повідомлення, AI пропустив старе.',
+            'already_processed' => 'Це повідомлення вже оброблене AI.',
+            'operator_already_replied' => 'Менеджер уже відповів у діалозі.',
+            default => 'AI пропустив це повідомлення за умовами безпеки.',
+        };
+    }
+
+    private function buildRuntimeStatusNote(
+        ?ChatAiTopic $topic,
+        ?int $requestedSize,
+        bool $isPhotoRequest,
+        int $sentMediaCount
+    ): string {
+        $topicName = trim((string) ($topic?->name ?? ''));
+
+        if ($isPhotoRequest && $sentMediaCount > 0) {
+            $topicText = $topicName !== '' ? " по темі «{$topicName}»" : '';
+            return "AI надіслав {$sentMediaCount} фото{$topicText}.";
+        }
+
+        if ($isPhotoRequest && $sentMediaCount === 0) {
+            return 'Клієнт просив фото, але в темі немає доступних медіа.';
+        }
+
+        if ($requestedSize !== null) {
+            return "AI опрацював запит по розміру {$requestedSize}.";
+        }
+
+        if ($topicName !== '') {
+            return "AI працює в темі «{$topicName}».";
+        }
+
+        return 'AI відповів клієнту у вільному режимі без визначеної теми.';
     }
 
     private function isPhotoRequest(string $text): bool

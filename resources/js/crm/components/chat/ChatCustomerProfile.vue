@@ -272,15 +272,26 @@
                     </label>
                   </div>
 
-                  <div class="ai-kv-grid">
-                    <div class="ai-kv-item">
-                      <span class="ai-kv-label">Модель</span>
-                      <span class="ai-kv-value">{{ aiRuntime.model || '—' }}</span>
+                  <div class="ai-qualification-block">
+                    <span class="ai-qualification-title">Поля для збору</span>
+                    <div class="ai-qualification-list">
+                      <span
+                        v-for="field in qualificationFields"
+                        :key="field"
+                        class="ai-qualification-label"
+                        :class="isFieldCollected(field) ? 'is-filled' : 'is-empty'"
+                      >
+                        {{ field }}
+                      </span>
                     </div>
-                    <div class="ai-kv-item">
-                      <span class="ai-kv-label">Повідомлень у контексті</span>
-                      <span class="ai-kv-value">{{ aiRuntime.max_messages || 12 }}</span>
-                    </div>
+                    <span class="ai-qualification-collected">
+                      Вже зібрано: {{ collectedFieldsText }}
+                    </span>
+                  </div>
+
+                  <div class="ai-status-note" :class="aiStatusClass">
+                    <i class="bi" :class="aiStatusIcon"></i>
+                    <span>{{ aiStatusNote }}</span>
                   </div>
 
                   <div v-if="props.customer?.ai?.handoff_reason" class="ai-handoff-note">
@@ -298,8 +309,6 @@
                       <span v-if="aiActionLoading" class="loader-mini"></span>
                       Передати менеджеру
                     </button>
-
-                    <a href="/settings/ai" class="btn-ai-link">Налаштування AI</a>
                   </div>
                 </template>
               </div>
@@ -358,6 +367,7 @@ const aiRuntime = reactive({
   assistant_name: '',
   model: '',
   max_messages: 12,
+  qualification_fields: [],
 });
 const placeholderThumb = 'https://via.placeholder.com/48x48?text=%20';
 const avatarFailed = ref(false);
@@ -496,6 +506,97 @@ const conversationAiEnabled = computed(() => {
 
   return globalAiEnabled.value;
 });
+const qualificationFields = computed(() => {
+  const fields = Array.isArray(aiRuntime.qualification_fields)
+    ? aiRuntime.qualification_fields
+    : [];
+
+  const normalized = fields
+    .map((field) => String(field || '').trim())
+    .filter((field) => field !== '');
+
+  if (normalized.length > 0) {
+    return normalized;
+  }
+
+  return ['імʼя', 'телефон', 'товар', 'бюджет', 'термін', 'місто'];
+});
+const collectedFieldsText = computed(() => {
+  const collected = qualificationFields.value.filter((field) => isFieldCollected(field));
+  return collected.length > 0 ? collected.join(', ') : 'нічого';
+});
+const aiStatusNote = computed(() => {
+  const lastError = String(props.customer?.ai?.last_error || '').trim();
+  if (lastError !== '') {
+    return `Помилка AI: ${lastError}`;
+  }
+
+  const statusNote = String(props.customer?.ai?.status_note || '').trim();
+  if (statusNote !== '') {
+    return statusNote;
+  }
+
+  const handoffReason = String(props.customer?.ai?.handoff_reason || '').trim();
+  if (handoffReason !== '') {
+    return `Передано менеджеру: ${handoffReason}`;
+  }
+
+  if (!globalAiEnabled.value) {
+    return 'AI глобально вимкнений у системі.';
+  }
+
+  if (!conversationAiEnabled.value) {
+    return 'AI вимкнено в цьому діалозі менеджером.';
+  }
+
+  return 'AI активний у цьому чаті та обробляє нові вхідні повідомлення клієнта.';
+});
+const aiStatusClass = computed(() => {
+  const hasError = String(props.customer?.ai?.last_error || '').trim() !== '';
+  if (hasError) {
+    return 'is-error';
+  }
+
+  if (!conversationAiEnabled.value || String(props.customer?.ai?.handoff_reason || '').trim() !== '') {
+    return 'is-warning';
+  }
+
+  return 'is-info';
+});
+const aiStatusIcon = computed(() => {
+  if (aiStatusClass.value === 'is-error') {
+    return 'bi-exclamation-octagon';
+  }
+
+  if (aiStatusClass.value === 'is-warning') {
+    return 'bi-person-raised-hand';
+  }
+
+  return 'bi-info-circle';
+});
+
+const normalizeFieldKey = (value) => String(value || '')
+  .toLowerCase()
+  .replace(/’/g, "'")
+  .trim();
+
+const isFieldCollected = (field) => {
+  const key = normalizeFieldKey(field);
+
+  if (key.includes('ім') || key.includes('прізв')) {
+    return Boolean(form.first_name.trim() && form.last_name.trim());
+  }
+
+  if (key.includes('тел')) {
+    return Boolean(form.phone && isPhoneValid.value);
+  }
+
+  if (key.includes('email') || key.includes('e-mail') || key.includes('емейл') || key.includes('пошта')) {
+    return Boolean(String(form.email || '').trim());
+  }
+
+  return false;
+};
 
 function syncFormFromCustomer(customer, { resetPanels = false } = {}) {
   if (!customer) {
@@ -608,6 +709,9 @@ const loadAiRuntimeSettings = async () => {
     aiRuntime.assistant_name = settings.assistant_name || '';
     aiRuntime.model = settings.model || '';
     aiRuntime.max_messages = Number(settings.max_messages || 12);
+    aiRuntime.qualification_fields = Array.isArray(settings.qualification_fields)
+      ? settings.qualification_fields
+      : [];
   } catch (e) {
     console.error('Не вдалося завантажити AI налаштування', e);
   } finally {
@@ -1057,18 +1161,23 @@ const handleOrderClose = () => {
 .ai-switch-track::after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: all 0.2s ease; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.25); }
 .ai-switch input:checked + .ai-switch-track { background: #22c55e; }
 .ai-switch input:checked + .ai-switch-track::after { transform: translateX(20px); }
-.ai-kv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.ai-kv-item { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
-.ai-kv-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8; font-weight: 700; }
-.ai-kv-value { font-size: 13px; font-weight: 700; color: #0f172a; }
+.ai-qualification-block { display: flex; flex-direction: column; gap: 8px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; }
+.ai-qualification-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8; font-weight: 700; }
+.ai-qualification-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.ai-qualification-label { font-size: 11px; font-weight: 700; border-radius: 999px; padding: 4px 10px; border: 1px solid #cbd5e1; background: #f8fafc; color: #475569; }
+.ai-qualification-label.is-filled { background: #dcfce7; border-color: #bbf7d0; color: #15803d; }
+.ai-qualification-label.is-empty { background: #f8fafc; border-color: #cbd5e1; color: #64748b; }
+.ai-qualification-collected { font-size: 11px; color: #64748b; }
+.ai-status-note { display: flex; align-items: flex-start; gap: 8px; border-radius: 10px; padding: 9px 10px; font-size: 12px; line-height: 1.4; border: 1px solid #bfdbfe; background: #eff6ff; color: #1e3a8a; }
+.ai-status-note.is-warning { background: #fffbeb; border-color: #fde68a; color: #854d0e; }
+.ai-status-note.is-error { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+.ai-status-note i { font-size: 14px; margin-top: 1px; }
 .ai-handoff-note { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #854d0e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 9px 10px; }
 .ai-actions-row { display: flex; gap: 8px; }
-.btn-ai-secondary, .btn-ai-link { height: 38px; border-radius: 8px; padding: 0 12px; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; }
+.btn-ai-secondary { height: 38px; border-radius: 8px; padding: 0 12px; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; }
 .btn-ai-secondary { border: 1px solid #cbd5e1; background: #fff; color: #1e293b; cursor: pointer; flex: 1; }
 .btn-ai-secondary:hover:not(:disabled) { background: #f8fafc; border-color: #94a3b8; }
 .btn-ai-secondary:disabled { opacity: 0.7; cursor: not-allowed; }
-.btn-ai-link { border: 1px solid #dbeafe; background: #eff6ff; color: #1d4ed8; }
-.btn-ai-link:hover { background: #dbeafe; }
 .ai-inline-loader { display: inline-flex; align-items: center; gap: 8px; color: #64748b; font-size: 12px; }
 .loader-mini { width: 14px; height: 14px; border: 2px solid #cbd5e1; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; }
 
@@ -1137,10 +1246,6 @@ const handleOrderClose = () => {
 
   .profile-mobile-header {
     display: flex;
-  }
-
-  .ai-kv-grid {
-    grid-template-columns: 1fr;
   }
 
   .ai-actions-row {
