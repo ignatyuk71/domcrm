@@ -506,7 +506,7 @@ class ChatAiAssistantService
 
             if (!empty($knowledgeContext['products'])) {
                 $input[] = 'Релевантні товари теми:';
-                foreach ($knowledgeContext['products'] as $idx => $product) {
+                foreach ($knowledgeContext['products'] as $product) {
                     $parts = [$product['title']];
 
                     if ($product['price'] !== null) {
@@ -525,7 +525,7 @@ class ChatAiAssistantService
                         $parts[] = 'фото ' . $product['photo_url'];
                     }
 
-                    $input[] = ($idx + 1) . '. ' . implode('; ', $parts);
+                    $input[] = '- ' . implode('; ', $parts);
                 }
             }
 
