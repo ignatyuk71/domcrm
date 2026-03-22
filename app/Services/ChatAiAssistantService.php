@@ -2251,6 +2251,10 @@ class ChatAiAssistantService
         $salesSlots = $this->normalizeSalesSlots($salesSlots);
         $source = $message ? $this->normalizeForMatch((string) $message->text) : '';
 
+        if ($this->shouldCollectVariantBeforeModel($knowledgeContext, $salesSlots, $source)) {
+            return $this->looksLikeColorPreference($source) ? 'color' : 'size';
+        }
+
         if ((bool) ($knowledgeContext['requires_model_choice'] ?? false) || empty($salesSlots['product_id'])) {
             return 'product_id';
         }
@@ -2563,8 +2567,14 @@ class ChatAiAssistantService
             'product_id' => 'Добрий день! Уточніть, будь ласка, яка саме модель вас цікавить. Напишіть номер моделі та ваш розмір.',
             'size' => (bool) ($knowledgeContext['requires_size_chart'] ?? false)
                 ? 'Надсилаю розмірну сітку у вкладенні. Напишіть, будь ласка, ваш розмір або довжину стопи в см.'
-                : 'Напишіть, будь ласка, який саме розмір вам потрібен.',
-            'color' => 'Підкажіть, будь ласка, який колір вам потрібен.',
+                : (
+                    empty($salesSlots['product_id']) && !empty($knowledgeContext['selected_topic']['id'])
+                        ? 'Теплі моделі є. Напишіть, будь ласка, який розмір вам потрібен, і підберу варіанти.'
+                        : 'Напишіть, будь ласка, який саме розмір вам потрібен.'
+                ),
+            'color' => empty($salesSlots['product_id']) && !empty($knowledgeContext['selected_topic']['id'])
+                ? 'Підкажіть, будь ласка, який колір вам потрібен, і підберу варіанти.'
+                : 'Підкажіть, будь ласка, який колір вам потрібен.',
             'qty' => $salesSlots['size'] !== '' && !empty($knowledgeContext['selected_product']['title'])
                 ? 'Розмір ' . $salesSlots['size'] . ' для моделі "' . $this->limitText((string) $knowledgeContext['selected_product']['title'], 80) . '" прийняв. Скільки пар потрібно?'
                 : 'Скільки пар вам потрібно?',
@@ -2663,6 +2673,66 @@ class ChatAiAssistantService
         }
 
         return $replyText;
+    }
+
+    /**
+     * @param  array<string, mixed>  $knowledgeContext
+     * @param  array<string, mixed>  $salesSlots
+     */
+    private function shouldCollectVariantBeforeModel(array $knowledgeContext, array $salesSlots, string $source): bool
+    {
+        if ($source === '' || !empty($salesSlots['product_id'])) {
+            return false;
+        }
+
+        if (empty($knowledgeContext['selected_topic']['id'])) {
+            return false;
+        }
+
+        if ($this->looksLikeSizeValue($source)) {
+            return true;
+        }
+
+        if ($this->containsAny($source, [
+            'нічого не обираю',
+            'не обираю',
+            'інша модель',
+            'інший варіант',
+            'щось інше',
+            'тепл',
+            'мяк',
+            'м’я',
+            "м'я",
+            'хутр',
+            'мех',
+            'домашн',
+        ])) {
+            return true;
+        }
+
+        return $this->looksLikeColorPreference($source);
+    }
+
+    private function looksLikeColorPreference(string $source): bool
+    {
+        if ($source === '') {
+            return false;
+        }
+
+        return $this->containsAny($source, [
+            'колір',
+            'кольор',
+            'сір',
+            'чорн',
+            'біли',
+            'блакит',
+            'червон',
+            'рожев',
+            'корич',
+            'капуч',
+            'електрик',
+            'малинов',
+        ]);
     }
 
     /**
