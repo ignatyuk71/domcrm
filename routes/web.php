@@ -186,6 +186,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/api/chat/tags', [ChatApiController::class, 'listConversationTags'])->name('chat.tags');
     Route::patch('/api/chat/conversations/{conversation}/stage', [ChatApiController::class, 'updateStage'])
         ->name('chat.stage');
+    Route::patch('/api/chat/conversations/{conversation}/ai', [ChatApiController::class, 'updateAiState'])
+        ->name('chat.ai.update');
+    Route::post('/api/chat/conversations/{conversation}/takeover', [ChatApiController::class, 'takeoverByManager'])
+        ->name('chat.ai.takeover');
     Route::delete('/api/chat/conversations/{conversation}', [ChatApiController::class, 'archiveConversation'])
         ->name('chat.archive');
     Route::delete('/api/chat/conversations/{conversation}/history', [ChatApiController::class, 'clearConversationHistory'])

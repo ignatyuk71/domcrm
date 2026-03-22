@@ -8,6 +8,7 @@ use App\Models\ChatMessage;
 use App\Models\ChatMessageAttachment;
 use App\Models\ChatStage;
 use App\Models\Customer;
+use App\Services\ChatAiSettingsService;
 use App\Services\ChatService;
 use App\Services\MetaService;
 use Carbon\Carbon;
@@ -20,8 +21,11 @@ use Illuminate\Validation\Rule;
 
 class ChatApiController extends Controller
 {
+    private ?bool $globalAiEnabled = null;
+
     public function __construct(
-        private readonly ChatService $chatService
+        private readonly ChatService $chatService,
+        private readonly ChatAiSettingsService $chatAiSettingsService,
     ) {
     }
 
@@ -101,6 +105,51 @@ class ChatApiController extends Controller
     public function updateTags(Request $request, ChatConversation $conversation): JsonResponse
     {
         return response()->json(['data' => []]);
+    }
+
+    public function updateAiState(Request $request, ChatConversation $conversation): JsonResponse
+    {
+        $validated = $request->validate([
+            'enabled' => ['required', 'boolean'],
+            'reason' => ['nullable', 'string', 'max:250'],
+        ]);
+
+        $this->storeConversationAiState(
+            $conversation,
+            (bool) $validated['enabled'],
+            $request->user()?->id,
+            $validated['reason'] ?? null
+        );
+
+        $conversation = $conversation->fresh(['contact', 'customer', 'stage', 'assignedUser', 'lastMessage.attachments']);
+
+        return response()->json([
+            'success' => true,
+            'ai' => $this->buildConversationAiState($conversation),
+            'conversation' => $this->formatConversation($conversation),
+        ]);
+    }
+
+    public function takeoverByManager(Request $request, ChatConversation $conversation): JsonResponse
+    {
+        $validated = $request->validate([
+            'reason' => ['nullable', 'string', 'max:250'],
+        ]);
+
+        $this->storeConversationAiState(
+            $conversation,
+            false,
+            $request->user()?->id,
+            $validated['reason'] ?? 'Передано менеджеру'
+        );
+
+        $conversation = $conversation->fresh(['contact', 'customer', 'stage', 'assignedUser', 'lastMessage.attachments']);
+
+        return response()->json([
+            'success' => true,
+            'ai' => $this->buildConversationAiState($conversation),
+            'conversation' => $this->formatConversation($conversation),
+        ]);
     }
 
     public function archiveConversation(ChatConversation $conversation): JsonResponse
@@ -573,6 +622,7 @@ class ChatApiController extends Controller
             'stage' => $stageCode,
             'thread_kind' => $originContext ? ($originContext['kind'] ?? 'direct') : 'direct',
             'origin_context' => $originContext,
+            'ai' => $this->buildConversationAiState($conversation),
             'tags' => [],
             'source' => $contact?->platform,
             'fb_user_id' => $contact?->platform === 'messenger'
@@ -731,6 +781,69 @@ class ChatApiController extends Controller
         }
 
         return $this->chatService->getOrCreateConversation($contact, $customer);
+    }
+
+    /**
+     * @return array{enabled: bool, global_enabled: bool, handoff_reason: ?string, updated_at: ?string}
+     */
+    private function buildConversationAiState(ChatConversation $conversation): array
+    {
+        $meta = is_array($conversation->meta) ? $conversation->meta : [];
+        $aiMeta = is_array(data_get($meta, 'ai')) ? data_get($meta, 'ai') : [];
+
+        $enabled = array_key_exists('enabled', $aiMeta)
+            ? (bool) $aiMeta['enabled']
+            : $this->resolveGlobalAiEnabled();
+
+        return [
+            'enabled' => $enabled,
+            'global_enabled' => $this->resolveGlobalAiEnabled(),
+            'handoff_reason' => isset($aiMeta['handoff_reason']) && trim((string) $aiMeta['handoff_reason']) !== ''
+                ? trim((string) $aiMeta['handoff_reason'])
+                : null,
+            'updated_at' => isset($aiMeta['updated_at']) ? (string) $aiMeta['updated_at'] : null,
+        ];
+    }
+
+    private function resolveGlobalAiEnabled(): bool
+    {
+        if ($this->globalAiEnabled !== null) {
+            return $this->globalAiEnabled;
+        }
+
+        $settings = $this->chatAiSettingsService->resolveRuntimeSettings();
+        $this->globalAiEnabled = (bool) ($settings['enabled'] ?? true);
+
+        return $this->globalAiEnabled;
+    }
+
+    private function storeConversationAiState(
+        ChatConversation $conversation,
+        bool $enabled,
+        ?int $userId,
+        ?string $reason = null
+    ): void {
+        $meta = is_array($conversation->meta) ? $conversation->meta : [];
+        $aiMeta = is_array(data_get($meta, 'ai')) ? data_get($meta, 'ai') : [];
+
+        $aiMeta['enabled'] = $enabled;
+        $aiMeta['updated_at'] = now()->toIso8601String();
+        $aiMeta['updated_by'] = $userId;
+
+        if ($enabled) {
+            $aiMeta['handoff_reason'] = null;
+            $aiMeta['handoff_at'] = null;
+        } else {
+            $aiMeta['handoff_reason'] = trim((string) $reason) !== ''
+                ? trim((string) $reason)
+                : ($aiMeta['handoff_reason'] ?? 'Передано менеджеру');
+            $aiMeta['handoff_at'] = now()->toIso8601String();
+        }
+
+        $meta['ai'] = $aiMeta;
+
+        $conversation->meta = $meta;
+        $conversation->save();
     }
 
     private function collectOutgoingAttachments(Request $request, array $remoteUrls): array

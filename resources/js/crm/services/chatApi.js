@@ -22,6 +22,19 @@ export function updateConversationStage(conversationId, stage) {
   return axios.patch(`/api/chat/conversations/${conversationId}/stage`, { stage });
 }
 
+export function updateConversationAiState(conversationId, enabled, reason = null) {
+  return axios.patch(`/api/chat/conversations/${conversationId}/ai`, {
+    enabled: Boolean(enabled),
+    ...(reason ? { reason } : {}),
+  });
+}
+
+export function takeoverConversationByManager(conversationId, reason = null) {
+  return axios.post(`/api/chat/conversations/${conversationId}/takeover`, {
+    ...(reason ? { reason } : {}),
+  });
+}
+
 export function archiveConversation(conversationId) {
   return axios.delete(`/api/chat/conversations/${conversationId}`);
 }
