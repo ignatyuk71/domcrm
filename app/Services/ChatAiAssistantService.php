@@ -370,6 +370,16 @@ class ChatAiAssistantService
         ChatConversation $conversation,
         array $settings
     ): array {
+        if ($this->shouldForceModelSelection($topics, $text, $conversation)) {
+            return [
+                'topic' => null,
+                'score' => 0,
+                'route_source' => 'needs_model_selection',
+                'route_reason' => 'Клієнт назвав лише розмір без вибору моделі.',
+                'route_confidence' => null,
+            ];
+        }
+
         $keywordMatch = $this->matchTopic($topics, $text, $conversation);
 
         if (!$this->shouldUseAiTopicClassifier($topics, $text, $conversation, $keywordMatch)) {
@@ -389,6 +399,42 @@ class ChatAiAssistantService
         }
 
         return $keywordMatch;
+    }
+
+    /**
+     * @param  Collection<int, ChatAiTopic>  $topics
+     */
+    private function shouldForceModelSelection(Collection $topics, string $text, ChatConversation $conversation): bool
+    {
+        if ($topics->count() < 2) {
+            return false;
+        }
+
+        $normalizedText = $this->normalizeText($text);
+        if ($normalizedText === '') {
+            return false;
+        }
+
+        $storedModel = $this->normalizeSlotValue('model', data_get($conversation->meta, 'ai.slot_values.model'));
+        $nextSlot = data_get($conversation->meta, 'ai.next_slot');
+
+        if ($storedModel !== null && (!is_string($nextSlot) || $nextSlot !== 'model')) {
+            return false;
+        }
+
+        if ($this->extractRequestedSize($text) === null) {
+            return false;
+        }
+
+        if ($this->extractVisualPreferenceStems($normalizedText) !== []) {
+            return false;
+        }
+
+        if ((bool) preg_match('/(домашн|для вулиці|на вулицю|вуличн|резинов|гумов|суцільн|літні?)/u', $normalizedText)) {
+            return false;
+        }
+
+        return !$this->messageContainsModelReference($normalizedText);
     }
 
     /**
@@ -567,6 +613,11 @@ class ChatAiAssistantService
         $normalizedText = $this->normalizeText($text);
         $isBroadCatalogRequest = $this->isBroadCatalogRequest($normalizedText);
         $lastTopicId = (int) data_get($conversation->meta, 'ai.last_topic_id', 0);
+        $storedModel = $this->normalizeSlotValue('model', data_get($conversation->meta, 'ai.slot_values.model'));
+        $nextSlot = data_get($conversation->meta, 'ai.next_slot');
+        $canReuseLastTopicContext = $storedModel !== null
+            && is_string($nextSlot)
+            && $nextSlot !== 'model';
 
         $bestTopic = null;
         $bestScore = PHP_INT_MIN;
@@ -574,7 +625,12 @@ class ChatAiAssistantService
         foreach ($topics as $topic) {
             $score = 0;
 
-            if (!$isBroadCatalogRequest && $lastTopicId > 0 && $lastTopicId === (int) $topic->id) {
+            if (
+                !$isBroadCatalogRequest
+                && $canReuseLastTopicContext
+                && $lastTopicId > 0
+                && $lastTopicId === (int) $topic->id
+            ) {
                 $score += 40;
             }
 
@@ -1594,11 +1650,6 @@ class ChatAiAssistantService
         $phone = $this->normalizeSlotValue('phone', (string) ($customer?->phone ?? ''));
         if ($phone !== null && !$this->hasSlotValue($slots['phone'] ?? null, 'phone')) {
             $slots['phone'] = $phone;
-        }
-
-        $lastTopicName = trim((string) ($ai['last_topic_name'] ?? ''));
-        if ($lastTopicName !== '' && !$this->hasSlotValue($slots['model'] ?? null, 'model')) {
-            $slots['model'] = $lastTopicName;
         }
 
         foreach ($slots as $key => $value) {
