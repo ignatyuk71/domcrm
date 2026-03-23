@@ -353,6 +353,7 @@ class ChatAiAssistantService
                         'product' => fn ($productQuery) => $productQuery
                             ->where('is_active', true)
                             ->with([
+                                'color:id,name',
                                 'variants' => fn ($variantQuery) => $variantQuery
                                     ->where('is_active', true)
                                     ->orderBy('id'),
@@ -757,41 +758,91 @@ class ChatAiAssistantService
                     ->filter(fn (ProductVariant $variant) => (int) ($variant->stock_qty ?? 0) > 0)
                     ->values();
 
-                $variantsForReply = $availableVariants->isNotEmpty()
-                    ? $availableVariants
-                    : $activeVariants;
+                $variantInventory = $activeVariants
+                    ->map(function (ProductVariant $variant) {
+                        $sizeLabel = $this->normalizeSizeSlotValue((string) ($variant->size ?? ''));
+                        if ($sizeLabel === null) {
+                            $sizeLabel = trim((string) $variant->size);
+                        }
 
-                $sizes = $variantsForReply
+                        return [
+                            'size' => $sizeLabel,
+                            'stock_qty' => max(0, (int) ($variant->stock_qty ?? 0)),
+                            'is_available' => (int) ($variant->stock_qty ?? 0) > 0,
+                        ];
+                    })
+                    ->filter(fn (array $variant) => trim((string) ($variant['size'] ?? '')) !== '')
+                    ->values();
+
+                $availableSizes = $variantInventory
+                    ->filter(fn (array $variant) => (bool) ($variant['is_available'] ?? false))
                     ->pluck('size')
-                    ->filter(fn ($size) => trim((string) $size) !== '')
+                    ->unique()
                     ->values()
                     ->all();
 
-                $matchesSize = $requestedSize === null
+                $allSizes = $variantInventory
+                    ->pluck('size')
+                    ->unique()
+                    ->values()
+                    ->all();
+
+                $matchesAvailableSize = $requestedSize === null
                     ? true
-                    : $this->productMatchesRequestedSize($variantsForReply, $requestedSize);
+                    : $this->productMatchesRequestedSize($availableVariants, $requestedSize);
+
+                $matchesAnySize = $requestedSize === null
+                    ? true
+                    : $this->productMatchesRequestedSize($activeVariants, $requestedSize);
+
+                $mainPhotoUrl = $this->absoluteUrl($product->main_photo_url);
+                $totalAvailableStock = (int) $variantInventory
+                    ->filter(fn (array $variant) => (bool) ($variant['is_available'] ?? false))
+                    ->sum('stock_qty');
 
                 return [
                     'topic_product_id' => (int) $topicProduct->id,
                     'product_id' => (int) $product->id,
                     'title' => (string) $product->title,
+                    'color_name' => $product->color?->name
+                        ? $this->normalizeHumanLabel((string) $product->color->name, 40)
+                        : $this->extractKnownColorFromText((string) $product->title),
                     'sku' => $product->sku ? (string) $product->sku : null,
                     'price' => $product->sale_price !== null ? (float) $product->sale_price : null,
-                    'main_photo_url' => $this->absoluteUrl($product->main_photo_url),
-                    'sizes' => $sizes,
+                    'main_photo_url' => $mainPhotoUrl,
+                    'main_photo_path' => $product->main_photo_path ? (string) $product->main_photo_path : null,
+                    'has_photo' => $mainPhotoUrl !== null,
+                    'available_sizes' => $availableSizes,
+                    'all_sizes' => $allSizes,
+                    'sizes' => $availableSizes !== [] ? $availableSizes : $allSizes,
+                    'variant_inventory' => $variantInventory->all(),
+                    'is_available' => $totalAvailableStock > 0,
+                    'total_stock_qty' => $totalAvailableStock,
                     'sort_order' => (int) $topicProduct->sort_order,
                     'is_active' => (bool) $topicProduct->is_active,
-                    'matches_size' => $matchesSize,
+                    'matches_available_size' => $matchesAvailableSize,
+                    'matches_size' => $matchesAnySize,
+                    'requested_size_stock_qty' => $requestedSize !== null
+                        ? $this->resolveRequestedSizeStock($variantInventory, $requestedSize)
+                        : null,
                 ];
             })
             ->sortBy([
+                ['matches_available_size', 'desc'],
                 ['matches_size', 'desc'],
+                ['has_photo', 'desc'],
+                ['is_available', 'desc'],
                 ['sort_order', 'asc'],
                 ['product_id', 'asc'],
             ])
             ->values();
 
         if ($requestedSize !== null) {
+            $filtered = $rows->where('matches_available_size', true)->values();
+            if ($filtered->isNotEmpty()) {
+                return $filtered;
+            }
+
             $filtered = $rows->where('matches_size', true)->values();
             if ($filtered->isNotEmpty()) {
                 return $filtered;
@@ -810,16 +861,22 @@ class ChatAiAssistantService
         $media = collect();
 
         foreach ($topic->mediaItems as $mediaItem) {
+            $mediaType = (string) $mediaItem->media_type;
+            if (!in_array($mediaType, ['collage', 'palette'], true)) {
+                continue;
+            }
+
             $url = $this->absoluteUrl($mediaItem->url ?: $mediaItem->savedFile?->url);
             if (!$url) {
                 continue;
             }
 
             $media->push([
-                'source' => 'topic_media',
+                'source' => 'topic_overview_media',
                 'topic_media_id' => (int) $mediaItem->id,
-                'media_type' => (string) $mediaItem->media_type,
+                'media_type' => $mediaType,
                 'label' => trim((string) $mediaItem->label),
+                'color_name' => $this->extractKnownColorFromText((string) $mediaItem->label),
                 'url' => $url,
                 'sort_order' => (int) $mediaItem->sort_order,
             ]);
@@ -836,6 +893,7 @@ class ChatAiAssistantService
                 'topic_media_id' => null,
                 'media_type' => 'image',
                 'label' => (string) ($product['title'] ?? ''),
+                'color_name' => isset($product['color_name']) ? (string) $product['color_name'] : null,
                 'url' => $url,
                 'sort_order' => (int) ($product['sort_order'] ?? 0),
                 'topic_product_id' => (int) ($product['topic_product_id'] ?? 0),
@@ -966,6 +1024,10 @@ class ChatAiAssistantService
         }
 
         $query = $this->normalizeText($messageText);
+        $requestedColor = $this->extractKnownColorFromText($query);
+        $requestedColorSearch = $requestedColor !== null
+            ? $this->normalizeText($requestedColor)
+            : null;
         $visualPreferenceStems = $this->extractVisualPreferenceStems($query);
         $explicitOverviewRequest = str_contains($query, 'колаж')
             || str_contains($query, 'палiтр')
@@ -975,8 +1037,10 @@ class ChatAiAssistantService
             ->values();
 
         $ranked = $media
-            ->map(function (array $item) use ($query, $tokens, $visualPreferenceStems, $explicitOverviewRequest) {
+            ->map(function (array $item) use ($query, $tokens, $visualPreferenceStems, $explicitOverviewRequest, $requestedColorSearch) {
                 $label = $this->normalizeText((string) ($item['label'] ?? ''));
+                $itemColorSearch = $this->normalizeText((string) ($item['color_name'] ?? ''));
+                $source = (string) ($item['source'] ?? '');
                 $score = 0;
 
                 if ($label !== '' && $query !== '') {
@@ -994,6 +1058,28 @@ class ChatAiAssistantService
                 foreach ($visualPreferenceStems as $stem) {
                     if ($label !== '' && str_contains($label, $stem)) {
                         $score += 90;
+                    }
+                }
+
+                if ($requestedColorSearch !== null && $requestedColorSearch !== '') {
+                    if ($itemColorSearch === $requestedColorSearch) {
+                        $score += 240;
+                    } elseif ($itemColorSearch !== '') {
+                        $score -= 120;
+                    }
+                }
+
+                if ($explicitOverviewRequest) {
+                    if (in_array(($item['media_type'] ?? ''), ['collage', 'palette'], true)) {
+                        $score += 220;
+                    } elseif ($source === 'product_photo') {
+                        $score -= 140;
+                    }
+                } else {
+                    if ($source === 'product_photo') {
+                        $score += 280;
+                    } elseif (in_array(($item['media_type'] ?? ''), ['collage', 'palette'], true)) {
+                        $score -= 220;
                     }
                 }
 
@@ -1028,19 +1114,36 @@ class ChatAiAssistantService
 
         if ($sendAll) {
             $specificPositive = $positive
-                ->reject(fn (array $item) => in_array((string) ($item['media_type'] ?? ''), ['collage', 'palette'], true))
+                ->filter(fn (array $item) => (string) ($item['source'] ?? '') === 'product_photo')
                 ->values();
 
-            return ($specificPositive->isNotEmpty() ? $specificPositive : ($positive->isNotEmpty() ? $positive : $ranked))
-                ->values();
+            if ($explicitOverviewRequest) {
+                $overviewPositive = $positive
+                    ->filter(fn (array $item) => in_array((string) ($item['media_type'] ?? ''), ['collage', 'palette'], true))
+                    ->values();
+
+                return ($overviewPositive->isNotEmpty() ? $overviewPositive : $positive)->values();
+            }
+
+            return ($specificPositive->isNotEmpty() ? $specificPositive : collect())->values();
         }
 
         if ($positive->isNotEmpty()) {
+            if ($explicitOverviewRequest) {
+                $overviewMedia = $positive
+                    ->filter(fn (array $item) => in_array((string) ($item['media_type'] ?? ''), ['collage', 'palette'], true))
+                    ->values();
+
+                return ($overviewMedia->isNotEmpty() ? $overviewMedia : $positive)
+                    ->take(1)
+                    ->values();
+            }
+
             $specificMedia = $positive
-                ->reject(fn (array $item) => in_array((string) ($item['media_type'] ?? ''), ['collage', 'palette'], true))
+                ->filter(fn (array $item) => (string) ($item['source'] ?? '') === 'product_photo')
                 ->values();
 
-            return ($specificMedia->isNotEmpty() ? $specificMedia : $positive)
+            return $specificMedia
                 ->take(1)
                 ->values();
         }
@@ -1050,7 +1153,7 @@ class ChatAiAssistantService
         }
 
         $specificMedia = $ranked
-            ->reject(fn (array $item) => in_array((string) ($item['media_type'] ?? ''), ['collage', 'palette'], true))
+            ->filter(fn (array $item) => (string) ($item['source'] ?? '') === 'product_photo')
             ->values();
 
         if ($specificMedia->isNotEmpty()) {
@@ -1221,6 +1324,9 @@ class ChatAiAssistantService
             'У відповіді клієнту не використовуй службове слово "тема". Використовуй: "модель", "варіант", "колір".',
             'Формуй відповідь тільки на основі переданого контексту з БД: правила, інструкція теми, товари, варіанти, медіа.',
             'Не вигадуй факти, ціни, розміри, наявність або умови доставки.',
+            'Для конкретного товару фото треба брати з товарів, які прив’язані до моделі, а не вигадувати їх за назвою чи label.',
+            'Колажі та палетки використовуй тільки для вибору моделі, коли модель ще не визначена.',
+            'Наявність і доступні розміри визначай тільки за варіантами товару та їх залишками.',
             'Якщо даних недостатньо — прямо напиши про це і постав 1 уточнювальне питання.',
             'Фото надсилаються окремо системою. У тексті не вставляй URL.',
             'Якщо клієнт просить фото і в контексті медіа відсутні — коротко повідом, що немає підготовлених фото, і запропонуй близьку тему або менеджера.',
@@ -1936,13 +2042,9 @@ class ChatAiAssistantService
 
     private function extractColorValue(string $text, ?string $previousNextSlot): ?string
     {
-        $normalized = $this->normalizeText($text);
-        $colorMap = $this->colorStemMap();
-
-        foreach ($colorMap as $needle => $label) {
-            if (str_contains($normalized, $needle)) {
-                return $label;
-            }
+        $matchedColor = $this->extractKnownColorFromText($text);
+        if ($matchedColor !== null) {
+            return $matchedColor;
         }
 
         if ($previousNextSlot !== 'color') {
@@ -1963,6 +2065,22 @@ class ChatAiAssistantService
         }
 
         return $this->normalizeSlotValue('color', $candidate);
+    }
+
+    private function extractKnownColorFromText(string $text): ?string
+    {
+        $normalized = $this->normalizeText($text);
+        if ($normalized === '') {
+            return null;
+        }
+
+        foreach ($this->colorStemMap() as $needle => $label) {
+            if (str_contains($normalized, $needle)) {
+                return $label;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -2395,8 +2513,18 @@ class ChatAiAssistantService
     {
         $explicitSize = $this->extractExplicitSizeSlotValue($text);
         $sizeLabels = $products
-            ->pluck('sizes')
-            ->flatten()
+            ->flatMap(function (array $product) {
+                $availableSizes = collect((array) ($product['available_sizes'] ?? []))
+                    ->filter(fn ($size) => trim((string) $size) !== '');
+
+                if ($availableSizes->isNotEmpty()) {
+                    return $availableSizes->values();
+                }
+
+                return collect((array) ($product['all_sizes'] ?? $product['sizes'] ?? []))
+                    ->filter(fn ($size) => trim((string) $size) !== '')
+                    ->values();
+            })
             ->map(fn ($size) => $this->normalizeSizeSlotValue($size))
             ->filter()
             ->unique()
@@ -2515,20 +2643,42 @@ class ChatAiAssistantService
         $productsText = $products
             ->take(20)
             ->map(function (array $product, int $index) {
-                $sizeLines = collect((array) ($product['sizes'] ?? []))
-                    ->filter(fn ($size) => trim((string) $size) !== '')
-                    ->map(fn ($size) => '   - ' . trim((string) $size))
+                $variantLines = collect((array) ($product['variant_inventory'] ?? []))
+                    ->map(function (array $variant) {
+                        $size = trim((string) ($variant['size'] ?? ''));
+                        if ($size === '') {
+                            return null;
+                        }
+
+                        $stockQty = max(0, (int) ($variant['stock_qty'] ?? 0));
+
+                        return "   - {$size} — {$stockQty} шт.";
+                    })
+                    ->filter()
                     ->implode("\n");
                 $price = $product['price'] !== null
                     ? number_format((float) $product['price'], 0, '.', '') . ' грн'
                     : 'ціна не вказана';
+                $availability = (bool) ($product['is_available'] ?? false)
+                    ? 'в наявності'
+                    : 'немає в наявності';
+                $photoState = (bool) ($product['has_photo'] ?? false)
+                    ? 'фото є'
+                    : 'фото немає';
+                $color = trim((string) ($product['color_name'] ?? ''));
+                $requestedSizeStock = isset($product['requested_size_stock_qty'])
+                    ? (int) ($product['requested_size_stock_qty'] ?? 0)
+                    : null;
 
                 return ($index + 1) . '. '
                     . ($product['title'] ?? 'Товар')
                     . ($product['sku'] ? " (SKU: {$product['sku']})" : '')
                     . " — {$price}"
-                    . "\n   розміри:\n"
-                    . ($sizeLines !== '' ? $sizeLines : '   - не вказано');
+                    . ($color !== '' ? "\n   колір: {$color}" : '')
+                    . "\n   статус: {$availability}, {$photoState}"
+                    . ($requestedSizeStock !== null ? "\n   залишок по запитаному розміру: {$requestedSizeStock} шт." : '')
+                    . "\n   варіанти і залишки:\n"
+                    . ($variantLines !== '' ? $variantLines : '   - не вказано');
             })
             ->implode("\n");
 
@@ -3086,6 +3236,39 @@ class ChatAiAssistantService
         }
 
         return false;
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $variantInventory
+     */
+    private function resolveRequestedSizeStock(Collection $variantInventory, int $requestedSize): int
+    {
+        return (int) $variantInventory
+            ->filter(function (array $variant) use ($requestedSize) {
+                $sizeText = trim((string) ($variant['size'] ?? ''));
+                if ($sizeText === '') {
+                    return false;
+                }
+
+                $numbers = $this->extractAllNumbers($sizeText);
+                if ($numbers === []) {
+                    return false;
+                }
+
+                if (in_array($requestedSize, $numbers, true)) {
+                    return true;
+                }
+
+                if (count($numbers) >= 2) {
+                    $min = min($numbers[0], $numbers[1]);
+                    $max = max($numbers[0], $numbers[1]);
+
+                    return $requestedSize >= $min && $requestedSize <= $max;
+                }
+
+                return false;
+            })
+            ->sum(fn (array $variant) => max(0, (int) ($variant['stock_qty'] ?? 0)));
     }
 
     /**
