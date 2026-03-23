@@ -1313,7 +1313,10 @@ class ChatAiAssistantService
         }
 
         if ($requestedSize !== null && $this->shouldPersistRequestedSizeAsSlot($text, $previousNextSlot)) {
-            $updates['size'] = $requestedSize;
+            $resolvedSize = $this->resolveRequestedSizeSlotValue($text, $products, $requestedSize);
+            if ($resolvedSize !== null) {
+                $updates['size'] = $resolvedSize;
+            }
         }
 
         if ($color = $this->extractColorValue($text, $previousNextSlot)) {
@@ -1830,11 +1833,35 @@ class ChatAiAssistantService
         };
     }
 
-    private function normalizeSizeSlotValue(mixed $value): ?int
+    private function normalizeSizeSlotValue(mixed $value): ?string
     {
-        $number = (int) $value;
+        $text = trim((string) $value);
+        if ($text === '') {
+            return null;
+        }
 
-        return $number >= 20 && $number <= 55 ? $number : null;
+        $text = str_replace(['–', '—'], '-', $text);
+        $text = preg_replace('/\s+/u', '', $text);
+        $text = preg_replace('/(?:р|рр|р\.)$/u', '', (string) $text);
+        $text = trim((string) $text);
+
+        if ($text === '') {
+            return null;
+        }
+
+        if (preg_match('/\b([2-5]\d)\s*\/\s*([2-5]\d)\b/u', $text, $match)) {
+            return "{$match[1]}/{$match[2]}";
+        }
+
+        if (preg_match('/\b([2-5]\d)\s*-\s*([2-5]\d)\b/u', $text, $match)) {
+            return "{$match[1]}/{$match[2]}";
+        }
+
+        if (preg_match('/(?<!\d)([2-5]\d)(?!\d)/u', $text, $match)) {
+            return $match[1];
+        }
+
+        return null;
     }
 
     private function normalizeQuantitySlotValue(mixed $value): ?int
@@ -1859,6 +1886,82 @@ class ChatAiAssistantService
 
         if (strlen($digits) === 12 && str_starts_with($digits, '380')) {
             return $digits;
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $products
+     */
+    private function resolveRequestedSizeSlotValue(string $text, Collection $products, int $requestedSize): ?string
+    {
+        $explicitSize = $this->extractExplicitSizeSlotValue($text);
+        $sizeLabels = $products
+            ->pluck('sizes')
+            ->flatten()
+            ->map(fn ($size) => $this->normalizeSizeSlotValue($size))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($explicitSize !== null) {
+            $matchedExplicit = $sizeLabels
+                ->first(fn (string $label) => $label === $explicitSize);
+
+            if (is_string($matchedExplicit) && $matchedExplicit !== '') {
+                return $matchedExplicit;
+            }
+
+            if (str_contains($explicitSize, '/')) {
+                return $explicitSize;
+            }
+        }
+
+        $singleMatch = $sizeLabels
+            ->first(fn (string $label) => $label === (string) $requestedSize);
+
+        if (is_string($singleMatch) && $singleMatch !== '') {
+            return $singleMatch;
+        }
+
+        $rangeMatch = $sizeLabels
+            ->first(function (string $label) use ($requestedSize) {
+                $numbers = $this->extractAllNumbers($label);
+                if ($numbers === []) {
+                    return false;
+                }
+
+                if (count($numbers) >= 2) {
+                    $min = min($numbers[0], $numbers[1]);
+                    $max = max($numbers[0], $numbers[1]);
+
+                    return $requestedSize >= $min && $requestedSize <= $max;
+                }
+
+                return in_array($requestedSize, $numbers, true);
+            });
+
+        if (is_string($rangeMatch) && $rangeMatch !== '') {
+            return $rangeMatch;
+        }
+
+        if ($explicitSize !== null) {
+            return $explicitSize;
+        }
+
+        return $this->normalizeSizeSlotValue((string) $requestedSize);
+    }
+
+    private function extractExplicitSizeSlotValue(string $text): ?string
+    {
+        $normalized = $this->normalizeText($text);
+        if ($normalized === '') {
+            return null;
+        }
+
+        if (preg_match('/(?<!\d)([2-5]\d)\s*[\/\-–]\s*([2-5]\d)(?!\d)/u', $normalized, $match)) {
+            return $this->normalizeSizeSlotValue("{$match[1]}/{$match[2]}");
         }
 
         return null;
