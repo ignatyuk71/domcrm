@@ -6,6 +6,7 @@ use App\Models\ChatAiResponseRule;
 use App\Models\ChatAiTopic;
 use App\Models\ChatConversation;
 use App\Models\ChatMessage;
+use App\Models\Color;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use Illuminate\Support\Collection;
@@ -14,6 +15,11 @@ use Illuminate\Support\Str;
 
 class ChatAiAssistantService
 {
+    /**
+     * @var array<string, string>|null
+     */
+    private ?array $cachedColorStemMap = null;
+
     public function __construct(
         private readonly ChatAiSettingsService $settingsService,
         private readonly OpenAiResponsesService $openAi,
@@ -1964,23 +1970,59 @@ class ChatAiAssistantService
      */
     private function colorStemMap(): array
     {
-        return [
-            'біл' => 'Білий',
-            'чорн' => 'Чорний',
-            'сір' => 'Сірий',
-            'рожев' => 'Рожевий',
-            'блакит' => 'Блакитний',
-            'син' => 'Синій',
-            'червон' => 'Червоний',
-            'коричн' => 'Коричневий',
-            'беж' => 'Бежевий',
-            'молоч' => 'Молочний',
-            'пудр' => 'Пудровий',
-            'малин' => 'Малиновий',
-            'електрик' => 'Електрик',
-            'капучин' => 'Капучино',
-            'зелен' => 'Зелений',
-        ];
+        if ($this->cachedColorStemMap !== null) {
+            return $this->cachedColorStemMap;
+        }
+
+        $map = [];
+
+        Color::query()
+            ->orderBy('name')
+            ->get(['name'])
+            ->each(function (Color $color) use (&$map) {
+                $label = $this->normalizeHumanLabel((string) $color->name, 40);
+                $normalized = $this->normalizeText($label);
+                if ($normalized === '') {
+                    return;
+                }
+
+                $needles = array_filter([
+                    $normalized,
+                    $this->buildColorStem($normalized),
+                ]);
+
+                foreach (array_unique($needles) as $needle) {
+                    if (!array_key_exists($needle, $map)) {
+                        $map[$needle] = $label;
+                    }
+                }
+            });
+
+        uksort($map, fn (string $left, string $right) => mb_strlen($right) <=> mb_strlen($left));
+
+        return $this->cachedColorStemMap = $map;
+    }
+
+    private function buildColorStem(string $normalizedColor): string
+    {
+        $firstWord = trim((string) (preg_split('/\s+/u', $normalizedColor) ?: [''])[0]);
+        if ($firstWord === '') {
+            return '';
+        }
+
+        if (mb_strlen($firstWord) <= 4) {
+            return $firstWord;
+        }
+
+        if (preg_match('/[иі]й$/u', $firstWord)) {
+            return mb_substr($firstWord, 0, -2);
+        }
+
+        if (preg_match('/[аеиіоуюя]$/u', $firstWord)) {
+            return mb_substr($firstWord, 0, -1);
+        }
+
+        return $firstWord;
     }
 
     /**
