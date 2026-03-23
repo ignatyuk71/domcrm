@@ -1768,6 +1768,7 @@ class ChatAiAssistantService
             'Якщо клієнт просить показати всі варіанти — у тексті підтвердь, що показуєш всі доступні для поточної теми.',
             'Якщо клієнт просить конкретний колір або варіант, а точних медіа в контексті немає, не пиши, що надсилаєш його фото.',
             'У блоці "Стан слотів замовлення" вже є зібрані поля. Не перепитуй те, що вже заповнено.',
+            'Якщо позиції замовлення вже підтверджені і збережені в чернетці, не перепитуй повторно модель, колір, розмір або кількість. Переходь тільки до відсутніх даних оформлення.',
             'Якщо система вказала "Наступний слот для уточнення", орієнтуйся на нього як на пріоритет і не перепитуй уже зібрані поля.',
             'Не став одне й те саме питання двічі поспіль. Якщо клієнт уже відповів, але система не змогла розібрати відповідь, коротко напиши, яке саме поле не вдалося зчитати, і попроси тільки його без повторення всього блоку питань.',
             'Зазвичай став одне коротке питання за раз, але на етапі оформлення можеш одним повідомленням попросити весь відсутній блок даних про доставку й отримувача.',
@@ -2071,6 +2072,21 @@ class ChatAiAssistantService
         $previousDraft = $this->loadStoredOrderDraft($conversation);
         $fallbackDraft = $this->buildFallbackOrderDraft($slotState, $previousDraft);
 
+        if ($this->shouldPreserveConfirmedOrderDraft($slotState, $previousDraft)) {
+            return $previousDraft;
+        }
+
+        $simpleUpdateDraft = $this->applySimpleFieldUpdateToPreviousDraft(
+            $conversation,
+            $message,
+            $topic,
+            $products,
+            $previousDraft
+        );
+        if ($simpleUpdateDraft !== null) {
+            return $simpleUpdateDraft;
+        }
+
         if (!$this->shouldUseAiOrderDraftExtractor($message, $slotState, $previousDraft)) {
             return $fallbackDraft;
         }
@@ -2098,6 +2114,113 @@ class ChatAiAssistantService
         }
 
         return $fallbackDraft;
+    }
+
+    /**
+     * @param  array{
+     *     items: array<int, array<string, mixed>>,
+     *     summary: string,
+     *     source: string,
+     *     confidence: ?float
+     * }  $previousDraft
+     */
+    private function shouldPreserveConfirmedOrderDraft(array $slotState, array $previousDraft): bool
+    {
+        if (empty($previousDraft['items'])) {
+            return false;
+        }
+
+        $orderIntent = (string) ($slotState['order_intent'] ?? 'none');
+        if (in_array($orderIntent, ['multi_item_add', 'multi_item_edit'], true)) {
+            return false;
+        }
+
+        $confirmedItems = (bool) ($slotState['multi_item_review_completed'] ?? false)
+            || (bool) ($slotState['single_item_review_completed'] ?? false)
+            || (bool) ($slotState['draft_items_complete'] ?? false);
+
+        if (!$confirmedItems) {
+            return false;
+        }
+
+        $nextSlot = is_string($slotState['next'] ?? null) ? $slotState['next'] : null;
+
+        return $nextSlot === null
+            || in_array($nextSlot, ['city', 'delivery', 'customer_name', 'phone', 'payment'], true);
+    }
+
+    /**
+     * @param  array{
+     *     items: array<int, array<string, mixed>>,
+     *     summary: string,
+     *     source: string,
+     *     confidence: ?float
+     * }  $previousDraft
+     * @return array{
+     *     items: array<int, array<string, mixed>>,
+     *     summary: string,
+     *     source: string,
+     *     confidence: ?float
+     * }|null
+     */
+    private function applySimpleFieldUpdateToPreviousDraft(
+        ChatConversation $conversation,
+        ChatMessage $message,
+        ?ChatAiTopic $topic,
+        Collection $products,
+        array $previousDraft
+    ): ?array {
+        $items = is_array($previousDraft['items'] ?? null) ? $previousDraft['items'] : [];
+        if ($items === []) {
+            return null;
+        }
+
+        $previousNextSlot = data_get($conversation->meta, 'ai.next_slot');
+        if (!is_string($previousNextSlot) || !in_array($previousNextSlot, ['model', 'color', 'size', 'quantity'], true)) {
+            return null;
+        }
+
+        $text = (string) ($message->text ?? '');
+        $normalized = $this->normalizeText($text);
+        if ($normalized === '') {
+            return null;
+        }
+
+        $value = match ($previousNextSlot) {
+            'model' => $topic?->name,
+            'color' => $this->extractColorValue($text, 'color'),
+            'size' => (($requestedSize = $this->extractRequestedSize($text)) !== null)
+                ? $this->resolveRequestedSizeSlotValue($text, $products, $requestedSize)
+                : null,
+            'quantity' => $this->extractQuantityValue($text, 'quantity'),
+            default => null,
+        };
+
+        if ($this->normalizeSlotValue($previousNextSlot, $value) === null) {
+            return null;
+        }
+
+        foreach ($items as $index => $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $current = $this->normalizeSlotValue($previousNextSlot, $item[$previousNextSlot] ?? null);
+            if ($current !== null) {
+                continue;
+            }
+
+            $items[$index][$previousNextSlot] = $value;
+
+            return [
+                'items' => $this->normalizeOrderDraftItems($items),
+                'summary' => $this->buildOrderDraftSummary($this->normalizeOrderDraftItems($items)),
+                'source' => 'incremental_reply',
+                'confidence' => null,
+            ];
+        }
+
+        return null;
     }
 
     /**
@@ -3822,6 +3945,25 @@ class ChatAiAssistantService
         $slots = is_array($slotState['slots'] ?? null)
             ? $slotState['slots']
             : [];
+        $draftItems = is_array($slotState['draft_items'] ?? null)
+            ? $slotState['draft_items']
+            : [];
+
+        if ($draftItems !== []) {
+            $itemLines = $this->buildFinalOrderItemLines($draftItems);
+            $checkoutLines = $this->buildFinalCheckoutLines($slots);
+
+            return trim(implode("\n\n", array_filter([
+                'Дякую, замовлення прийняв.',
+                $itemLines !== []
+                    ? "Склад замовлення:\n" . implode("\n", $itemLines)
+                    : null,
+                $checkoutLines !== []
+                    ? "Дані для відправлення:\n" . implode("\n", $checkoutLines)
+                    : null,
+                'Замовлення передаю на пакування.',
+            ])));
+        }
 
         $parts = [];
 
@@ -3850,8 +3992,70 @@ class ChatAiAssistantService
         $details = implode(', ', $parts);
 
         return $details !== ''
-            ? "Дякую, зафіксував замовлення: {$details}. Передаю менеджеру для підтвердження."
-            : 'Дякую, дані для замовлення отримано. Передаю менеджеру для підтвердження.';
+            ? "Дякую, замовлення прийняв: {$details}. Замовлення передаю на пакування."
+            : 'Дякую, дані для замовлення отримано. Замовлення передаю на пакування.';
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $items
+     * @return array<int, string>
+     */
+    private function buildFinalOrderItemLines(array $items): array
+    {
+        $lines = [];
+
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $parts = array_filter([
+                $this->normalizeSlotValue('model', $item['model'] ?? null),
+                $this->normalizeSlotValue('color', $item['color'] ?? null),
+                $this->normalizeSlotValue('size', $item['size'] ?? null),
+            ], fn ($value) => is_string($value) && trim($value) !== '');
+
+            if ($parts === []) {
+                continue;
+            }
+
+            $quantity = $this->normalizeOrderDraftQuantity($item['quantity'] ?? null);
+            if ($quantity !== null && $quantity > 1) {
+                $parts[] = 'кількість: ' . $quantity;
+            }
+
+            $lines[] = '- ' . implode(', ', $parts);
+        }
+
+        return $lines;
+    }
+
+    /**
+     * @param  array<string, mixed>  $slots
+     * @return array<int, string>
+     */
+    private function buildFinalCheckoutLines(array $slots): array
+    {
+        $map = [
+            'customer_name' => "Отримувач",
+            'phone' => 'Телефон',
+            'city' => 'Місто / населений пункт',
+            'delivery' => 'Доставка',
+            'payment' => 'Оплата',
+        ];
+
+        $lines = [];
+
+        foreach ($map as $key => $label) {
+            $value = $this->formatSlotValue($key, $slots[$key] ?? null);
+            if ($value === '') {
+                continue;
+            }
+
+            $lines[] = "- {$label}: {$value}";
+        }
+
+        return $lines;
     }
 
     private function hasSlotValue(mixed $value, string $key): bool
