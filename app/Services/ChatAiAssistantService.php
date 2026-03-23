@@ -796,18 +796,13 @@ class ChatAiAssistantService
                 ->sortBy('sort_order')
                 ->values();
 
-            if ($topicMedia->isEmpty()) {
-                $topicMedia = $topic->mediaItems
-                    ->sortBy('sort_order')
-                    ->values();
-            }
+            if ($topicMedia->isNotEmpty()) {
+                foreach ($topicMedia as $mediaItem) {
+                    $url = $this->absoluteUrl($mediaItem->url ?: $mediaItem->savedFile?->url);
+                    if (!$url) {
+                        continue;
+                    }
 
-            $primaryTopicMedia = $topicMedia->first();
-
-            if ($primaryTopicMedia) {
-                $mediaItem = $primaryTopicMedia;
-                $url = $this->absoluteUrl($mediaItem->url ?: $mediaItem->savedFile?->url);
-                if ($url) {
                     $overview->push([
                         'source' => 'topic_overview_media',
                         'topic_media_id' => (int) $mediaItem->id,
@@ -817,6 +812,33 @@ class ChatAiAssistantService
                             : "Модель: {$topic->name}",
                         'url' => $url,
                         'sort_order' => (int) $mediaItem->sort_order,
+                        'topic_id' => (int) $topic->id,
+                        'topic_name' => (string) $topic->name,
+                        'topic_priority' => (int) $topic->priority,
+                    ]);
+                }
+            }
+
+            if ($topicMedia->isNotEmpty()) {
+                continue;
+            }
+
+            $primaryTopicMedia = $topic->mediaItems
+                ->sortBy('sort_order')
+                ->first();
+
+            if ($primaryTopicMedia) {
+                $url = $this->absoluteUrl($primaryTopicMedia->url ?: $primaryTopicMedia->savedFile?->url);
+                if ($url) {
+                    $overview->push([
+                        'source' => 'topic_overview_media',
+                        'topic_media_id' => (int) $primaryTopicMedia->id,
+                        'media_type' => (string) $primaryTopicMedia->media_type,
+                        'label' => trim((string) $primaryTopicMedia->label) !== ''
+                            ? trim((string) $primaryTopicMedia->label)
+                            : "Модель: {$topic->name}",
+                        'url' => $url,
+                        'sort_order' => (int) $primaryTopicMedia->sort_order,
                         'topic_id' => (int) $topic->id,
                         'topic_name' => (string) $topic->name,
                         'topic_priority' => (int) $topic->priority,
@@ -934,13 +956,18 @@ class ChatAiAssistantService
             ])
             ->values();
 
-        if ($sendAll) {
-            return $ranked;
-        }
-
         $positive = $ranked
             ->filter(fn (array $item) => (int) ($item['score'] ?? 0) > 0)
             ->values();
+
+        if ($sendAll) {
+            $specificPositive = $positive
+                ->reject(fn (array $item) => in_array((string) ($item['media_type'] ?? ''), ['collage', 'palette'], true))
+                ->values();
+
+            return ($specificPositive->isNotEmpty() ? $specificPositive : ($positive->isNotEmpty() ? $positive : $ranked))
+                ->values();
+        }
 
         if ($positive->isNotEmpty()) {
             $specificMedia = $positive
@@ -948,7 +975,7 @@ class ChatAiAssistantService
                 ->values();
 
             return ($specificMedia->isNotEmpty() ? $specificMedia : $positive)
-                ->take(3)
+                ->take(1)
                 ->values();
         }
 
@@ -961,11 +988,11 @@ class ChatAiAssistantService
             ->values();
 
         if ($specificMedia->isNotEmpty()) {
-            return $specificMedia->take(3)->values();
+            return $specificMedia->take(1)->values();
         }
 
         return $explicitOverviewRequest
-            ? $ranked->take(3)->values()
+            ? $ranked->take(1)->values()
             : collect();
     }
 
@@ -2692,10 +2719,6 @@ class ChatAiAssistantService
     {
         $normalized = $this->normalizeText($text);
         if ($normalized === '') {
-            return false;
-        }
-
-        if ($this->extractVisualPreferenceStems($normalized) !== []) {
             return false;
         }
 
