@@ -72,10 +72,6 @@ class ChatAiAssistantService
 
         $products = $topic ? $this->resolveTopicProducts($topic, $requestedSize) : collect();
         $mediaCandidates = $topic ? $this->resolveTopicMedia($topic, $products) : collect();
-        $isPhotoRequest = $this->isPhotoRequest((string) ($message->text ?? ''));
-        $isAllPhotosRequest = $isPhotoRequest && $this->isAllPhotosRequest((string) ($message->text ?? ''));
-        $isBroadCatalogRequest = $this->isBroadCatalogRequest($normalizedMessageText);
-        $shouldSendOverviewMedia = $isTopicUnclear && ($isBroadCatalogRequest || $isAllPhotosRequest);
         $slotState = $this->buildConversationSlotState(
             $conversation,
             $message,
@@ -85,11 +81,39 @@ class ChatAiAssistantService
             $topicScore,
             $requestedSize
         );
+
+        $awaitingPhotoConfirmation = $this->isAwaitingPhotoConfirmation($conversation);
+        $explicitPhotoRequest = $this->isPhotoRequest((string) ($message->text ?? ''));
+        $confirmedPhotoRequest = $awaitingPhotoConfirmation && $this->isAffirmativeReply((string) ($message->text ?? ''));
+        $declinedPhotoRequest = $awaitingPhotoConfirmation && $this->isNegativeReply((string) ($message->text ?? ''));
+        $ambiguousVisualIntent = !$explicitPhotoRequest
+            && !$confirmedPhotoRequest
+            && !$declinedPhotoRequest
+            && $this->isAmbiguousVisualIntent((string) ($message->text ?? ''));
+        $hasResolvedVisualContext = $this->hasResolvedVisualContext($topic, $slotState, $conversation);
+        $isPhotoRequest = $explicitPhotoRequest || $confirmedPhotoRequest;
+        $isAllPhotosRequest = $explicitPhotoRequest && $this->isAllPhotosRequest((string) ($message->text ?? ''));
+        $isBroadCatalogRequest = $this->isBroadCatalogRequest($normalizedMessageText);
+        $shouldSendOverviewMedia = $isTopicUnclear && ($isBroadCatalogRequest || $isAllPhotosRequest);
+        $mediaSelectionQuery = $this->buildMediaSelectionQuery(
+            (string) ($message->text ?? ''),
+            $slotState,
+            $topic,
+            $isPhotoRequest
+        );
+        $previewMedia = $mediaCandidates->isNotEmpty()
+            ? $this->selectMediaForReply($mediaCandidates, $mediaSelectionQuery, false)
+            : collect();
+        $shouldAskPhotoConfirmation = $ambiguousVisualIntent
+            && $hasResolvedVisualContext
+            && $previewMedia->isNotEmpty();
+
         $selectedMedia = $shouldSendOverviewMedia
             ? $this->resolveAllTopicsOverviewMedia($topics)
             : ($isPhotoRequest
-                ? $this->selectMediaForReply($mediaCandidates, (string) ($message->text ?? ''), $isAllPhotosRequest)
+                ? $this->selectMediaForReply($mediaCandidates, $mediaSelectionQuery, $isAllPhotosRequest)
                 : collect());
+        $mediaForPrompt = $shouldAskPhotoConfirmation ? $previewMedia : $selectedMedia;
 
         if ($slotState['just_completed'] && $slotState['order_ready']) {
             $reply = [
@@ -105,11 +129,12 @@ class ChatAiAssistantService
                     $rules,
                     $topic,
                     $products,
-                    $selectedMedia,
+                    $mediaForPrompt,
                     $slotState,
                     $requestedSize,
                     $isPhotoRequest,
-                    $isAllPhotosRequest
+                    $isAllPhotosRequest,
+                    $shouldAskPhotoConfirmation
                 );
             } catch (\Throwable $e) {
                 Log::warning('AI: помилка генерації відповіді', [
@@ -161,6 +186,7 @@ class ChatAiAssistantService
             'last_requested_size' => $requestedSize,
             'last_photo_request' => $isPhotoRequest,
             'last_all_photo_request' => $isAllPhotosRequest,
+            'awaiting_photo_confirmation' => $shouldAskPhotoConfirmation,
             'topic_unresolved' => $isTopicUnclear,
             'slot_definitions' => $slotState['definitions'],
             'slot_values' => $slotState['slots'],
@@ -193,6 +219,7 @@ class ChatAiAssistantService
             'requested_size' => $requestedSize,
             'photo_request' => $isPhotoRequest,
             'all_photo_request' => $isAllPhotosRequest,
+            'awaiting_photo_confirmation' => $shouldAskPhotoConfirmation,
             'sent_media_count' => $sentMediaCount,
             'sent_text' => $sentText,
             'handoff' => $handoff,
@@ -706,9 +733,18 @@ class ChatAiAssistantService
         array $slotState,
         ?int $requestedSize,
         bool $isPhotoRequest,
-        bool $isAllPhotosRequest
+        bool $isAllPhotosRequest,
+        bool $shouldAskPhotoConfirmation
     ): array {
-        $instructions = $this->buildSystemInstructions($settings, $rules, $message, $slotState, $products, $requestedSize);
+        $instructions = $this->buildSystemInstructions(
+            $settings,
+            $rules,
+            $message,
+            $slotState,
+            $products,
+            $requestedSize,
+            $shouldAskPhotoConfirmation
+        );
         $memory = $message->conversation
             ? $this->buildConversationMemoryBlock($message->conversation)
             : '';
@@ -787,7 +823,8 @@ class ChatAiAssistantService
         ChatMessage $message,
         array $slotState,
         Collection $products,
-        ?int $requestedSize
+        ?int $requestedSize,
+        bool $shouldAskPhotoConfirmation
     ): string
     {
         $assistantName = trim((string) ($settings['assistant_name'] ?? 'DomCRM AI'));
@@ -796,7 +833,13 @@ class ChatAiAssistantService
         $knowledgeBase = trim((string) ($settings['knowledge_base'] ?? ''));
         $handoffRules = trim((string) ($settings['handoff_rules'] ?? ''));
         $qualificationFields = (array) ($settings['qualification_fields'] ?? []);
-        $flowGuidance = $this->buildFlowGuidanceBlock($message, $slotState, $products, $requestedSize);
+        $flowGuidance = $this->buildFlowGuidanceBlock(
+            $message,
+            $slotState,
+            $products,
+            $requestedSize,
+            $shouldAskPhotoConfirmation
+        );
 
         $rulesBlock = $rules
             ->map(function (ChatAiResponseRule $rule) {
@@ -842,11 +885,16 @@ class ChatAiAssistantService
         ChatMessage $message,
         array $slotState,
         Collection $products,
-        ?int $requestedSize
+        ?int $requestedSize,
+        bool $shouldAskPhotoConfirmation
     ): string {
         $guidance = [];
         $text = (string) ($message->text ?? '');
         $nextSlot = is_string($slotState['next'] ?? null) ? $slotState['next'] : null;
+
+        if ($shouldAskPhotoConfirmation) {
+            $guidance[] = 'Клієнт схоже хоче переглянути товар, але не попросив фото прямо. Не вгадуй і не пиши, що фото немає. Одним коротким питанням уточни, чи показати фото цього варіанту.';
+        }
 
         if ($requestedSize !== null && $this->isFootLengthConsultationText($text)) {
             $guidance[] = 'Клієнт назвав довжину стопи в сантиметрах або питає, чи не маломірить. Спочатку порадь відповідний розмір за сіткою, не переходь у цьому ж повідомленні до кількості.';
@@ -997,6 +1045,32 @@ class ChatAiAssistantService
         }
 
         return "Коротка пам'ять діалогу:\n" . implode("\n", $lines);
+    }
+
+    private function isAwaitingPhotoConfirmation(ChatConversation $conversation): bool
+    {
+        return (bool) data_get($conversation->meta, 'ai.awaiting_photo_confirmation', false);
+    }
+
+    /**
+     * @param  array<string, mixed>  $slotState
+     */
+    private function hasResolvedVisualContext(?ChatAiTopic $topic, array $slotState, ChatConversation $conversation): bool
+    {
+        $slots = is_array($slotState['slots'] ?? null) ? $slotState['slots'] : [];
+
+        if ($topic !== null) {
+            return true;
+        }
+
+        if (
+            $this->hasSlotValue($slots['model'] ?? null, 'model')
+            || $this->hasSlotValue($slots['color'] ?? null, 'color')
+        ) {
+            return true;
+        }
+
+        return trim((string) data_get($conversation->meta, 'ai.last_topic_name', '')) !== '';
     }
 
     /**
@@ -2206,6 +2280,99 @@ class ChatAiAssistantService
             '/(які маєте|якi маєте|яки маєте|що маєте|які у вас є|якi у вас є|яки у вас є|що у вас є|які є|якi є|яки є|що є|в наявност|асортимент)/u',
             $normalizedText
         );
+    }
+
+    private function isAmbiguousVisualIntent(string $text): bool
+    {
+        $normalized = $this->normalizeText($text);
+        if ($normalized === '' || $this->isPhotoRequest($text)) {
+            return false;
+        }
+
+        return (bool) preg_match(
+            '/(можна показати|хочу глянути|хочу подивит|хочу побачити|можна глянути|можна подивит|можна побачити|а можна показати|глянути|подивит|побачити|показати)/u',
+            $normalized
+        );
+    }
+
+    private function isAffirmativeReply(string $text): bool
+    {
+        $normalized = $this->normalizeText($text);
+        if ($normalized === '') {
+            return false;
+        }
+
+        return (bool) preg_match(
+            '/^(так|ага|угу|давайте|показуйте|покажіть|покажи|скидайте|надсилайте|надiшлiть|надiшли|хочу|можна)([\s!.,?].*)?$/u',
+            $normalized
+        );
+    }
+
+    private function isNegativeReply(string $text): bool
+    {
+        $normalized = $this->normalizeText($text);
+        if ($normalized === '') {
+            return false;
+        }
+
+        return (bool) preg_match('/^(ні|не треба|не потрібно|не хочу|неа|не треба показувати)([\s!.,?].*)?$/u', $normalized);
+    }
+
+    /**
+     * @param  array<string, mixed>  $slotState
+     */
+    private function buildMediaSelectionQuery(
+        string $messageText,
+        array $slotState,
+        ?ChatAiTopic $topic,
+        bool $forceContext
+    ): string {
+        $parts = [];
+        $normalized = $this->normalizeText($messageText);
+        $slots = is_array($slotState['slots'] ?? null) ? $slotState['slots'] : [];
+
+        if (trim($messageText) !== '') {
+            $parts[] = trim($messageText);
+        }
+
+        $color = $this->hasSlotValue($slots['color'] ?? null, 'color')
+            ? (string) $slots['color']
+            : '';
+        $model = $this->hasSlotValue($slots['model'] ?? null, 'model')
+            ? (string) $slots['model']
+            : ($topic?->name ?? '');
+
+        if ($color !== '' && (!$this->messageContainsVisualPreference($normalized) || $forceContext)) {
+            $parts[] = $color;
+        }
+
+        if ($model !== '' && (!$this->messageContainsModelReference($normalized) || $forceContext)) {
+            $parts[] = $model;
+        }
+
+        if ($forceContext && !preg_match('/(фото|фотк|картин|зображ|колаж|палітр|палiтр)/u', $normalized)) {
+            $parts[] = 'фото';
+        }
+
+        return collect($parts)
+            ->map(fn ($part) => trim((string) $part))
+            ->filter()
+            ->unique()
+            ->implode(' ');
+    }
+
+    private function messageContainsVisualPreference(string $normalizedText): bool
+    {
+        return $this->extractVisualPreferenceStems($normalizedText) !== [];
+    }
+
+    private function messageContainsModelReference(string $normalizedText): bool
+    {
+        if ($normalizedText === '') {
+            return false;
+        }
+
+        return (bool) preg_match('/(halluci|модел|варіант|капц|тапул|тапк)/u', $normalizedText);
     }
 
     private function extractRequestedSize(?string $text): ?int

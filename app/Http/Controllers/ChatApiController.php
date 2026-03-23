@@ -265,6 +265,7 @@ class ChatApiController extends Controller
             'last_requested_size' => null,
             'last_photo_request' => null,
             'last_all_photo_request' => null,
+            'awaiting_photo_confirmation' => false,
             'topic_unresolved' => null,
             'slot_definitions' => [],
             'slot_values' => [],
