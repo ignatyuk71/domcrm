@@ -189,16 +189,16 @@ class ChatApiController extends Controller
                     ->where('conversation_id', $conversation->id)
                     ->delete();
 
-                $conversation->update([
-                    'last_message_id' => null,
-                    'last_message_preview' => null,
-                    'last_message_at' => null,
-                    'last_inbound_at' => null,
-                    'last_outbound_at' => null,
-                    'unread_count' => 0,
-                    'status' => 'open',
-                    'closed_at' => null,
-                ]);
+                $conversation->last_message_id = null;
+                $conversation->last_message_preview = null;
+                $conversation->last_message_at = null;
+                $conversation->last_inbound_at = null;
+                $conversation->last_outbound_at = null;
+                $conversation->unread_count = 0;
+                $conversation->status = 'open';
+                $conversation->closed_at = null;
+                $conversation->meta = $this->resetConversationMetaAfterHistoryClear($conversation);
+                $conversation->save();
             });
 
             foreach ($filesToDelete as $file) {
@@ -227,6 +227,55 @@ class ChatApiController extends Controller
 
             return response()->json(['error' => 'Не вдалося очистити історію чату.'], 500);
         }
+    }
+
+    /**
+     * Скидає AI-контекст чату після очищення історії, щоб новий тест починався з нуля.
+     *
+     * @return array<string, mixed>
+     */
+    private function resetConversationMetaAfterHistoryClear(ChatConversation $conversation): array
+    {
+        $meta = is_array($conversation->meta) ? $conversation->meta : [];
+        $aiMeta = is_array(data_get($meta, 'ai')) ? data_get($meta, 'ai') : [];
+
+        $enabled = array_key_exists('enabled', $aiMeta)
+            ? (bool) $aiMeta['enabled']
+            : $this->resolveGlobalAiEnabled();
+        $statusCode = trim((string) ($aiMeta['status_code'] ?? ''));
+
+        // Якщо AI був вимкнений саме через auto handoff, після очищення повертаємо чат у чистий стан.
+        if (!$enabled && $statusCode !== 'handoff_manager') {
+            $enabled = $this->resolveGlobalAiEnabled();
+        }
+
+        $meta['ai'] = [
+            'enabled' => $enabled,
+            'updated_at' => now()->toIso8601String(),
+            'handoff_reason' => null,
+            'handoff_at' => null,
+            'status_code' => $enabled ? 'history_cleared' : 'history_cleared_ai_disabled',
+            'status_note' => $enabled
+                ? 'Історію чату та AI-контекст очищено. Діалог починається з нуля.'
+                : 'Історію чату та AI-контекст очищено. AI лишився вимкненим для цього діалогу.',
+            'last_error' => null,
+            'last_topic_id' => null,
+            'last_topic_name' => null,
+            'last_reply_at' => null,
+            'last_requested_size' => null,
+            'last_photo_request' => null,
+            'last_all_photo_request' => null,
+            'topic_unresolved' => null,
+            'slot_definitions' => [],
+            'slot_values' => [],
+            'missing_slots' => [],
+            'next_slot' => null,
+            'order_ready' => false,
+            'slot_summary' => null,
+            'updated_slots' => [],
+        ];
+
+        return $meta;
     }
 
     public function showByCustomer(Request $request, int $customerId, MetaService $metaService): JsonResponse
