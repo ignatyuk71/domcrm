@@ -708,7 +708,7 @@ class ChatAiAssistantService
         bool $isPhotoRequest,
         bool $isAllPhotosRequest
     ): array {
-        $instructions = $this->buildSystemInstructions($settings, $rules);
+        $instructions = $this->buildSystemInstructions($settings, $rules, $message, $slotState, $products, $requestedSize);
         $memory = $message->conversation
             ? $this->buildConversationMemoryBlock($message->conversation)
             : '';
@@ -716,7 +716,15 @@ class ChatAiAssistantService
             (int) $message->conversation_id,
             (int) ($settings['max_messages'] ?? 12)
         );
-        $topicBlock = $this->buildTopicBlock($topic, $products, $selectedMedia, $requestedSize, $isPhotoRequest, $isAllPhotosRequest);
+        $topicBlock = $this->buildTopicBlock(
+            $topic,
+            $products,
+            $selectedMedia,
+            $requestedSize,
+            (string) ($message->text ?? ''),
+            $isPhotoRequest,
+            $isAllPhotosRequest
+        );
         $slotBlock = $this->buildSlotStateBlock($slotState['definitions'], $slotState['slots'], $slotState['missing'], $slotState['next'], $slotState['order_ready']);
 
         $input = implode("\n\n", array_filter([
@@ -773,7 +781,14 @@ class ChatAiAssistantService
     /**
      * @param  Collection<int, ChatAiResponseRule>  $rules
      */
-    private function buildSystemInstructions(array $settings, Collection $rules): string
+    private function buildSystemInstructions(
+        array $settings,
+        Collection $rules,
+        ChatMessage $message,
+        array $slotState,
+        Collection $products,
+        ?int $requestedSize
+    ): string
     {
         $assistantName = trim((string) ($settings['assistant_name'] ?? 'DomCRM AI'));
         $replyStyle = trim((string) ($settings['reply_style'] ?? ''));
@@ -781,6 +796,7 @@ class ChatAiAssistantService
         $knowledgeBase = trim((string) ($settings['knowledge_base'] ?? ''));
         $handoffRules = trim((string) ($settings['handoff_rules'] ?? ''));
         $qualificationFields = (array) ($settings['qualification_fields'] ?? []);
+        $flowGuidance = $this->buildFlowGuidanceBlock($message, $slotState, $products, $requestedSize);
 
         $rulesBlock = $rules
             ->map(function (ChatAiResponseRule $rule) {
@@ -805,15 +821,119 @@ class ChatAiAssistantService
             'Якщо клієнт просить показати всі варіанти — у тексті підтвердь, що показуєш всі доступні для поточної теми.',
             'Якщо клієнт просить конкретний колір або варіант, а точних медіа в контексті немає, не пиши, що надсилаєш його фото.',
             'У блоці "Стан слотів замовлення" вже є зібрані поля. Не перепитуй те, що вже заповнено.',
-            'Якщо система вказала "Наступний слот для уточнення", постав тільки одне коротке питання саме про нього.',
-            'Не проси кілька полів в одному повідомленні. Один крок = одне уточнення.',
+            'Якщо система вказала "Наступний слот для уточнення", орієнтуйся на нього як на пріоритет і не перепитуй уже зібрані поля.',
+            'Зазвичай став одне коротке питання за раз, але на етапі оформлення можеш одним повідомленням попросити весь відсутній блок даних про доставку й отримувача.',
+            'Коли перелічуєш розміри або розмірну сітку, пиши кожен варіант з нового рядка.',
             $replyStyle !== '' ? "Стиль відповіді: {$replyStyle}" : null,
             $companyContext !== '' ? "Контекст компанії: {$companyContext}" : null,
             $knowledgeBase !== '' ? "Додаткова база знань: {$knowledgeBase}" : null,
             $qualificationText !== '' ? "Поля кваліфікації, які треба зібрати по діалогу: {$qualificationText}" : null,
             $handoffRules !== '' ? "Коли передавати менеджеру:\n{$handoffRules}" : null,
+            $flowGuidance !== '' ? "Додаткові правила поточного кроку:\n{$flowGuidance}" : null,
             $rulesBlock !== '' ? "Сценарні правила:\n{$rulesBlock}" : null,
         ])));
+    }
+
+    /**
+     * @param  array<string, mixed>  $slotState
+     * @param  Collection<int, array<string, mixed>>  $products
+     */
+    private function buildFlowGuidanceBlock(
+        ChatMessage $message,
+        array $slotState,
+        Collection $products,
+        ?int $requestedSize
+    ): string {
+        $guidance = [];
+        $text = (string) ($message->text ?? '');
+        $nextSlot = is_string($slotState['next'] ?? null) ? $slotState['next'] : null;
+
+        if ($requestedSize !== null && $this->isFootLengthConsultationText($text)) {
+            $guidance[] = 'Клієнт назвав довжину стопи в сантиметрах або питає, чи не маломірить. Спочатку порадь відповідний розмір за сіткою, не переходь у цьому ж повідомленні до кількості.';
+            $guidance[] = 'Після рекомендації спитай, чи підходить цей розмір. Попроси підтвердити саме розміром, наприклад: "Якщо підходить, напишіть, будь ласка, 36/37."';
+        }
+
+        if ($nextSlot === 'quantity') {
+            $guidance[] = 'Коли уточнюєш кількість, пиши м’яко: "Скільки пар бажаєте замовити?" Не використовуй формулювання "кладемо".';
+        }
+
+        if ($this->shouldAskForOrderDetailsBundle($slotState)) {
+            $guidance[] = $this->buildOrderDetailsBundleGuidance($slotState);
+        } elseif ($nextSlot === 'city') {
+            $guidance[] = 'Коли уточнюєш населений пункт, пиши: "Підкажіть, будь ласка, місто або населений пункт для доставки."';
+        } elseif ($nextSlot === 'delivery') {
+            $guidance[] = 'Коли уточнюєш доставку, пиши: "Підкажіть, будь ласка, що вам зручніше: Нова пошта, поштомат чи кур’єр?" Якщо потрібно, одразу попроси номер відділення, поштомата або адресу.';
+        }
+
+        if ($products->isNotEmpty()) {
+            $guidance[] = 'Якщо клієнт питає про наявні розміри, перелічи їх стовпчиком, кожен варіант з нового рядка.';
+        }
+
+        return implode("\n", array_filter($guidance));
+    }
+
+    /**
+     * @param  array<string, mixed>  $slotState
+     */
+    private function shouldAskForOrderDetailsBundle(array $slotState): bool
+    {
+        $slots = is_array($slotState['slots'] ?? null) ? $slotState['slots'] : [];
+        $missing = is_array($slotState['missing'] ?? null) ? $slotState['missing'] : [];
+
+        if ($missing === []) {
+            return false;
+        }
+
+        if (
+            !$this->hasSlotValue($slots['model'] ?? null, 'model')
+            || !$this->hasSlotValue($slots['size'] ?? null, 'size')
+        ) {
+            return false;
+        }
+
+        if (!$this->hasSlotValue($slots['quantity'] ?? null, 'quantity')) {
+            return false;
+        }
+
+        return collect(['customer_name', 'phone', 'city', 'delivery'])
+            ->contains(fn (string $key) => in_array($key, $missing, true));
+    }
+
+    /**
+     * @param  array<string, mixed>  $slotState
+     */
+    private function buildOrderDetailsBundleGuidance(array $slotState): string
+    {
+        $missing = array_values(array_filter(
+            is_array($slotState['missing'] ?? null) ? $slotState['missing'] : [],
+            fn (string $key) => in_array($key, ['customer_name', 'phone', 'city', 'delivery'], true)
+        ));
+
+        $fieldLines = [];
+
+        if (in_array('customer_name', $missing, true)) {
+            $fieldLines[] = '- ПІБ отримувача';
+        }
+        if (in_array('phone', $missing, true)) {
+            $fieldLines[] = '- Номер мобільного';
+        }
+        if (in_array('city', $missing, true)) {
+            $fieldLines[] = '- Місто або населений пункт';
+        }
+        if (in_array('delivery', $missing, true)) {
+            $fieldLines[] = '- Що зручніше: Нова пошта, поштомат чи кур’єр';
+            $fieldLines[] = '- Номер відділення, поштомата або повна адреса для кур’єра';
+        }
+
+        $template = implode("\n", array_filter([
+            'Ми вже на етапі оформлення. Замість окремих коротких питань попроси клієнта одним повідомленням надіслати відсутні дані.',
+            'Сформулюй повідомлення у такому стилі:',
+            'Для оформлення замовлення вкажіть, будь ласка, такі дані:',
+            implode("\n", $fieldLines),
+            'Якщо частина даних уже зібрана, не дублюй їх і попроси лише те, чого не вистачає.',
+        ]));
+
+        return $template;
     }
 
     private function buildHistoryForPrompt(int $conversationId, int $maxMessages): string
@@ -862,16 +982,14 @@ class ChatAiAssistantService
             $lines[] = "Остання визначена тема: {$lastTopicName}";
         }
 
-        $lastRequestedSize = isset($ai['last_requested_size'])
-            ? (int) $ai['last_requested_size']
-            : null;
+        $lastRequestedSize = isset($ai['last_requested_size']) ? (int) $ai['last_requested_size'] : null;
         if (
             $lastRequestedSize !== null
             && $lastRequestedSize >= 20
             && $lastRequestedSize <= 55
             && !str_contains($slotSummary, (string) $lastRequestedSize)
         ) {
-            $lines[] = "Останній відомий розмір клієнта: {$lastRequestedSize}";
+            $lines[] = "Остання згадана довжина стопи або розмір: {$lastRequestedSize}";
         }
 
         if ($lines === []) {
@@ -972,8 +1090,8 @@ class ChatAiAssistantService
             'color' => ['key' => 'color', 'label' => 'Колір', 'required' => false],
             'size' => ['key' => 'size', 'label' => 'Розмір', 'required' => true],
             'quantity' => ['key' => 'quantity', 'label' => 'Кількість', 'required' => false],
-            'city' => ['key' => 'city', 'label' => 'Місто', 'required' => true],
-            'delivery' => ['key' => 'delivery', 'label' => 'Відділення / адреса', 'required' => true],
+            'city' => ['key' => 'city', 'label' => 'Місто / населений пункт', 'required' => true],
+            'delivery' => ['key' => 'delivery', 'label' => 'Спосіб доставки / відділення / адреса', 'required' => true],
             'customer_name' => ['key' => 'customer_name', 'label' => "Ім'я", 'required' => true],
             'phone' => ['key' => 'phone', 'label' => 'Телефон', 'required' => true],
             'payment' => ['key' => 'payment', 'label' => 'Оплата', 'required' => false],
@@ -1019,7 +1137,7 @@ class ChatAiAssistantService
             (bool) preg_match('/\b(колір|цвет)\b/u', $normalized) => 'color',
             (bool) preg_match('/\b(розмір|розм|size)\b/u', $normalized) => 'size',
             (bool) preg_match('/\b(кількість|кільк|qty|пара|пар)\b/u', $normalized) => 'quantity',
-            (bool) preg_match('/\b(місто|город)\b/u', $normalized) => 'city',
+            (bool) preg_match('/\b(місто|город|село|смт|населен)\b/u', $normalized) => 'city',
             (bool) preg_match('/\b(відділення|відділ|доставка|адреса|адрес|поштомат)\b/u', $normalized) => 'delivery',
             (bool) preg_match('/\b(ім[\'’`ʼ]?я|имя|прізвище|отримувач)\b/u', $normalized) => 'customer_name',
             (bool) preg_match('/\b(телефон|тел|номер)\b/u', $normalized) => 'phone',
@@ -1081,13 +1199,6 @@ class ChatAiAssistantService
             $slots['model'] = $lastTopicName;
         }
 
-        $lastRequestedSize = isset($ai['last_requested_size'])
-            ? (int) $ai['last_requested_size']
-            : null;
-        if ($lastRequestedSize !== null && !$this->hasSlotValue($slots['size'] ?? null, 'size')) {
-            $slots['size'] = $lastRequestedSize;
-        }
-
         foreach ($slots as $key => $value) {
             $normalized = $this->normalizeSlotValue((string) $key, $value);
             if ($normalized === null) {
@@ -1127,7 +1238,7 @@ class ChatAiAssistantService
             $updates['model'] = $topic->name;
         }
 
-        if ($requestedSize !== null) {
+        if ($requestedSize !== null && $this->shouldPersistRequestedSizeAsSlot($text, $previousNextSlot)) {
             $updates['size'] = $requestedSize;
         }
 
@@ -1424,6 +1535,41 @@ class ChatAiAssistantService
         );
     }
 
+    private function shouldPersistRequestedSizeAsSlot(string $text, ?string $previousNextSlot): bool
+    {
+        $normalized = $this->normalizeText($text);
+        if ($normalized === '') {
+            return false;
+        }
+
+        if ($this->containsShippingNumberContext($normalized)) {
+            return false;
+        }
+
+        if ($this->isFootLengthConsultationText($normalized)) {
+            return false;
+        }
+
+        if (
+            $previousNextSlot !== null
+            && in_array($previousNextSlot, ['city', 'delivery', 'customer_name', 'phone', 'payment'], true)
+        ) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private function isFootLengthConsultationText(string $text): bool
+    {
+        $normalized = $this->normalizeText($text);
+        if ($normalized === '') {
+            return false;
+        }
+
+        return (bool) preg_match('/(\bсм\b|сантим|стоп|устілк|довжин|на ногу|по нозі|по стопі|маломір)/u', $normalized);
+    }
+
     /**
      * @param  array<string, array<string, mixed>>  $definitions
      * @param  array<string, mixed>  $slots
@@ -1686,13 +1832,17 @@ class ChatAiAssistantService
         Collection $products,
         Collection $selectedMedia,
         ?int $requestedSize,
+        string $messageText,
         bool $isPhotoRequest,
         bool $isAllPhotosRequest
     ): string {
         $productsText = $products
             ->take(20)
             ->map(function (array $product, int $index) {
-                $sizes = implode(', ', array_filter((array) ($product['sizes'] ?? [])));
+                $sizeLines = collect((array) ($product['sizes'] ?? []))
+                    ->filter(fn ($size) => trim((string) $size) !== '')
+                    ->map(fn ($size) => '   - ' . trim((string) $size))
+                    ->implode("\n");
                 $price = $product['price'] !== null
                     ? number_format((float) $product['price'], 0, '.', '') . ' грн'
                     : 'ціна не вказана';
@@ -1701,7 +1851,8 @@ class ChatAiAssistantService
                     . ($product['title'] ?? 'Товар')
                     . ($product['sku'] ? " (SKU: {$product['sku']})" : '')
                     . " — {$price}"
-                    . ($sizes !== '' ? "; розміри: {$sizes}" : '; розміри: не вказано');
+                    . "\n   розміри:\n"
+                    . ($sizeLines !== '' ? $sizeLines : '   - не вказано');
             })
             ->implode("\n");
 
@@ -1720,12 +1871,25 @@ class ChatAiAssistantService
         return trim(implode("\n", array_filter([
             $topic ? "Поточна тема: {$topic->name}" : 'Поточна тема: не визначена',
             $topic && trim((string) $topic->instruction) !== '' ? "Інструкція теми: {$topic->instruction}" : null,
-            $requestedSize ? "Запитаний розмір: {$requestedSize}" : 'Запитаний розмір: не вказаний',
+            $this->buildRequestedSizeContextLine($requestedSize, $messageText),
             $isPhotoRequest ? 'Клієнт просить фото: так' : 'Клієнт просить фото: ні',
             $isAllPhotosRequest ? 'Клієнт просить показати всі фото: так' : null,
             $productsText !== '' ? "Релевантні товари:\n{$productsText}" : 'Релевантні товари: немає',
             $mediaText !== '' ? "Медіа, які система може надіслати зараз:\n{$mediaText}" : 'Медіа для поточної теми: немає',
         ])));
+    }
+
+    private function buildRequestedSizeContextLine(?int $requestedSize, string $messageText): string
+    {
+        if ($requestedSize === null) {
+            return 'Запитаний розмір: не вказаний';
+        }
+
+        if ($this->isFootLengthConsultationText($messageText)) {
+            return "Клієнт назвав довжину стопи або промір у сантиметрах: {$requestedSize}";
+        }
+
+        return "Запитаний розмір: {$requestedSize}";
     }
 
     private function buildUnknownTopicStatusNote(int $sentMediaCount): string
