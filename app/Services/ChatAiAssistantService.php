@@ -227,6 +227,10 @@ class ChatAiAssistantService
             'media_intent_reason' => $mediaIntent['reason'] ?? null,
             'media_intent_confidence' => $mediaIntent['confidence'] ?? null,
             'media_intent_target_color' => $mediaIntentColor,
+            'order_intent' => $slotState['order_intent'] ?? null,
+            'order_intent_source' => $slotState['order_intent_source'] ?? null,
+            'order_intent_reason' => $slotState['order_intent_reason'] ?? null,
+            'order_intent_confidence' => $slotState['order_intent_confidence'] ?? null,
             'multi_item_pending' => (bool) ($slotState['multi_item_pending'] ?? false),
             'multi_item_just_confirmed' => (bool) ($slotState['multi_item_just_confirmed'] ?? false),
             'slot_definitions' => $slotState['definitions'],
@@ -274,6 +278,10 @@ class ChatAiAssistantService
             'media_intent_reason' => $mediaIntent['reason'] ?? null,
             'media_intent_confidence' => $mediaIntent['confidence'] ?? null,
             'media_intent_target_color' => $mediaIntentColor,
+            'order_intent' => $slotState['order_intent'] ?? null,
+            'order_intent_source' => $slotState['order_intent_source'] ?? null,
+            'order_intent_reason' => $slotState['order_intent_reason'] ?? null,
+            'order_intent_confidence' => $slotState['order_intent_confidence'] ?? null,
             'multi_item_pending' => (bool) ($slotState['multi_item_pending'] ?? false),
             'multi_item_just_confirmed' => (bool) ($slotState['multi_item_just_confirmed'] ?? false),
             'slot_updates' => $slotState['updated'],
@@ -1773,7 +1781,8 @@ class ChatAiAssistantService
 
         if ((bool) ($slotState['multi_item_just_confirmed'] ?? false)) {
             $guidance[] = 'Клієнт щойно підтвердив список кількох пар. Не повторюй цей список ще раз і не проси повторно підтвердження.';
-            $guidance[] = 'Одним наступним повідомленням попроси дані для оформлення замовлення: ПІБ отримувача, номер мобільного, місто або село, номер відділення чи поштомата або повну адресу для кур’єра.';
+            $guidance[] = 'Якщо хоча б для однієї пари ще не вистачає моделі, кольору або розміру, спочатку попроси саме ці деталі. До доставки переходь тільки коли всі позиції вже повністю зрозумілі.';
+            $guidance[] = 'Лише коли всі пари вже описані повністю, одним наступним повідомленням попроси дані для оформлення замовлення: ПІБ отримувача, номер мобільного, місто або село, номер відділення чи поштомата або повну адресу для кур’єра.';
         }
 
         if ($shouldAskPhotoConfirmation) {
@@ -2027,10 +2036,23 @@ class ChatAiAssistantService
         $previousMultiItemPending = (bool) data_get($conversation->meta, 'ai.multi_item_pending', false);
         $previousNextSlot = data_get($conversation->meta, 'ai.next_slot');
         $text = (string) ($message->text ?? '');
-        $currentMultiItemPending = $this->isComplexMultiItemOrderText($text);
+        $orderIntent = $this->resolveOrderIntent(
+            $conversation,
+            $message,
+            $topic,
+            $products,
+            $slots,
+            $previousNextSlot,
+            $previousMultiItemPending,
+            $settings
+        );
+        $currentMultiItemPending = in_array((string) ($orderIntent['intent'] ?? ''), ['multi_item_add', 'multi_item_edit'], true)
+            || $this->isComplexMultiItemOrderText($text);
         $multiItemJustConfirmed = $previousMultiItemPending
-            && !$currentMultiItemPending
-            && $this->isAffirmativeReply($text);
+            && (
+                (string) ($orderIntent['intent'] ?? '') === 'multi_item_confirm'
+                || (!$currentMultiItemPending && $this->isAffirmativeReply($text))
+            );
         $multiItemPending = $currentMultiItemPending
             || ($previousMultiItemPending && !$multiItemJustConfirmed && !$this->isSingleItemResetText($text));
 
@@ -2046,7 +2068,8 @@ class ChatAiAssistantService
             $topicScore,
             $requestedSize,
             $slots,
-            $previousNextSlot
+            $previousNextSlot,
+            (string) ($orderIntent['intent'] ?? 'none')
         );
 
         $updated = [];
@@ -2083,6 +2106,10 @@ class ChatAiAssistantService
             'updated' => $updated,
             'updated_keys' => array_keys($updated),
             'just_completed' => !$previousOrderReady && $orderReady,
+            'order_intent' => (string) ($orderIntent['intent'] ?? 'none'),
+            'order_intent_source' => $orderIntent['source'] ?? null,
+            'order_intent_reason' => $orderIntent['reason'] ?? null,
+            'order_intent_confidence' => $orderIntent['confidence'] ?? null,
             'multi_item_pending' => $multiItemPending,
             'multi_item_just_confirmed' => $multiItemJustConfirmed,
         ];
@@ -2228,7 +2255,8 @@ class ChatAiAssistantService
         int $topicScore,
         ?int $requestedSize,
         array $currentSlots,
-        ?string $previousNextSlot
+        ?string $previousNextSlot,
+        string $orderIntent = 'none'
     ): array {
         $text = trim((string) ($message->text ?? ''));
         if ($text === '') {
@@ -2252,7 +2280,10 @@ class ChatAiAssistantService
             $updates['color'] = $color;
         }
 
-        if ($quantity = $this->extractQuantityValue($text, $previousNextSlot)) {
+        if (
+            !in_array($orderIntent, ['multi_item_add', 'multi_item_edit', 'multi_item_confirm'], true)
+            && ($quantity = $this->extractQuantityValue($text, $previousNextSlot))
+        ) {
             $updates['quantity'] = $quantity;
         }
 
@@ -2277,6 +2308,266 @@ class ChatAiAssistantService
         }
 
         return $updates;
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $products
+     * @param  array<string, mixed>  $slots
+     * @return array{
+     *     intent: string,
+     *     source: string,
+     *     reason: ?string,
+     *     confidence: ?float
+     * }
+     */
+    private function resolveOrderIntent(
+        ChatConversation $conversation,
+        ChatMessage $message,
+        ?ChatAiTopic $topic,
+        Collection $products,
+        array $slots,
+        ?string $previousNextSlot,
+        bool $previousMultiItemPending,
+        array $settings
+    ): array {
+        $fallback = $this->resolveOrderIntentFallback(
+            (string) ($message->text ?? ''),
+            $previousNextSlot,
+            $previousMultiItemPending
+        );
+
+        if (!$this->shouldUseAiOrderIntentClassifier(
+            (string) ($message->text ?? ''),
+            $previousNextSlot,
+            $previousMultiItemPending,
+            $slots
+        )) {
+            return $fallback;
+        }
+
+        try {
+            $aiIntent = $this->classifyOrderIntentWithAi(
+                $conversation,
+                $message,
+                $topic,
+                $products,
+                $slots,
+                $previousNextSlot,
+                $previousMultiItemPending,
+                $settings
+            );
+            if ($aiIntent !== null) {
+                return $aiIntent;
+            }
+        } catch (\Throwable $e) {
+            Log::warning('AI: не вдалося визначити order-intent через classifier', [
+                'conversation_id' => $conversation->id,
+                'message_id' => $message->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return $fallback;
+    }
+
+    /**
+     * @param  array<string, mixed>  $slots
+     */
+    private function shouldUseAiOrderIntentClassifier(
+        string $text,
+        ?string $previousNextSlot,
+        bool $previousMultiItemPending,
+        array $slots
+    ): bool {
+        $normalized = $this->normalizeText($text);
+        if ($normalized === '') {
+            return false;
+        }
+
+        if ($previousMultiItemPending) {
+            return true;
+        }
+
+        if ($previousNextSlot === 'quantity') {
+            return true;
+        }
+
+        if ($this->hasSlotValue($slots['quantity'] ?? null, 'quantity')) {
+            return true;
+        }
+
+        return $this->hasAdditionalPairIntentCue($normalized);
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $products
+     * @param  array<string, mixed>  $slots
+     * @return array{
+     *     intent: string,
+     *     source: string,
+     *     reason: ?string,
+     *     confidence: ?float
+     * }|null
+     */
+    private function classifyOrderIntentWithAi(
+        ChatConversation $conversation,
+        ChatMessage $message,
+        ?ChatAiTopic $topic,
+        Collection $products,
+        array $slots,
+        ?string $previousNextSlot,
+        bool $previousMultiItemPending,
+        array $settings
+    ): ?array {
+        $currentModel = $this->normalizeSlotValue('model', $slots['model'] ?? ($topic?->name ?? null));
+        $currentColor = $this->normalizeSlotValue('color', $slots['color'] ?? null);
+        $currentSize = $this->normalizeSlotValue('size', $slots['size'] ?? null);
+        $currentQuantity = $this->normalizeSlotValue('quantity', $slots['quantity'] ?? null);
+        $availableColors = $products
+            ->pluck('color_name')
+            ->map(fn ($value) => $this->normalizeSlotValue('color', $value))
+            ->filter()
+            ->unique()
+            ->values()
+            ->implode(', ');
+        $availableSizes = $products
+            ->flatMap(fn (array $product) => (array) ($product['available_sizes'] ?? []))
+            ->map(fn ($value) => $this->normalizeSlotValue('size', $value))
+            ->filter()
+            ->unique()
+            ->values()
+            ->implode(', ');
+        $memory = $this->buildConversationMemoryBlock($conversation);
+        $history = $this->buildHistoryForPrompt($conversation->id, 8);
+
+        $input = implode("\n\n", array_filter([
+            'Останнє повідомлення клієнта: ' . trim((string) ($message->text ?? '')),
+            $memory,
+            'Поточний стан замовлення:'
+                . ($currentModel !== null ? "\n- модель: {$currentModel}" : "\n- модель: не визначена")
+                . ($currentColor !== null ? "\n- колір: {$currentColor}" : '')
+                . ($currentSize !== null ? "\n- розмір: {$currentSize}" : '')
+                . ($currentQuantity !== null ? "\n- кількість: {$currentQuantity}" : '')
+                . ($previousNextSlot !== null ? "\n- попередній наступний слот: {$previousNextSlot}" : '')
+                . "\n- multi_item_pending: " . ($previousMultiItemPending ? 'так' : 'ні'),
+            $availableColors !== '' ? "Доступні кольори поточної моделі: {$availableColors}" : null,
+            $availableSizes !== '' ? "Доступні розміри поточної моделі: {$availableSizes}" : null,
+            "Останні повідомлення діалогу:\n{$history}",
+        ]));
+
+        $schema = [
+            'type' => 'object',
+            'additionalProperties' => false,
+            'properties' => [
+                'intent' => [
+                    'type' => 'string',
+                    'enum' => [
+                        'none',
+                        'single_item_quantity',
+                        'multi_item_add',
+                        'multi_item_edit',
+                        'multi_item_confirm',
+                    ],
+                ],
+                'confidence' => [
+                    'type' => 'number',
+                    'minimum' => 0,
+                    'maximum' => 1,
+                ],
+                'reason' => [
+                    'type' => 'string',
+                ],
+            ],
+            'required' => ['intent', 'confidence', 'reason'],
+        ];
+
+        $instructions = implode("\n", [
+            'Ти визначаєш намір клієнта щодо складу замовлення.',
+            'Поверни тільки один intent із дозволеного списку.',
+            'single_item_quantity — клієнт просто називає кількість для вже вибраного одного товару.',
+            'multi_item_add — клієнт додає ще одну пару, каже про себе і ще когось, згадує другу людину, ще одну пару, інший колір чи розмір для другої пари.',
+            'multi_item_edit — клієнт змінює вже озвучений список кількох пар.',
+            'multi_item_confirm — клієнт підтверджує, що список кількох пар правильний.',
+            'none — якщо повідомлення не стосується кількості чи складу кількох пар.',
+            'Фрази на кшталт "собі і мамі", "нам дві", "ще одну пару", "одні мені, одні мамі" трактуй як multi_item_add, а не як просту кількість одного товару.',
+            'Якщо клієнт підтверджує список кількох пар словами "так", "так все правильно", "все вірно" — це multi_item_confirm.',
+            'Не вигадуй деталі другої пари. Визначай тільки intent.',
+        ]);
+
+        $response = $this->openAi->createStructuredResponse(
+            $instructions,
+            $input,
+            $schema,
+            'chat_order_intent_router',
+            (string) ($settings['model'] ?? '')
+        );
+
+        $intent = trim((string) ($response['intent'] ?? ''));
+        $confidence = isset($response['confidence']) ? (float) $response['confidence'] : 0.0;
+        $reason = trim((string) ($response['reason'] ?? ''));
+
+        if (!in_array($intent, ['none', 'single_item_quantity', 'multi_item_add', 'multi_item_edit', 'multi_item_confirm'], true)) {
+            return null;
+        }
+
+        if ($confidence < 0.58) {
+            return null;
+        }
+
+        return [
+            'intent' => $intent,
+            'source' => 'ai_classifier',
+            'reason' => $reason !== '' ? $reason : 'Намір замовлення визначено AI-класифікатором.',
+            'confidence' => round($confidence, 3),
+        ];
+    }
+
+    /**
+     * @return array{
+     *     intent: string,
+     *     source: string,
+     *     reason: ?string,
+     *     confidence: ?float
+     * }
+     */
+    private function resolveOrderIntentFallback(
+        string $text,
+        ?string $previousNextSlot,
+        bool $previousMultiItemPending
+    ): array {
+        if ($previousMultiItemPending && $this->isAffirmativeReply($text)) {
+            return [
+                'intent' => 'multi_item_confirm',
+                'source' => 'fallback',
+                'reason' => 'Клієнт підтвердив раніше зібраний список пар.',
+                'confidence' => null,
+            ];
+        }
+
+        if ($this->hasAdditionalPairIntentCue($text) || $this->isComplexMultiItemOrderText($text)) {
+            return [
+                'intent' => 'multi_item_add',
+                'source' => 'fallback',
+                'reason' => 'Текст схожий на багатопозиційне замовлення.',
+                'confidence' => null,
+            ];
+        }
+
+        if ($previousNextSlot === 'quantity' && $this->extractQuantityValue($text, $previousNextSlot) !== null) {
+            return [
+                'intent' => 'single_item_quantity',
+                'source' => 'fallback',
+                'reason' => 'Клієнт назвав кількість для однієї позиції.',
+                'confidence' => null,
+            ];
+        }
+
+        return [
+            'intent' => 'none',
+            'source' => 'fallback',
+            'reason' => 'Окремий order-intent не виявлено.',
+            'confidence' => null,
+        ];
     }
 
     private function extractPhoneValue(string $text): ?string
@@ -2621,6 +2912,26 @@ class ChatAiAssistantService
         }
 
         return $hasMultipleVariants && $hasSplitCue;
+    }
+
+    private function hasAdditionalPairIntentCue(string $text): bool
+    {
+        $normalized = $this->normalizeText($text);
+        if ($normalized === '') {
+            return false;
+        }
+
+        if (
+            (bool) preg_match('/\b(2|3|4|дві|два|три|чотири)\b/u', $normalized)
+            && (bool) preg_match('/\b(пари|пара|пар)\b/u', $normalized)
+        ) {
+            return true;
+        }
+
+        return (bool) preg_match(
+            '/(собі|себе|мамі|маме|мама|дружин|чоловік|чоловіку|дитин|доньк|сину|сестрі|брату|нам|ще одну|ще одні|ще пару|додай|добав|ще такі|ще таку|одні .* друг|другу пару|для двох)/u',
+            $normalized
+        );
     }
 
     private function isSingleItemResetText(string $text): bool
