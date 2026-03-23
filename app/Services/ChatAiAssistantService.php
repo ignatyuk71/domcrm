@@ -61,10 +61,11 @@ class ChatAiAssistantService
 
         $normalizedMessageText = $this->normalizeText((string) ($message->text ?? ''));
         $requestedSize = $this->extractRequestedSize($message->text);
-        $topicMatch = $this->matchTopic(
+        $topicMatch = $this->resolveTopicMatch(
             $topics,
             (string) ($message->text ?? ''),
-            $conversation
+            $conversation,
+            $settings
         );
         $topic = $topicMatch['topic'];
         $topicScore = (int) ($topicMatch['score'] ?? 0);
@@ -188,6 +189,9 @@ class ChatAiAssistantService
             'last_all_photo_request' => $isAllPhotosRequest,
             'awaiting_photo_confirmation' => $shouldAskPhotoConfirmation,
             'topic_unresolved' => $isTopicUnclear,
+            'topic_route_source' => $topicMatch['route_source'] ?? null,
+            'topic_route_reason' => $topicMatch['route_reason'] ?? null,
+            'topic_route_confidence' => $topicMatch['route_confidence'] ?? null,
             'slot_definitions' => $slotState['definitions'],
             'slot_values' => $slotState['slots'],
             'missing_slots' => $slotState['missing'],
@@ -225,6 +229,9 @@ class ChatAiAssistantService
             'handoff' => $handoff,
             'handoff_reason' => $handoffReason,
             'topic_unresolved' => $isTopicUnclear,
+            'topic_route_source' => $topicMatch['route_source'] ?? null,
+            'topic_route_reason' => $topicMatch['route_reason'] ?? null,
+            'topic_route_confidence' => $topicMatch['route_confidence'] ?? null,
             'slot_updates' => $slotState['updated'],
             'slot_values' => $slotState['slots'],
             'missing_slots' => $slotState['missing'],
@@ -341,12 +348,205 @@ class ChatAiAssistantService
 
     /**
      * @param  Collection<int, ChatAiTopic>  $topics
-     * @return array{topic: ?ChatAiTopic, score: int}
+     * @return array{topic: ?ChatAiTopic, score: int, route_source: string, route_reason: ?string, route_confidence: ?float}
+     */
+    private function resolveTopicMatch(
+        Collection $topics,
+        string $text,
+        ChatConversation $conversation,
+        array $settings
+    ): array {
+        $keywordMatch = $this->matchTopic($topics, $text, $conversation);
+
+        if (!$this->shouldUseAiTopicClassifier($topics, $text, $conversation, $keywordMatch)) {
+            return $keywordMatch;
+        }
+
+        try {
+            $aiMatch = $this->classifyTopicWithAi($topics, $text, $conversation, $settings);
+            if ($aiMatch !== null) {
+                return $aiMatch;
+            }
+        } catch (\Throwable $e) {
+            Log::warning('AI: не вдалося визначити тему через classifier', [
+                'conversation_id' => $conversation->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return $keywordMatch;
+    }
+
+    /**
+     * @param  Collection<int, ChatAiTopic>  $topics
+     * @param  array{topic: ?ChatAiTopic, score: int, route_source: string, route_reason: ?string, route_confidence: ?float}  $keywordMatch
+     */
+    private function shouldUseAiTopicClassifier(
+        Collection $topics,
+        string $text,
+        ChatConversation $conversation,
+        array $keywordMatch
+    ): bool {
+        if ($topics->count() < 2) {
+            return false;
+        }
+
+        $normalizedText = $this->normalizeText($text);
+        if ($normalizedText === '') {
+            return false;
+        }
+
+        if ($this->isBroadCatalogRequest($normalizedText)) {
+            return false;
+        }
+
+        $keywordScore = (int) ($keywordMatch['score'] ?? 0);
+        $topicUnresolved = (bool) data_get($conversation->meta, 'ai.topic_unresolved', false);
+
+        if ($keywordScore <= 0) {
+            return true;
+        }
+
+        return $topicUnresolved && $keywordScore < 100;
+    }
+
+    /**
+     * @param  Collection<int, ChatAiTopic>  $topics
+     * @return array{topic: ?ChatAiTopic, score: int, route_source: string, route_reason: ?string, route_confidence: ?float}|null
+     */
+    private function classifyTopicWithAi(
+        Collection $topics,
+        string $text,
+        ChatConversation $conversation,
+        array $settings
+    ): ?array {
+        $topicBlock = $topics
+            ->map(function (ChatAiTopic $topic) {
+                $positiveKeywords = $topic->keywords
+                    ->where('is_active', true)
+                    ->where('match_type', 'positive')
+                    ->pluck('phrase')
+                    ->filter(fn ($phrase) => trim((string) $phrase) !== '')
+                    ->implode('; ');
+
+                $negativeKeywords = $topic->keywords
+                    ->where('is_active', true)
+                    ->where('match_type', 'negative')
+                    ->pluck('phrase')
+                    ->filter(fn ($phrase) => trim((string) $phrase) !== '')
+                    ->implode('; ');
+
+                $mediaLabels = $topic->mediaItems
+                    ->where('is_active', true)
+                    ->pluck('label')
+                    ->filter(fn ($label) => trim((string) $label) !== '')
+                    ->take(5)
+                    ->implode('; ');
+
+                $productTitles = $topic->topicProducts
+                    ->filter(fn ($topicProduct) => (bool) $topicProduct->is_active && $topicProduct->product !== null)
+                    ->map(fn ($topicProduct) => trim((string) ($topicProduct->product?->title ?? '')))
+                    ->filter()
+                    ->take(5)
+                    ->implode('; ');
+
+                $instruction = trim((string) $topic->instruction);
+                $instruction = $instruction !== '' ? Str::limit($instruction, 320, '') : 'Опис теми не заданий.';
+
+                return implode("\n", array_filter([
+                    "ID: {$topic->id}",
+                    "Назва: {$topic->name}",
+                    "Опис: {$instruction}",
+                    $positiveKeywords !== '' ? "Позитивні підказки: {$positiveKeywords}" : null,
+                    $negativeKeywords !== '' ? "Негативні підказки: {$negativeKeywords}" : null,
+                    $mediaLabels !== '' ? "Назви медіа: {$mediaLabels}" : null,
+                    $productTitles !== '' ? "Приклади товарів: {$productTitles}" : null,
+                ]));
+            })
+            ->implode("\n\n");
+
+        $memory = $this->buildConversationMemoryBlock($conversation);
+        $history = $this->buildHistoryForPrompt($conversation->id, 6);
+        $input = implode("\n\n", array_filter([
+            "Останнє повідомлення клієнта: " . trim($text),
+            $memory,
+            "Останні повідомлення діалогу:\n{$history}",
+            "Доступні теми:\n{$topicBlock}",
+        ]));
+
+        $schema = [
+            'type' => 'object',
+            'additionalProperties' => false,
+            'properties' => [
+                'topic_id' => [
+                    'type' => ['integer', 'null'],
+                ],
+                'confidence' => [
+                    'type' => 'number',
+                    'minimum' => 0,
+                    'maximum' => 1,
+                ],
+                'reason' => [
+                    'type' => 'string',
+                ],
+            ],
+            'required' => ['topic_id', 'confidence', 'reason'],
+        ];
+
+        $instructions = implode("\n", [
+            'Ти визначаєш тему товару для AI-продавця.',
+            'Обирай тему по змісту повідомлення, короткій пам’яті діалогу та останній історії розмови.',
+            'Не покладайся тільки на точні keywords, використовуй зміст і контекст.',
+            'Використовуй як семантичні підказки також назви колажів, фото і товарів, якщо вони є в описі теми.',
+            'Якщо клієнт явно вибрав один із варіантів, які AI щойно запропонував, віднеси це до відповідної теми.',
+            'Якщо інформації недостатньо і тема неочевидна, повертай topic_id = null.',
+            'Не вигадуй нові теми. Обирай тільки з доступного списку.',
+        ]);
+
+        $response = $this->openAi->createStructuredResponse(
+            $instructions,
+            $input,
+            $schema,
+            'chat_topic_router',
+            (string) ($settings['model'] ?? '')
+        );
+
+        $topicId = isset($response['topic_id']) ? (int) $response['topic_id'] : 0;
+        $confidence = isset($response['confidence']) ? (float) $response['confidence'] : 0.0;
+        $reason = trim((string) ($response['reason'] ?? ''));
+
+        if ($topicId <= 0 || $confidence < 0.55) {
+            return null;
+        }
+
+        $topic = $topics->firstWhere('id', $topicId);
+        if (!$topic) {
+            return null;
+        }
+
+        return [
+            'topic' => $topic,
+            'score' => 1000,
+            'route_source' => 'ai_classifier',
+            'route_reason' => $reason !== '' ? $reason : 'Тему визначено AI-класифікатором.',
+            'route_confidence' => round($confidence, 3),
+        ];
+    }
+
+    /**
+     * @param  Collection<int, ChatAiTopic>  $topics
+     * @return array{topic: ?ChatAiTopic, score: int, route_source: string, route_reason: ?string, route_confidence: ?float}
      */
     private function matchTopic(Collection $topics, string $text, ChatConversation $conversation): array
     {
         if ($topics->isEmpty()) {
-            return ['topic' => null, 'score' => 0];
+            return [
+                'topic' => null,
+                'score' => 0,
+                'route_source' => 'unresolved',
+                'route_reason' => 'Активні теми відсутні.',
+                'route_confidence' => null,
+            ];
         }
 
         $normalizedText = $this->normalizeText($text);
@@ -397,31 +597,67 @@ class ChatAiAssistantService
         }
 
         if (!$bestTopic) {
-            return ['topic' => null, 'score' => 0];
+            return [
+                'topic' => null,
+                'score' => 0,
+                'route_source' => 'unresolved',
+                'route_reason' => 'Не знайдено найкращу тему.',
+                'route_confidence' => null,
+            ];
         }
 
         // Якщо запит загальний ("які маєте", "що є в наявності"), не тягнемо попередню тему:
         // потрібно показати оглядові варіанти.
         if ($bestScore <= 0 && $isBroadCatalogRequest) {
-            return ['topic' => null, 'score' => $bestScore];
+            return [
+                'topic' => null,
+                'score' => $bestScore,
+                'route_source' => 'broad_catalog_unresolved',
+                'route_reason' => 'Загальний запит без конкретної теми.',
+                'route_confidence' => null,
+            ];
         }
 
         if ($bestScore <= 0 && $topics->count() === 1) {
-            return ['topic' => $topics->first(), 'score' => 1];
+            return [
+                'topic' => $topics->first(),
+                'score' => 1,
+                'route_source' => 'single_topic_fallback',
+                'route_reason' => 'Активна лише одна тема.',
+                'route_confidence' => null,
+            ];
         }
 
         if ($bestScore <= 0 && $lastTopicId > 0) {
             $fallback = $topics->firstWhere('id', $lastTopicId);
             if ($fallback) {
-                return ['topic' => $fallback, 'score' => 1];
+                return [
+                    'topic' => $fallback,
+                    'score' => 1,
+                    'route_source' => 'last_topic_fallback',
+                    'route_reason' => 'Використано останню тему з пам’яті діалогу.',
+                    'route_confidence' => null,
+                ];
             }
         }
 
         if ($bestScore <= 0) {
-            return ['topic' => null, 'score' => $bestScore];
+            return [
+                'topic' => null,
+                'score' => $bestScore,
+                'route_source' => 'keywords_unresolved',
+                'route_reason' => 'Keywords не дали достатнього збігу.',
+                'route_confidence' => null,
+            ];
         }
 
-        return ['topic' => $bestTopic, 'score' => $bestScore];
+        return [
+            'topic' => $bestTopic,
+            'score' => $bestScore,
+            'route_source' => 'keywords',
+            'route_reason' => 'Тему визначено за назвою, keywords або контекстом останньої теми.',
+            'route_confidence' => null,
+        ];
     }
 
     /**
