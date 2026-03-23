@@ -1803,6 +1803,7 @@ class ChatAiAssistantService
             $guidance[] = 'Клієнт схоже збирає замовлення з кількох різних пар або змішує різні моделі. Не переходь до доставки й не проси місто, відділення чи адресу, поки не підтверджені всі позиції.';
             $guidance[] = 'Спочатку коротко перелічи позиції, як ти їх зрозумів, кожну з нового рядка, і попроси підтвердити або виправити список пар.';
             $guidance[] = 'Якщо для однієї з пар бракує лише одного поля, проси тільки його конкретно й просто, наприклад: "Уточніть, будь ласка, розмір для другої пари." Не використовуй фрази на кшталт "Тоді допишіть..." або канцелярський тон.';
+            $guidance[] = 'Якщо клієнт уже явно написав кількість по кожній позиції, наприклад "одну пару чорних і одну пару сірих", включи цю кількість у список пар. Після підтвердження не перепитуй кількість або розмір цих самих пар ще раз.';
         }
 
         if ((bool) ($slotState['single_item_review_pending'] ?? false)) {
@@ -1825,6 +1826,7 @@ class ChatAiAssistantService
         if ((bool) ($slotState['multi_item_review_completed'] ?? false)) {
             $guidance[] = 'Список кількох пар уже підтверджений клієнтом. Не повертайся знову до уточнення моделі, кольору, розміру чи кількості, якщо клієнт сам не змінює замовлення.';
             $guidance[] = 'Після підтвердженого списку пар переходь тільки до оформлення або до конкретного нового запиту клієнта. Не вигадуй, що для другої пари ще чогось бракує, якщо клієнт цього не написав.';
+            $guidance[] = 'Вважай, що підтверджений список уже зафіксував модель, колір, розмір і кількість по кожній парі. Не проси повторно підтвердити розмір або кількість для вже підтверджених позицій.';
         }
 
         if ($shouldAskPhotoConfirmation) {
@@ -2191,13 +2193,21 @@ class ChatAiAssistantService
                 $currentMultiItemPending
                 || ($previousMultiItemPending && !$multiItemJustConfirmed && !$this->isSingleItemResetText($text))
             );
+        if ($multiItemReviewCompleted) {
+            $missing = array_values(array_filter(
+                $missing,
+                fn (string $key) => in_array($key, ['customer_name', 'phone', 'city', 'delivery', 'payment'], true)
+            ));
+        }
         $singleItemReviewJustConfirmed = $previousSingleItemReviewPending
             && !$multiItemPending
+            && !$multiItemReviewCompleted
             && $this->isAffirmativeReply($text);
         $singleItemReviewCompleted = $singleItemReviewJustConfirmed
             ? true
             : ($itemDefinitionChanged ? false : $previousSingleItemReviewCompleted);
         $singleItemReviewPending = !$multiItemPending
+            && !$multiItemReviewCompleted
             && !$singleItemReviewCompleted
             && !$singleItemReviewJustConfirmed
             && $this->shouldRequireSingleItemReview($definitions, $slots, $missing);
