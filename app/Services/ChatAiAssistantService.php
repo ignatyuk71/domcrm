@@ -96,6 +96,7 @@ class ChatAiAssistantService
             $slotState,
             $settings
         );
+        $slotState = $this->applyOrderDraftContextToSlotState($slotState, $orderDraft);
 
         $awaitingPhotoConfirmation = $this->isAwaitingPhotoConfirmation($conversation);
         $explicitPhotoRequest = $this->isPhotoRequest((string) ($message->text ?? ''));
@@ -1654,7 +1655,9 @@ class ChatAiAssistantService
             $slotState['next'],
             $slotState['order_ready'],
             (bool) ($slotState['single_item_review_pending'] ?? false),
-            (bool) ($slotState['multi_item_pending'] ?? false)
+            (bool) ($slotState['multi_item_pending'] ?? false),
+            is_array($slotState['draft_items'] ?? null) ? $slotState['draft_items'] : [],
+            trim((string) ($slotState['draft_summary'] ?? ''))
         );
 
         $input = implode("\n\n", array_filter([
@@ -1839,6 +1842,11 @@ class ChatAiAssistantService
             $guidance[] = 'Вважай, що підтверджений список уже зафіксував модель, колір, розмір і кількість по кожній парі. Не проси повторно підтвердити розмір або кількість для вже підтверджених позицій.';
         }
 
+        if ((bool) ($slotState['draft_items_complete'] ?? false) && (int) ($slotState['draft_items_count'] ?? 0) > 0) {
+            $guidance[] = 'Позиції замовлення вже зібрані в окремому чернетковому списку. Не перепитуй модель, колір, розмір або кількість по вже збережених позиціях.';
+            $guidance[] = 'Якщо клієнт не змінює сам склад замовлення, переходь тільки до оформлення або відповіді на нове питання.';
+        }
+
         if ($shouldAskPhotoConfirmation) {
             $guidance[] = 'Клієнт схоже хоче переглянути товар, але не попросив фото прямо. Не вгадуй і не пиши, що фото немає. Одним коротким питанням уточни, чи показати фото цього варіанту.';
         }
@@ -1879,6 +1887,8 @@ class ChatAiAssistantService
         $slots = is_array($slotState['slots'] ?? null) ? $slotState['slots'] : [];
         $missing = is_array($slotState['missing'] ?? null) ? $slotState['missing'] : [];
         $definitions = is_array($slotState['definitions'] ?? null) ? $slotState['definitions'] : [];
+        $draftItemsComplete = (bool) ($slotState['draft_items_complete'] ?? false);
+        $draftItemsCount = (int) ($slotState['draft_items_count'] ?? 0);
 
         if (
             $missing === []
@@ -1888,16 +1898,18 @@ class ChatAiAssistantService
             return false;
         }
 
-        if (
-            !$this->hasSlotValue($slots['model'] ?? null, 'model')
-            || ((bool) data_get($definitions, 'color.required', false) && !$this->hasSlotValue($slots['color'] ?? null, 'color'))
-            || !$this->hasSlotValue($slots['size'] ?? null, 'size')
-        ) {
-            return false;
-        }
+        if (!$draftItemsComplete || $draftItemsCount === 0) {
+            if (
+                !$this->hasSlotValue($slots['model'] ?? null, 'model')
+                || ((bool) data_get($definitions, 'color.required', false) && !$this->hasSlotValue($slots['color'] ?? null, 'color'))
+                || !$this->hasSlotValue($slots['size'] ?? null, 'size')
+            ) {
+                return false;
+            }
 
-        if (!$this->hasSlotValue($slots['quantity'] ?? null, 'quantity')) {
-            return false;
+            if (!$this->hasSlotValue($slots['quantity'] ?? null, 'quantity')) {
+                return false;
+            }
         }
 
         return collect(['customer_name', 'phone', 'city', 'delivery'])
@@ -2418,6 +2430,83 @@ class ChatAiAssistantService
         }
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * @param  array<string, mixed>  $slotState
+     * @param  array{
+     *     items: array<int, array<string, mixed>>,
+     *     summary: string,
+     *     source: string,
+     *     confidence: ?float
+     * }  $orderDraft
+     * @return array<string, mixed>
+     */
+    private function applyOrderDraftContextToSlotState(array $slotState, array $orderDraft): array
+    {
+        $items = is_array($orderDraft['items'] ?? null) ? $orderDraft['items'] : [];
+        $draftSummary = trim((string) ($orderDraft['summary'] ?? ''));
+        $allItemsComplete = $items !== [] && $this->orderDraftItemsAreComplete($items);
+
+        $slotState['draft_items'] = $items;
+        $slotState['draft_summary'] = $draftSummary;
+        $slotState['draft_items_complete'] = $allItemsComplete;
+        $slotState['draft_items_count'] = count($items);
+
+        if (!$allItemsComplete) {
+            return $slotState;
+        }
+
+        $itemKeys = ['model', 'color', 'size', 'quantity'];
+        $missing = array_values(array_filter(
+            is_array($slotState['missing'] ?? null) ? $slotState['missing'] : [],
+            fn (string $key) => !in_array($key, $itemKeys, true)
+        ));
+        $next = is_string($slotState['next'] ?? null) ? $slotState['next'] : null;
+
+        if ($next !== null && in_array($next, $itemKeys, true)) {
+            $next = $missing[0] ?? null;
+        }
+
+        $slotState['missing'] = $missing;
+        $slotState['next'] = $next;
+        $slotState['order_ready'] = $missing === [];
+        $slotState['summary'] = $this->buildSlotSummary(
+            is_array($slotState['definitions'] ?? null) ? $slotState['definitions'] : [],
+            is_array($slotState['slots'] ?? null) ? $slotState['slots'] : [],
+            $missing,
+            $next,
+            (bool) $slotState['order_ready'],
+            (bool) ($slotState['single_item_review_pending'] ?? false),
+            (bool) ($slotState['multi_item_pending'] ?? false),
+            $items,
+            $draftSummary
+        );
+
+        return $slotState;
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $items
+     */
+    private function orderDraftItemsAreComplete(array $items): bool
+    {
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                return false;
+            }
+
+            $model = $this->normalizeSlotValue('model', $item['model'] ?? null);
+            $color = $this->normalizeSlotValue('color', $item['color'] ?? null);
+            $size = $this->normalizeSlotValue('size', $item['size'] ?? null);
+            $quantity = $this->normalizeOrderDraftQuantity($item['quantity'] ?? null) ?? 1;
+
+            if ($model === null || $color === null || $size === null || $quantity < 1) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function isAwaitingPhotoConfirmation(ChatConversation $conversation): bool
@@ -3611,7 +3700,9 @@ class ChatAiAssistantService
         ?string $nextSlot,
         bool $orderReady,
         bool $singleItemReviewPending = false,
-        bool $multiItemPending = false
+        bool $multiItemPending = false,
+        array $draftItems = [],
+        string $draftSummary = ''
     ): string {
         $filled = collect($definitions)
             ->map(function (array $definition, string $key) use ($slots) {
@@ -3633,6 +3724,10 @@ class ChatAiAssistantService
             ->implode(', ');
 
         $parts = [];
+
+        if ($draftItems !== []) {
+            $parts[] = 'Позиції: ' . ($draftSummary !== '' ? preg_replace('/\s+/u', ' ', $draftSummary) : (string) count($draftItems) . ' шт.');
+        }
 
         if ($filled !== '') {
             $parts[] = "Зібрано: {$filled}";
@@ -3673,9 +3768,16 @@ class ChatAiAssistantService
         ?string $nextSlot,
         bool $orderReady,
         bool $singleItemReviewPending = false,
-        bool $multiItemPending = false
+        bool $multiItemPending = false,
+        array $draftItems = [],
+        string $draftSummary = ''
     ): string {
         $lines = ['Стан слотів замовлення:'];
+
+        if ($draftItems !== []) {
+            $lines[] = 'Позиції замовлення в чернетці:';
+            $lines[] = $draftSummary !== '' ? $draftSummary : ('- Кількість позицій: ' . count($draftItems));
+        }
 
         foreach ($definitions as $key => $definition) {
             $label = (string) ($definition['label'] ?? $key);
