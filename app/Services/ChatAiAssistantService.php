@@ -2896,15 +2896,11 @@ class ChatAiAssistantService
         }
 
         $hasShowVerb = (bool) preg_match(
-            '/(покажи|покажiть|покажіть|показат|побачити|скинь|надішли|надiшли)/u',
-            $normalized
-        );
-        $hasVisualObject = (bool) preg_match(
-            '/(кольор|кольори|біл|чорн|сір|рожев|блакит|коричн|червон|малинов|електрик|капучин|модел|варіант|асортимент|в наявност|які є|якi є|яки є|що є|вигляд|вигляда)/u',
+            '/(покажи|покажiть|покажіть|показат|побачити|подивит|глянути|скинь|скидайте|надішли|надiшли|надсилайте|можна показати|можна побачити|можна глянути|хочу глянути|хочу подивит|хочу побачити)/u',
             $normalized
         );
 
-        return $hasShowVerb && $hasVisualObject;
+        return $hasShowVerb;
     }
 
     private function isAllPhotosRequest(string $text): bool
