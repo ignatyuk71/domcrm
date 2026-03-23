@@ -1843,7 +1843,11 @@ class ChatAiAssistantService
             }
         }
 
-        if ($previousNextSlot === 'quantity' && preg_match('/^\s*([1-9]\d?)\s*$/u', $normalized, $match)) {
+        if (
+            $previousNextSlot === 'quantity'
+            && preg_match('/^\s*([1-9]\d?)\s*$/u', $normalized, $match)
+            && (int) $match[1] <= 9
+        ) {
             return (int) $match[1];
         }
 
@@ -2058,6 +2062,10 @@ class ChatAiAssistantService
             return false;
         }
 
+        if ($this->isDecimalFootLengthValue($normalized)) {
+            return false;
+        }
+
         if (
             $previousNextSlot !== null
             && in_array($previousNextSlot, ['city', 'delivery', 'customer_name', 'phone', 'payment'], true)
@@ -2075,7 +2083,18 @@ class ChatAiAssistantService
             return false;
         }
 
-        return (bool) preg_match('/(\bсм\b|сантим|стоп|устілк|довжин|на ногу|по нозі|по стопі|маломір)/u', $normalized);
+        return (bool) preg_match('/(\bсм\b|сантим|стоп|устілк|довжин|на ногу|по нозі|по стопі|маломір)/u', $normalized)
+            || $this->isDecimalFootLengthValue($normalized);
+    }
+
+    private function isDecimalFootLengthValue(string $text): bool
+    {
+        $normalized = $this->normalizeText($text);
+        if ($normalized === '') {
+            return false;
+        }
+
+        return (bool) preg_match('/^\s*(2[0-9]|3[0-9]|4[0-9]|5[0-5])[\.,]\d+\s*(см)?\s*$/u', $normalized);
     }
 
     /**
