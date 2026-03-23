@@ -1264,7 +1264,7 @@ const handleOrderClose = () => {
 .ai-settings-card.is-active { border-color: #cbd5e1; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
 .ai-settings-header { width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #fff; border: none; cursor: pointer; text-align: left; }
 .ai-settings-body-wrapper { max-height: 0; overflow: hidden; transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1); background: #f8fafc; }
-.ai-settings-card.is-active .ai-settings-body-wrapper { max-height: 520px; border-top: 1px solid #f1f5f9; }
+.ai-settings-card.is-active .ai-settings-body-wrapper { max-height: min(72vh, 760px); overflow-y: auto; overscroll-behavior: contain; border-top: 1px solid #f1f5f9; }
 .ai-settings-body { padding: 12px; display: flex; flex-direction: column; gap: 12px; }
 .ai-pill-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
 .status-badge.status-on { background: #dcfce7; color: #15803d; }
