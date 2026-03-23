@@ -204,6 +204,7 @@ class ChatAiAssistantService
             'topic_route_source' => $topicMatch['route_source'] ?? null,
             'topic_route_reason' => $topicMatch['route_reason'] ?? null,
             'topic_route_confidence' => $topicMatch['route_confidence'] ?? null,
+            'multi_item_pending' => (bool) ($slotState['multi_item_pending'] ?? false),
             'slot_definitions' => $slotState['definitions'],
             'slot_values' => $slotState['slots'],
             'missing_slots' => $slotState['missing'],
@@ -244,6 +245,7 @@ class ChatAiAssistantService
             'topic_route_source' => $topicMatch['route_source'] ?? null,
             'topic_route_reason' => $topicMatch['route_reason'] ?? null,
             'topic_route_confidence' => $topicMatch['route_confidence'] ?? null,
+            'multi_item_pending' => (bool) ($slotState['multi_item_pending'] ?? false),
             'slot_updates' => $slotState['updated'],
             'slot_values' => $slotState['slots'],
             'missing_slots' => $slotState['missing'],
@@ -1047,7 +1049,14 @@ class ChatAiAssistantService
             $isAllPhotosRequest,
             $shouldSendOverviewMedia
         );
-        $slotBlock = $this->buildSlotStateBlock($slotState['definitions'], $slotState['slots'], $slotState['missing'], $slotState['next'], $slotState['order_ready']);
+        $slotBlock = $this->buildSlotStateBlock(
+            $slotState['definitions'],
+            $slotState['slots'],
+            $slotState['missing'],
+            $slotState['next'],
+            $slotState['order_ready'],
+            (bool) ($slotState['multi_item_pending'] ?? false)
+        );
 
         $input = implode("\n\n", array_filter([
             'Останнє повідомлення клієнта: ' . trim((string) ($message->text ?? '')),
@@ -1197,6 +1206,11 @@ class ChatAiAssistantService
             }
         }
 
+        if ((bool) ($slotState['multi_item_pending'] ?? false)) {
+            $guidance[] = 'Клієнт схоже збирає замовлення з кількох різних пар або змішує різні моделі. Не переходь до доставки й не проси місто, відділення чи адресу, поки не підтверджені всі позиції.';
+            $guidance[] = 'Спочатку коротко перелічи позиції, як ти їх зрозумів, кожну з нового рядка, і попроси підтвердити або виправити список пар.';
+        }
+
         if ($shouldAskPhotoConfirmation) {
             $guidance[] = 'Клієнт схоже хоче переглянути товар, але не попросив фото прямо. Не вгадуй і не пиши, що фото немає. Одним коротким питанням уточни, чи показати фото цього варіанту.';
         }
@@ -1232,13 +1246,15 @@ class ChatAiAssistantService
     {
         $slots = is_array($slotState['slots'] ?? null) ? $slotState['slots'] : [];
         $missing = is_array($slotState['missing'] ?? null) ? $slotState['missing'] : [];
+        $definitions = is_array($slotState['definitions'] ?? null) ? $slotState['definitions'] : [];
 
-        if ($missing === []) {
+        if ($missing === [] || (bool) ($slotState['multi_item_pending'] ?? false)) {
             return false;
         }
 
         if (
             !$this->hasSlotValue($slots['model'] ?? null, 'model')
+            || ((bool) data_get($definitions, 'color.required', false) && !$this->hasSlotValue($slots['color'] ?? null, 'color'))
             || !$this->hasSlotValue($slots['size'] ?? null, 'size')
         ) {
             return false;
@@ -1389,7 +1405,8 @@ class ChatAiAssistantService
      *     summary: string,
      *     updated: array<string, mixed>,
      *     updated_keys: array<int, string>,
-     *     just_completed: bool
+     *     just_completed: bool,
+     *     multi_item_pending: bool
      * }
      */
     private function buildConversationSlotState(
@@ -1405,7 +1422,12 @@ class ChatAiAssistantService
         $slots = $this->hydrateBaseSlotValues($this->loadStoredSlotValues($conversation), $conversation);
         $previousMissing = $this->resolveMissingSlotKeys($definitions, $slots);
         $previousOrderReady = (bool) data_get($conversation->meta, 'ai.order_ready', false);
+        $previousMultiItemPending = (bool) data_get($conversation->meta, 'ai.multi_item_pending', false);
         $previousNextSlot = data_get($conversation->meta, 'ai.next_slot');
+        $text = (string) ($message->text ?? '');
+        $currentMultiItemPending = $this->isComplexMultiItemOrderText($text);
+        $multiItemPending = $currentMultiItemPending
+            || ($previousMultiItemPending && !$this->isSingleItemResetText($text));
 
         if (!is_string($previousNextSlot) || !array_key_exists($previousNextSlot, $definitions)) {
             $previousNextSlot = $previousMissing[0] ?? null;
@@ -1456,6 +1478,7 @@ class ChatAiAssistantService
             'updated' => $updated,
             'updated_keys' => array_keys($updated),
             'just_completed' => !$previousOrderReady && $orderReady,
+            'multi_item_pending' => $multiItemPending,
         ];
     }
 
@@ -1917,6 +1940,46 @@ class ChatAiAssistantService
         );
     }
 
+    private function isComplexMultiItemOrderText(string $text): bool
+    {
+        $normalized = $this->normalizeText($text);
+        if ($normalized === '') {
+            return false;
+        }
+
+        $hasPairCount = (bool) preg_match('/\b(2|3|4|дві|два|три|чотири)\b/u', $normalized)
+            && (bool) preg_match('/\b(пари|пара|пар)\b/u', $normalized);
+        $hasSplitCue = (bool) preg_match('/(одн[аиі].{0,40}друг|перш.{0,40}друг|а другу|а другі|і ще|ще одну|ще одні|\bі\b|\bта\b)/u', $normalized);
+        $colorCount = count($this->extractVisualPreferenceStems($normalized));
+        $modelFamilyCount = 0;
+
+        if ((bool) preg_match('/домашн/u', $normalized)) {
+            $modelFamilyCount++;
+        }
+
+        if ((bool) preg_match('/(для вулиці|на вулицю|вуличн|резинов|гумов|суцільн)/u', $normalized)) {
+            $modelFamilyCount++;
+        }
+
+        $hasMultipleVariants = $colorCount >= 2 || $modelFamilyCount >= 2;
+
+        if ($hasPairCount && ($hasSplitCue || $hasMultipleVariants)) {
+            return true;
+        }
+
+        return $hasMultipleVariants && $hasSplitCue;
+    }
+
+    private function isSingleItemResetText(string $text): bool
+    {
+        $normalized = $this->normalizeText($text);
+        if ($normalized === '' || $this->isComplexMultiItemOrderText($text)) {
+            return false;
+        }
+
+        return (bool) preg_match('/(\b1\b|\bодна\b|\bодну\b|\bодні\b|\bодин\b|лише|тільки)/u', $normalized);
+    }
+
     private function shouldPersistRequestedSizeAsSlot(string $text, ?string $previousNextSlot): bool
     {
         $normalized = $this->normalizeText($text);
@@ -2037,7 +2100,8 @@ class ChatAiAssistantService
         array $slots,
         array $missing,
         ?string $nextSlot,
-        bool $orderReady
+        bool $orderReady,
+        bool $multiItemPending = false
     ): string {
         $lines = ['Стан слотів замовлення:'];
 
@@ -2064,6 +2128,10 @@ class ChatAiAssistantService
         $lines[] = $orderReady
             ? 'Усі обов’язкові слоти зібрані: так'
             : 'Усі обов’язкові слоти зібрані: ні';
+
+        if ($multiItemPending) {
+            $lines[] = 'Багатопозиційне замовлення: так. Не переходь до доставки, поки не підтверджені всі пари.';
+        }
 
         return implode("\n", $lines);
     }
