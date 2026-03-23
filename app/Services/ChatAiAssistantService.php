@@ -95,7 +95,17 @@ class ChatAiAssistantService
         $isPhotoRequest = $explicitPhotoRequest || $confirmedPhotoRequest;
         $isAllPhotosRequest = $explicitPhotoRequest && $this->isAllPhotosRequest((string) ($message->text ?? ''));
         $isBroadCatalogRequest = $this->isBroadCatalogRequest($normalizedMessageText);
-        $shouldSendOverviewMedia = $isTopicUnclear && ($isBroadCatalogRequest || $isAllPhotosRequest);
+        $allTopicsOverviewMedia = $this->resolveAllTopicsOverviewMedia($topics);
+        $shouldSendTopicOverviewForModelSelection = $isTopicUnclear
+            && $this->shouldSendTopicOverviewForModelSelection(
+                $normalizedMessageText,
+                $requestedSize,
+                $slotState,
+                $allTopicsOverviewMedia
+            );
+        $shouldSendOverviewMedia = $isTopicUnclear
+            && $allTopicsOverviewMedia->isNotEmpty()
+            && ($isBroadCatalogRequest || $isAllPhotosRequest || $shouldSendTopicOverviewForModelSelection);
         $mediaSelectionQuery = $this->buildMediaSelectionQuery(
             (string) ($message->text ?? ''),
             $slotState,
@@ -110,7 +120,7 @@ class ChatAiAssistantService
             && $previewMedia->isNotEmpty();
 
         $selectedMedia = $shouldSendOverviewMedia
-            ? $this->resolveAllTopicsOverviewMedia($topics)
+            ? $allTopicsOverviewMedia
             : ($isPhotoRequest
                 ? $this->selectMediaForReply($mediaCandidates, $mediaSelectionQuery, $isAllPhotosRequest)
                 : collect());
@@ -128,6 +138,7 @@ class ChatAiAssistantService
                     $message,
                     $settings,
                     $rules,
+                    $topics,
                     $topic,
                     $products,
                     $mediaForPrompt,
@@ -135,7 +146,8 @@ class ChatAiAssistantService
                     $requestedSize,
                     $isPhotoRequest,
                     $isAllPhotosRequest,
-                    $shouldAskPhotoConfirmation
+                    $shouldAskPhotoConfirmation,
+                    $shouldSendOverviewMedia
                 );
             } catch (\Throwable $e) {
                 Log::warning('AI: помилка генерації відповіді', [
@@ -401,9 +413,10 @@ class ChatAiAssistantService
         }
 
         $keywordScore = (int) ($keywordMatch['score'] ?? 0);
+        $routeSource = (string) ($keywordMatch['route_source'] ?? '');
         $topicUnresolved = (bool) data_get($conversation->meta, 'ai.topic_unresolved', false);
 
-        if ($keywordScore <= 0) {
+        if ($keywordScore <= 0 || $routeSource === 'last_topic_fallback') {
             return true;
         }
 
@@ -780,34 +793,38 @@ class ChatAiAssistantService
         foreach ($topics as $topic) {
             $topicMedia = $topic->mediaItems
                 ->filter(fn ($item) => in_array((string) $item->media_type, ['collage', 'palette'], true))
+                ->sortBy('sort_order')
                 ->values();
 
             if ($topicMedia->isEmpty()) {
-                $topicMedia = $topic->mediaItems->values();
+                $topicMedia = $topic->mediaItems
+                    ->sortBy('sort_order')
+                    ->values();
             }
 
-            foreach ($topicMedia as $mediaItem) {
+            $primaryTopicMedia = $topicMedia->first();
+
+            if ($primaryTopicMedia) {
+                $mediaItem = $primaryTopicMedia;
                 $url = $this->absoluteUrl($mediaItem->url ?: $mediaItem->savedFile?->url);
-                if (!$url) {
-                    continue;
+                if ($url) {
+                    $overview->push([
+                        'source' => 'topic_overview_media',
+                        'topic_media_id' => (int) $mediaItem->id,
+                        'media_type' => (string) $mediaItem->media_type,
+                        'label' => trim((string) $mediaItem->label) !== ''
+                            ? trim((string) $mediaItem->label)
+                            : "Модель: {$topic->name}",
+                        'url' => $url,
+                        'sort_order' => (int) $mediaItem->sort_order,
+                        'topic_id' => (int) $topic->id,
+                        'topic_name' => (string) $topic->name,
+                        'topic_priority' => (int) $topic->priority,
+                    ]);
                 }
-
-                $overview->push([
-                    'source' => 'topic_overview_media',
-                    'topic_media_id' => (int) $mediaItem->id,
-                    'media_type' => (string) $mediaItem->media_type,
-                    'label' => trim((string) $mediaItem->label) !== ''
-                        ? trim((string) $mediaItem->label)
-                        : "Модель: {$topic->name}",
-                    'url' => $url,
-                    'sort_order' => (int) $mediaItem->sort_order,
-                    'topic_id' => (int) $topic->id,
-                    'topic_name' => (string) $topic->name,
-                    'topic_priority' => (int) $topic->priority,
-                ]);
             }
 
-            if ($topicMedia->isNotEmpty()) {
+            if ($primaryTopicMedia) {
                 continue;
             }
 
@@ -963,6 +980,7 @@ class ChatAiAssistantService
         ChatMessage $message,
         array $settings,
         Collection $rules,
+        Collection $topics,
         ?ChatAiTopic $topic,
         Collection $products,
         Collection $selectedMedia,
@@ -970,16 +988,19 @@ class ChatAiAssistantService
         ?int $requestedSize,
         bool $isPhotoRequest,
         bool $isAllPhotosRequest,
-        bool $shouldAskPhotoConfirmation
+        bool $shouldAskPhotoConfirmation,
+        bool $shouldSendOverviewMedia
     ): array {
         $instructions = $this->buildSystemInstructions(
             $settings,
             $rules,
+            $topics,
             $message,
             $slotState,
             $products,
             $requestedSize,
-            $shouldAskPhotoConfirmation
+            $shouldAskPhotoConfirmation,
+            $shouldSendOverviewMedia
         );
         $memory = $message->conversation
             ? $this->buildConversationMemoryBlock($message->conversation)
@@ -989,13 +1010,15 @@ class ChatAiAssistantService
             (int) ($settings['max_messages'] ?? 12)
         );
         $topicBlock = $this->buildTopicBlock(
+            $topics,
             $topic,
             $products,
             $selectedMedia,
             $requestedSize,
             (string) ($message->text ?? ''),
             $isPhotoRequest,
-            $isAllPhotosRequest
+            $isAllPhotosRequest,
+            $shouldSendOverviewMedia
         );
         $slotBlock = $this->buildSlotStateBlock($slotState['definitions'], $slotState['slots'], $slotState['missing'], $slotState['next'], $slotState['order_ready']);
 
@@ -1056,11 +1079,13 @@ class ChatAiAssistantService
     private function buildSystemInstructions(
         array $settings,
         Collection $rules,
+        Collection $topics,
         ChatMessage $message,
         array $slotState,
         Collection $products,
         ?int $requestedSize,
-        bool $shouldAskPhotoConfirmation
+        bool $shouldAskPhotoConfirmation,
+        bool $shouldSendOverviewMedia
     ): string
     {
         $assistantName = trim((string) ($settings['assistant_name'] ?? 'DomCRM AI'));
@@ -1070,11 +1095,13 @@ class ChatAiAssistantService
         $handoffRules = trim((string) ($settings['handoff_rules'] ?? ''));
         $qualificationFields = (array) ($settings['qualification_fields'] ?? []);
         $flowGuidance = $this->buildFlowGuidanceBlock(
+            $topics,
             $message,
             $slotState,
             $products,
             $requestedSize,
-            $shouldAskPhotoConfirmation
+            $shouldAskPhotoConfirmation,
+            $shouldSendOverviewMedia
         );
 
         $rulesBlock = $rules
@@ -1118,15 +1145,30 @@ class ChatAiAssistantService
      * @param  Collection<int, array<string, mixed>>  $products
      */
     private function buildFlowGuidanceBlock(
+        Collection $topics,
         ChatMessage $message,
         array $slotState,
         Collection $products,
         ?int $requestedSize,
-        bool $shouldAskPhotoConfirmation
+        bool $shouldAskPhotoConfirmation,
+        bool $shouldSendOverviewMedia
     ): string {
         $guidance = [];
         $text = (string) ($message->text ?? '');
         $nextSlot = is_string($slotState['next'] ?? null) ? $slotState['next'] : null;
+
+        if ($nextSlot === 'model') {
+            $availableModels = $this->buildAvailableTopicList($topics);
+            $guidance[] = 'Модель треба визначити першою. Поки клієнт не вибрав модель, не переходь до кольору, розміру, кількості або оформлення.';
+
+            if ($shouldSendOverviewMedia) {
+                $guidance[] = 'Система окремо надсилає клієнту оглядові колажі всіх доступних моделей. У тексті не проси дивитися "тему" і не описуй технічну логіку, просто попроси обрати модель.';
+            }
+
+            if ($availableModels !== '') {
+                $guidance[] = "Перелічи доступні моделі кожну з нового рядка:\n{$availableModels}";
+            }
+        }
 
         if ($shouldAskPhotoConfirmation) {
             $guidance[] = 'Клієнт схоже хоче переглянути товар, але не попросив фото прямо. Не вгадуй і не пиши, що фото немає. Одним коротким питанням уточни, чи показати фото цього варіанту.';
@@ -2241,13 +2283,15 @@ class ChatAiAssistantService
      * @param  Collection<int, array<string, mixed>>  $selectedMedia
      */
     private function buildTopicBlock(
+        Collection $topics,
         ?ChatAiTopic $topic,
         Collection $products,
         Collection $selectedMedia,
         ?int $requestedSize,
         string $messageText,
         bool $isPhotoRequest,
-        bool $isAllPhotosRequest
+        bool $isAllPhotosRequest,
+        bool $shouldSendOverviewMedia
     ): string {
         $productsText = $products
             ->take(20)
@@ -2281,12 +2325,18 @@ class ChatAiAssistantService
             })
             ->implode("\n");
 
+        $availableModels = $topic === null
+            ? $this->buildAvailableTopicList($topics)
+            : '';
+
         return trim(implode("\n", array_filter([
             $topic ? "Поточна тема: {$topic->name}" : 'Поточна тема: не визначена',
+            $availableModels !== '' ? "Доступні моделі для вибору:\n{$availableModels}" : null,
             $topic && trim((string) $topic->instruction) !== '' ? "Інструкція теми: {$topic->instruction}" : null,
             $this->buildRequestedSizeContextLine($requestedSize, $messageText),
             $isPhotoRequest ? 'Клієнт просить фото: так' : 'Клієнт просить фото: ні',
             $isAllPhotosRequest ? 'Клієнт просить показати всі фото: так' : null,
+            $shouldSendOverviewMedia ? 'Система надсилає оглядові колажі доступних моделей: так' : null,
             $productsText !== '' ? "Релевантні товари:\n{$productsText}" : 'Релевантні товари: немає',
             $mediaText !== '' ? "Медіа, які система може надіслати зараз:\n{$mediaText}" : 'Медіа для поточної теми: немає',
         ])));
@@ -2305,6 +2355,19 @@ class ChatAiAssistantService
         return "Запитаний розмір: {$requestedSize}";
     }
 
+    /**
+     * @param  Collection<int, ChatAiTopic>  $topics
+     */
+    private function buildAvailableTopicList(Collection $topics): string
+    {
+        return $topics
+            ->sortBy('priority')
+            ->map(fn (ChatAiTopic $topic) => '- ' . trim((string) $topic->name))
+            ->filter(fn (string $line) => trim($line) !== '-')
+            ->values()
+            ->implode("\n");
+    }
+
     private function buildUnknownTopicStatusNote(int $sentMediaCount): string
     {
         if ($sentMediaCount > 0) {
@@ -2312,6 +2375,39 @@ class ChatAiAssistantService
         }
 
         return 'Тема не визначена, AI попросив клієнта уточнити модель або категорію.';
+    }
+
+    /**
+     * @param  array<string, mixed>  $slotState
+     * @param  Collection<int, array<string, mixed>>  $overviewMedia
+     */
+    private function shouldSendTopicOverviewForModelSelection(
+        string $normalizedMessageText,
+        ?int $requestedSize,
+        array $slotState,
+        Collection $overviewMedia
+    ): bool {
+        if ($overviewMedia->isEmpty()) {
+            return false;
+        }
+
+        $nextSlot = is_string($slotState['next'] ?? null) ? $slotState['next'] : null;
+        if ($nextSlot !== 'model') {
+            return false;
+        }
+
+        if ($requestedSize !== null) {
+            return true;
+        }
+
+        if ($normalizedMessageText === '') {
+            return false;
+        }
+
+        return (bool) preg_match(
+            '/(хочу|ціна|скільки|які|якi|яки|що|є|в наявност|замов|потріб|потрiб|капц|тапк|хутр|вулиц|домашн|кольор|колір|модель|варіант|варiант|асортимент|подивит|глянути|показати|фото)/u',
+            $normalizedMessageText
+        );
     }
 
     /**
