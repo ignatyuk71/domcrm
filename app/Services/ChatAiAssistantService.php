@@ -3131,6 +3131,10 @@ class ChatAiAssistantService
             return false;
         }
 
+        if ($this->isVisualBrowsingRequest($text)) {
+            return false;
+        }
+
         if ($previousMultiItemPending) {
             return true;
         }
@@ -3236,6 +3240,7 @@ class ChatAiAssistantService
             'multi_item_edit — клієнт змінює вже озвучений список кількох пар.',
             'multi_item_confirm — клієнт підтверджує, що список кількох пар правильний.',
             'none — якщо повідомлення не стосується кількості чи складу кількох пар.',
+            'Якщо клієнт просить показати фото, кольори, варіанти або каже "покажи", "скинь", "хочу глянути", це intent = none, а не multi_item_add.',
             'Фрази на кшталт "собі і мамі", "нам дві", "ще одну пару", "одні мені, одні мамі" трактуй як multi_item_add, а не як просту кількість одного товару.',
             'Якщо клієнт підтверджує список кількох пар словами "так", "так все правильно", "все вірно" — це multi_item_confirm.',
             'Не вигадуй деталі другої пари. Визначай тільки intent.',
@@ -3282,6 +3287,15 @@ class ChatAiAssistantService
         ?string $previousNextSlot,
         bool $previousMultiItemPending
     ): array {
+        if ($this->isVisualBrowsingRequest($text)) {
+            return [
+                'intent' => 'none',
+                'source' => 'fallback',
+                'reason' => 'Повідомлення є запитом на фото або перегляд варіантів, а не зміною складу замовлення.',
+                'confidence' => null,
+            ];
+        }
+
         if ($previousMultiItemPending && $this->isAffirmativeReply($text)) {
             return [
                 'intent' => 'multi_item_confirm',
@@ -3685,6 +3699,10 @@ class ChatAiAssistantService
             return false;
         }
 
+        if ($this->isVisualBrowsingRequest($text)) {
+            return false;
+        }
+
         $hasPairCount = (bool) preg_match('/\b(2|3|4|дві|два|три|чотири)\b/u', $normalized)
             && (bool) preg_match('/\b(пари|пара|пар)\b/u', $normalized);
         $hasSplitCue = (bool) preg_match('/(одн[аиі].{0,40}друг|перш.{0,40}друг|а другу|а другі|і ще|ще одну|ще одні|\bі\b|\bта\b)/u', $normalized);
@@ -3715,6 +3733,10 @@ class ChatAiAssistantService
             return false;
         }
 
+        if ($this->isVisualBrowsingRequest($text)) {
+            return false;
+        }
+
         if (
             (bool) preg_match('/\b(2|3|4|дві|два|три|чотири)\b/u', $normalized)
             && (bool) preg_match('/\b(пари|пара|пар)\b/u', $normalized)
@@ -3736,6 +3758,23 @@ class ChatAiAssistantService
         }
 
         return (bool) preg_match('/(\b1\b|\bодна\b|\bодну\b|\bодні\b|\bодин\b|лише|тільки)/u', $normalized);
+    }
+
+    private function isVisualBrowsingRequest(string $text): bool
+    {
+        $normalized = $this->normalizeText($text);
+        if ($normalized === '') {
+            return false;
+        }
+
+        if ($this->isPhotoRequest($text) || $this->isAmbiguousVisualIntent($text)) {
+            return true;
+        }
+
+        return (bool) preg_match(
+            '/(покажи|показ|скинь|надіш|глянут|подив|побач|які є ще|всі які є|усі які є|які кольори|всі кольори|усі кольори|варіанти|фото|фотк)/u',
+            $normalized
+        );
     }
 
     private function shouldPersistRequestedSizeAsSlot(string $text, ?string $previousNextSlot): bool
