@@ -1956,7 +1956,7 @@ class ChatAiAssistantService
             }
         }
 
-        return collect(['customer_name', 'phone', 'city', 'delivery'])
+        return collect(['customer_name', 'phone', 'city', 'delivery', 'payment'])
             ->contains(fn (string $key) => in_array($key, $missing, true));
     }
 
@@ -1985,7 +1985,7 @@ class ChatAiAssistantService
             return false;
         }
 
-        return collect(['customer_name', 'phone', 'city', 'delivery'])
+        return collect(['customer_name', 'phone', 'city', 'delivery', 'payment'])
             ->contains(fn (string $key) => in_array($key, $missing, true));
     }
 
@@ -1996,7 +1996,7 @@ class ChatAiAssistantService
     {
         $missing = array_values(array_filter(
             is_array($slotState['missing'] ?? null) ? $slotState['missing'] : [],
-            fn (string $key) => in_array($key, ['customer_name', 'phone', 'city', 'delivery'], true)
+            fn (string $key) => in_array($key, ['customer_name', 'phone', 'city', 'delivery', 'payment'], true)
         ));
 
         $fieldLines = [];
@@ -2013,6 +2013,9 @@ class ChatAiAssistantService
         if (in_array('delivery', $missing, true)) {
             $fieldLines[] = '- Що зручніше: відділення, поштомат чи кур’єр';
             $fieldLines[] = '- Номер відділення, поштомата або повна адреса для кур’єра';
+        }
+        if (in_array('payment', $missing, true)) {
+            $fieldLines[] = '- Спосіб оплати: післяплата чи оплата на картку';
         }
 
         $template = implode("\n", array_filter([
