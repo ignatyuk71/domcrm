@@ -1456,10 +1456,12 @@ class ChatAiAssistantService
         }
 
         $query = $this->normalizeText($messageText);
-        $requestedColor = $this->extractKnownColorFromText($query);
-        $requestedColorSearch = $requestedColor !== null
-            ? $this->normalizeText($requestedColor)
-            : null;
+        $requestedColors = $this->extractKnownColorsFromText($query);
+        $requestedColorSearches = collect($requestedColors)
+            ->map(fn (string $color) => $this->normalizeText($color))
+            ->filter()
+            ->values()
+            ->all();
         $visualPreferenceStems = $this->extractVisualPreferenceStems($query);
         $explicitOverviewRequest = str_contains($query, 'колаж')
             || str_contains($query, 'палiтр')
@@ -1469,7 +1471,7 @@ class ChatAiAssistantService
             ->values();
 
         $ranked = $media
-            ->map(function (array $item) use ($query, $tokens, $visualPreferenceStems, $explicitOverviewRequest, $requestedColorSearch) {
+            ->map(function (array $item) use ($query, $tokens, $visualPreferenceStems, $explicitOverviewRequest, $requestedColorSearches) {
                 $label = $this->normalizeText((string) ($item['label'] ?? ''));
                 $itemColorSearch = $this->normalizeText((string) ($item['color_name'] ?? ''));
                 $source = (string) ($item['source'] ?? '');
@@ -1493,8 +1495,8 @@ class ChatAiAssistantService
                     }
                 }
 
-                if ($requestedColorSearch !== null && $requestedColorSearch !== '') {
-                    if ($itemColorSearch === $requestedColorSearch) {
+                if ($requestedColorSearches !== []) {
+                    if ($itemColorSearch !== '' && in_array($itemColorSearch, $requestedColorSearches, true)) {
                         $score += 240;
                     } elseif ($itemColorSearch !== '') {
                         $score -= 120;
@@ -1557,6 +1559,16 @@ class ChatAiAssistantService
                 return ($overviewPositive->isNotEmpty() ? $overviewPositive : $positive)->values();
             }
 
+            if ($requestedColorSearches !== []) {
+                $specificPositive = $specificPositive
+                    ->filter(function (array $item) use ($requestedColorSearches) {
+                        $itemColorSearch = $this->normalizeText((string) ($item['color_name'] ?? ''));
+
+                        return $itemColorSearch !== '' && in_array($itemColorSearch, $requestedColorSearches, true);
+                    })
+                    ->values();
+            }
+
             return ($specificPositive->isNotEmpty() ? $specificPositive : collect())->values();
         }
 
@@ -1574,6 +1586,28 @@ class ChatAiAssistantService
             $specificMedia = $positive
                 ->filter(fn (array $item) => (string) ($item['source'] ?? '') === 'product_photo')
                 ->values();
+
+            if ($requestedColorSearches !== []) {
+                $selectedByColors = collect();
+
+                foreach ($requestedColorSearches as $requestedColorSearch) {
+                    $match = $specificMedia->first(function (array $item) use ($requestedColorSearch) {
+                        $itemColorSearch = $this->normalizeText((string) ($item['color_name'] ?? ''));
+
+                        return $itemColorSearch !== '' && $itemColorSearch === $requestedColorSearch;
+                    });
+
+                    if (is_array($match)) {
+                        $selectedByColors->push($match);
+                    }
+                }
+
+                if ($selectedByColors->isNotEmpty()) {
+                    return $selectedByColors
+                        ->unique(fn (array $item) => (string) ($item['url'] ?? ''))
+                        ->values();
+                }
+            }
 
             return $specificMedia
                 ->take(1)
@@ -3594,18 +3628,44 @@ class ChatAiAssistantService
 
     private function extractKnownColorFromText(string $text): ?string
     {
+        return $this->extractKnownColorsFromText($text)[0] ?? null;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function extractKnownColorsFromText(string $text): array
+    {
         $normalized = $this->normalizeText($text);
         if ($normalized === '') {
-            return null;
+            return [];
         }
+
+        $matches = [];
 
         foreach ($this->colorStemMap() as $needle => $label) {
-            if (str_contains($normalized, $needle)) {
-                return $label;
+            $offset = mb_stripos($normalized, $needle);
+            if ($offset === false) {
+                continue;
             }
+
+            $key = $this->normalizeText($label);
+            if ($key === '' || array_key_exists($key, $matches)) {
+                continue;
+            }
+
+            $matches[$key] = [
+                'label' => $label,
+                'offset' => $offset,
+            ];
         }
 
-        return null;
+        uasort($matches, fn (array $left, array $right) => $left['offset'] <=> $right['offset']);
+
+        return array_values(array_map(
+            fn (array $item) => (string) $item['label'],
+            $matches
+        ));
     }
 
     /**
@@ -4860,6 +4920,8 @@ class ChatAiAssistantService
     ): string {
         $parts = [];
         $normalized = $this->normalizeText($messageText);
+        $explicitRequestedColors = $this->extractKnownColorsFromText($messageText);
+        $hasExplicitRequestedColors = $explicitRequestedColors !== [];
         $slots = is_array($slotState['slots'] ?? null) ? $slotState['slots'] : [];
 
         if (trim($messageText) !== '') {
@@ -4873,13 +4935,19 @@ class ChatAiAssistantService
             ? (string) $slots['model']
             : ($topic?->name ?? '');
 
-        if ($color !== '' && (!$this->messageContainsVisualPreference($normalized) || $forceContext)) {
+        if (
+            !$hasExplicitRequestedColors
+            && $color !== ''
+            && (!$this->messageContainsVisualPreference($normalized) || $forceContext)
+        ) {
             $parts[] = $color;
         }
 
         $forcedColor = $this->normalizeSlotValue('color', $forcedColorHint);
         if (
-            is_string($forcedColor)
+            !$hasExplicitRequestedColors
+            && $forcedColor !== null
+            && is_string($forcedColor)
             && $forcedColor !== ''
             && (!$this->messageContainsVisualPreference($normalized) || $forceContext)
         ) {
