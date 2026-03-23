@@ -1891,6 +1891,15 @@ class ChatAiAssistantService
             $guidance[] = 'Після рекомендації спитай, чи підходить цей розмір. Попроси підтвердити саме розміром, наприклад: "Якщо підходить, напишіть, будь ласка, 36/37."';
         }
 
+        if ($nextSlot === 'color') {
+            $availableColors = $this->buildAvailableColorList($products);
+            $guidance[] = 'На кроці вибору кольору не пиши загальну фразу без варіантів. Одразу покажи доступні кольори цієї моделі списком, кожен з нового рядка, і коротко попроси клієнта обрати один із них.';
+
+            if ($availableColors !== '') {
+                $guidance[] = "Доступні кольори поточної моделі, які треба показати клієнту списком:\n{$availableColors}";
+            }
+        }
+
         if ($nextSlot === 'quantity') {
             $guidance[] = 'Коли уточнюєш кількість, пиши м’яко: "Скільки пар бажаєте замовити?" Не використовуй формулювання "кладемо".';
         }
@@ -4493,6 +4502,21 @@ class ChatAiAssistantService
             ->map(fn (ChatAiTopic $topic) => '- ' . trim((string) $topic->name))
             ->filter(fn (string $line) => trim($line) !== '-')
             ->values()
+            ->implode("\n");
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $products
+     */
+    private function buildAvailableColorList(Collection $products): string
+    {
+        return $products
+            ->pluck('color_name')
+            ->map(fn ($value) => $this->normalizeSlotValue('color', $value))
+            ->filter()
+            ->unique()
+            ->values()
+            ->map(fn (string $color) => '- ' . $color)
             ->implode("\n");
     }
 
