@@ -115,6 +115,21 @@ class ChatAiAssistantService
             $declinedPhotoRequest,
             $hasResolvedVisualContext
         );
+        $forceOverviewForModelSelection = $this->shouldSendTopicOverviewForModelSelection(
+            $normalizedMessageText,
+            $requestedSize,
+            $slotState,
+            $allTopicsOverviewMedia
+        );
+        if ($forceOverviewForModelSelection && (($mediaIntent['intent'] ?? 'none') !== 'show_models')) {
+            $mediaIntent = [
+                'intent' => 'show_models',
+                'source' => 'forced_model_selection',
+                'reason' => 'Модель ще не визначена, система примусово надсилає всі колажі моделей.',
+                'confidence' => null,
+                'target_color' => null,
+            ];
+        }
         $mediaIntentName = (string) ($mediaIntent['intent'] ?? 'none');
         $mediaIntentColor = $this->normalizeSlotValue('color', $mediaIntent['target_color'] ?? null);
         $currentModelGalleryRequest = $mediaIntentName === 'show_all_current_model_photos';
