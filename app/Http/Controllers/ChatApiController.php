@@ -283,6 +283,7 @@ class ChatApiController extends Controller
             'single_item_review_completed' => false,
             'single_item_just_confirmed' => false,
             'multi_item_pending' => false,
+            'multi_item_review_completed' => false,
             'multi_item_just_confirmed' => false,
             'slot_definitions' => [],
             'slot_values' => [],
