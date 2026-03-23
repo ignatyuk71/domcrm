@@ -98,8 +98,17 @@ class ChatAiAssistantService
             && !$declinedPhotoRequest
             && $this->isAmbiguousVisualIntent((string) ($message->text ?? ''));
         $hasResolvedVisualContext = $this->hasResolvedVisualContext($topic, $slotState, $conversation);
-        $isPhotoRequest = $explicitPhotoRequest || $confirmedPhotoRequest;
-        $isAllPhotosRequest = $explicitPhotoRequest && $this->isAllPhotosRequest((string) ($message->text ?? ''));
+        $hasSelectedModelContext = $this->hasSelectedModelContext($topic, $slotState, $conversation);
+        $currentModelGalleryRequest = $this->shouldSendAllCurrentModelPhotos(
+            (string) ($message->text ?? ''),
+            $explicitPhotoRequest,
+            $slotState,
+            $topic,
+            $conversation
+        );
+        $isPhotoRequest = $explicitPhotoRequest || $confirmedPhotoRequest || $currentModelGalleryRequest;
+        $isAllPhotosRequest = ($explicitPhotoRequest && $this->isAllPhotosRequest((string) ($message->text ?? '')))
+            || $currentModelGalleryRequest;
         $isBroadCatalogRequest = $this->isBroadCatalogRequest($normalizedMessageText);
         $allTopicsOverviewMedia = $this->resolveAllTopicsOverviewMedia($topics);
         $shouldSendTopicOverviewForModelSelection = $isTopicUnclear
@@ -110,6 +119,7 @@ class ChatAiAssistantService
                 $allTopicsOverviewMedia
             );
         $shouldSendOverviewMedia = $isTopicUnclear
+            && !$hasSelectedModelContext
             && $allTopicsOverviewMedia->isNotEmpty()
             && ($isBroadCatalogRequest || $isAllPhotosRequest || $shouldSendTopicOverviewForModelSelection);
         $mediaSelectionQuery = $this->buildMediaSelectionQuery(
@@ -689,6 +699,19 @@ class ChatAiAssistantService
         // Якщо запит загальний ("які маєте", "що є в наявності"), не тягнемо попередню тему:
         // потрібно показати оглядові варіанти.
         if ($bestScore <= 0 && $isBroadCatalogRequest) {
+            if ($canReuseLastTopicContext && $lastTopicId > 0) {
+                $fallback = $topics->firstWhere('id', $lastTopicId);
+                if ($fallback) {
+                    return [
+                        'topic' => $fallback,
+                        'score' => 2,
+                        'route_source' => 'current_model_context',
+                        'route_reason' => 'Загальний запит інтерпретовано в межах уже вибраної моделі.',
+                        'route_confidence' => null,
+                    ];
+                }
+            }
+
             return [
                 'topic' => null,
                 'score' => $bestScore,
@@ -1567,6 +1590,23 @@ class ChatAiAssistantService
         }
 
         return trim((string) data_get($conversation->meta, 'ai.last_topic_name', '')) !== '';
+    }
+
+    /**
+     * @param  array<string, mixed>  $slotState
+     */
+    private function hasSelectedModelContext(?ChatAiTopic $topic, array $slotState, ChatConversation $conversation): bool
+    {
+        if ($topic !== null) {
+            return true;
+        }
+
+        $slots = is_array($slotState['slots'] ?? null) ? $slotState['slots'] : [];
+        if ($this->hasSlotValue($slots['model'] ?? null, 'model')) {
+            return true;
+        }
+
+        return (int) data_get($conversation->meta, 'ai.last_topic_id', 0) > 0;
     }
 
     /**
@@ -3094,6 +3134,42 @@ class ChatAiAssistantService
         return (bool) preg_match(
             '/(які маєте|якi маєте|яки маєте|що маєте|які у вас є|якi у вас є|яки у вас є|що у вас є|які є|якi є|яки є|що є|в наявност|асортимент)/u',
             $normalizedText
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $slotState
+     */
+    private function shouldSendAllCurrentModelPhotos(
+        string $text,
+        bool $explicitPhotoRequest,
+        array $slotState,
+        ?ChatAiTopic $topic,
+        ChatConversation $conversation
+    ): bool {
+        if (!$this->hasSelectedModelContext($topic, $slotState, $conversation)) {
+            return false;
+        }
+
+        $normalized = $this->normalizeText($text);
+        if ($normalized === '') {
+            return false;
+        }
+
+        $slots = is_array($slotState['slots'] ?? null) ? $slotState['slots'] : [];
+        $hasSelectedColor = $this->hasSlotValue($slots['color'] ?? null, 'color');
+
+        if ($explicitPhotoRequest && !$hasSelectedColor) {
+            return true;
+        }
+
+        if ($this->isAllPhotosRequest($text) || $this->isBroadCatalogRequest($normalized)) {
+            return true;
+        }
+
+        return (bool) preg_match(
+            '/(які є ще|якi є ще|яки є ще|а які є|а якi є|а яки є|ще які|ще якi|ще яки|ще фото|покажи ще|ще покажи|які кольори|якi кольори|яки кольори|всі кольори|усі кольори|інші кольори|инші кольори|які варіанти|якi варіанти|яки варіанти|всі варіанти|усі варіанти|всі які є|усі які є)/u',
+            $normalized
         );
     }
 
