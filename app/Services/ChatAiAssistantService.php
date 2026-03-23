@@ -99,39 +99,41 @@ class ChatAiAssistantService
             && $this->isAmbiguousVisualIntent((string) ($message->text ?? ''));
         $hasResolvedVisualContext = $this->hasResolvedVisualContext($topic, $slotState, $conversation);
         $hasSelectedModelContext = $this->hasSelectedModelContext($topic, $slotState, $conversation);
-        $currentModelGalleryRequest = $this->shouldSendAllCurrentModelPhotos(
-            (string) ($message->text ?? ''),
-            $explicitPhotoRequest,
-            $slotState,
-            $topic,
-            $conversation
-        );
-        $isPhotoRequest = $explicitPhotoRequest || $confirmedPhotoRequest || $currentModelGalleryRequest;
-        $isAllPhotosRequest = ($explicitPhotoRequest && $this->isAllPhotosRequest((string) ($message->text ?? '')))
-            || $currentModelGalleryRequest;
-        $isBroadCatalogRequest = $this->isBroadCatalogRequest($normalizedMessageText);
         $allTopicsOverviewMedia = $this->resolveAllTopicsOverviewMedia($topics);
-        $shouldSendTopicOverviewForModelSelection = $isTopicUnclear
-            && $this->shouldSendTopicOverviewForModelSelection(
-                $normalizedMessageText,
-                $requestedSize,
-                $slotState,
-                $allTopicsOverviewMedia
-            );
-        $shouldSendOverviewMedia = $isTopicUnclear
-            && !$hasSelectedModelContext
-            && $allTopicsOverviewMedia->isNotEmpty()
-            && ($isBroadCatalogRequest || $isAllPhotosRequest || $shouldSendTopicOverviewForModelSelection);
+        $mediaIntent = $this->resolveMediaIntent(
+            $topics,
+            $topic,
+            $products,
+            $slotState,
+            $conversation,
+            (string) ($message->text ?? ''),
+            $settings,
+            $allTopicsOverviewMedia,
+            $explicitPhotoRequest,
+            $ambiguousVisualIntent,
+            $confirmedPhotoRequest,
+            $declinedPhotoRequest,
+            $hasResolvedVisualContext
+        );
+        $mediaIntentName = (string) ($mediaIntent['intent'] ?? 'none');
+        $mediaIntentColor = $this->normalizeSlotValue('color', $mediaIntent['target_color'] ?? null);
+        $currentModelGalleryRequest = $mediaIntentName === 'show_all_current_model_photos';
+        $specificModelPhotoRequest = $mediaIntentName === 'show_specific_color_photo';
+        $isPhotoRequest = $confirmedPhotoRequest || $specificModelPhotoRequest || $currentModelGalleryRequest;
+        $isAllPhotosRequest = $currentModelGalleryRequest;
+        $shouldSendOverviewMedia = $allTopicsOverviewMedia->isNotEmpty()
+            && $mediaIntentName === 'show_models';
         $mediaSelectionQuery = $this->buildMediaSelectionQuery(
             (string) ($message->text ?? ''),
             $slotState,
             $topic,
-            $isPhotoRequest
+            $isPhotoRequest,
+            $specificModelPhotoRequest ? $mediaIntentColor : null
         );
         $previewMedia = $mediaCandidates->isNotEmpty()
             ? $this->selectMediaForReply($mediaCandidates, $mediaSelectionQuery, false)
             : collect();
-        $shouldAskPhotoConfirmation = $ambiguousVisualIntent
+        $shouldAskPhotoConfirmation = $mediaIntentName === 'confirm_photo'
             && $hasResolvedVisualContext
             && $previewMedia->isNotEmpty();
 
@@ -220,6 +222,11 @@ class ChatAiAssistantService
             'topic_route_source' => $topicMatch['route_source'] ?? null,
             'topic_route_reason' => $topicMatch['route_reason'] ?? null,
             'topic_route_confidence' => $topicMatch['route_confidence'] ?? null,
+            'media_intent' => $mediaIntentName,
+            'media_intent_source' => $mediaIntent['source'] ?? null,
+            'media_intent_reason' => $mediaIntent['reason'] ?? null,
+            'media_intent_confidence' => $mediaIntent['confidence'] ?? null,
+            'media_intent_target_color' => $mediaIntentColor,
             'multi_item_pending' => (bool) ($slotState['multi_item_pending'] ?? false),
             'multi_item_just_confirmed' => (bool) ($slotState['multi_item_just_confirmed'] ?? false),
             'slot_definitions' => $slotState['definitions'],
@@ -262,6 +269,11 @@ class ChatAiAssistantService
             'topic_route_source' => $topicMatch['route_source'] ?? null,
             'topic_route_reason' => $topicMatch['route_reason'] ?? null,
             'topic_route_confidence' => $topicMatch['route_confidence'] ?? null,
+            'media_intent' => $mediaIntentName,
+            'media_intent_source' => $mediaIntent['source'] ?? null,
+            'media_intent_reason' => $mediaIntent['reason'] ?? null,
+            'media_intent_confidence' => $mediaIntent['confidence'] ?? null,
+            'media_intent_target_color' => $mediaIntentColor,
             'multi_item_pending' => (bool) ($slotState['multi_item_pending'] ?? false),
             'multi_item_just_confirmed' => (bool) ($slotState['multi_item_just_confirmed'] ?? false),
             'slot_updates' => $slotState['updated'],
@@ -418,6 +430,361 @@ class ChatAiAssistantService
         }
 
         return $keywordMatch;
+    }
+
+    /**
+     * @param  Collection<int, ChatAiTopic>  $topics
+     * @param  Collection<int, array<string, mixed>>  $products
+     * @param  array<string, mixed>  $slotState
+     * @param  Collection<int, array<string, mixed>>  $overviewMedia
+     * @return array{
+     *     intent: string,
+     *     source: string,
+     *     reason: ?string,
+     *     confidence: ?float,
+     *     target_color: ?string
+     * }
+     */
+    private function resolveMediaIntent(
+        Collection $topics,
+        ?ChatAiTopic $topic,
+        Collection $products,
+        array $slotState,
+        ChatConversation $conversation,
+        string $text,
+        array $settings,
+        Collection $overviewMedia,
+        bool $explicitPhotoRequest,
+        bool $ambiguousVisualIntent,
+        bool $confirmedPhotoRequest,
+        bool $declinedPhotoRequest,
+        bool $hasResolvedVisualContext
+    ): array {
+        $fallback = $this->resolveMediaIntentFallback(
+            $topic,
+            $slotState,
+            $conversation,
+            $text,
+            $overviewMedia,
+            $explicitPhotoRequest,
+            $ambiguousVisualIntent,
+            $hasResolvedVisualContext
+        );
+
+        if ($confirmedPhotoRequest || $declinedPhotoRequest) {
+            return $fallback;
+        }
+
+        if (!$this->shouldUseAiMediaIntentClassifier(
+            $topics,
+            $topic,
+            $slotState,
+            $conversation,
+            $text,
+            $explicitPhotoRequest,
+            $ambiguousVisualIntent
+        )) {
+            return $fallback;
+        }
+
+        try {
+            $aiIntent = $this->classifyMediaIntentWithAi(
+                $topics,
+                $topic,
+                $products,
+                $slotState,
+                $conversation,
+                $text,
+                $settings
+            );
+            if ($aiIntent !== null) {
+                return $aiIntent;
+            }
+        } catch (\Throwable $e) {
+            Log::warning('AI: не вдалося визначити медіа-intent через classifier', [
+                'conversation_id' => $conversation->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return $fallback;
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $products
+     * @param  array<string, mixed>  $slotState
+     * @return array{
+     *     intent: string,
+     *     source: string,
+     *     reason: ?string,
+     *     confidence: ?float,
+     *     target_color: ?string
+     * }|null
+     */
+    private function classifyMediaIntentWithAi(
+        Collection $topics,
+        ?ChatAiTopic $topic,
+        Collection $products,
+        array $slotState,
+        ChatConversation $conversation,
+        string $text,
+        array $settings
+    ): ?array {
+        $currentModel = $this->resolveCurrentModelContextName($topic, $slotState, $conversation);
+        $currentColor = $this->normalizeSlotValue('color', data_get($slotState, 'slots.color'));
+        $currentSize = $this->normalizeSlotValue('size', data_get($slotState, 'slots.size'));
+        $nextSlot = is_string($slotState['next'] ?? null) ? $slotState['next'] : null;
+        $availableModels = $this->buildAvailableTopicList($topics);
+        $availableColors = $products
+            ->pluck('color_name')
+            ->map(fn ($value) => $this->normalizeSlotValue('color', $value))
+            ->filter()
+            ->unique()
+            ->values()
+            ->implode(', ');
+        $currentPhotoCount = $products
+            ->filter(fn (array $product) => (bool) ($product['has_photo'] ?? false))
+            ->count();
+        $memory = $this->buildConversationMemoryBlock($conversation);
+        $history = $this->buildHistoryForPrompt($conversation->id, 6);
+
+        $input = implode("\n\n", array_filter([
+            'Останнє повідомлення клієнта: ' . trim($text),
+            $memory,
+            'Поточний стан:'
+                . "\n- модель вибрана: " . ($currentModel !== null ? 'так' : 'ні')
+                . ($currentModel !== null ? "\n- поточна модель: {$currentModel}" : '')
+                . ($currentColor !== null ? "\n- поточний колір: {$currentColor}" : '')
+                . ($currentSize !== null ? "\n- поточний розмір: {$currentSize}" : '')
+                . ($nextSlot !== null ? "\n- наступний слот: {$nextSlot}" : ''),
+            $availableModels !== '' ? "Доступні моделі:\n{$availableModels}" : null,
+            $availableColors !== '' ? "Доступні кольори поточної моделі: {$availableColors}" : null,
+            $currentPhotoCount > 0 ? "Кількість фото поточної моделі: {$currentPhotoCount}" : 'Фото поточної моделі: немає',
+            "Останні повідомлення діалогу:\n{$history}",
+        ]));
+
+        $schema = [
+            'type' => 'object',
+            'additionalProperties' => false,
+            'properties' => [
+                'intent' => [
+                    'type' => 'string',
+                    'enum' => [
+                        'none',
+                        'show_models',
+                        'show_all_current_model_photos',
+                        'show_specific_color_photo',
+                        'confirm_photo',
+                    ],
+                ],
+                'confidence' => [
+                    'type' => 'number',
+                    'minimum' => 0,
+                    'maximum' => 1,
+                ],
+                'reason' => [
+                    'type' => 'string',
+                ],
+                'target_color' => [
+                    'type' => ['string', 'null'],
+                ],
+            ],
+            'required' => ['intent', 'confidence', 'reason', 'target_color'],
+        ];
+
+        $instructions = implode("\n", [
+            'Ти визначаєш намір клієнта для вибору моделей і фото товарів.',
+            'Поверни тільки один intent із дозволеного списку.',
+            'Якщо модель ще не вибрана і клієнт пише нечітко, коротко, називає тільки розмір, ціну або просить "показати/які є" без конкретної моделі — intent = show_models.',
+            'Якщо модель уже вибрана і клієнт просить показати ще, всі варіанти, всі кольори, всі фото або що ще є по цій моделі — intent = show_all_current_model_photos.',
+            'Якщо модель уже вибрана і клієнт просить показати конкретний колір — intent = show_specific_color_photo.',
+            'Якщо клієнт натякає, що хоче подивитися, але не зовсім прямо просить фото, а в діалозі вже є зрозуміла модель або колір — intent = confirm_photo.',
+            'Якщо повідомлення не про вибір моделі чи фото, а про ціну, розмір, кількість, доставку, оплату або оформлення — intent = none.',
+            'Якщо є target_color, поверни канонічну назву кольору українською. Якщо кольору не видно — поверни null.',
+            'Не вигадуй нових моделей чи кольорів. Орієнтуйся тільки на переданий контекст.',
+        ]);
+
+        $response = $this->openAi->createStructuredResponse(
+            $instructions,
+            $input,
+            $schema,
+            'chat_media_intent_router',
+            (string) ($settings['model'] ?? '')
+        );
+
+        $intent = trim((string) ($response['intent'] ?? ''));
+        $confidence = isset($response['confidence']) ? (float) $response['confidence'] : 0.0;
+        $reason = trim((string) ($response['reason'] ?? ''));
+        $targetColor = $this->normalizeSlotValue('color', $response['target_color'] ?? null);
+        $normalizedText = $this->normalizeText($text);
+
+        if (!in_array($intent, ['none', 'show_models', 'show_all_current_model_photos', 'show_specific_color_photo', 'confirm_photo'], true)) {
+            return null;
+        }
+
+        if ($confidence < 0.58) {
+            return null;
+        }
+
+        // Якщо колір уже обраний, а клієнт просто просить показати фото без слів
+        // "ще / всі / варіанти / кольори", показуємо один конкретний варіант.
+        if (
+            $intent === 'show_all_current_model_photos'
+            && $currentColor !== null
+            && $this->isPhotoRequest($text)
+            && !$this->isAllPhotosRequest($text)
+            && !$this->isBroadCatalogRequest($normalizedText)
+        ) {
+            $intent = 'show_specific_color_photo';
+            $targetColor = $currentColor;
+            $reason = 'Клієнт просить показати фото вже вибраного кольору поточної моделі.';
+        }
+
+        return [
+            'intent' => $intent,
+            'source' => 'ai_classifier',
+            'reason' => $reason !== '' ? $reason : 'Намір визначено AI-класифікатором.',
+            'confidence' => round($confidence, 3),
+            'target_color' => $targetColor,
+        ];
+    }
+
+    /**
+     * @param  Collection<int, ChatAiTopic>  $topics
+     * @param  array<string, mixed>  $slotState
+     */
+    private function shouldUseAiMediaIntentClassifier(
+        Collection $topics,
+        ?ChatAiTopic $topic,
+        array $slotState,
+        ChatConversation $conversation,
+        string $text,
+        bool $explicitPhotoRequest,
+        bool $ambiguousVisualIntent
+    ): bool {
+        if ($topics->isEmpty()) {
+            return false;
+        }
+
+        $normalized = $this->normalizeText($text);
+        if ($normalized === '') {
+            return false;
+        }
+
+        $nextSlot = is_string($slotState['next'] ?? null) ? $slotState['next'] : null;
+        if ($nextSlot === 'model') {
+            return true;
+        }
+
+        if ($explicitPhotoRequest || $ambiguousVisualIntent) {
+            return true;
+        }
+
+        if (!$this->hasSelectedModelContext($topic, $slotState, $conversation)) {
+            return false;
+        }
+
+        return (bool) preg_match(
+            '/(які|якi|яки|ще|всі|усі|все|усе|кольор|варіант|покажи|показ|глянут|подив|побач|скинь|надіш|надіш|можна|фото)/u',
+            $normalized
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $slotState
+     * @param  Collection<int, array<string, mixed>>  $overviewMedia
+     * @return array{
+     *     intent: string,
+     *     source: string,
+     *     reason: ?string,
+     *     confidence: ?float,
+     *     target_color: ?string
+     * }
+     */
+    private function resolveMediaIntentFallback(
+        ?ChatAiTopic $topic,
+        array $slotState,
+        ChatConversation $conversation,
+        string $text,
+        Collection $overviewMedia,
+        bool $explicitPhotoRequest,
+        bool $ambiguousVisualIntent,
+        bool $hasResolvedVisualContext
+    ): array {
+        $normalized = $this->normalizeText($text);
+        $hasSelectedModelContext = $this->hasSelectedModelContext($topic, $slotState, $conversation);
+        $nextSlot = is_string($slotState['next'] ?? null) ? $slotState['next'] : null;
+        $targetColor = $this->normalizeSlotValue('color', data_get($slotState, 'slots.color'))
+            ?? $this->normalizeSlotValue('color', $this->extractColorValue($text, $nextSlot));
+
+        if (
+            !$hasSelectedModelContext
+            && $overviewMedia->isNotEmpty()
+            && $normalized !== ''
+            && $nextSlot === 'model'
+        ) {
+            return [
+                'intent' => 'show_models',
+                'source' => 'fallback',
+                'reason' => 'Модель ще не вибрана, показуємо колажі моделей.',
+                'confidence' => null,
+                'target_color' => null,
+            ];
+        }
+
+        if ($hasSelectedModelContext) {
+            if ($this->shouldSendAllCurrentModelPhotos($text, $explicitPhotoRequest, $slotState, $topic, $conversation)) {
+                return [
+                    'intent' => 'show_all_current_model_photos',
+                    'source' => 'fallback',
+                    'reason' => 'Поточна модель уже вибрана, показуємо всі фото цієї моделі.',
+                    'confidence' => null,
+                    'target_color' => null,
+                ];
+            }
+
+            if ($explicitPhotoRequest) {
+                return [
+                    'intent' => 'show_specific_color_photo',
+                    'source' => 'fallback',
+                    'reason' => 'Клієнт прямо просить фото по поточній моделі.',
+                    'confidence' => null,
+                    'target_color' => $targetColor,
+                ];
+            }
+
+            if ($ambiguousVisualIntent && $hasResolvedVisualContext) {
+                return [
+                    'intent' => 'confirm_photo',
+                    'source' => 'fallback',
+                    'reason' => 'Потрібно коротко уточнити, чи клієнт справді хоче переглянути фото.',
+                    'confidence' => null,
+                    'target_color' => $targetColor,
+                ];
+            }
+        }
+
+        if (
+            !$hasSelectedModelContext
+            && $overviewMedia->isNotEmpty()
+            && ($explicitPhotoRequest || $this->isBroadCatalogRequest($normalized) || $this->isAllPhotosRequest($text))
+        ) {
+            return [
+                'intent' => 'show_models',
+                'source' => 'fallback',
+                'reason' => 'Клієнт просить показати варіанти до вибору моделі.',
+                'confidence' => null,
+                'target_color' => null,
+            ];
+        }
+
+        return [
+            'intent' => 'none',
+            'source' => 'fallback',
+            'reason' => 'Окремий медіа-наміру не виявлено.',
+            'confidence' => null,
+            'target_color' => $targetColor,
+        ];
     }
 
     /**
@@ -1607,6 +1974,25 @@ class ChatAiAssistantService
         }
 
         return (int) data_get($conversation->meta, 'ai.last_topic_id', 0) > 0;
+    }
+
+    /**
+     * @param  array<string, mixed>  $slotState
+     */
+    private function resolveCurrentModelContextName(?ChatAiTopic $topic, array $slotState, ChatConversation $conversation): ?string
+    {
+        if ($topic !== null && trim((string) $topic->name) !== '') {
+            return trim((string) $topic->name);
+        }
+
+        $model = $this->normalizeSlotValue('model', data_get($slotState, 'slots.model'));
+        if (is_string($model) && trim($model) !== '') {
+            return trim($model);
+        }
+
+        $lastTopicName = trim((string) data_get($conversation->meta, 'ai.last_topic_name', ''));
+
+        return $lastTopicName !== '' ? $lastTopicName : null;
     }
 
     /**
@@ -3216,7 +3602,8 @@ class ChatAiAssistantService
         string $messageText,
         array $slotState,
         ?ChatAiTopic $topic,
-        bool $forceContext
+        bool $forceContext,
+        ?string $forcedColorHint = null
     ): string {
         $parts = [];
         $normalized = $this->normalizeText($messageText);
@@ -3235,6 +3622,15 @@ class ChatAiAssistantService
 
         if ($color !== '' && (!$this->messageContainsVisualPreference($normalized) || $forceContext)) {
             $parts[] = $color;
+        }
+
+        $forcedColor = $this->normalizeSlotValue('color', $forcedColorHint);
+        if (
+            is_string($forcedColor)
+            && $forcedColor !== ''
+            && (!$this->messageContainsVisualPreference($normalized) || $forceContext)
+        ) {
+            $parts[] = $forcedColor;
         }
 
         if ($model !== '' && (!$this->messageContainsModelReference($normalized) || $forceContext)) {
