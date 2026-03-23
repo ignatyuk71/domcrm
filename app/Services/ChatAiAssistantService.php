@@ -231,6 +231,8 @@ class ChatAiAssistantService
             'order_intent_source' => $slotState['order_intent_source'] ?? null,
             'order_intent_reason' => $slotState['order_intent_reason'] ?? null,
             'order_intent_confidence' => $slotState['order_intent_confidence'] ?? null,
+            'single_item_review_pending' => (bool) ($slotState['single_item_review_pending'] ?? false),
+            'single_item_just_confirmed' => (bool) ($slotState['single_item_just_confirmed'] ?? false),
             'multi_item_pending' => (bool) ($slotState['multi_item_pending'] ?? false),
             'multi_item_just_confirmed' => (bool) ($slotState['multi_item_just_confirmed'] ?? false),
             'slot_definitions' => $slotState['definitions'],
@@ -282,6 +284,8 @@ class ChatAiAssistantService
             'order_intent_source' => $slotState['order_intent_source'] ?? null,
             'order_intent_reason' => $slotState['order_intent_reason'] ?? null,
             'order_intent_confidence' => $slotState['order_intent_confidence'] ?? null,
+            'single_item_review_pending' => (bool) ($slotState['single_item_review_pending'] ?? false),
+            'single_item_just_confirmed' => (bool) ($slotState['single_item_just_confirmed'] ?? false),
             'multi_item_pending' => (bool) ($slotState['multi_item_pending'] ?? false),
             'multi_item_just_confirmed' => (bool) ($slotState['multi_item_just_confirmed'] ?? false),
             'slot_updates' => $slotState['updated'],
@@ -1620,6 +1624,7 @@ class ChatAiAssistantService
             $slotState['missing'],
             $slotState['next'],
             $slotState['order_ready'],
+            (bool) ($slotState['single_item_review_pending'] ?? false),
             (bool) ($slotState['multi_item_pending'] ?? false)
         );
 
@@ -1779,6 +1784,16 @@ class ChatAiAssistantService
             $guidance[] = 'Спочатку коротко перелічи позиції, як ти їх зрозумів, кожну з нового рядка, і попроси підтвердити або виправити список пар.';
         }
 
+        if ((bool) ($slotState['single_item_review_pending'] ?? false)) {
+            $guidance[] = 'Для однієї пари теж потрібне коротке підтвердження перед оформленням. Не переходь до доставки й не проси місто, відділення чи адресу на цьому кроці.';
+            $guidance[] = 'Коротко підсумуй одну позицію: модель, колір, розмір, кількість. Наприкінці попроси перевірити, чи правильно сформовано замовлення.';
+        }
+
+        if ((bool) ($slotState['single_item_just_confirmed'] ?? false)) {
+            $guidance[] = 'Клієнт щойно підтвердив одну позицію. Не повторюй summary ще раз.';
+            $guidance[] = 'Тепер можна перейти до оформлення і одним повідомленням попросити відсутні дані про доставку й отримувача.';
+        }
+
         if ((bool) ($slotState['multi_item_just_confirmed'] ?? false)) {
             $guidance[] = 'Клієнт щойно підтвердив список кількох пар. Не повторюй цей список ще раз і не проси повторно підтвердження.';
             $guidance[] = 'Якщо хоча б для однієї пари ще не вистачає моделі, кольору або розміру, спочатку попроси саме ці деталі. До доставки переходь тільки коли всі позиції вже повністю зрозумілі.';
@@ -1822,7 +1837,11 @@ class ChatAiAssistantService
         $missing = is_array($slotState['missing'] ?? null) ? $slotState['missing'] : [];
         $definitions = is_array($slotState['definitions'] ?? null) ? $slotState['definitions'] : [];
 
-        if ($missing === [] || (bool) ($slotState['multi_item_pending'] ?? false)) {
+        if (
+            $missing === []
+            || (bool) ($slotState['multi_item_pending'] ?? false)
+            || (bool) ($slotState['single_item_review_pending'] ?? false)
+        ) {
             return false;
         }
 
@@ -1835,6 +1854,35 @@ class ChatAiAssistantService
         }
 
         if (!$this->hasSlotValue($slots['quantity'] ?? null, 'quantity')) {
+            return false;
+        }
+
+        return collect(['customer_name', 'phone', 'city', 'delivery'])
+            ->contains(fn (string $key) => in_array($key, $missing, true));
+    }
+
+    /**
+     * @param  array<string, array<string, mixed>>  $definitions
+     * @param  array<string, mixed>  $slots
+     * @param  array<int, string>  $missing
+     */
+    private function shouldRequireSingleItemReview(array $definitions, array $slots, array $missing): bool
+    {
+        if (!$this->hasSlotValue($slots['model'] ?? null, 'model')) {
+            return false;
+        }
+
+        if (
+            (bool) data_get($definitions, 'color.required', false)
+            && !$this->hasSlotValue($slots['color'] ?? null, 'color')
+        ) {
+            return false;
+        }
+
+        if (
+            !$this->hasSlotValue($slots['size'] ?? null, 'size')
+            || !$this->hasSlotValue($slots['quantity'] ?? null, 'quantity')
+        ) {
             return false;
         }
 
@@ -2016,6 +2064,8 @@ class ChatAiAssistantService
      *     updated: array<string, mixed>,
      *     updated_keys: array<int, string>,
      *     just_completed: bool,
+     *     single_item_review_pending: bool,
+     *     single_item_just_confirmed: bool,
      *     multi_item_pending: bool,
      *     multi_item_just_confirmed: bool
      * }
@@ -2034,6 +2084,7 @@ class ChatAiAssistantService
         $previousMissing = $this->resolveMissingSlotKeys($definitions, $slots);
         $previousOrderReady = (bool) data_get($conversation->meta, 'ai.order_ready', false);
         $previousMultiItemPending = (bool) data_get($conversation->meta, 'ai.multi_item_pending', false);
+        $previousSingleItemReviewPending = (bool) data_get($conversation->meta, 'ai.single_item_review_pending', false);
         $previousNextSlot = data_get($conversation->meta, 'ai.next_slot');
         $text = (string) ($message->text ?? '');
         $orderIntent = $this->resolveOrderIntent(
@@ -2093,7 +2144,13 @@ class ChatAiAssistantService
         }
 
         $missing = $this->resolveMissingSlotKeys($definitions, $slots);
-        $nextSlot = $missing[0] ?? null;
+        $singleItemReviewJustConfirmed = $previousSingleItemReviewPending
+            && !$multiItemPending
+            && $this->isAffirmativeReply($text);
+        $singleItemReviewPending = !$multiItemPending
+            && !$singleItemReviewJustConfirmed
+            && $this->shouldRequireSingleItemReview($definitions, $slots, $missing);
+        $nextSlot = $singleItemReviewPending ? null : ($missing[0] ?? null);
         $orderReady = $missing === [];
 
         return [
@@ -2102,7 +2159,15 @@ class ChatAiAssistantService
             'missing' => $missing,
             'next' => $nextSlot,
             'order_ready' => $orderReady,
-            'summary' => $this->buildSlotSummary($definitions, $slots, $missing, $nextSlot, $orderReady),
+            'summary' => $this->buildSlotSummary(
+                $definitions,
+                $slots,
+                $missing,
+                $nextSlot,
+                $orderReady,
+                $singleItemReviewPending,
+                $multiItemPending
+            ),
             'updated' => $updated,
             'updated_keys' => array_keys($updated),
             'just_completed' => !$previousOrderReady && $orderReady,
@@ -2110,6 +2175,8 @@ class ChatAiAssistantService
             'order_intent_source' => $orderIntent['source'] ?? null,
             'order_intent_reason' => $orderIntent['reason'] ?? null,
             'order_intent_confidence' => $orderIntent['confidence'] ?? null,
+            'single_item_review_pending' => $singleItemReviewPending,
+            'single_item_just_confirmed' => $singleItemReviewJustConfirmed,
             'multi_item_pending' => $multiItemPending,
             'multi_item_just_confirmed' => $multiItemJustConfirmed,
         ];
@@ -3027,7 +3094,9 @@ class ChatAiAssistantService
         array $slots,
         array $missing,
         ?string $nextSlot,
-        bool $orderReady
+        bool $orderReady,
+        bool $singleItemReviewPending = false,
+        bool $multiItemPending = false
     ): string {
         $filled = collect($definitions)
             ->map(function (array $definition, string $key) use ($slots) {
@@ -3062,6 +3131,14 @@ class ChatAiAssistantService
             $parts[] = 'Наступний слот: ' . $definitions[$nextSlot]['label'];
         }
 
+        if ($singleItemReviewPending) {
+            $parts[] = 'Потрібно підтвердити сформовану позицію перед оформленням';
+        }
+
+        if ($multiItemPending) {
+            $parts[] = 'Потрібно підтвердити список кількох пар перед оформленням';
+        }
+
         if ($orderReady) {
             $parts[] = 'Усі обов’язкові дані зібрано';
         }
@@ -3080,6 +3157,7 @@ class ChatAiAssistantService
         array $missing,
         ?string $nextSlot,
         bool $orderReady,
+        bool $singleItemReviewPending = false,
         bool $multiItemPending = false
     ): string {
         $lines = ['Стан слотів замовлення:'];
@@ -3107,6 +3185,10 @@ class ChatAiAssistantService
         $lines[] = $orderReady
             ? 'Усі обов’язкові слоти зібрані: так'
             : 'Усі обов’язкові слоти зібрані: ні';
+
+        if ($singleItemReviewPending) {
+            $lines[] = 'Підтвердження однієї позиції: так. Не переходь до доставки, поки клієнт не підтвердив сформовану позицію.';
+        }
 
         if ($multiItemPending) {
             $lines[] = 'Багатопозиційне замовлення: так. Не переходь до доставки, поки не підтверджені всі пари.';
