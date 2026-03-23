@@ -300,22 +300,58 @@
                       <span v-if="aiOrderReady" class="ai-ready-badge">Усі дані зібрано</span>
                     </div>
 
-                    <div class="ai-collected-list">
-                      <span class="ai-collected-title">Вже зібрано</span>
-                      <ul v-if="visibleCollectedRows.length > 0" class="ai-collected-items">
-                        <li v-for="row in visibleCollectedRows" :key="row.field">
-                          <strong>{{ row.field }}:</strong> {{ row.value }}
-                        </li>
-                      </ul>
-                      <span v-else class="ai-qualification-collected">Ще нічого не зібрано.</span>
+                    <div class="ai-panel-section">
+                      <div class="ai-panel-section-head">
+                        <span class="ai-collected-title">Позиції замовлення</span>
+                        <span class="ai-panel-count">{{ aiOrderItems.length }}</span>
+                      </div>
+
+                      <div v-if="aiOrderItems.length > 0" class="ai-order-items">
+                        <div v-for="item in aiOrderItems" :key="item.id" class="ai-order-item-card">
+                          <div class="ai-order-item-top">
+                            <strong>{{ item.title }}</strong>
+                            <span class="ai-order-item-badge" :class="item.complete ? 'is-ready' : 'is-pending'">
+                              {{ item.complete ? 'Готово' : 'Чернетка' }}
+                            </span>
+                          </div>
+                          <div class="ai-order-item-summary">{{ item.summary }}</div>
+                          <div v-if="Array.isArray(item.missing_labels) && item.missing_labels.length > 0" class="ai-order-item-missing">
+                            <span v-for="label in item.missing_labels" :key="`${item.id}-${label}`" class="ai-missing-badge">
+                              {{ label }}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <span v-else class="ai-qualification-collected">Ще немає жодної сформованої позиції.</span>
+
+                      <div v-if="aiOrderSummaryText" class="ai-order-summary-block">
+                        <span class="ai-collected-title">Поточна чернетка</span>
+                        <pre class="ai-order-summary-text">{{ aiOrderSummaryText }}</pre>
+                      </div>
                     </div>
 
-                    <div v-if="aiMissingSlotLabels.length > 0" class="ai-missing-list">
-                      <span class="ai-collected-title">Ще треба зібрати</span>
-                      <div class="ai-missing-badges">
-                        <span v-for="label in aiMissingSlotLabels" :key="label" class="ai-missing-badge">
-                          {{ label }}
-                        </span>
+                    <div class="ai-panel-section">
+                      <div class="ai-panel-section-head">
+                        <span class="ai-collected-title">Оформлення</span>
+                        <span class="ai-panel-count">{{ aiFilledCheckoutFields.length }}/{{ aiCheckoutFields.length }}</span>
+                      </div>
+
+                      <div class="ai-collected-list">
+                        <ul v-if="aiFilledCheckoutFields.length > 0" class="ai-collected-items">
+                          <li v-for="row in aiFilledCheckoutFields" :key="row.key">
+                            <strong>{{ row.label }}:</strong> {{ row.value }}
+                          </li>
+                        </ul>
+                        <span v-else class="ai-qualification-collected">Дані оформлення ще не заповнені.</span>
+                      </div>
+
+                      <div v-if="aiCheckoutMissingLabels.length > 0" class="ai-missing-list">
+                        <span class="ai-collected-title">Ще треба зібрати</span>
+                        <div class="ai-missing-badges">
+                          <span v-for="label in aiCheckoutMissingLabels" :key="label" class="ai-missing-badge">
+                            {{ label }}
+                          </span>
+                        </div>
                       </div>
                     </div>
 
@@ -559,6 +595,45 @@ const visibleCollectedRows = computed(() => {
   return aiCollectedSlotRows.value.length > 0
     ? aiCollectedSlotRows.value
     : collectedFieldRows.value;
+});
+const aiOrderItems = computed(() => (
+  Array.isArray(props.customer?.ai?.order_items)
+    ? props.customer.ai.order_items
+        .map((item, index) => ({
+          id: String(item?.id || `item-${index + 1}`),
+          title: String(item?.title || `Позиція ${index + 1}`).trim(),
+          summary: String(item?.summary || '').trim(),
+          complete: Boolean(item?.complete),
+          missing_labels: Array.isArray(item?.missing_labels)
+            ? item.missing_labels.map((label) => String(label || '').trim()).filter((label) => label !== '')
+            : [],
+        }))
+        .filter((item) => item.summary !== '' || item.missing_labels.length > 0)
+    : []
+));
+const aiOrderSummaryText = computed(() => String(props.customer?.ai?.order_summary_text || '').trim());
+const aiCheckoutFields = computed(() => (
+  Array.isArray(props.customer?.ai?.checkout_fields)
+    ? props.customer.ai.checkout_fields
+        .map((field) => ({
+          key: String(field?.key || '').trim(),
+          label: String(field?.label || field?.key || '').trim(),
+          value: String(field?.value || '').trim(),
+          filled: Boolean(field?.filled),
+          required: Boolean(field?.required),
+        }))
+        .filter((field) => field.key !== '')
+    : []
+));
+const aiFilledCheckoutFields = computed(() => (
+  aiCheckoutFields.value.filter((field) => field.filled && field.value !== '')
+));
+const aiCheckoutMissingLabels = computed(() => {
+  return Array.isArray(props.customer?.ai?.checkout_missing_labels)
+    ? props.customer.ai.checkout_missing_labels
+        .map((label) => String(label || '').trim())
+        .filter((label) => label !== '')
+    : [];
 });
 const aiMissingSlotLabels = computed(() => {
   return Array.isArray(props.customer?.ai?.missing_slot_labels)
@@ -1211,11 +1286,25 @@ const handleOrderClose = () => {
 .ai-qualification-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8; font-weight: 700; }
 .ai-ready-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; color: #15803d; background: #dcfce7; border-radius: 999px; padding: 3px 8px; }
 .ai-qualification-collected { font-size: 11px; color: #64748b; }
+.ai-panel-section { display: flex; flex-direction: column; gap: 8px; padding-top: 2px; }
+.ai-panel-section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ai-panel-count { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; padding: 0 8px; border-radius: 999px; background: #eff6ff; color: #1d4ed8; font-size: 11px; font-weight: 700; }
 .ai-collected-list { display: flex; flex-direction: column; gap: 6px; margin-top: 2px; }
 .ai-collected-title { font-size: 11px; font-weight: 700; color: #475569; }
 .ai-collected-items { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
 .ai-collected-items li { font-size: 12px; color: #334155; line-height: 1.35; }
 .ai-collected-items li strong { color: #0f172a; font-weight: 700; }
+.ai-order-items { display: flex; flex-direction: column; gap: 8px; }
+.ai-order-item-card { display: flex; flex-direction: column; gap: 6px; padding: 10px; border-radius: 10px; border: 1px solid #dbeafe; background: #f8fbff; }
+.ai-order-item-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ai-order-item-top strong { font-size: 12px; color: #0f172a; }
+.ai-order-item-badge { display: inline-flex; align-items: center; min-height: 22px; padding: 0 8px; border-radius: 999px; font-size: 10px; font-weight: 700; }
+.ai-order-item-badge.is-ready { background: #dcfce7; color: #15803d; }
+.ai-order-item-badge.is-pending { background: #fff7ed; color: #9a3412; }
+.ai-order-item-summary { font-size: 12px; line-height: 1.45; color: #334155; }
+.ai-order-item-missing { display: flex; flex-wrap: wrap; gap: 6px; }
+.ai-order-summary-block { display: flex; flex-direction: column; gap: 6px; }
+.ai-order-summary-text { margin: 0; padding: 10px; border-radius: 10px; border: 1px solid #e2e8f0; background: #f8fafc; color: #334155; font-size: 12px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; font-family: inherit; }
 .ai-missing-list { display: flex; flex-direction: column; gap: 6px; }
 .ai-missing-badges { display: flex; flex-wrap: wrap; gap: 6px; }
 .ai-missing-badge { display: inline-flex; align-items: center; min-height: 26px; padding: 0 10px; border-radius: 999px; background: #fff7ed; border: 1px solid #fdba74; color: #9a3412; font-size: 11px; font-weight: 700; }

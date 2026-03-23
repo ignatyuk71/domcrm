@@ -287,6 +287,12 @@ class ChatApiController extends Controller
             'multi_item_just_confirmed' => false,
             'slot_definitions' => [],
             'slot_values' => [],
+            'order_draft' => [
+                'items' => [],
+                'summary' => null,
+                'source' => null,
+                'confidence' => null,
+            ],
             'missing_slots' => [],
             'next_slot' => null,
             'order_ready' => false,
@@ -864,6 +870,10 @@ class ChatApiController extends Controller
      *     last_reply_at: ?string,
      *     updated_at: ?string,
      *     slots: array<int, array<string, mixed>>,
+     *     order_items: array<int, array<string, mixed>>,
+     *     order_summary_text: ?string,
+     *     checkout_fields: array<int, array<string, mixed>>,
+     *     checkout_missing_labels: array<int, string>,
      *     missing_slots: array<int, string>,
      *     missing_slot_labels: array<int, string>,
      *     next_slot: ?string,
@@ -882,6 +892,8 @@ class ChatApiController extends Controller
             ->filter(fn ($key) => is_string($key) && trim($key) !== '')
             ->values()
             ->all();
+        $normalizedOrderDraft = $this->normalizeConversationAiOrderDraft($aiMeta['order_draft'] ?? null, $slotValues);
+        $checkoutState = $this->buildConversationAiCheckoutState($definitions, $slotValues, $missingSlots);
         $nextSlot = is_string($aiMeta['next_slot'] ?? null)
             ? trim((string) $aiMeta['next_slot'])
             : null;
@@ -916,6 +928,10 @@ class ChatApiController extends Controller
             'last_reply_at' => isset($aiMeta['last_reply_at']) ? (string) $aiMeta['last_reply_at'] : null,
             'updated_at' => isset($aiMeta['updated_at']) ? (string) $aiMeta['updated_at'] : null,
             'slots' => $this->buildConversationAiSlots($definitions, $slotValues, $missingSlots),
+            'order_items' => $normalizedOrderDraft['items'],
+            'order_summary_text' => $normalizedOrderDraft['summary'],
+            'checkout_fields' => $checkoutState['fields'],
+            'checkout_missing_labels' => $checkoutState['missing_labels'],
             'missing_slots' => $missingSlots,
             'missing_slot_labels' => collect($missingSlots)
                 ->map(fn (string $key) => (string) ($definitions[$key]['label'] ?? $this->humanizeAiSlotKey($key)))
@@ -1057,6 +1073,146 @@ class ChatApiController extends Controller
             'payment' => 'Оплата',
             default => trim((string) preg_replace('/[_\-]+/u', ' ', $key)),
         };
+    }
+
+    /**
+     * @param  array<string, mixed>  $slotValues
+     * @return array{
+     *     items: array<int, array<string, mixed>>,
+     *     summary: ?string
+     * }
+     */
+    private function normalizeConversationAiOrderDraft(mixed $draft, array $slotValues): array
+    {
+        $items = [];
+        $summary = null;
+
+        if (is_array($draft)) {
+            $summary = isset($draft['summary']) && trim((string) $draft['summary']) !== ''
+                ? trim((string) $draft['summary'])
+                : null;
+
+            foreach ((array) ($draft['items'] ?? []) as $index => $item) {
+                if (!is_array($item)) {
+                    continue;
+                }
+
+                $normalized = $this->buildConversationAiOrderItem($item, $index + 1);
+                if ($normalized !== null) {
+                    $items[] = $normalized;
+                }
+            }
+        }
+
+        if ($items === []) {
+            $fallbackItem = $this->buildConversationAiOrderItem([
+                'model' => $slotValues['model'] ?? null,
+                'color' => $slotValues['color'] ?? null,
+                'size' => $slotValues['size'] ?? null,
+                'quantity' => $slotValues['quantity'] ?? null,
+            ], 1);
+
+            if ($fallbackItem !== null) {
+                $items[] = $fallbackItem;
+            }
+        }
+
+        return [
+            'items' => $items,
+            'summary' => $summary,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $item
+     * @return array<string, mixed>|null
+     */
+    private function buildConversationAiOrderItem(array $item, int $index): ?array
+    {
+        $model = trim((string) ($item['model'] ?? ''));
+        $color = trim((string) ($item['color'] ?? ''));
+        $size = trim((string) ($item['size'] ?? ''));
+        $quantityValue = $item['quantity'] ?? null;
+        $quantity = is_numeric($quantityValue) && (int) $quantityValue >= 1 ? (int) $quantityValue : null;
+
+        if ($model === '' && $color === '' && $size === '' && $quantity === null) {
+            return null;
+        }
+
+        $parts = [];
+        if ($model !== '') {
+            $parts[] = $model;
+        }
+        if ($color !== '') {
+            $parts[] = $color;
+        }
+        if ($size !== '') {
+            $parts[] = $size;
+        }
+        if ($quantity !== null && $quantity > 1) {
+            $parts[] = $quantity . ' шт.';
+        }
+
+        $missingLabels = [];
+        if ($model === '') {
+            $missingLabels[] = 'Модель';
+        }
+        if ($color === '') {
+            $missingLabels[] = 'Колір';
+        }
+        if ($size === '') {
+            $missingLabels[] = 'Розмір';
+        }
+
+        return [
+            'id' => 'item-' . $index,
+            'title' => 'Позиція ' . $index,
+            'summary' => $parts !== [] ? implode(', ', $parts) : 'Позиція ще не заповнена',
+            'model' => $model !== '' ? $model : null,
+            'color' => $color !== '' ? $color : null,
+            'size' => $size !== '' ? $size : null,
+            'quantity' => $quantity,
+            'complete' => $missingLabels === [],
+            'missing_labels' => $missingLabels,
+        ];
+    }
+
+    /**
+     * @param  array<string, array<string, mixed>>  $definitions
+     * @param  array<string, mixed>  $slotValues
+     * @param  array<int, string>  $missingSlots
+     * @return array{
+     *     fields: array<int, array<string, mixed>>,
+     *     missing_labels: array<int, string>
+     * }
+     */
+    private function buildConversationAiCheckoutState(array $definitions, array $slotValues, array $missingSlots): array
+    {
+        $checkoutKeys = ['customer_name', 'phone', 'city', 'delivery', 'payment'];
+        $fields = [];
+
+        foreach ($checkoutKeys as $key) {
+            $value = trim((string) ($slotValues[$key] ?? ''));
+
+            $fields[] = [
+                'key' => $key,
+                'label' => (string) ($definitions[$key]['label'] ?? $this->humanizeAiSlotKey($key)),
+                'value' => $value !== '' ? $value : null,
+                'filled' => $value !== '',
+                'required' => (bool) ($definitions[$key]['required'] ?? false),
+            ];
+        }
+
+        $missingLabels = collect($missingSlots)
+            ->filter(fn (string $key) => in_array($key, $checkoutKeys, true))
+            ->map(fn (string $key) => (string) ($definitions[$key]['label'] ?? $this->humanizeAiSlotKey($key)))
+            ->values()
+            ->all();
+
+        return [
+            'fields' => $fields,
+            'missing_labels' => $missingLabels,
+        ];
     }
 
     private function resolveGlobalAiEnabled(): bool

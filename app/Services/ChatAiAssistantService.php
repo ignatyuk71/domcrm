@@ -88,6 +88,14 @@ class ChatAiAssistantService
             $topicScore,
             $requestedSize
         );
+        $orderDraft = $this->buildConversationOrderDraft(
+            $conversation,
+            $message,
+            $topic,
+            $products,
+            $slotState,
+            $settings
+        );
 
         $awaitingPhotoConfirmation = $this->isAwaitingPhotoConfirmation($conversation);
         $explicitPhotoRequest = $this->isPhotoRequest((string) ($message->text ?? ''));
@@ -258,6 +266,7 @@ class ChatAiAssistantService
             'next_slot' => $slotState['next'],
             'order_ready' => $slotState['order_ready'],
             'slot_summary' => $slotState['summary'],
+            'order_draft' => $orderDraft,
             'updated_slots' => $slotState['updated_keys'],
         ];
 
@@ -312,6 +321,7 @@ class ChatAiAssistantService
             'missing_slots' => $slotState['missing'],
             'next_slot' => $slotState['next'],
             'order_ready' => $slotState['order_ready'],
+            'order_draft' => $orderDraft,
         ]);
 
         return [
@@ -1995,9 +2005,14 @@ class ChatAiAssistantService
             : [];
 
         $lines = [];
+        $orderDraftSummary = trim((string) data_get($ai, 'order_draft.summary', ''));
+
+        if ($orderDraftSummary !== '') {
+            $lines[] = "Чернетка замовлення:\n{$orderDraftSummary}";
+        }
 
         $slotSummary = trim((string) ($ai['slot_summary'] ?? ''));
-        if ($slotSummary !== '') {
+        if ($slotSummary !== '' && $slotSummary !== $orderDraftSummary) {
             $lines[] = $slotSummary;
         }
 
@@ -2021,6 +2036,388 @@ class ChatAiAssistantService
         }
 
         return "Коротка пам'ять діалогу:\n" . implode("\n", $lines);
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $products
+     * @param  array<string, mixed>  $slotState
+     * @return array{
+     *     items: array<int, array<string, mixed>>,
+     *     summary: string,
+     *     source: string,
+     *     confidence: ?float
+     * }
+     */
+    private function buildConversationOrderDraft(
+        ChatConversation $conversation,
+        ChatMessage $message,
+        ?ChatAiTopic $topic,
+        Collection $products,
+        array $slotState,
+        array $settings
+    ): array {
+        $previousDraft = $this->loadStoredOrderDraft($conversation);
+        $fallbackDraft = $this->buildFallbackOrderDraft($slotState, $previousDraft);
+
+        if (!$this->shouldUseAiOrderDraftExtractor($message, $slotState, $previousDraft)) {
+            return $fallbackDraft;
+        }
+
+        try {
+            $extractedDraft = $this->extractOrderDraftWithAi(
+                $conversation,
+                $message,
+                $topic,
+                $products,
+                $slotState,
+                $previousDraft,
+                $settings
+            );
+
+            if ($extractedDraft !== null) {
+                return $extractedDraft;
+            }
+        } catch (\Throwable $e) {
+            Log::warning('AI: не вдалося зібрати structured order draft', [
+                'conversation_id' => $conversation->id,
+                'message_id' => $message->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return $fallbackDraft;
+    }
+
+    /**
+     * @return array{
+     *     items: array<int, array<string, mixed>>,
+     *     summary: string,
+     *     source: string,
+     *     confidence: ?float
+     * }
+     */
+    private function loadStoredOrderDraft(ChatConversation $conversation): array
+    {
+        $items = $this->normalizeOrderDraftItems(data_get($conversation->meta, 'ai.order_draft.items'));
+        $summary = trim((string) data_get($conversation->meta, 'ai.order_draft.summary', ''));
+        $source = trim((string) data_get($conversation->meta, 'ai.order_draft.source', ''));
+        $confidence = data_get($conversation->meta, 'ai.order_draft.confidence');
+
+        return [
+            'items' => $items,
+            'summary' => $summary !== '' ? $summary : $this->buildOrderDraftSummary($items),
+            'source' => $source !== '' ? $source : 'stored',
+            'confidence' => is_numeric($confidence) ? round((float) $confidence, 3) : null,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $slotState
+     * @param  array{
+     *     items: array<int, array<string, mixed>>,
+     *     summary: string,
+     *     source: string,
+     *     confidence: ?float
+     * }  $previousDraft
+     * @return array{
+     *     items: array<int, array<string, mixed>>,
+     *     summary: string,
+     *     source: string,
+     *     confidence: ?float
+     * }
+     */
+    private function buildFallbackOrderDraft(array $slotState, array $previousDraft): array
+    {
+        $items = [];
+        $shouldKeepPreviousItems = (bool) ($slotState['multi_item_pending'] ?? false)
+            || (bool) ($slotState['multi_item_review_completed'] ?? false)
+            || count($previousDraft['items'] ?? []) > 1;
+
+        if ($shouldKeepPreviousItems && !empty($previousDraft['items'])) {
+            $items = $previousDraft['items'];
+        } else {
+            $slots = is_array($slotState['slots'] ?? null) ? $slotState['slots'] : [];
+            $singleItem = $this->buildSingleOrderDraftItemFromSlots($slots);
+
+            if ($singleItem !== null) {
+                $items = [$singleItem];
+            } elseif (!empty($previousDraft['items'])) {
+                $items = $previousDraft['items'];
+            }
+        }
+
+        return [
+            'items' => $items,
+            'summary' => $this->buildOrderDraftSummary($items),
+            'source' => !empty($items) && $shouldKeepPreviousItems ? 'stored_fallback' : 'slots_fallback',
+            'confidence' => null,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $slotState
+     * @param  array{
+     *     items: array<int, array<string, mixed>>,
+     *     summary: string,
+     *     source: string,
+     *     confidence: ?float
+     * }  $previousDraft
+     */
+    private function shouldUseAiOrderDraftExtractor(
+        ChatMessage $message,
+        array $slotState,
+        array $previousDraft
+    ): bool {
+        $text = trim((string) ($message->text ?? ''));
+        if ($text === '') {
+            return false;
+        }
+
+        if (!empty($previousDraft['items'])) {
+            return true;
+        }
+
+        if ((bool) ($slotState['multi_item_pending'] ?? false) || (bool) ($slotState['multi_item_review_completed'] ?? false)) {
+            return true;
+        }
+
+        $slots = is_array($slotState['slots'] ?? null) ? $slotState['slots'] : [];
+
+        foreach (['model', 'color', 'size', 'quantity'] as $key) {
+            if ($this->hasSlotValue($slots[$key] ?? null, $key)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $products
+     * @param  array<string, mixed>  $slotState
+     * @param  array{
+     *     items: array<int, array<string, mixed>>,
+     *     summary: string,
+     *     source: string,
+     *     confidence: ?float
+     * }  $previousDraft
+     * @return array{
+     *     items: array<int, array<string, mixed>>,
+     *     summary: string,
+     *     source: string,
+     *     confidence: ?float
+     * }|null
+     */
+    private function extractOrderDraftWithAi(
+        ChatConversation $conversation,
+        ChatMessage $message,
+        ?ChatAiTopic $topic,
+        Collection $products,
+        array $slotState,
+        array $previousDraft,
+        array $settings
+    ): ?array {
+        $slots = is_array($slotState['slots'] ?? null) ? $slotState['slots'] : [];
+        $currentModel = $this->normalizeSlotValue('model', $slots['model'] ?? ($topic?->name ?? null));
+        $currentColor = $this->normalizeSlotValue('color', $slots['color'] ?? null);
+        $currentSize = $this->normalizeSlotValue('size', $slots['size'] ?? null);
+        $currentQuantity = $this->normalizeSlotValue('quantity', $slots['quantity'] ?? null);
+        $previousItemsJson = json_encode($previousDraft['items'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $history = $this->buildHistoryForPrompt($conversation->id, 12);
+        $memory = $this->buildConversationMemoryBlock($conversation);
+        $productHints = $products
+            ->map(function (array $product) {
+                $parts = array_filter([
+                    trim((string) ($product['title'] ?? '')),
+                    trim((string) ($product['color_name'] ?? '')),
+                ]);
+
+                return $parts !== [] ? '- ' . implode(' | ', $parts) : null;
+            })
+            ->filter()
+            ->take(12)
+            ->implode("\n");
+
+        $input = implode("\n\n", array_filter([
+            'Останнє повідомлення клієнта: ' . trim((string) ($message->text ?? '')),
+            $memory,
+            'Поточні слоти:'
+                . ($currentModel !== null ? "\n- модель: {$currentModel}" : "\n- модель: не визначена")
+                . ($currentColor !== null ? "\n- колір: {$currentColor}" : '')
+                . ($currentSize !== null ? "\n- розмір: {$currentSize}" : '')
+                . ($currentQuantity !== null ? "\n- кількість: {$currentQuantity}" : ''),
+            $previousItemsJson !== false ? "Попередня чернетка позицій JSON: {$previousItemsJson}" : null,
+            $productHints !== '' ? "Підказки по товарах поточної моделі:\n{$productHints}" : null,
+            "Останні повідомлення діалогу:\n{$history}",
+        ]));
+
+        $schema = [
+            'type' => 'object',
+            'additionalProperties' => false,
+            'properties' => [
+                'items' => [
+                    'type' => 'array',
+                    'items' => [
+                        'type' => 'object',
+                        'additionalProperties' => false,
+                        'properties' => [
+                            'model' => ['type' => 'string'],
+                            'color' => ['type' => 'string'],
+                            'size' => ['type' => 'string'],
+                            'quantity' => ['type' => 'integer', 'minimum' => 0, 'maximum' => 20],
+                        ],
+                        'required' => ['model', 'color', 'size', 'quantity'],
+                    ],
+                ],
+                'summary' => ['type' => 'string'],
+                'confidence' => ['type' => 'number', 'minimum' => 0, 'maximum' => 1],
+                'reason' => ['type' => 'string'],
+            ],
+            'required' => ['items', 'summary', 'confidence', 'reason'],
+        ];
+
+        $instructions = implode("\n", [
+            'Ти витягуєш структуровану чернетку замовлення для внутрішньої CRM-панелі.',
+            'Поверни повний поточний список позицій замовлення, які вже можна зрозуміти з діалогу.',
+            'Якщо клієнт уже підтвердив список кількох пар, збережи весь список, а не лише останню пару.',
+            'Якщо повідомлення стосується доставки, оплати, імені чи телефону, але список позицій уже був зрозумілий раніше, збережи попередні позиції без змін.',
+            'Якщо позиція неповна, залиш порожній рядок для невідомого поля.',
+            'Кількість став 1, якщо клієнт явно описує окрему пару без іншої кількості, наприклад "одну пару чорних і одну пару сірих".',
+            'Не вигадуй позиції, яких не було в діалозі.',
+            'Поверни summary коротко: кожна позиція з нового рядка, без службового тексту.',
+        ]);
+
+        $response = $this->openAi->createStructuredResponse(
+            $instructions,
+            $input,
+            $schema,
+            'chat_order_draft_extractor',
+            (string) ($settings['model'] ?? '')
+        );
+
+        $confidence = isset($response['confidence']) ? (float) $response['confidence'] : 0.0;
+        if ($confidence < 0.55) {
+            return null;
+        }
+
+        $items = $this->normalizeOrderDraftItems($response['items'] ?? null);
+        if ($items === [] && !empty($previousDraft['items'])) {
+            $items = $previousDraft['items'];
+        }
+
+        $summary = trim((string) ($response['summary'] ?? ''));
+
+        return [
+            'items' => $items,
+            'summary' => $summary !== '' ? $summary : $this->buildOrderDraftSummary($items),
+            'source' => 'ai_extractor',
+            'confidence' => round($confidence, 3),
+        ];
+    }
+
+    /**
+     * @param  mixed  $items
+     * @return array<int, array<string, mixed>>
+     */
+    private function normalizeOrderDraftItems(mixed $items): array
+    {
+        if (!is_array($items)) {
+            return [];
+        }
+
+        $normalized = [];
+
+        foreach (array_values($items) as $index => $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $model = $this->normalizeSlotValue('model', $item['model'] ?? null);
+            $color = $this->normalizeSlotValue('color', $item['color'] ?? null);
+            $size = $this->normalizeSlotValue('size', $item['size'] ?? null);
+            $quantity = $this->normalizeOrderDraftQuantity($item['quantity'] ?? null);
+
+            if ($model === null && $color === null && $size === null && $quantity === null) {
+                continue;
+            }
+
+            $normalized[] = [
+                'id' => 'item-' . ($index + 1),
+                'model' => $model,
+                'color' => $color,
+                'size' => $size,
+                'quantity' => $quantity,
+            ];
+        }
+
+        return $normalized;
+    }
+
+    private function normalizeOrderDraftQuantity(mixed $value): ?int
+    {
+        if ($value === null || $value === '' || !is_numeric($value)) {
+            return null;
+        }
+
+        $quantity = (int) $value;
+
+        return $quantity >= 1 && $quantity <= 20 ? $quantity : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $slots
+     * @return array<string, mixed>|null
+     */
+    private function buildSingleOrderDraftItemFromSlots(array $slots): ?array
+    {
+        $model = $this->normalizeSlotValue('model', $slots['model'] ?? null);
+        $color = $this->normalizeSlotValue('color', $slots['color'] ?? null);
+        $size = $this->normalizeSlotValue('size', $slots['size'] ?? null);
+        $quantity = $this->normalizeOrderDraftQuantity($slots['quantity'] ?? null);
+
+        if ($model === null && $color === null && $size === null && $quantity === null) {
+            return null;
+        }
+
+        return [
+            'id' => 'item-1',
+            'model' => $model,
+            'color' => $color,
+            'size' => $size,
+            'quantity' => $quantity,
+        ];
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $items
+     */
+    private function buildOrderDraftSummary(array $items): string
+    {
+        if ($items === []) {
+            return '';
+        }
+
+        $lines = [];
+
+        foreach ($items as $item) {
+            $parts = array_filter([
+                $item['model'] ?? null,
+                $item['color'] ?? null,
+                $item['size'] ?? null,
+                isset($item['quantity']) && (int) $item['quantity'] > 1 ? ((int) $item['quantity']) . ' шт.' : null,
+            ], fn ($value) => is_string($value) ? trim($value) !== '' : $value !== null);
+
+            if ($parts === []) {
+                continue;
+            }
+
+            $lines[] = '- ' . implode(', ', array_map(
+                fn ($value) => is_string($value) ? trim($value) : (string) $value,
+                $parts
+            ));
+        }
+
+        return implode("\n", $lines);
     }
 
     private function isAwaitingPhotoConfirmation(ChatConversation $conversation): bool
