@@ -137,7 +137,7 @@ class ChatAiAssistantService
         $isPhotoRequest = $confirmedPhotoRequest || $specificModelPhotoRequest || $currentModelGalleryRequest;
         $isAllPhotosRequest = $currentModelGalleryRequest;
         $shouldSendOverviewMedia = $allTopicsOverviewMedia->isNotEmpty()
-            && $mediaIntentName === 'show_models';
+            && ($forceOverviewForModelSelection || $mediaIntentName === 'show_models');
         $mediaSelectionQuery = $this->buildMediaSelectionQuery(
             (string) ($message->text ?? ''),
             $slotState,
@@ -247,6 +247,7 @@ class ChatAiAssistantService
             'order_intent_reason' => $slotState['order_intent_reason'] ?? null,
             'order_intent_confidence' => $slotState['order_intent_confidence'] ?? null,
             'single_item_review_pending' => (bool) ($slotState['single_item_review_pending'] ?? false),
+            'single_item_review_completed' => (bool) ($slotState['single_item_review_completed'] ?? false),
             'single_item_just_confirmed' => (bool) ($slotState['single_item_just_confirmed'] ?? false),
             'multi_item_pending' => (bool) ($slotState['multi_item_pending'] ?? false),
             'multi_item_just_confirmed' => (bool) ($slotState['multi_item_just_confirmed'] ?? false),
@@ -300,6 +301,7 @@ class ChatAiAssistantService
             'order_intent_reason' => $slotState['order_intent_reason'] ?? null,
             'order_intent_confidence' => $slotState['order_intent_confidence'] ?? null,
             'single_item_review_pending' => (bool) ($slotState['single_item_review_pending'] ?? false),
+            'single_item_review_completed' => (bool) ($slotState['single_item_review_completed'] ?? false),
             'single_item_just_confirmed' => (bool) ($slotState['single_item_just_confirmed'] ?? false),
             'multi_item_pending' => (bool) ($slotState['multi_item_pending'] ?? false),
             'multi_item_just_confirmed' => (bool) ($slotState['multi_item_just_confirmed'] ?? false),
@@ -2080,6 +2082,7 @@ class ChatAiAssistantService
      *     updated_keys: array<int, string>,
      *     just_completed: bool,
      *     single_item_review_pending: bool,
+     *     single_item_review_completed: bool,
      *     single_item_just_confirmed: bool,
      *     multi_item_pending: bool,
      *     multi_item_just_confirmed: bool
@@ -2100,6 +2103,7 @@ class ChatAiAssistantService
         $previousOrderReady = (bool) data_get($conversation->meta, 'ai.order_ready', false);
         $previousMultiItemPending = (bool) data_get($conversation->meta, 'ai.multi_item_pending', false);
         $previousSingleItemReviewPending = (bool) data_get($conversation->meta, 'ai.single_item_review_pending', false);
+        $previousSingleItemReviewCompleted = (bool) data_get($conversation->meta, 'ai.single_item_review_completed', false);
         $previousNextSlot = data_get($conversation->meta, 'ai.next_slot');
         $text = (string) ($message->text ?? '');
         $orderIntent = $this->resolveOrderIntent(
@@ -2159,10 +2163,16 @@ class ChatAiAssistantService
         }
 
         $missing = $this->resolveMissingSlotKeys($definitions, $slots);
+        $itemDefinitionChanged = collect(['model', 'color', 'size', 'quantity'])
+            ->contains(fn (string $key) => array_key_exists($key, $updated));
         $singleItemReviewJustConfirmed = $previousSingleItemReviewPending
             && !$multiItemPending
             && $this->isAffirmativeReply($text);
+        $singleItemReviewCompleted = $singleItemReviewJustConfirmed
+            ? true
+            : ($itemDefinitionChanged ? false : $previousSingleItemReviewCompleted);
         $singleItemReviewPending = !$multiItemPending
+            && !$singleItemReviewCompleted
             && !$singleItemReviewJustConfirmed
             && $this->shouldRequireSingleItemReview($definitions, $slots, $missing);
         $nextSlot = $singleItemReviewPending ? null : ($missing[0] ?? null);
@@ -2191,6 +2201,7 @@ class ChatAiAssistantService
             'order_intent_reason' => $orderIntent['reason'] ?? null,
             'order_intent_confidence' => $orderIntent['confidence'] ?? null,
             'single_item_review_pending' => $singleItemReviewPending,
+            'single_item_review_completed' => $singleItemReviewCompleted,
             'single_item_just_confirmed' => $singleItemReviewJustConfirmed,
             'multi_item_pending' => $multiItemPending,
             'multi_item_just_confirmed' => $multiItemJustConfirmed,
@@ -2347,6 +2358,14 @@ class ChatAiAssistantService
 
         $updates = [];
 
+        $bundledDelivery = $this->extractBundledDeliveryDetails($text, $previousNextSlot);
+        if ($bundledDelivery['city'] !== null) {
+            $updates['city'] = $bundledDelivery['city'];
+        }
+        if ($bundledDelivery['delivery'] !== null) {
+            $updates['delivery'] = $bundledDelivery['delivery'];
+        }
+
         if ($topic !== null && ($topicScore > 0 || $products->isNotEmpty() || !$this->hasSlotValue($currentSlots['model'] ?? null, 'model'))) {
             $updates['model'] = $topic->name;
         }
@@ -2369,11 +2388,11 @@ class ChatAiAssistantService
             $updates['quantity'] = $quantity;
         }
 
-        if ($city = $this->extractCityValue($text, $previousNextSlot)) {
+        if (!array_key_exists('city', $updates) && ($city = $this->extractCityValue($text, $previousNextSlot))) {
             $updates['city'] = $city;
         }
 
-        if ($delivery = $this->extractDeliveryValue($text, $previousNextSlot)) {
+        if (!array_key_exists('delivery', $updates) && ($delivery = $this->extractDeliveryValue($text, $previousNextSlot))) {
             $updates['delivery'] = $delivery;
         }
 
@@ -2713,7 +2732,7 @@ class ChatAiAssistantService
 
         return match (true) {
             (bool) preg_match('/(передоплат|повна оплат|100%|предоплат)/u', $normalized) => 'Передоплата',
-            (bool) preg_match('/(післяплат|накладен|налож)/u', $normalized) => 'Післяплата',
+            (bool) preg_match('/(післяплат|накладен|налож|при отриман)/u', $normalized) => 'Післяплата',
             (bool) preg_match('/(карт|онлайн|mono|monobank|на карту|по реквізит)/u', $normalized) => 'Оплата карткою',
             (bool) preg_match('/(готівк|налич)/u', $normalized) => 'Готівка',
             default => null,
@@ -2770,7 +2789,15 @@ class ChatAiAssistantService
         $trimmed = trim((string) preg_replace('/\s+/u', ' ', $text));
         $normalizedTrimmed = $this->normalizeText($trimmed);
 
+        if ((bool) preg_match('/^(при отриман|післяплат|накладен|на карт|оплат)/u', $normalizedTrimmed)) {
+            return null;
+        }
+
         if (preg_match('/^([^,]{2,50}),\s*(?:нова пошта|відділен|поштомат)/iu', $trimmed, $match)) {
+            return $this->normalizeSlotValue('city', $match[1]);
+        }
+
+        if (preg_match('/^\s*([[:alpha:]\-\'’`ʼ ]{2,40})\s+(?:нова пошта|укрпошта|поштомат|кур[\'’`ʼ]?єр|кур[еє]р|відділен|відд\.?)/iu', $trimmed, $match)) {
             return $this->normalizeSlotValue('city', $match[1]);
         }
 
@@ -2796,6 +2823,7 @@ class ChatAiAssistantService
             || $wordCount < 1
             || $wordCount > 3
             || (bool) preg_match('/^(я|хочу|мені|потріб|добре|так|ні|ок|гаразд)\b/u', $normalizedCandidate)
+            || (bool) preg_match('/^(при отриман|післяплат|накладен|на карт|оплат)/u', $normalizedCandidate)
             || $this->containsLocationNoise($normalizedTrimmed)
             || (bool) preg_match('/(відділен|нова пошта|поштомат|розм|біл|чорн|сір|рожев)/u', $normalizedCandidate)
             || !preg_match('/^[[:alpha:]\-\'’`ʼ ]+$/u', $candidate)
@@ -2819,6 +2847,10 @@ class ChatAiAssistantService
             return $this->normalizeSlotValue('delivery', $match[1]);
         }
 
+        if (preg_match('/((?:нова пошта|укрпошта)\s*(?:відділення|відд\.?|від)\s*№?\s*\d{1,4})/iu', $trimmed, $match)) {
+            return $this->normalizeSlotValue('delivery', preg_replace('/\bвід\b/iu', 'відділення', $match[1]));
+        }
+
         if (preg_match('/((?:\bвул\.?\b|\bвулиця\b|\bпроспект\b|\bпросп\.?\b)\s*[^,\n]{0,120}\d[\w\/-]*)/iu', $trimmed, $match)) {
             return $this->normalizeSlotValue('delivery', $match[1]);
         }
@@ -2837,6 +2869,40 @@ class ChatAiAssistantService
         }
 
         return null;
+    }
+
+    /**
+     * @return array{city: ?string, delivery: ?string}
+     */
+    private function extractBundledDeliveryDetails(string $text, ?string $previousNextSlot): array
+    {
+        $trimmed = trim((string) preg_replace('/\s+/u', ' ', $text));
+        if ($trimmed === '' || !in_array($previousNextSlot, ['city', 'delivery'], true)) {
+            return ['city' => null, 'delivery' => null];
+        }
+
+        if (preg_match('/^\s*([[:alpha:]\-\'’`ʼ ]{2,40})\s+(нова пошта|укрпошта)\s*(?:відділення|відд\.?|від)\s*№?\s*(\d{1,4})\s*$/iu', $trimmed, $match)) {
+            return [
+                'city' => $this->normalizeSlotValue('city', $match[1]),
+                'delivery' => $this->normalizeSlotValue('delivery', "{$match[2]} відділення {$match[3]}"),
+            ];
+        }
+
+        if (preg_match('/^\s*([[:alpha:]\-\'’`ʼ ]{2,40})\s+(поштомат)\s*№?\s*(\d{1,4})\s*$/iu', $trimmed, $match)) {
+            return [
+                'city' => $this->normalizeSlotValue('city', $match[1]),
+                'delivery' => $this->normalizeSlotValue('delivery', "{$match[2]} {$match[3]}"),
+            ];
+        }
+
+        if (preg_match('/^\s*([[:alpha:]\-\'’`ʼ ]{2,40})\s+(кур[\'’`ʼ]?єр|кур[еє]р)(?:ом)?\s*$/iu', $trimmed, $match)) {
+            return [
+                'city' => $this->normalizeSlotValue('city', $match[1]),
+                'delivery' => $this->normalizeSlotValue('delivery', $match[2]),
+            ];
+        }
+
+        return ['city' => null, 'delivery' => null];
     }
 
     private function extractColorValue(string $text, ?string $previousNextSlot): ?string

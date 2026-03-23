@@ -280,6 +280,7 @@ class ChatApiController extends Controller
             'order_intent_reason' => null,
             'order_intent_confidence' => null,
             'single_item_review_pending' => false,
+            'single_item_review_completed' => false,
             'single_item_just_confirmed' => false,
             'multi_item_pending' => false,
             'multi_item_just_confirmed' => false,
