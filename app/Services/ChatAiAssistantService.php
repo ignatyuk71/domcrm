@@ -2456,23 +2456,43 @@ class ChatAiAssistantService
         }
 
         $text = str_replace(['–', '—'], '-', $text);
-        $text = preg_replace('/\s+/u', '', $text);
-        $text = preg_replace('/(?:р|рр|р\.)$/u', '', (string) $text);
+        $text = preg_replace('/\s+/u', ' ', $text);
         $text = trim((string) $text);
 
         if ($text === '') {
             return null;
         }
 
-        if (preg_match('/\b([2-5]\d)\s*\/\s*([2-5]\d)\b/u', $text, $match)) {
+        // Для рядків варіантів на кшталт "36/37р - 24-24,5см" спочатку беремо саме розмір,
+        // а не діапазон сантиметрів, який іде далі в описі.
+        if (preg_match('/^\s*([2-5]\d)\s*\/\s*([2-5]\d)\s*(?:р|рр|р\.)?(?=$|[^\d])/u', $text, $match)) {
             return "{$match[1]}/{$match[2]}";
         }
 
-        if (preg_match('/\b([2-5]\d)\s*-\s*([2-5]\d)\b/u', $text, $match)) {
+        if (preg_match('/^\s*([2-5]\d)\s*-\s*([2-5]\d)\s*(?:р|рр|р\.)?(?=$|[^\d])/u', $text, $match)) {
             return "{$match[1]}/{$match[2]}";
         }
 
-        if (preg_match('/(?<!\d)([2-5]\d)(?!\d)/u', $text, $match)) {
+        if (preg_match('/^\s*([2-5]\d)\s*(?:р|рр|р\.)?(?=$|[^\d])/u', $text, $match)) {
+            return $match[1];
+        }
+
+        $compactText = preg_replace('/\s+/u', '', $text);
+        $compactText = trim((string) $compactText);
+
+        if ($compactText === '') {
+            return null;
+        }
+
+        if (preg_match('/(?<!\d)([2-5]\d)\s*\/\s*([2-5]\d)(?!\d)/u', $compactText, $match)) {
+            return "{$match[1]}/{$match[2]}";
+        }
+
+        if (preg_match('/(?<!\d)([2-5]\d)\s*-\s*([2-5]\d)(?!\d)/u', $compactText, $match)) {
+            return "{$match[1]}/{$match[2]}";
+        }
+
+        if (preg_match('/(?<!\d)([2-5]\d)(?!\d)/u', $compactText, $match)) {
             return $match[1];
         }
 
