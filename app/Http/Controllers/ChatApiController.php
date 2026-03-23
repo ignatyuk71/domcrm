@@ -271,6 +271,7 @@ class ChatApiController extends Controller
             'topic_route_reason' => null,
             'topic_route_confidence' => null,
             'multi_item_pending' => false,
+            'multi_item_just_confirmed' => false,
             'slot_definitions' => [],
             'slot_values' => [],
             'missing_slots' => [],

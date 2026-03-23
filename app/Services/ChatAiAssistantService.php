@@ -205,6 +205,7 @@ class ChatAiAssistantService
             'topic_route_reason' => $topicMatch['route_reason'] ?? null,
             'topic_route_confidence' => $topicMatch['route_confidence'] ?? null,
             'multi_item_pending' => (bool) ($slotState['multi_item_pending'] ?? false),
+            'multi_item_just_confirmed' => (bool) ($slotState['multi_item_just_confirmed'] ?? false),
             'slot_definitions' => $slotState['definitions'],
             'slot_values' => $slotState['slots'],
             'missing_slots' => $slotState['missing'],
@@ -246,6 +247,7 @@ class ChatAiAssistantService
             'topic_route_reason' => $topicMatch['route_reason'] ?? null,
             'topic_route_confidence' => $topicMatch['route_confidence'] ?? null,
             'multi_item_pending' => (bool) ($slotState['multi_item_pending'] ?? false),
+            'multi_item_just_confirmed' => (bool) ($slotState['multi_item_just_confirmed'] ?? false),
             'slot_updates' => $slotState['updated'],
             'slot_values' => $slotState['slots'],
             'missing_slots' => $slotState['missing'],
@@ -1267,6 +1269,11 @@ class ChatAiAssistantService
             $guidance[] = 'Спочатку коротко перелічи позиції, як ти їх зрозумів, кожну з нового рядка, і попроси підтвердити або виправити список пар.';
         }
 
+        if ((bool) ($slotState['multi_item_just_confirmed'] ?? false)) {
+            $guidance[] = 'Клієнт щойно підтвердив список кількох пар. Не повторюй цей список ще раз і не проси повторно підтвердження.';
+            $guidance[] = 'Одним наступним повідомленням попроси дані для оформлення замовлення: ПІБ отримувача, номер мобільного, місто або село, номер відділення чи поштомата або повну адресу для кур’єра.';
+        }
+
         if ($shouldAskPhotoConfirmation) {
             $guidance[] = 'Клієнт схоже хоче переглянути товар, але не попросив фото прямо. Не вгадуй і не пиши, що фото немає. Одним коротким питанням уточни, чи показати фото цього варіанту.';
         }
@@ -1462,7 +1469,8 @@ class ChatAiAssistantService
      *     updated: array<string, mixed>,
      *     updated_keys: array<int, string>,
      *     just_completed: bool,
-     *     multi_item_pending: bool
+     *     multi_item_pending: bool,
+     *     multi_item_just_confirmed: bool
      * }
      */
     private function buildConversationSlotState(
@@ -1482,8 +1490,11 @@ class ChatAiAssistantService
         $previousNextSlot = data_get($conversation->meta, 'ai.next_slot');
         $text = (string) ($message->text ?? '');
         $currentMultiItemPending = $this->isComplexMultiItemOrderText($text);
+        $multiItemJustConfirmed = $previousMultiItemPending
+            && !$currentMultiItemPending
+            && $this->isAffirmativeReply($text);
         $multiItemPending = $currentMultiItemPending
-            || ($previousMultiItemPending && !$this->isSingleItemResetText($text));
+            || ($previousMultiItemPending && !$multiItemJustConfirmed && !$this->isSingleItemResetText($text));
 
         if (!is_string($previousNextSlot) || !array_key_exists($previousNextSlot, $definitions)) {
             $previousNextSlot = $previousMissing[0] ?? null;
@@ -1535,6 +1546,7 @@ class ChatAiAssistantService
             'updated_keys' => array_keys($updated),
             'just_completed' => !$previousOrderReady && $orderReady,
             'multi_item_pending' => $multiItemPending,
+            'multi_item_just_confirmed' => $multiItemJustConfirmed,
         ];
     }
 
