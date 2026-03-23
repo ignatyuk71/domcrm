@@ -75,7 +75,7 @@ class ChatAiAssistantService
         $isPhotoRequest = $this->isPhotoRequest((string) ($message->text ?? ''));
         $isAllPhotosRequest = $isPhotoRequest && $this->isAllPhotosRequest((string) ($message->text ?? ''));
         $isBroadCatalogRequest = $this->isBroadCatalogRequest($normalizedMessageText);
-        $shouldSendOverviewMedia = $isTopicUnclear && ($isPhotoRequest || $isBroadCatalogRequest);
+        $shouldSendOverviewMedia = $isTopicUnclear && ($isBroadCatalogRequest || $isAllPhotosRequest);
         $slotState = $this->buildConversationSlotState(
             $conversation,
             $message,
@@ -599,12 +599,15 @@ class ChatAiAssistantService
 
         $query = $this->normalizeText($messageText);
         $visualPreferenceStems = $this->extractVisualPreferenceStems($query);
+        $explicitOverviewRequest = str_contains($query, 'колаж')
+            || str_contains($query, 'палiтр')
+            || str_contains($query, 'палітр');
         $tokens = collect(preg_split('/[^[:alnum:]]+/u', $query))
             ->filter(fn ($token) => mb_strlen((string) $token) >= 4)
             ->values();
 
         $ranked = $media
-            ->map(function (array $item) use ($query, $tokens) {
+            ->map(function (array $item) use ($query, $tokens, $visualPreferenceStems, $explicitOverviewRequest) {
                 $label = $this->normalizeText((string) ($item['label'] ?? ''));
                 $score = 0;
 
@@ -620,7 +623,7 @@ class ChatAiAssistantService
                     }
                 }
 
-                foreach ($this->extractVisualPreferenceStems($query) as $stem) {
+                foreach ($visualPreferenceStems as $stem) {
                     if ($label !== '' && str_contains($label, $stem)) {
                         $score += 90;
                     }
@@ -628,14 +631,14 @@ class ChatAiAssistantService
 
                 if (
                     in_array(($item['media_type'] ?? ''), ['collage', 'palette'], true)
-                    && (str_contains($query, 'колаж') || str_contains($query, 'палiтр') || str_contains($query, 'палітр'))
+                    && $explicitOverviewRequest
                 ) {
                     $score += 40;
                 }
 
                 if (
                     $label !== ''
-                    && $this->extractVisualPreferenceStems($query) !== []
+                    && $visualPreferenceStems !== []
                     && in_array((string) ($item['media_type'] ?? ''), ['collage', 'palette'], true)
                 ) {
                     $score -= 50;
@@ -673,7 +676,17 @@ class ChatAiAssistantService
             return collect();
         }
 
-        return $ranked->take(3)->values();
+        $specificMedia = $ranked
+            ->reject(fn (array $item) => in_array((string) ($item['media_type'] ?? ''), ['collage', 'palette'], true))
+            ->values();
+
+        if ($specificMedia->isNotEmpty()) {
+            return $specificMedia->take(3)->values();
+        }
+
+        return $explicitOverviewRequest
+            ? $ranked->take(3)->values()
+            : collect();
     }
 
     /**
@@ -2005,9 +2018,16 @@ class ChatAiAssistantService
     private function isAllPhotosRequest(string $text): bool
     {
         $normalized = $this->normalizeText($text);
+        if ($normalized === '') {
+            return false;
+        }
+
+        if ($this->extractVisualPreferenceStems($normalized) !== []) {
+            return false;
+        }
 
         return (bool) preg_match(
-            '/(всi|всі|усi|усі|все|усе|які є|якi є|яки є|в наявностi|в наявності|весь асортимент)/u',
+            '/(всi|всі|усi|усі|все|усе|які є|якi є|яки є|що є|в наявностi|в наявності|весь асортимент|всі варіанти|усі варіанти|всі кольори|усі кольори)/u',
             $normalized
         );
     }

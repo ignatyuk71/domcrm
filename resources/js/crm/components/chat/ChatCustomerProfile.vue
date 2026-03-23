@@ -300,10 +300,6 @@
                       <span v-if="aiOrderReady" class="ai-ready-badge">Усі дані зібрано</span>
                     </div>
 
-                    <div v-if="aiSlotSummary" class="ai-slot-summary">
-                      {{ aiSlotSummary }}
-                    </div>
-
                     <div class="ai-collected-list">
                       <span class="ai-collected-title">Вже зібрано</span>
                       <ul v-if="visibleCollectedRows.length > 0" class="ai-collected-items">
@@ -573,7 +569,6 @@ const aiMissingSlotLabels = computed(() => {
 });
 const aiNextSlotLabel = computed(() => String(props.customer?.ai?.next_slot_label || '').trim());
 const aiOrderReady = computed(() => Boolean(props.customer?.ai?.order_ready));
-const aiSlotSummary = computed(() => String(props.customer?.ai?.slot_summary || '').trim());
 const aiStatusNote = computed(() => {
   const lastError = String(props.customer?.ai?.last_error || '').trim();
   if (lastError !== '') {
@@ -1215,7 +1210,6 @@ const handleOrderClose = () => {
 .ai-qualification-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .ai-qualification-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8; font-weight: 700; }
 .ai-ready-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; color: #15803d; background: #dcfce7; border-radius: 999px; padding: 3px 8px; }
-.ai-slot-summary { font-size: 12px; line-height: 1.45; color: #334155; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px; }
 .ai-qualification-collected { font-size: 11px; color: #64748b; }
 .ai-collected-list { display: flex; flex-direction: column; gap: 6px; margin-top: 2px; }
 .ai-collected-title { font-size: 11px; font-weight: 700; color: #475569; }
