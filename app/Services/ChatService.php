@@ -769,7 +769,6 @@ class ChatService
         } elseif (
             $mentionsStory
             || str_contains($urlLower, '/stories/')
-            || str_contains($urlLower, 'story_fbid=')
         ) {
             $objectType = 'story';
         } elseif (
