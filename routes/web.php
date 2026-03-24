@@ -16,8 +16,6 @@ use App\Http\Controllers\PackingController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\MessageTemplateController;
 use App\Http\Controllers\ChatApiController;
-use App\Http\Controllers\ChatAiSettingsController;
-use App\Http\Controllers\ChatAiKnowledgeBaseController;
 use App\Http\Controllers\MetaConnectionController;
 use App\Http\Controllers\SavedFileController;
 use App\Http\Controllers\NovaPoshtaSettingsController;
@@ -186,10 +184,6 @@ Route::middleware('auth')->group(function () {
     Route::get('/api/chat/tags', [ChatApiController::class, 'listConversationTags'])->name('chat.tags');
     Route::patch('/api/chat/conversations/{conversation}/stage', [ChatApiController::class, 'updateStage'])
         ->name('chat.stage');
-    Route::patch('/api/chat/conversations/{conversation}/ai', [ChatApiController::class, 'updateAiState'])
-        ->name('chat.ai.update');
-    Route::post('/api/chat/conversations/{conversation}/takeover', [ChatApiController::class, 'takeoverByManager'])
-        ->name('chat.ai.takeover');
     Route::delete('/api/chat/conversations/{conversation}', [ChatApiController::class, 'archiveConversation'])
         ->name('chat.archive');
     Route::delete('/api/chat/conversations/{conversation}/history', [ChatApiController::class, 'clearConversationHistory'])
@@ -320,24 +314,6 @@ Route::middleware('auth')->group(function () {
         Route::get('/meta/redirect', [MetaConnectionController::class, 'redirectToFacebook'])->name('meta.redirect');
         Route::get('/meta/callback', [MetaConnectionController::class, 'handleFacebookCallback'])->name('meta.callback');
         Route::post('/meta/disconnect', [MetaConnectionController::class, 'disconnect'])->name('meta.disconnect');
-        Route::get('/ai', [ChatAiSettingsController::class, 'index'])->name('ai.index');
-        Route::post('/ai', [ChatAiSettingsController::class, 'save'])->name('ai.save');
-        Route::get('/ai/knowledge', [ChatAiKnowledgeBaseController::class, 'index'])->name('ai.knowledge');
-        Route::post('/ai/knowledge/topics', [ChatAiKnowledgeBaseController::class, 'storeTopic'])->name('ai.knowledge.topics.store');
-        Route::put('/ai/knowledge/topics/{topic}', [ChatAiKnowledgeBaseController::class, 'updateTopic'])->name('ai.knowledge.topics.update');
-        Route::delete('/ai/knowledge/topics/{topic}', [ChatAiKnowledgeBaseController::class, 'destroyTopic'])->name('ai.knowledge.topics.destroy');
-        Route::post('/ai/knowledge/keywords', [ChatAiKnowledgeBaseController::class, 'storeKeyword'])->name('ai.knowledge.keywords.store');
-        Route::put('/ai/knowledge/keywords/{keyword}', [ChatAiKnowledgeBaseController::class, 'updateKeyword'])->name('ai.knowledge.keywords.update');
-        Route::delete('/ai/knowledge/keywords/{keyword}', [ChatAiKnowledgeBaseController::class, 'destroyKeyword'])->name('ai.knowledge.keywords.destroy');
-        Route::post('/ai/knowledge/topic-products', [ChatAiKnowledgeBaseController::class, 'storeTopicProduct'])->name('ai.knowledge.topicProducts.store');
-        Route::put('/ai/knowledge/topic-products/{topicProduct}', [ChatAiKnowledgeBaseController::class, 'updateTopicProduct'])->name('ai.knowledge.topicProducts.update');
-        Route::delete('/ai/knowledge/topic-products/{topicProduct}', [ChatAiKnowledgeBaseController::class, 'destroyTopicProduct'])->name('ai.knowledge.topicProducts.destroy');
-        Route::post('/ai/knowledge/media', [ChatAiKnowledgeBaseController::class, 'storeMedia'])->name('ai.knowledge.media.store');
-        Route::put('/ai/knowledge/media/{media}', [ChatAiKnowledgeBaseController::class, 'updateMedia'])->name('ai.knowledge.media.update');
-        Route::delete('/ai/knowledge/media/{media}', [ChatAiKnowledgeBaseController::class, 'destroyMedia'])->name('ai.knowledge.media.destroy');
-        Route::post('/ai/knowledge/rules', [ChatAiKnowledgeBaseController::class, 'storeRule'])->name('ai.knowledge.rules.store');
-        Route::put('/ai/knowledge/rules/{rule}', [ChatAiKnowledgeBaseController::class, 'updateRule'])->name('ai.knowledge.rules.update');
-        Route::delete('/ai/knowledge/rules/{rule}', [ChatAiKnowledgeBaseController::class, 'destroyRule'])->name('ai.knowledge.rules.destroy');
         Route::get('/nova-poshta', [NovaPoshtaSettingsController::class, 'index'])->name('novaPoshta.index');
         Route::post('/nova-poshta', [NovaPoshtaSettingsController::class, 'save'])->name('novaPoshta.save');
         Route::post('/nova-poshta/fetch-refs', [NovaPoshtaSettingsController::class, 'fetchRefs'])->name('novaPoshta.fetchRefs');

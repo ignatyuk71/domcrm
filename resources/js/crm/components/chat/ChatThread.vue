@@ -909,23 +909,6 @@ watch(
     align-items: stretch;
   }
 
-  .ai-card-head {
-    flex-direction: column;
-  }
-
-  .ai-card-actions {
-    width: 100%;
-    justify-content: stretch;
-  }
-
-  .ai-action-btn {
-    width: 100%;
-  }
-
-  .ai-lead-grid {
-    grid-template-columns: 1fr;
-  }
-
   .origin-toggle-btn,
   .origin-link-btn {
     width: 100%;

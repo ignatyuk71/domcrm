@@ -462,10 +462,6 @@
                 <span class="icon-frame"><i class="bi bi-box-seam"></i></span>
                 <span class="item-text-sub">Нова Пошта</span>
             </a>
-            <a href="{{ route('settings.ai.index') }}" class="sidebar-link-sub {{ request()->is('settings/ai*') ? 'active' : '' }}">
-                <span class="icon-frame"><i class="bi bi-sliders"></i></span>
-                <span class="item-text-sub">Система</span>
-            </a>
             <a href="{{ route('settings.categories.index') }}" class="sidebar-link-sub {{ request()->is('settings/categories') ? 'active' : '' }}">
                 <span class="icon-frame"><i class="bi bi-tags"></i></span>
                 <span class="item-text-sub">Категорії</span>

@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Facebook;
 
-use App\Jobs\ProcessChatAiReplyJob;
 use App\Http\Controllers\Controller;
 use App\Models\ChatContact;
 use App\Models\ChatMessage;
@@ -253,11 +252,6 @@ class WebhookController extends Controller
 
         $conversation = $chatService->updateConversationAfterMessage($conversation, $storedMessage, !$isEcho);
 
-        if (!$isEcho && $storedMessage->direction === 'inbound') {
-            app()->terminating(function () use ($storedMessage): void {
-                ProcessChatAiReplyJob::dispatchSync((int) $storedMessage->id);
-            });
-        }
     }
 
     private function processReadReceipt(array $event, string $platform): void
