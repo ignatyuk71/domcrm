@@ -384,13 +384,6 @@ const canSaveProfile = computed(() => (
   isEmailValid.value
 ));
 
-watch(() => form.phone, (newVal) => {
-  const cleaned = String(newVal || '').replace(/\D/g, '').slice(0, 12);
-  if (cleaned !== newVal) {
-    form.phone = cleaned;
-  }
-});
-
 const customerId = computed(() => {
   const rawId = props.customer?.id ?? props.customer?.customer_id ?? null;
   const normalizedId = Number(rawId);
