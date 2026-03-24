@@ -113,22 +113,42 @@ class CustomerController extends Controller
      */
     public function update(Request $request, Customer $customer): JsonResponse
     {
-        // 1. Валідація вхідних даних
         $validated = $request->validate([
-            'first_name' => 'required|string|max:255',
-            'last_name'  => 'required|string|max:255',
-            'phone'      => 'required|string|max:20',
-            'email'      => 'nullable|email|max:255',
+            'first_name' => ['nullable', 'string', 'max:255'],
+            'last_name'  => ['nullable', 'string', 'max:255'],
+            'phone'      => ['nullable', 'string', 'max:20'],
+            'email'      => ['nullable', 'email', 'max:255'],
         ]);
 
-        // 2. Оновлення моделі
-        $customer->update($validated);
+        // Нормалізуємо порожні значення, щоб не зберігати сміття у вигляді порожніх рядків.
+        $payload = [
+            'first_name' => $this->normalizeNullableString($validated['first_name'] ?? null),
+            'last_name' => $this->normalizeNullableString($validated['last_name'] ?? null),
+            'phone' => $this->normalizeNullablePhone($validated['phone'] ?? null),
+            'email' => $this->normalizeNullableString($validated['email'] ?? null),
+        ];
 
-        // 3. Повернення успішної відповіді
+        $customer->update($payload);
+        $customer->refresh();
+
         return response()->json([
             'status' => 'success',
             'message' => 'Дані клієнта оновлено',
-            'data' => $customer
+            'data' => $customer,
         ]);
+    }
+
+    private function normalizeNullableString(?string $value): ?string
+    {
+        $value = trim((string) $value);
+
+        return $value !== '' ? $value : null;
+    }
+
+    private function normalizeNullablePhone(?string $value): ?string
+    {
+        $digits = preg_replace('/\D+/', '', (string) $value);
+
+        return $digits !== '' ? $digits : null;
     }
 }

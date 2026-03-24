@@ -95,11 +95,12 @@
              
             </div>
             <div v-else class="add-btn" @click="enableEmail"><i class="bi bi-plus-circle"></i> Додати email</div>
+            <small v-if="form.email && !isEmailValid" class="error-text">Вкажіть коректний email</small>
           </div>
         </div>
 
         <div class="action-row">
-          <button class="btn-save-modern" @click="saveData" :disabled="isLoading || !isProfileComplete">
+          <button class="btn-save-modern" @click="saveData" :disabled="!canSaveProfile">
             <span v-if="isLoading" class="spinner"></span>
             {{ isLoading ? 'Зберігаємо...' : 'Зберегти покупця' }}
           </button>
@@ -346,6 +347,7 @@ const form = reactive({
 });
 
 const cyrillicRegex = /^[А-Яа-яЁёЇїІіЄєҐґ' \-]+$/;
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const isNameValid = computed(() => {
   return form.first_name.trim().length >= 2 && 
@@ -355,7 +357,32 @@ const isNameValid = computed(() => {
 });
 
 const isPhoneValid = computed(() => /^380\d{9}$/.test(form.phone));
+const isEmailValid = computed(() => !form.email || emailRegex.test(form.email.trim()));
 const isProfileComplete = computed(() => isNameValid.value && isPhoneValid.value);
+const normalizedProfilePayload = computed(() => ({
+  first_name: form.first_name.trim(),
+  last_name: form.last_name.trim(),
+  phone: form.phone || '',
+  email: form.email.trim(),
+}));
+const originalProfilePayload = computed(() => ({
+  first_name: String(props.customer?.first_name || '').trim(),
+  last_name: String(props.customer?.last_name || '').trim(),
+  phone: String(props.customer?.phone || '').replace(/\D/g, ''),
+  email: String(props.customer?.email || '').trim(),
+}));
+const hasProfileChanges = computed(() => (
+  normalizedProfilePayload.value.first_name !== originalProfilePayload.value.first_name ||
+  normalizedProfilePayload.value.last_name !== originalProfilePayload.value.last_name ||
+  normalizedProfilePayload.value.phone !== originalProfilePayload.value.phone ||
+  normalizedProfilePayload.value.email !== originalProfilePayload.value.email
+));
+const canSaveProfile = computed(() => (
+  !isLoading.value &&
+  hasProfileChanges.value &&
+  (!form.phone || isPhoneValid.value) &&
+  isEmailValid.value
+));
 
 watch(() => form.phone, (newVal) => {
   if (!newVal) return;
@@ -512,22 +539,43 @@ const getStatusLabel = (order) => {
 };
 
 const saveData = async () => {
-  if (!customerId.value || !isProfileComplete.value) return;
+  if (!customerId.value) return;
+  if (!canSaveProfile.value) {
+    if (form.phone && !isPhoneValid.value) {
+      showToast('Телефон має бути у форматі 380XXXXXXXXX.', 'error');
+      return;
+    }
+
+    if (!isEmailValid.value) {
+      showToast('Вкажіть коректний email.', 'error');
+      return;
+    }
+
+    showToast('Немає змін для збереження.', 'error');
+    return;
+  }
+
   isLoading.value = true;
   try {
-    const response = await axios.put(`/api/customers/${customerId.value}`, form);
+    const payload = { ...normalizedProfilePayload.value };
+    const response = await axios.put(`/api/customers/${customerId.value}`, payload, {
+      headers: { Accept: 'application/json' },
+    });
     const updatedCustomer = response?.data?.data;
     if (props.customer && updatedCustomer) {
       Object.assign(props.customer, updatedCustomer);
     } else if (props.customer) {
-      Object.assign(props.customer, form);
+      Object.assign(props.customer, payload);
     }
 
     showNameInput.value = false;
     showToast('Покупця успішно збережено.');
   } catch (e) { 
-    console.error(e); 
-    showToast('Не вдалося зберегти дані покупця.', 'error');
+    console.error(e);
+    const validationErrors = Object.values(e?.response?.data?.errors || {})
+      .flat()
+      .filter(Boolean);
+    showToast(validationErrors[0] || e?.response?.data?.message || 'Не вдалося зберегти дані покупця.', 'error');
   } finally { 
     isLoading.value = false; 
   }
