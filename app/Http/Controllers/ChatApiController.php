@@ -751,6 +751,20 @@ class ChatApiController extends Controller
         }
 
         foreach ($files as $file) {
+            $originalName = (string) $file->getClientOriginalName();
+            $fileSize = $file->getSize();
+            $mimeType = null;
+
+            try {
+                $mimeType = $file->getMimeType() ?: $file->getClientMimeType();
+            } catch (\Throwable $e) {
+                $mimeType = $file->getClientMimeType();
+                Log::warning('Не вдалося визначити MIME завантаженого файла до переміщення', [
+                    'name' => $originalName,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+
             $datePath = now()->format('Y/m/d');
             $destinationPath = public_path("chat/attachments/{$datePath}");
             if (!is_dir($destinationPath)) {
@@ -763,16 +777,16 @@ class ChatApiController extends Controller
             @chmod($destinationPath . '/' . $fileName, 0644);
 
             $relativeUrl = "chat/attachments/{$datePath}/{$fileName}";
-            $type = $this->inferFileAttachmentType($file->getMimeType(), $fileName);
+            $type = $this->inferFileAttachmentType($mimeType, $fileName);
 
             $attachments[] = [
                 'meta_payload' => ['type' => $type, 'url' => url($relativeUrl)],
                 'stored_attachment' => [
                     'type' => $type,
                     'url' => $relativeUrl,
-                    'mime_type' => $file->getMimeType(),
-                    'file_name' => $file->getClientOriginalName(),
-                    'file_size' => $file->getSize(),
+                    'mime_type' => $mimeType,
+                    'file_name' => $originalName,
+                    'file_size' => $fileSize,
                 ],
             ];
         }
