@@ -65,42 +65,6 @@
       <hr class="divider" />
 
       <div class="fields-section">
-        <div class="field-row">
-          <div class="icon-col"><i class="bi bi-telephone"></i></div>
-          <div class="input-col">
-            <label>Телефон</label>
-            <div class="input-group" :class="{ 'is-focused': phoneFocused, 'is-invalid': form.phone && !isPhoneValid }">
-              <input 
-                v-model="form.phone" 
-                class="simple-input" 
-                placeholder="380XXXXXXXXX" 
-                ref="phoneRef"
-                type="tel"
-                @focus="phoneFocused = true"
-                @blur="phoneFocused = false"
-              >
-              <button v-if="form.phone" type="button" class="clear-inline-btn" title="Очистити телефон" @click="form.phone = ''">
-                <i class="bi bi-x-lg"></i>
-              </button>
-            </div>
-            <small v-if="form.phone && !isPhoneValid" class="error-text">Має бути 12 цифр (380...)</small>
-          </div>
-        </div>
-
-        <div class="field-row">
-          <div class="icon-col"><i class="bi bi-envelope"></i></div>
-          <div class="input-col">
-            <label>E-mail</label>
-            <div class="input-group" :class="{ 'is-focused': emailFocused }">
-              <input v-model="form.email" class="simple-input" placeholder="email@example.com" @focus="emailFocused = true" @blur="emailFocused = false">
-              <button v-if="form.email" type="button" class="clear-inline-btn" title="Очистити email" @click="form.email = ''">
-                <i class="bi bi-x-lg"></i>
-              </button>
-            </div>
-            <small v-if="form.email && !isEmailValid" class="error-text">Вкажіть коректний email</small>
-          </div>
-        </div>
-
         <div class="action-row">
           <button class="btn-save-modern" @click="saveData" :disabled="!canSaveProfile">
             <span v-if="isLoading" class="spinner"></span>
@@ -251,10 +215,7 @@ const props = defineProps({ customer: Object });
 const emit = defineEmits(['close', 'update-stage']);
 
 const showNameInput = ref(false);
-const phoneFocused = ref(false);
-const emailFocused = ref(false);
 const isLoading = ref(false);
-const phoneRef = ref(null);
 const isOrderSaving = ref(false);
 const historyOrders = ref([]);
 const historyLoading = ref(false);
@@ -341,13 +302,10 @@ const orderSubmitState = reactive({
 
 const form = reactive({ 
   first_name: '',
-  last_name: '',
-  phone: '', 
-  email: '' 
+  last_name: ''
 });
 
 const cyrillicRegex = /^[А-Яа-яЁёЇїІіЄєҐґ' \-]+$/;
-const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const isNameValid = computed(() => {
   return form.first_name.trim().length >= 2 && 
@@ -356,32 +314,22 @@ const isNameValid = computed(() => {
          cyrillicRegex.test(form.last_name);
 });
 
-const isPhoneValid = computed(() => /^380\d{9}$/.test(form.phone));
-const isEmailValid = computed(() => !form.email || emailRegex.test(form.email.trim()));
-const isProfileComplete = computed(() => isNameValid.value && isPhoneValid.value);
+const isProfileComplete = computed(() => isNameValid.value);
 const normalizedProfilePayload = computed(() => ({
   first_name: form.first_name.trim(),
   last_name: form.last_name.trim(),
-  phone: form.phone || '',
-  email: form.email.trim(),
 }));
 const originalProfilePayload = computed(() => ({
   first_name: String(props.customer?.first_name || '').trim(),
   last_name: String(props.customer?.last_name || '').trim(),
-  phone: String(props.customer?.phone || '').replace(/\D/g, ''),
-  email: String(props.customer?.email || '').trim(),
 }));
 const hasProfileChanges = computed(() => (
   normalizedProfilePayload.value.first_name !== originalProfilePayload.value.first_name ||
-  normalizedProfilePayload.value.last_name !== originalProfilePayload.value.last_name ||
-  normalizedProfilePayload.value.phone !== originalProfilePayload.value.phone ||
-  normalizedProfilePayload.value.email !== originalProfilePayload.value.email
+  normalizedProfilePayload.value.last_name !== originalProfilePayload.value.last_name
 ));
 const canSaveProfile = computed(() => (
   !isLoading.value &&
-  hasProfileChanges.value &&
-  (!form.phone || isPhoneValid.value) &&
-  isEmailValid.value
+  hasProfileChanges.value
 ));
 
 const customerId = computed(() => {
@@ -406,8 +354,6 @@ function syncFormFromCustomer(customer, { resetPanels = false } = {}) {
 
   form.first_name = customer.first_name || '';
   form.last_name = customer.last_name || '';
-  form.phone = customer.phone ? customer.phone.replace(/\D/g, '') : '';
-  form.email = customer.email || '';
 
   if (resetPanels) {
     showNameInput.value = false;
@@ -515,16 +461,6 @@ const getStatusLabel = (order) => {
 const saveData = async () => {
   if (!customerId.value) return;
   if (!canSaveProfile.value) {
-    if (form.phone && !isPhoneValid.value) {
-      showToast('Телефон має бути у форматі 380XXXXXXXXX.', 'error');
-      return;
-    }
-
-    if (!isEmailValid.value) {
-      showToast('Вкажіть коректний email.', 'error');
-      return;
-    }
-
     showToast('Немає змін для збереження.', 'error');
     return;
   }
@@ -589,10 +525,6 @@ const createOrderFromDraft = async () => {
     showToast('Оберіть відділення.', 'error');
     return;
   }
-  if (!form.phone) {
-    showToast('Вкажіть телефон клієнта.', 'error');
-    return;
-  }
   if (isOrderSaving.value) return;
   isOrderSaving.value = true;
   orderSubmitState.status = 'loading';
@@ -610,8 +542,6 @@ const createOrderFromDraft = async () => {
     customer: {
       first_name: form.first_name || '',
       last_name: form.last_name || '',
-      phone: form.phone || '',
-      email: form.email || '',
     },
     order: {
       status: 'confirmed',
@@ -648,7 +578,7 @@ const createOrderFromDraft = async () => {
       apartment: delivery.apartment || '',
       address_note: delivery.address_note || '',
       recipient_name: [delivery.last_name, delivery.first_name, delivery.middle_name].filter(Boolean).join(' '),
-      recipient_phone: delivery.phone || form.phone || '',
+      recipient_phone: delivery.phone || '',
     },
   };
 
@@ -797,16 +727,6 @@ const handleOrderClose = () => {
 .id-badge { font-size: 11px; color: #a0aec0; margin-top: 4px; display: inline-block; background: #f7fafc; padding: 2px 6px; border-radius: 4px; }
 .divider { border: 0; border-top: 1px solid #e5e7eb; margin: 0; }
 .fields-section { display: flex; flex-direction: column; gap: 12px; padding: 16px; }
-.field-row { display: flex; align-items: flex-start; }
-.icon-col { width: 32px; color: #cbd5e0; font-size: 18px; padding-top: 18px; }
-.input-col label { font-size: 10px; font-weight: 700; color: #a0aec0; text-transform: uppercase; margin-bottom: 2px; display: block; }
-.input-group { display: flex; align-items: center; border-bottom: 2px solid #edf2f7; padding: 2px 0; }
-.simple-input { flex: 1; border: none; background: transparent; font-size: 14px; color: #2d3748; outline: none; font-weight: 600; }
-.clear-inline-btn { width: 22px; height: 22px; border: none; background: transparent; color: #94a3b8; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; border-radius: 4px; }
-.clear-inline-btn:hover { color: #64748b; background: #f1f5f9; }
-.clear-inline-btn i { font-size: 10px; }
-.error-text { color: #ef4444; font-size: 10px; margin-top: 2px; }
-.add-btn { color: #6366f1; font-size: 13px; font-weight: 600; cursor: pointer; padding: 4px 0; }
 .action-row { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
 .history-container { margin-top: 18px; }
 .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding: 0 4px; }
