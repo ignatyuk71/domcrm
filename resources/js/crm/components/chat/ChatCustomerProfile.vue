@@ -69,7 +69,7 @@
           <div class="icon-col"><i class="bi bi-telephone"></i></div>
           <div class="input-col">
             <label>Телефон</label>
-            <div v-if="form.phone || showPhoneInput" class="input-group" :class="{ 'is-focused': phoneFocused, 'is-invalid': form.phone && !isPhoneValid }">
+            <div class="input-group" :class="{ 'is-focused': phoneFocused, 'is-invalid': form.phone && !isPhoneValid }">
               <input 
                 v-model="form.phone" 
                 class="simple-input" 
@@ -79,9 +79,10 @@
                 @focus="phoneFocused = true"
                 @blur="phoneFocused = false"
               >
-              
+              <button v-if="form.phone" type="button" class="clear-inline-btn" title="Очистити телефон" @click="form.phone = ''">
+                <i class="bi bi-x-lg"></i>
+              </button>
             </div>
-            <div v-else class="add-btn" @click="enablePhone"><i class="bi bi-plus-circle"></i> Додати телефон</div>
             <small v-if="form.phone && !isPhoneValid" class="error-text">Має бути 12 цифр (380...)</small>
           </div>
         </div>
@@ -90,11 +91,12 @@
           <div class="icon-col"><i class="bi bi-envelope"></i></div>
           <div class="input-col">
             <label>E-mail</label>
-            <div v-if="form.email || showEmailInput" class="input-group" :class="{ 'is-focused': emailFocused }">
+            <div class="input-group" :class="{ 'is-focused': emailFocused }">
               <input v-model="form.email" class="simple-input" placeholder="email@example.com" @focus="emailFocused = true" @blur="emailFocused = false">
-             
+              <button v-if="form.email" type="button" class="clear-inline-btn" title="Очистити email" @click="form.email = ''">
+                <i class="bi bi-x-lg"></i>
+              </button>
             </div>
-            <div v-else class="add-btn" @click="enableEmail"><i class="bi bi-plus-circle"></i> Додати email</div>
             <small v-if="form.email && !isEmailValid" class="error-text">Вкажіть коректний email</small>
           </div>
         </div>
@@ -252,8 +254,6 @@ const showNameInput = ref(false);
 const phoneFocused = ref(false);
 const emailFocused = ref(false);
 const isLoading = ref(false);
-const showPhoneInput = ref(false);
-const showEmailInput = ref(false);
 const phoneRef = ref(null);
 const isOrderSaving = ref(false);
 const historyOrders = ref([]);
@@ -410,8 +410,6 @@ function syncFormFromCustomer(customer, { resetPanels = false } = {}) {
   form.last_name = customer.last_name || '';
   form.phone = customer.phone ? customer.phone.replace(/\D/g, '') : '';
   form.email = customer.email || '';
-  showPhoneInput.value = !!form.phone;
-  showEmailInput.value = !!form.email;
 
   if (resetPanels) {
     showNameInput.value = false;
@@ -468,10 +466,6 @@ const showToast = (msg, type = 'success') => {
 };
 
 const enableNameEdit = () => { showNameInput.value = true; };
-const enablePhone = async () => { showPhoneInput.value = true; await nextTick(); phoneRef.value?.focus(); };
-const clearPhone = () => { form.phone = ''; showPhoneInput.value = false; };
-const enableEmail = async () => { showEmailInput.value = true; await nextTick(); };
-const clearEmail = () => { form.email = ''; showEmailInput.value = false; };
 
 const loadCustomerHistory = async (id) => {
   const requestToken = ++historyRequestToken;
@@ -828,6 +822,9 @@ const handleOrderClose = () => {
 .input-col label { font-size: 10px; font-weight: 700; color: #a0aec0; text-transform: uppercase; margin-bottom: 2px; display: block; }
 .input-group { display: flex; align-items: center; border-bottom: 2px solid #edf2f7; padding: 2px 0; }
 .simple-input { flex: 1; border: none; background: transparent; font-size: 14px; color: #2d3748; outline: none; font-weight: 600; }
+.clear-inline-btn { width: 22px; height: 22px; border: none; background: transparent; color: #94a3b8; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; border-radius: 4px; }
+.clear-inline-btn:hover { color: #64748b; background: #f1f5f9; }
+.clear-inline-btn i { font-size: 10px; }
 .error-text { color: #ef4444; font-size: 10px; margin-top: 2px; }
 .add-btn { color: #6366f1; font-size: 13px; font-weight: 600; cursor: pointer; padding: 4px 0; }
 .action-row { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
