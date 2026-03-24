@@ -81,8 +81,9 @@
               type="tel"
               class="contact-input"
               placeholder="380XXXXXXXXX"
+              @input="applyLegacyPhoneFilter"
               @focus="phoneFocused = true"
-              @blur="phoneFocused = false"
+              @blur="handlePhoneBlur"
             >
             <small v-if="form.phone && !isPhoneValid" class="contact-error">Телефон має бути у форматі 380XXXXXXXXX</small>
           </div>
@@ -364,6 +365,28 @@ const isNameValid = computed(() => {
 });
 
 const normalizePhone = (value) => String(value || '').replace(/\D/g, '').slice(0, 12);
+
+function applyLegacyPhoneFilter() {
+  let cleaned = String(form.phone || '').replace(/\D/g, '');
+
+  if (cleaned.startsWith('0')) {
+    cleaned = `38${cleaned}`;
+  } else if (cleaned.startsWith('38') && !cleaned.startsWith('380')) {
+    cleaned = `380${cleaned.slice(2)}`;
+  }
+
+  if (cleaned.startsWith('3800')) {
+    cleaned = `380${cleaned.slice(4)}`;
+  }
+
+  form.phone = cleaned.slice(0, 12);
+}
+
+function handlePhoneBlur() {
+  phoneFocused.value = false;
+  applyLegacyPhoneFilter();
+}
+
 const isPhoneValid = computed(() => /^380\d{9}$/.test(normalizePhone(form.phone)));
 const isEmailValid = computed(() => !String(form.email || '').trim() || emailRegex.test(String(form.email || '').trim()));
 const isProfileComplete = computed(() => isNameValid.value && isPhoneValid.value);
