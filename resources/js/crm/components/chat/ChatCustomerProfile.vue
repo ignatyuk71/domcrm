@@ -385,17 +385,10 @@ const canSaveProfile = computed(() => (
 ));
 
 watch(() => form.phone, (newVal) => {
-  if (!newVal) return;
-  let cleaned = newVal.replace(/\D/g, '');
-  if (cleaned.startsWith('0')) {
-    cleaned = '38' + cleaned;
-  } else if (cleaned.startsWith('38') && !cleaned.startsWith('380')) {
-    cleaned = '380' + cleaned.slice(2);
+  const cleaned = String(newVal || '').replace(/\D/g, '').slice(0, 12);
+  if (cleaned !== newVal) {
+    form.phone = cleaned;
   }
-  if (cleaned.startsWith('3800')) {
-    cleaned = '380' + cleaned.slice(4);
-  }
-  form.phone = cleaned.substring(0, 12);
 });
 
 const customerId = computed(() => props.customer?.id ?? props.customer?.customer_id ?? null);
@@ -448,7 +441,14 @@ watch(
 watch(
   () => [props.customer?.first_name, props.customer?.last_name, props.customer?.phone, props.customer?.email],
   () => {
-    if (!props.customer || showNameInput.value) {
+    // Не перетираємо локальний ввід, поки користувач редагує профіль.
+    if (
+      !props.customer ||
+      showNameInput.value ||
+      phoneFocused.value ||
+      emailFocused.value ||
+      hasProfileChanges.value
+    ) {
       return;
     }
 
@@ -468,7 +468,7 @@ const showToast = (msg, type = 'success') => {
 };
 
 const enableNameEdit = () => { showNameInput.value = true; };
-const enablePhone = async () => { showPhoneInput.value = true; if (!form.phone) form.phone = '380'; await nextTick(); phoneRef.value?.focus(); };
+const enablePhone = async () => { showPhoneInput.value = true; await nextTick(); phoneRef.value?.focus(); };
 const clearPhone = () => { form.phone = ''; showPhoneInput.value = false; };
 const enableEmail = async () => { showEmailInput.value = true; await nextTick(); };
 const clearEmail = () => { form.email = ''; showEmailInput.value = false; };
