@@ -29,7 +29,7 @@ class ChatApiController extends Controller
     ) {
     }
 
-    public function list(MetaService $metaService): JsonResponse
+    public function list(): JsonResponse
     {
         try {
             $conversations = ChatConversation::query()
@@ -39,7 +39,7 @@ class ChatApiController extends Controller
                 ->paginate(20);
 
             $conversations->getCollection()->transform(
-                fn (ChatConversation $conversation) => $this->formatConversation($conversation, $metaService)
+                fn (ChatConversation $conversation) => $this->formatConversation($conversation)
             );
 
             return response()->json($conversations);
@@ -53,7 +53,7 @@ class ChatApiController extends Controller
         }
     }
 
-    public function funnel(MetaService $metaService): JsonResponse
+    public function funnel(): JsonResponse
     {
         $conversations = ChatConversation::query()
             ->where('status', '!=', 'archived')
@@ -67,7 +67,7 @@ class ChatApiController extends Controller
         }
 
         foreach ($conversations as $conversation) {
-            $payload = $this->formatConversation($conversation, $metaService);
+            $payload = $this->formatConversation($conversation);
             $stageKey = $payload['stage'] ?: 'none';
             $groups[$stageKey][] = $payload;
         }
@@ -303,7 +303,7 @@ class ChatApiController extends Controller
         return $meta;
     }
 
-    public function showByCustomer(Request $request, int $customerId, MetaService $metaService): JsonResponse
+    public function showByCustomer(Request $request, int $customerId): JsonResponse
     {
         $platform = $request->query('platform');
         $conversation = $this->chatService->resolveConversationByCustomer($customerId, $platform);
@@ -312,7 +312,7 @@ class ChatApiController extends Controller
             return response()->json(['error' => 'Conversation not found'], 404);
         }
 
-        return response()->json(['data' => $this->formatConversation($conversation, $metaService)]);
+        return response()->json(['data' => $this->formatConversation($conversation)]);
     }
 
     public function messages(Request $request, int $id, MetaService $metaService): JsonResponse
@@ -656,15 +656,12 @@ class ChatApiController extends Controller
         ];
     }
 
-    private function formatConversation(ChatConversation $conversation, ?MetaService $metaService = null): array
+    private function formatConversation(ChatConversation $conversation): array
     {
-        if ($metaService) {
-            $conversation = $this->chatService->hydrateConversationProfile($conversation, $metaService);
-        }
-
         $contact = $conversation->contact;
         $customer = $conversation->customer;
-        $profileSnapshot = $this->chatService->buildConversationProfileSnapshot($contact, $customer, true);
+        // У списку чатів працюємо тільки по вже збережених даних, без повільного recovery/refresh профілю.
+        $profileSnapshot = $this->chatService->buildConversationProfileSnapshot($contact, $customer, false);
         $originContext = $this->resolveOriginContext(
             data_get($conversation->meta, 'origin_context'),
             $conversation->last_message_preview,
