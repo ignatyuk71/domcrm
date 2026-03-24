@@ -74,11 +74,16 @@ class PackingController extends Controller
     {
         $packing->releaseStaleOrders();
 
-        // Беремо ID статусів з конфігу (наприклад, 4 - Упакування)
-        $queueStatusIds = config('packing.status_ids.queue', [4]);
+        // Беремо статуси черги через сервіс (code -> id, з fallback).
+        $queueStatusIds = $packing->queueStatusIds();
 
         $userId = Auth::id();
-        $orders = Order::whereIn('status_id', $queueStatusIds)
+        $orders = Order::query()
+            ->when($queueStatusIds, fn ($q) => $q->whereIn('status_id', $queueStatusIds), fn ($q) => $q->whereRaw('1 = 0'))
+            ->where(function ($q) {
+                $q->whereNull('packing_status')
+                    ->orWhereIn('packing_status', ['pending', 'processing', 'skipped']);
+            })
             ->orderBy('is_priority', 'desc') // Спочатку пріоритетні
             ->orderBy('created_at', 'asc')   // Потім старіші
             ->with([
@@ -106,10 +111,7 @@ class PackingController extends Controller
         $packing->releaseStaleOrders();
 
         // Статуси, які вже поїхали (щоб не показувати їх у списку)
-        $shippedStatusIds = config('packing.status_ids.shipped', []);
-        if (!is_array($shippedStatusIds)) {
-            $shippedStatusIds = [$shippedStatusIds];
-        }
+        $shippedStatusIds = $packing->shippedStatusIds();
 
         // Підзапит для отримання часу завершення пакування
         $subQuery = PackingSession::query()
@@ -197,13 +199,18 @@ class PackingController extends Controller
 
             $packing->closeSession($locked, $userId, 'finished');
 
-            // Оновлюємо статус на "Запаковано" (ID 12)
-            $packedStatusId = config('packing.status_ids.packed', 12);
-            
-            $locked->update([
+            // Оновлюємо статус на "Запаковано" (визначається через PackingService)
+            $packedStatusId = $packing->packedStatusId();
+            $updates = [
                 'packing_status' => 'packed',
                 'status_id' => $packedStatusId,
-            ]);
+            ];
+            $packedStatusCode = $packing->statusCodeById($packedStatusId);
+            if ($packedStatusCode) {
+                $updates['status'] = $packedStatusCode;
+            }
+
+            $locked->update($updates);
 
             return response()->json(['success' => true]);
         });
@@ -215,20 +222,25 @@ class PackingController extends Controller
     public function pause(Order $order, PackingService $packing): JsonResponse
     {
         $userId = Auth::id();
-        $queueStatusIds = config('packing.status_ids.queue', []);
-        $queueStatusId = is_array($queueStatusIds) ? ($queueStatusIds[0] ?? 4) : $queueStatusIds;
+        $queueStatusId = $packing->queueStatusId();
+        $queueStatusCode = $packing->statusCodeById($queueStatusId);
 
-        return DB::transaction(function () use ($order, $userId, $queueStatusId, $packing) {
+        return DB::transaction(function () use ($order, $userId, $queueStatusId, $queueStatusCode, $packing) {
             $locked = Order::whereKey($order->id)->lockForUpdate()->first();
             if (!$locked) return response()->json(['error' => 'Замовлення не знайдено'], 404);
 
             $packing->closeSession($locked, $userId, 'paused');
 
-            $locked->update([
+            $updates = [
                 'packer_id' => null,
                 'packing_status' => 'pending',
                 'status_id' => $queueStatusId, // Повертаємо статус "Упакування"
-            ]);
+            ];
+            if ($queueStatusCode) {
+                $updates['status'] = $queueStatusCode;
+            }
+
+            $locked->update($updates);
 
             return response()->json(['success' => true]);
         });
@@ -241,13 +253,15 @@ class PackingController extends Controller
     {
         $userId = Auth::id();
         // ID статусу "Проблема" (наприклад, 2 - В обробці)
-        $problemStatusId = config('packing.status_ids.problem');
+        $problemStatusId = $packing->problemStatusId();
 
         if (!$problemStatusId) {
             return response()->json(['error' => 'Не налаштовано статус проблеми.'], 422);
         }
 
-        return DB::transaction(function () use ($order, $userId, $problemStatusId, $packing) {
+        $problemStatusCode = $packing->statusCodeById($problemStatusId);
+
+        return DB::transaction(function () use ($order, $userId, $problemStatusId, $problemStatusCode, $packing) {
             $locked = Order::whereKey($order->id)->lockForUpdate()->first();
             if (!$locked) return response()->json(['error' => 'Замовлення не знайдено'], 404);
 
@@ -256,11 +270,16 @@ class PackingController extends Controller
             // Скидаємо пакувальника і переводимо замовлення у відкладений стан.
             // Воно лишається доступним у списку для ручного запуску, але не має
             // автоматично підхоплюватися як наступне замовлення.
-            $locked->update([
+            $updates = [
                 'packer_id' => null,
                 'packing_status' => 'skipped',
                 'status_id' => $problemStatusId,
-            ]);
+            ];
+            if ($problemStatusCode) {
+                $updates['status'] = $problemStatusCode;
+            }
+
+            $locked->update($updates);
 
             return response()->json(['success' => true, 'message' => 'Замовлення позначено як проблемне.']);
         });

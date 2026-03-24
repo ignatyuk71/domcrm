@@ -286,14 +286,11 @@ const printingSelected = ref(false);
 let refreshInterval = null;
 
 // --- Helpers ---
-// Логіка статусів: 
-// Pending = 4 (Упакування)
-// Processing = 'processing' (Локальний статус блокування)
-// Packed = 12 (Запаковано)
-const isPending = (o) => o.packing_status === 'pending' || (!o.packing_status && o.status_id !== 12); 
+// Логіка статусів будується на packing_status, щоб не залежати від ID довідника.
+const isPending = (o) => o.packing_status === 'pending' || !o.packing_status;
 const isProcessing = (o) => o.packing_status === 'processing';
 const isSkipped = (o) => o.packing_status === 'skipped';
-const isPacked = (o) => o.packing_status === 'packed' || !!o.packed_at || o.status_id === 12;
+const isPacked = (o) => o.packing_status === 'packed' || !!o.packed_at;
 
 // Шукаємо замовлення, яке я вже почав, але не закінчив
 const myActiveOrder = computed(() => orders.value.find(o => isProcessing(o)));

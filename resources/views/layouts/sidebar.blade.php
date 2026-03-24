@@ -378,7 +378,27 @@
         <div class="nav-divider">Склад</div>
 
         @php
-            $packingCount = \App\Models\Order::whereIn('status_id', config('packing.status_ids.queue', [4]))
+            $queueStatusCodes = config('packing.status_codes.queue', []);
+            if (!is_array($queueStatusCodes)) {
+                $queueStatusCodes = [$queueStatusCodes];
+            }
+
+            $queueStatusIds = \App\Models\Status::query()
+                ->where('type', 'order')
+                ->whereIn('code', array_filter(array_map('strval', $queueStatusCodes)))
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+
+            if (empty($queueStatusIds)) {
+                $fallbackQueueIds = config('packing.status_ids.queue', [4]);
+                if (!is_array($fallbackQueueIds)) {
+                    $fallbackQueueIds = [$fallbackQueueIds];
+                }
+                $queueStatusIds = array_values(array_filter(array_map('intval', $fallbackQueueIds), fn ($id) => $id > 0));
+            }
+
+            $packingCount = \App\Models\Order::whereIn('status_id', $queueStatusIds)
                 ->where(function ($query) {
                     $query->whereNull('packing_status')
                         ->orWhere('packing_status', 'pending');

@@ -3,10 +3,14 @@
 namespace App\Services;
 
 use App\Models\Order;
+use App\Models\Status;
 use Illuminate\Support\Facades\DB;
 
 class PackingService
 {
+    private ?array $statusIdsByCode = null;
+    private ?array $statusCodesById = null;
+
     /**
      * Перевіряє, чи може користувач примусово зняти пакувальника.
      */
@@ -108,16 +112,146 @@ class PackingService
         $this->closeSession($order, $releasedBy, $reason);
 
         $queueStatusId = $this->queueStatusId();
-        $order->update([
+        $updates = [
             'packer_id' => null,
             'packing_status' => 'pending',
             'status_id' => $queueStatusId,
-        ]);
+        ];
+
+        $statusCode = $this->statusCodeById($queueStatusId);
+        if ($statusCode) {
+            $updates['status'] = $statusCode;
+        }
+
+        $order->update($updates);
     }
 
-    private function queueStatusId(): int
+    /**
+     * ID статусів, які формують чергу пакування.
+     */
+    public function queueStatusIds(): array
     {
-        $queueStatusIds = config('packing.status_ids.queue', []);
-        return is_array($queueStatusIds) ? ($queueStatusIds[0] ?? 4) : $queueStatusIds;
+        return $this->resolveStatusIds('queue');
+    }
+
+    /**
+     * Головний ID статусу черги (для повернення замовлення назад у чергу).
+     */
+    public function queueStatusId(): int
+    {
+        $queueStatusIds = $this->queueStatusIds();
+
+        return (int) ($queueStatusIds[0] ?? 4);
+    }
+
+    /**
+     * ID статусу "Запаковано".
+     */
+    public function packedStatusId(): int
+    {
+        $ids = $this->resolveStatusIds('packed');
+
+        return (int) ($ids[0] ?? 12);
+    }
+
+    /**
+     * ID статусу для "Проблема / Нема товару".
+     */
+    public function problemStatusId(): ?int
+    {
+        $ids = $this->resolveStatusIds('problem');
+
+        return $ids[0] ?? null;
+    }
+
+    /**
+     * ID фінальних/відправлених статусів.
+     */
+    public function shippedStatusIds(): array
+    {
+        return $this->resolveStatusIds('shipped');
+    }
+
+    /**
+     * Код статусу за ID.
+     */
+    public function statusCodeById(?int $statusId): ?string
+    {
+        if (!$statusId) {
+            return null;
+        }
+
+        $this->loadStatusMaps();
+
+        return $this->statusCodesById[(int) $statusId] ?? null;
+    }
+
+    /**
+     * Резолвить статуси спочатку по code, і лише потім бере fallback ID з config.
+     */
+    private function resolveStatusIds(string $group): array
+    {
+        $this->loadStatusMaps();
+
+        $resolved = [];
+        $codes = config("packing.status_codes.{$group}", []);
+        if (!is_array($codes)) {
+            $codes = [$codes];
+        }
+
+        foreach ($codes as $code) {
+            $normalizedCode = trim((string) $code);
+            if ($normalizedCode === '') {
+                continue;
+            }
+
+            $statusId = $this->statusIdsByCode[$normalizedCode] ?? null;
+            if ($statusId) {
+                $resolved[] = (int) $statusId;
+            }
+        }
+
+        if (!empty($resolved)) {
+            return array_values(array_unique($resolved));
+        }
+
+        $fallbackIds = config("packing.status_ids.{$group}", []);
+        if (!is_array($fallbackIds)) {
+            $fallbackIds = [$fallbackIds];
+        }
+
+        foreach ($fallbackIds as $fallbackId) {
+            $normalizedId = (int) $fallbackId;
+            if ($normalizedId > 0) {
+                $resolved[] = $normalizedId;
+            }
+        }
+
+        return array_values(array_unique($resolved));
+    }
+
+    private function loadStatusMaps(): void
+    {
+        if ($this->statusIdsByCode !== null && $this->statusCodesById !== null) {
+            return;
+        }
+
+        $this->statusIdsByCode = [];
+        $this->statusCodesById = [];
+
+        $rows = Status::query()
+            ->where('type', 'order')
+            ->get(['id', 'code']);
+
+        foreach ($rows as $row) {
+            $statusId = (int) $row->id;
+            $statusCode = trim((string) $row->code);
+            if ($statusCode === '' || $statusId <= 0) {
+                continue;
+            }
+
+            $this->statusIdsByCode[$statusCode] = $statusId;
+            $this->statusCodesById[$statusId] = $statusCode;
+        }
     }
 }
