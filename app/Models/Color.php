@@ -16,4 +16,12 @@ class Color extends Model
     {
         return $this->hasMany(Product::class);
     }
+
+    public function productMedia(): HasMany
+    {
+        return $this->hasMany(ProductMedia::class, 'color_id')
+            ->orderByDesc('is_primary')
+            ->orderBy('sort_order')
+            ->orderBy('id');
+    }
 }

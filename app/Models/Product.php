@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Product extends Model
 {
@@ -65,9 +66,17 @@ class Product extends Model
         return $this->belongsTo(Color::class);
     }
 
-    public function variants()
+    public function variants(): HasMany
     {
         return $this->hasMany(ProductVariant::class);
+    }
+
+    public function media(): HasMany
+    {
+        return $this->hasMany(ProductMedia::class, 'product_id')
+            ->orderByDesc('is_primary')
+            ->orderBy('sort_order')
+            ->orderBy('id');
     }
 
     /**
