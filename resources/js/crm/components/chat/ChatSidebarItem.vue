@@ -30,7 +30,13 @@
 
       <div class="content-bottom">
         <div class="preview-stack">
-          <span v-if="originLabel" class="origin-chip" :class="originClass">{{ originLabel }}</span>
+          <div v-if="originLabel" class="origin-row">
+            <span class="origin-chip" :class="originClass">
+              <i v-if="originIcon" class="bi" :class="originIcon"></i>
+              {{ originLabel }}
+            </span>
+            <span class="origin-meta">{{ originMetaLine }}</span>
+          </div>
           <p class="preview-text">{{ previewText }}</p>
         </div>
         <div class="meta-right">
@@ -48,6 +54,12 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue';
+import {
+  resolveOriginBadgeClass,
+  resolveOriginContext,
+  resolveOriginMeta,
+  resolveOriginSummaryLine,
+} from '@/crm/utils/chatOrigin';
 
 const props = defineProps({
   item: { type: Object, required: true },
@@ -89,30 +101,24 @@ const stageClass = computed(() => (
   props.item.stage ? `stage-${props.item.stage}` : ''
 ));
 
-const originContext = computed(() => props.item.origin_context || null);
-const originLabel = computed(() => {
-  if (!originContext.value) {
-    return '';
-  }
-
-  return originContext.value.object_type === 'ad'
-    ? 'Реклама'
-    : originContext.value.object_type === 'story'
-      ? 'Сторіс'
-      : originContext.value.object_type === 'reel'
-        ? 'Reels'
-        : 'Пост';
-});
-const originClass = computed(() => (
-  originContext.value ? `origin-${originContext.value.object_type || 'comment'}` : ''
-));
+const originContext = computed(() => resolveOriginContext(props.item));
+const originMeta = computed(() => resolveOriginMeta(originContext.value));
+const originLabel = computed(() => originMeta.value.label || '');
+const originIcon = computed(() => originMeta.value.icon || '');
+const originClass = computed(() => resolveOriginBadgeClass(originContext.value, 'origin'));
+const originMetaLine = computed(() => resolveOriginSummaryLine(originContext.value, props.item.platform));
 
 const previewText = computed(() => {
-  if (originContext.value?.summary && (!props.item.last_message || props.item.last_message === originContext.value.summary)) {
-    return originContext.value.summary;
+  const lastMessage = String(props.item.last_message || '').trim();
+  if (lastMessage !== '') {
+    if (originMetaLine.value && lastMessage === originMetaLine.value) {
+      return 'Нове повідомлення';
+    }
+
+    return lastMessage;
   }
 
-  return props.item.last_message || 'Вкладення';
+  return originMetaLine.value || 'Вкладення';
 });
 
 const formattedTime = computed(() => {
@@ -273,6 +279,7 @@ watch(
   width: fit-content;
   display: inline-flex;
   align-items: center;
+  gap: 4px;
   justify-content: center;
   min-height: 18px;
   padding: 0 6px;
@@ -280,6 +287,27 @@ watch(
   font-size: 10px;
   font-weight: 700;
   line-height: 1;
+}
+
+.origin-chip i {
+  font-size: 10px;
+}
+
+.origin-row {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.origin-meta {
+  min-width: 0;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .origin-chip.origin-post {
@@ -300,6 +328,11 @@ watch(
 .origin-chip.origin-reel {
   background: #f5f3ff;
   color: #7c3aed;
+}
+
+.origin-chip.origin-comment {
+  background: #eef2ff;
+  color: #3730a3;
 }
 
 .meta-right {

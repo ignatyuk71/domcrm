@@ -164,25 +164,15 @@ class MetaService
 
     public function getContactProfile(string $externalUserId, string $platform = 'messenger'): array
     {
+        $settings = $this->getSettings();
         $participantSnapshot = $this->getParticipantProfileSnapshot($externalUserId, $platform);
-
-        $fields = $platform === 'instagram'
-            ? 'name,username,profile_pic,picture.type(large)'
-            : 'first_name,last_name,name,profile_pic,picture.type(large)';
-
-        $response = Http::withToken($this->getSettings()->access_token)
-            ->get($this->graphUrl("/{$externalUserId}"), ['fields' => $fields]);
-
-        if (!$response->ok() || $response->json() === []) {
-            return $participantSnapshot;
-        }
-
-        $profile = $this->normalizeProfilePayload($response->json());
-
-        return array_merge(
-            $participantSnapshot,
-            array_filter($profile, static fn ($value) => $value !== null && $value !== '')
+        $graphProfile = $this->fetchGraphProfile(
+            $externalUserId,
+            $platform,
+            (string) $settings->access_token
         );
+
+        return array_merge($participantSnapshot, $graphProfile);
     }
 
     /**
@@ -206,22 +196,14 @@ class MetaService
 
         foreach ($platforms as $platform => $externalUserId) {
             $profile = $this->getParticipantProfileSnapshot($externalUserId, $platform);
-            $fields = $platform === 'instagram'
-                ? 'name,username,profile_pic,picture.type(large)'
-                : 'first_name,last_name,name,profile_pic,picture.type(large)';
-
-            $response = Http::withToken($connection->access_token)
-                ->get($this->graphUrl("/{$externalUserId}"), ['fields' => $fields]);
-
-            if ($response->successful() && is_array($response->json())) {
-                $profile = array_merge(
-                    $profile,
-                    array_filter(
-                        $this->normalizeProfilePayload($response->json()),
-                        static fn ($value) => $value !== null && $value !== ''
-                    )
-                );
-            }
+            $profile = array_merge(
+                $profile,
+                $this->fetchGraphProfile(
+                    (string) $externalUserId,
+                    (string) $platform,
+                    (string) $connection->access_token
+                )
+            );
 
             if ($profile === []) {
                 continue;
@@ -501,6 +483,67 @@ class MetaService
         }
 
         return $profile;
+    }
+
+    private function fetchGraphProfile(string $externalUserId, string $platform, string $accessToken): array
+    {
+        if ($externalUserId === '' || $accessToken === '') {
+            return [];
+        }
+
+        $profile = [];
+        $response = Http::withToken($accessToken)
+            ->get($this->graphUrl("/{$externalUserId}"), ['fields' => $this->profileFields($platform)]);
+
+        if ($response->successful() && is_array($response->json())) {
+            $profile = $this->normalizeProfilePayload($response->json());
+        }
+
+        if (empty($profile['profile_pic'])) {
+            $profilePictureUrl = $this->fetchGraphProfilePictureUrl($externalUserId, $accessToken);
+            if ($profilePictureUrl !== null) {
+                $profile['profile_pic'] = $profilePictureUrl;
+            }
+        }
+
+        return array_filter($profile, static fn ($value) => $value !== null && $value !== '');
+    }
+
+    private function profileFields(string $platform): string
+    {
+        return $platform === 'instagram'
+            ? 'name,username,profile_pic,picture.type(large)'
+            : 'first_name,last_name,name,profile_pic,picture.type(large)';
+    }
+
+    private function fetchGraphProfilePictureUrl(string $externalUserId, string $accessToken): ?string
+    {
+        if ($externalUserId === '' || $accessToken === '') {
+            return null;
+        }
+
+        try {
+            $response = Http::withToken($accessToken)
+                ->get($this->graphUrl("/{$externalUserId}/picture"), [
+                    'type' => 'large',
+                    'redirect' => 'false',
+                ]);
+
+            if ($response->failed()) {
+                return null;
+            }
+
+            $url = data_get($response->json(), 'data.url');
+            if (is_string($url) && trim($url) !== '') {
+                return trim($url);
+            }
+
+            $location = trim((string) $response->header('Location'));
+
+            return $location !== '' ? $location : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private function extractProfilePictureUrl(array $payload): ?string

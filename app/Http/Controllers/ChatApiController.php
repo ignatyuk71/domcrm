@@ -555,6 +555,8 @@ class ChatApiController extends Controller
         if ($originContext && data_get($conversation->meta, 'origin_context') !== $originContext) {
             $this->chatService->syncConversationOrigin($conversation, $originContext);
         }
+        $originType = $originContext['object_type'] ?? ($originContext ? 'comment' : 'direct');
+        $originPlatform = $originContext['platform'] ?? $contact?->platform;
         $stageCode = $conversation->stage?->code;
         if ($stageCode === 'no_stage') {
             $stageCode = null;
@@ -577,6 +579,8 @@ class ChatApiController extends Controller
             'status' => $conversation->status,
             'stage' => $stageCode,
             'thread_kind' => $originContext ? ($originContext['kind'] ?? 'direct') : 'direct',
+            'origin_type' => $originType,
+            'origin_platform' => $originPlatform,
             'origin_context' => $originContext,
             'tags' => [],
             'source' => $contact?->platform,

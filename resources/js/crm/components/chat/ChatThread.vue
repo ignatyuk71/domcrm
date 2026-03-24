@@ -27,8 +27,12 @@
           </div>
 
           <div v-if="metaSubtitle" class="subtitle-row">
-            <span class="platform-pill">{{ platformLabel }}</span>
+            <span class="platform-pill">
+              <i class="bi" :class="platformIcon"></i>
+              {{ platformLabel }}
+            </span>
             <span v-if="originBadgeLabel" class="source-pill" :class="originBadgeClass">
+              <i v-if="originBadgeIcon" class="bi" :class="originBadgeIcon"></i>
               {{ originBadgeLabel }}
             </span>
             <span class="meta-subtitle-text">{{ metaSubtitle }}</span>
@@ -118,7 +122,7 @@
       >
         <div class="origin-head-row">
           <div class="origin-copy">
-            <span class="origin-label">{{ originContext.summary }}</span>
+            <span class="origin-label">{{ originSummaryLine }}</span>
             <strong>{{ originTitle }}</strong>
             <span v-if="originPreviewTitle" class="origin-preview-title">{{ originPreviewTitle }}</span>
             <span v-if="originPreviewDescription" class="origin-preview-description">{{ originPreviewDescription }}</span>
@@ -213,6 +217,14 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import ChatInput from './ChatInput.vue';
 import ChatMessage from './ChatMessage.vue';
+import {
+  resolveOriginBadgeClass,
+  resolveOriginContext,
+  resolveOriginMeta,
+  resolveOriginSummaryLine,
+  resolveOriginTitle as resolveOriginThreadTitle,
+  resolvePlatformMeta,
+} from '@/crm/utils/chatOrigin';
 
 const props = defineProps({
   activeChat: { type: Object, default: null },
@@ -258,34 +270,37 @@ const safeAvatarUrl = computed(() => {
 });
 
 const displayInitial = computed(() => (props.activeChat?.customer_name || '?').charAt(0).toUpperCase());
-const platformLabel = computed(() => (
-  props.activeChat?.platform === 'instagram' ? 'Instagram' : 'Messenger'
-));
+const platformMeta = computed(() => resolvePlatformMeta(props.activeChat?.platform));
+const platformLabel = computed(() => platformMeta.value.label);
+const platformIcon = computed(() => platformMeta.value.icon);
+const originContext = computed(() => resolveOriginContext(props.activeChat));
+const originMeta = computed(() => resolveOriginMeta(originContext.value));
+const originSummaryLine = computed(() => resolveOriginSummaryLine(originContext.value, props.activeChat?.platform));
 const metaSubtitle = computed(() => {
   const username = String(props.activeChat?.external_username || '').trim();
+  const sourceDisplay = String(originContext.value?.source_display || '').trim();
+  const parts = [];
+
   if (username) {
-    return `@${username.replace(/^@/, '')}`;
+    parts.push(`@${username.replace(/^@/, '')}`);
   }
 
-  return props.activeChat?.platform === 'instagram'
-    ? 'Instagram Direct'
-    : 'Messenger чат';
-});
-
-const originContext = computed(() => props.activeChat?.origin_context || null);
-const originTitle = computed(() => {
-  if (!originContext.value) {
-    return '';
+  if (sourceDisplay) {
+    parts.push(sourceDisplay);
+  } else if (!originContext.value) {
+    parts.push(props.activeChat?.platform === 'instagram'
+      ? 'Instagram Direct'
+      : 'Messenger чат');
+  } else if (!username) {
+    parts.push(originSummaryLine.value);
+  } else {
+    parts.push('Лід із коментарів');
   }
 
-  return originContext.value.object_type === 'ad'
-    ? 'Коментар до реклами'
-    : originContext.value.object_type === 'story'
-      ? 'Відповідь на сторіс'
-      : originContext.value.object_type === 'reel'
-        ? 'Коментар до reels'
-        : 'Коментар до поста';
+  return parts.join(' • ');
 });
+
+const originTitle = computed(() => resolveOriginThreadTitle(originContext.value));
 const originSourceTitle = computed(() => originContext.value?.source_title || 'Джерело');
 const originSourceDisplay = computed(() => originContext.value?.source_display || '');
 const originEmbedUrl = computed(() => originContext.value?.embed_url || '');
@@ -293,22 +308,9 @@ const originPreviewImage = computed(() => originContext.value?.preview_image_url
 const originPreviewTitle = computed(() => originContext.value?.preview_title || '');
 const originPreviewDescription = computed(() => originContext.value?.preview_description || '');
 const hasOriginPreview = computed(() => Boolean(originEmbedUrl.value || originPreviewImage.value));
-const originBadgeLabel = computed(() => {
-  if (!originContext.value) {
-    return '';
-  }
-
-  return originContext.value.object_type === 'ad'
-    ? 'Реклама'
-    : originContext.value.object_type === 'story'
-      ? 'Сторіс'
-      : originContext.value.object_type === 'reel'
-        ? 'Reels'
-        : 'Пост';
-});
-const originBadgeClass = computed(() => (
-  originContext.value ? `source-${originContext.value.object_type || 'comment'}` : ''
-));
+const originBadgeLabel = computed(() => originMeta.value.label || '');
+const originBadgeIcon = computed(() => originMeta.value.icon || '');
+const originBadgeClass = computed(() => resolveOriginBadgeClass(originContext.value, 'source'));
 
 const groupedMessages = computed(() => {
   const groups = [];
@@ -663,6 +665,7 @@ watch(
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   height: 24px;
   padding: 0 8px;
   border-radius: 999px;
@@ -672,15 +675,24 @@ watch(
   font-weight: 700;
 }
 
+.platform-pill i {
+  font-size: 11px;
+}
+
 .source-pill {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   height: 24px;
   padding: 0 8px;
   border-radius: 999px;
   font-size: 12px;
   font-weight: 700;
+}
+
+.source-pill i {
+  font-size: 11px;
 }
 
 .source-pill.source-post {
@@ -701,6 +713,11 @@ watch(
 .source-pill.source-reel {
   background: #f5f3ff;
   color: #7c3aed;
+}
+
+.source-pill.source-comment {
+  background: #eef2ff;
+  color: #3730a3;
 }
 
 .meta-subtitle-text {

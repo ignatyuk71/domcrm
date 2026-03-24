@@ -28,7 +28,10 @@
           <img :src="originPreviewImage" alt="Джерело коментаря" loading="lazy">
         </div>
         <div class="origin-message-copy">
-          <span class="origin-message-label">{{ originSummary }}</span>
+          <span class="origin-message-label">
+            <i v-if="originIcon" class="bi" :class="originIcon"></i>
+            {{ originSummary }}
+          </span>
           <strong>{{ originTitle }}</strong>
           <span v-if="originPreviewTitle" class="origin-message-title">{{ originPreviewTitle }}</span>
           <span v-if="originPreviewDescription" class="origin-message-description">{{ originPreviewDescription }}</span>
@@ -89,6 +92,12 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue';
+import {
+  resolveOriginContext,
+  resolveOriginMeta,
+  resolveOriginSummaryLine,
+  resolveOriginTitle as resolveOriginThreadTitle,
+} from '@/crm/utils/chatOrigin';
 
 const props = defineProps({
   message: { type: Object, required: true },
@@ -116,21 +125,11 @@ const hasAttachments = computed(() => {
   return Array.isArray(props.message.attachments) && props.message.attachments.length > 0;
 });
 
-const originContext = computed(() => props.message.origin_context || null);
-const originSummary = computed(() => originContext.value?.summary || 'Коментар');
-const originTitle = computed(() => {
-  if (!originContext.value) {
-    return '';
-  }
-
-  return originContext.value.object_type === 'ad'
-    ? 'Джерело: реклама'
-    : originContext.value.object_type === 'story'
-      ? 'Джерело: сторіс'
-      : originContext.value.object_type === 'reel'
-        ? 'Джерело: reels'
-        : 'Джерело: пост';
-});
+const originContext = computed(() => resolveOriginContext(props.message));
+const originMeta = computed(() => resolveOriginMeta(originContext.value));
+const originSummary = computed(() => resolveOriginSummaryLine(originContext.value, 'messenger') || 'Коментар');
+const originTitle = computed(() => `Джерело: ${resolveOriginThreadTitle(originContext.value)}`);
+const originIcon = computed(() => originMeta.value.icon || '');
 const originSourceTitle = computed(() => originContext.value?.source_title || 'Джерело');
 const originSourceDisplay = computed(() => originContext.value?.source_display || '');
 const originPreviewImage = computed(() => originContext.value?.preview_image_url || '');
@@ -291,12 +290,19 @@ const statusIcon = computed(() => {
 }
 
 .origin-message-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 11px;
   line-height: 1.2;
   font-weight: 700;
   color: #64748b;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.origin-message-label i {
+  font-size: 10px;
 }
 
 .origin-message-copy strong {

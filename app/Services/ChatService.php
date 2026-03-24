@@ -706,20 +706,50 @@ class ChatService
         }
 
         $normalized = mb_strtolower($text);
-        $looksLikeComment = str_contains($normalized, 'коментар')
-            || str_contains($normalized, 'comment')
-            || str_contains($normalized, 'комментар')
-            || str_contains($normalized, 'comment_id=');
-
-        if (!$looksLikeComment) {
-            return null;
-        }
-
         preg_match('~https?://[^\s)]+~u', $text, $matches);
         $url = isset($matches[0]) ? rtrim($matches[0], '.,;') : null;
         $urlLower = mb_strtolower((string) $url);
 
-        $resolvedPlatform = $platform;
+        $mentionsComment = str_contains($normalized, 'коментар')
+            || str_contains($normalized, 'comment')
+            || str_contains($normalized, 'комментар')
+            || str_contains($normalized, 'comment_id=');
+        $mentionsStory = str_contains($normalized, 'сторіс')
+            || str_contains($normalized, 'сториз')
+            || str_contains($normalized, 'story')
+            || str_contains($normalized, 'відповідь на сторіс');
+        $mentionsReel = str_contains($normalized, 'reel');
+        $mentionsAd = str_contains($normalized, 'реклам')
+            || str_contains($normalized, 'adsmanager')
+            || str_contains($normalized, 'ad_id=');
+        $mentionsPost = str_contains($normalized, 'публікаці')
+            || str_contains($normalized, 'допис')
+            || str_contains($normalized, 'post')
+            || str_contains($normalized, 'permalink.php');
+
+        $hasCommentPointer = str_contains($urlLower, 'comment_id=')
+            || str_contains($urlLower, 'reply_comment_id=');
+        $hasSocialSourceLink = str_contains($urlLower, 'instagram.com')
+            || str_contains($urlLower, 'facebook.com')
+            || str_contains($urlLower, 'fb.com')
+            || str_contains($urlLower, 'fb.watch');
+        $hasReplyPhrase = str_contains($normalized, 'ви відповідаєте')
+            || str_contains($normalized, 'you are replying')
+            || str_contains($normalized, 'вы отвечаете');
+
+        $looksLikeOriginThread = $mentionsComment
+            || $mentionsStory
+            || $mentionsReel
+            || $mentionsAd
+            || $mentionsPost
+            || $hasCommentPointer
+            || ($hasSocialSourceLink && $hasReplyPhrase);
+
+        if (!$looksLikeOriginThread) {
+            return null;
+        }
+
+        $resolvedPlatform = $platform === 'instagram' ? 'instagram' : 'messenger';
         if ($urlLower !== '') {
             if (str_contains($urlLower, 'instagram.com')) {
                 $resolvedPlatform = 'instagram';
@@ -730,30 +760,26 @@ class ChatService
 
         $objectType = 'comment';
         if (
-            str_contains($normalized, 'реклам')
+            $mentionsAd
             || str_contains($urlLower, 'ad_id=')
             || str_contains($urlLower, '/ads/')
             || str_contains($urlLower, 'adsmanager')
         ) {
             $objectType = 'ad';
         } elseif (
-            str_contains($normalized, 'сторіс')
-            || str_contains($normalized, 'сториз')
-            || str_contains($normalized, 'story')
+            $mentionsStory
             || str_contains($urlLower, '/stories/')
             || str_contains($urlLower, 'story_fbid=')
         ) {
             $objectType = 'story';
         } elseif (
-            str_contains($normalized, 'reel')
+            $mentionsReel
             || str_contains($urlLower, '/reel/')
             || str_contains($urlLower, '/reels/')
         ) {
             $objectType = 'reel';
         } elseif (
-            str_contains($normalized, 'публікаці')
-            || str_contains($normalized, 'допис')
-            || str_contains($normalized, 'post')
+            $mentionsPost
             || str_contains($urlLower, '/posts/')
             || str_contains($urlLower, 'pfbid')
             || str_contains($urlLower, 'permalink.php')
@@ -779,12 +805,21 @@ class ChatService
             default => 'коментаря',
         };
 
+        $summary = match ($objectType) {
+            'ad' => "Повідомлення з реклами {$platformLabel}",
+            'story' => "Відповідь на сторіс {$platformLabel}",
+            'reel' => "Коментар до Reels {$platformLabel}",
+            'post' => "Коментар до поста {$platformLabel}",
+            default => "Коментар {$platformLabel}",
+        };
+
         return [
             'kind' => 'comment',
             'platform' => $resolvedPlatform,
             'object_type' => $objectType,
             'object_label' => $objectLabel,
-            'summary' => "Коментар до {$objectLabel} {$platformLabel}",
+            'summary' => $summary,
+            'entry_point' => $objectType,
             'url' => $url,
             'embed_url' => $this->buildOriginEmbedUrl($url, $objectType, $resolvedPlatform),
             'source_title' => match ($objectType) {

@@ -11,7 +11,8 @@
           @click="platformFilter = tab.value"
         >
           {{ tab.label }}
-          <span v-if="getPlatformCount(tab.value) > 0" class="tab-count">{{ getPlatformCount(tab.value) }}</span>
+          <span v-if="getPlatformTotal(tab.value) > 0" class="tab-count">{{ getPlatformTotal(tab.value) }}</span>
+          <span v-if="getPlatformUnread(tab.value) > 0" class="tab-unread-dot"></span>
         </button>
       </div>
     </template>
@@ -78,6 +79,7 @@ import ChatSidebar from '@/crm/components/chat/ChatSidebar.vue';
 import ChatThread from '@/crm/components/chat/ChatThread.vue';
 import ChatEmpty from '@/crm/components/chat/ChatEmptyState.vue';
 import ChatProfile from '@/crm/components/chat/ChatCustomerProfile.vue';
+import { matchConversationByTab } from '@/crm/utils/chatOrigin';
 
 const platformTabs = [
   { value: 'all', label: 'Усі повідомлення' },
@@ -144,33 +146,33 @@ const filteredConversations = computed(() => {
   });
 });
 
-function getPlatformCount(platform) {
-  return conversations.value.filter((chat) => (
-    matchConversationByTab(chat, platform) && Number(chat.unread_count || 0) > 0
-  )).length;
+const tabStats = computed(() => {
+  const stats = Object.fromEntries(
+    platformTabs.map((tab) => [tab.value, { total: 0, unread: 0 }])
+  );
+
+  conversations.value.forEach((chat) => {
+    platformTabs.forEach((tab) => {
+      if (!matchConversationByTab(chat, tab.value)) {
+        return;
+      }
+
+      stats[tab.value].total += 1;
+      if (Number(chat.unread_count || 0) > 0) {
+        stats[tab.value].unread += 1;
+      }
+    });
+  });
+
+  return stats;
+});
+
+function getPlatformTotal(platform) {
+  return tabStats.value[platform]?.total || 0;
 }
 
-function matchConversationByTab(chat, tab) {
-  const originPlatform = chat?.origin_context?.platform;
-  const isCommentThread = chat?.thread_kind === 'comment';
-
-  if (tab === 'all') {
-    return true;
-  }
-
-  if (tab === 'messenger' || tab === 'instagram') {
-    return chat.platform === tab;
-  }
-
-  if (tab === 'facebook_comments') {
-    return isCommentThread && originPlatform === 'messenger';
-  }
-
-  if (tab === 'instagram_comments') {
-    return isCommentThread && originPlatform === 'instagram';
-  }
-
-  return true;
+function getPlatformUnread(platform) {
+  return tabStats.value[platform]?.unread || 0;
 }
 
 function handleSelectChat(chat) {
@@ -343,10 +345,17 @@ onUnmounted(stopPolling);
   height: 20px;
   padding: 0 6px;
   border-radius: 999px;
-  background: #b42318;
-  color: #fff;
+  background: #e5e7eb;
+  color: #1f2937;
   font-size: 11px;
   font-weight: 700;
+}
+
+.tab-unread-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #b42318;
 }
 
 @media (max-width: 768px) {

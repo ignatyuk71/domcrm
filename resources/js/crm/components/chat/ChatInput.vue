@@ -107,7 +107,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import ChatTemplates from './ChatTemplates.vue';
 import ChatGallery from './ChatGallery.vue';
 
@@ -173,10 +173,8 @@ function removeFile(index) {
 function handleTemplateSelect(content) {
   text.value = (text.value ? text.value + ' ' : '') + content;
   showTemplates.value = false;
-  if (textareaRef.value) {
-    textareaRef.value.focus();
-    setTimeout(autoResize, 0);
-  }
+  focusTextarea();
+  setTimeout(autoResize, 0);
 }
 
 function handleGallerySelect(files) {
@@ -191,10 +189,8 @@ function handleGallerySelect(files) {
     });
   });
   showGallery.value = false;
-  if (textareaRef.value) {
-    textareaRef.value.focus();
-    setTimeout(autoResize, 0);
-  }
+  focusTextarea();
+  setTimeout(autoResize, 0);
 }
 
 function autoResize() {
@@ -203,6 +199,19 @@ function autoResize() {
     el.style.height = 'auto';
     el.style.height = Math.min(el.scrollHeight, 150) + 'px';
   }
+}
+
+function focusTextarea() {
+  nextTick(() => {
+    const el = textareaRef.value;
+    if (!el || props.disabled) {
+      return;
+    }
+
+    el.focus();
+    const position = el.value.length;
+    el.setSelectionRange(position, position);
+  });
 }
 
 function sendLike() {
@@ -246,9 +255,23 @@ function handleSend() {
   
   if (textareaRef.value) {
     textareaRef.value.style.height = 'auto';
-    textareaRef.value.focus();
   }
+
+  focusTextarea();
 }
+
+watch(
+  () => props.disabled,
+  (isDisabled, wasDisabled) => {
+    if (wasDisabled && !isDisabled) {
+      focusTextarea();
+    }
+  }
+);
+
+onMounted(() => {
+  focusTextarea();
+});
 </script>
 
 <style scoped>
