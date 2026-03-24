@@ -48,7 +48,9 @@ class ChatAiOrchestratorService
             return;
         }
 
-        if ($conversation->assigned_user_id) {
+        // Не блокуємо AI тільки через assigned_user_id.
+        // Блокуємо лише коли оператор щойно відповідав вручну.
+        if ($this->hasRecentOperatorActivity($conversation->id)) {
             return;
         }
 
@@ -1030,5 +1032,15 @@ class ChatAiOrchestratorService
         }
 
         return $sum;
+    }
+
+    private function hasRecentOperatorActivity(int $conversationId): bool
+    {
+        return ChatMessage::query()
+            ->where('conversation_id', $conversationId)
+            ->where('direction', 'outbound')
+            ->where('source', 'operator')
+            ->where('created_at', '>=', now()->subMinutes(15))
+            ->exists();
     }
 }
