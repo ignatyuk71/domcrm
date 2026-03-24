@@ -96,9 +96,11 @@ class DeliveryStatusMapper
      */
     public static function getCrmStatusCode(int $npCode): ?string
     {
-        // 1. Створено ТТН -> Запаковано (ID 4)
+        // 1. Створено ТТН -> НЕ змінюємо CRM-статус.
+        // Логіка пакування керується менеджером/пакувальником вручну.
+        // Інакше cron може перезаписати "Упакування" -> "Запаковано" завчасно.
         if ($npCode === self::NP_REGISTERED) {
-            return 'packed';
+            return null;
         }
 
         // 2. У дорозі -> Відправлено (ID 5)
