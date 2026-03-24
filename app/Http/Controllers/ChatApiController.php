@@ -285,6 +285,14 @@ class ChatApiController extends Controller
             'multi_item_pending' => false,
             'multi_item_review_completed' => false,
             'multi_item_just_confirmed' => false,
+            'conversation_stage' => 'consultation',
+            'conversation_stage_source' => null,
+            'conversation_stage_reason' => null,
+            'conversation_stage_confidence' => null,
+            'consultation_context' => [
+                'summary' => null,
+                'fields' => [],
+            ],
             'slot_definitions' => [],
             'slot_values' => [],
             'order_draft' => [
@@ -889,7 +897,20 @@ class ChatApiController extends Controller
             ->filter(fn ($key) => is_string($key) && trim($key) !== '')
             ->values()
             ->all();
-        $normalizedOrderDraft = $this->normalizeConversationAiOrderDraft($aiMeta['order_draft'] ?? null, $slotValues);
+        $conversationStage = is_string($aiMeta['conversation_stage'] ?? null)
+            ? trim((string) $aiMeta['conversation_stage'])
+            : 'consultation';
+        if (!in_array($conversationStage, ['consultation', 'ordering', 'checkout'], true)) {
+            $conversationStage = 'consultation';
+        }
+
+        $normalizedOrderDraft = $this->normalizeConversationAiOrderDraft($aiMeta['order_draft'] ?? null);
+        $consultationState = $this->buildConversationAiConsultationState(
+            $aiMeta['consultation_context'] ?? null,
+            $slotValues,
+            $definitions,
+            $aiMeta['last_topic_name'] ?? null
+        );
         $checkoutState = $this->buildConversationAiCheckoutState($definitions, $slotValues, $missingSlots);
         $nextSlot = is_string($aiMeta['next_slot'] ?? null)
             ? trim((string) $aiMeta['next_slot'])
@@ -915,6 +936,9 @@ class ChatApiController extends Controller
             'status_code' => isset($aiMeta['status_code']) && trim((string) $aiMeta['status_code']) !== ''
                 ? trim((string) $aiMeta['status_code'])
                 : null,
+            'conversation_stage' => $conversationStage,
+            'consultation_summary_text' => $consultationState['summary'],
+            'consultation_fields' => $consultationState['fields'],
             'last_error' => isset($aiMeta['last_error']) && trim((string) $aiMeta['last_error']) !== ''
                 ? trim((string) $aiMeta['last_error'])
                 : null,
@@ -1079,7 +1103,7 @@ class ChatApiController extends Controller
      *     summary: ?string
      * }
      */
-    private function normalizeConversationAiOrderDraft(mixed $draft, array $slotValues): array
+    private function normalizeConversationAiOrderDraft(mixed $draft): array
     {
         $items = [];
         $summary = null;
@@ -1101,22 +1125,85 @@ class ChatApiController extends Controller
             }
         }
 
-        if ($items === []) {
-            $fallbackItem = $this->buildConversationAiOrderItem([
-                'model' => $slotValues['model'] ?? null,
-                'color' => $slotValues['color'] ?? null,
-                'size' => $slotValues['size'] ?? null,
-                'quantity' => $slotValues['quantity'] ?? null,
-            ], 1);
-
-            if ($fallbackItem !== null) {
-                $items[] = $fallbackItem;
-            }
-        }
-
         return [
             'items' => $items,
             'summary' => $summary,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $slotValues
+     * @param  array<string, array<string, mixed>>  $definitions
+     * @return array{
+     *     summary: ?string,
+     *     fields: array<int, array<string, string>>
+     * }
+     */
+    private function buildConversationAiConsultationState(
+        mixed $context,
+        array $slotValues,
+        array $definitions,
+        mixed $lastTopicName
+    ): array {
+        $fields = [];
+        $summary = null;
+
+        if (is_array($context)) {
+            $summary = isset($context['summary']) && trim((string) $context['summary']) !== ''
+                ? trim((string) $context['summary'])
+                : null;
+
+            foreach ((array) ($context['fields'] ?? []) as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+
+                $key = trim((string) ($row['key'] ?? ''));
+                $label = trim((string) ($row['label'] ?? ''));
+                $value = trim((string) ($row['value'] ?? ''));
+
+                if ($value === '') {
+                    continue;
+                }
+
+                $fields[] = [
+                    'key' => $key !== '' ? $key : 'field-' . (count($fields) + 1),
+                    'label' => $label !== '' ? $label : ($definitions[$key]['label'] ?? $this->humanizeAiSlotKey($key !== '' ? $key : '')),
+                    'value' => $value,
+                ];
+            }
+        }
+
+        if ($fields === []) {
+            $model = trim((string) ($slotValues['model'] ?? ''));
+            if ($model === '' && is_string($lastTopicName) && trim($lastTopicName) !== '') {
+                $model = trim($lastTopicName);
+            }
+
+            foreach ([
+                'model' => $model,
+                'color' => trim((string) ($slotValues['color'] ?? '')),
+                'size' => trim((string) ($slotValues['size'] ?? '')),
+            ] as $key => $value) {
+                if ($value === '') {
+                    continue;
+                }
+
+                $fields[] = [
+                    'key' => $key,
+                    'label' => (string) ($definitions[$key]['label'] ?? $this->humanizeAiSlotKey($key)),
+                    'value' => $value,
+                ];
+            }
+        }
+
+        if ($summary === null && $fields !== []) {
+            $summary = implode(', ', array_map(fn (array $field) => $field['value'], $fields));
+        }
+
+        return [
+            'summary' => $summary,
+            'fields' => $fields,
         ];
     }
 

@@ -88,15 +88,31 @@ class ChatAiAssistantService
             $topicScore,
             $requestedSize
         );
+        $previousDraft = $this->loadStoredOrderDraft($conversation);
+        $conversationStage = $this->resolveConversationStage(
+            $conversation,
+            $message,
+            $topic,
+            $products,
+            $slotState,
+            $previousDraft,
+            $settings
+        );
+        $slotState['conversation_stage'] = $conversationStage['stage'];
+        $slotState['conversation_stage_source'] = $conversationStage['source'] ?? null;
+        $slotState['conversation_stage_reason'] = $conversationStage['reason'] ?? null;
+        $slotState['conversation_stage_confidence'] = $conversationStage['confidence'] ?? null;
         $orderDraft = $this->buildConversationOrderDraft(
             $conversation,
             $message,
             $topic,
             $products,
             $slotState,
-            $settings
+            $settings,
+            $previousDraft
         );
         $slotState = $this->applyOrderDraftContextToSlotState($slotState, $orderDraft);
+        $slotState['consultation_context'] = $this->buildConsultationContext($topic, $slotState);
 
         $awaitingPhotoConfirmation = $this->isAwaitingPhotoConfirmation($conversation);
         $explicitPhotoRequest = $this->isPhotoRequest((string) ($message->text ?? ''));
@@ -261,6 +277,11 @@ class ChatAiAssistantService
             'multi_item_pending' => (bool) ($slotState['multi_item_pending'] ?? false),
             'multi_item_review_completed' => (bool) ($slotState['multi_item_review_completed'] ?? false),
             'multi_item_just_confirmed' => (bool) ($slotState['multi_item_just_confirmed'] ?? false),
+            'conversation_stage' => $slotState['conversation_stage'] ?? 'consultation',
+            'conversation_stage_source' => $slotState['conversation_stage_source'] ?? null,
+            'conversation_stage_reason' => $slotState['conversation_stage_reason'] ?? null,
+            'conversation_stage_confidence' => $slotState['conversation_stage_confidence'] ?? null,
+            'consultation_context' => $slotState['consultation_context'] ?? null,
             'slot_definitions' => $slotState['definitions'],
             'slot_values' => $slotState['slots'],
             'missing_slots' => $slotState['missing'],
@@ -317,6 +338,11 @@ class ChatAiAssistantService
             'multi_item_pending' => (bool) ($slotState['multi_item_pending'] ?? false),
             'multi_item_review_completed' => (bool) ($slotState['multi_item_review_completed'] ?? false),
             'multi_item_just_confirmed' => (bool) ($slotState['multi_item_just_confirmed'] ?? false),
+            'conversation_stage' => $slotState['conversation_stage'] ?? 'consultation',
+            'conversation_stage_source' => $slotState['conversation_stage_source'] ?? null,
+            'conversation_stage_reason' => $slotState['conversation_stage_reason'] ?? null,
+            'conversation_stage_confidence' => $slotState['conversation_stage_confidence'] ?? null,
+            'consultation_context' => $slotState['consultation_context'] ?? null,
             'slot_updates' => $slotState['updated'],
             'slot_values' => $slotState['slots'],
             'missing_slots' => $slotState['missing'],
@@ -1833,6 +1859,11 @@ class ChatAiAssistantService
         $guidance = [];
         $text = (string) ($message->text ?? '');
         $nextSlot = is_string($slotState['next'] ?? null) ? $slotState['next'] : null;
+        $conversationStage = (string) ($slotState['conversation_stage'] ?? 'consultation');
+
+        if ($conversationStage === 'consultation') {
+            $guidance[] = 'Клієнт зараз у режимі консультації. Відповідай на питання про модель, фото, кольори, матеріал, хутро чи підошву і не переходь до оформлення, поки клієнт явно не підтвердив замовлення.';
+        }
 
         if ($nextSlot === 'model') {
             $availableModels = $this->buildAvailableTopicList($topics);
@@ -1904,15 +1935,15 @@ class ChatAiAssistantService
             $guidance[] = 'Коли уточнюєш кількість, пиши м’яко: "Скільки пар бажаєте замовити?" Не використовуй формулювання "кладемо".';
         }
 
-        if ($this->shouldAskForOrderDetailsBundle($slotState)) {
+        if ($conversationStage !== 'consultation' && $this->shouldAskForOrderDetailsBundle($slotState)) {
             $guidance[] = $this->buildOrderDetailsBundleGuidance($slotState);
-        } elseif ($nextSlot === 'city') {
+        } elseif ($conversationStage !== 'consultation' && $nextSlot === 'city') {
             $guidance[] = 'Коли уточнюєш населений пункт, пиши: "Підкажіть, будь ласка, місто або населений пункт для доставки."';
-        } elseif ($nextSlot === 'delivery') {
+        } elseif ($conversationStage !== 'consultation' && $nextSlot === 'delivery') {
             $guidance[] = 'Коли уточнюєш доставку, пиши: "Підкажіть, будь ласка, що вам зручніше: відділення, поштомат чи кур’єр?" Якщо потрібно, одразу попроси номер відділення, поштомата або адресу.';
         }
 
-        if (in_array($nextSlot, ['city', 'delivery', 'customer_name', 'phone', 'payment'], true)) {
+        if ($conversationStage !== 'consultation' && in_array($nextSlot, ['city', 'delivery', 'customer_name', 'phone', 'payment'], true)) {
             $guidance[] = 'На етапі оформлення не повторюй один і той самий запит по 2-3 рази. Якщо клієнт уже надіслав дані одним повідомленням, використай усе, що вдалося розпізнати, і попроси тільки відсутнє.';
         }
 
@@ -1928,6 +1959,10 @@ class ChatAiAssistantService
      */
     private function shouldAskForOrderDetailsBundle(array $slotState): bool
     {
+        if ((string) ($slotState['conversation_stage'] ?? 'consultation') !== 'checkout') {
+            return false;
+        }
+
         $slots = is_array($slotState['slots'] ?? null) ? $slotState['slots'] : [];
         $missing = is_array($slotState['missing'] ?? null) ? $slotState['missing'] : [];
         $definitions = is_array($slotState['definitions'] ?? null) ? $slotState['definitions'] : [];
@@ -2113,10 +2148,22 @@ class ChatAiAssistantService
         ?ChatAiTopic $topic,
         Collection $products,
         array $slotState,
-        array $settings
+        array $settings,
+        array $previousDraft
     ): array {
-        $previousDraft = $this->loadStoredOrderDraft($conversation);
+        $conversationStage = (string) ($slotState['conversation_stage'] ?? 'consultation');
         $fallbackDraft = $this->buildFallbackOrderDraft($slotState, $previousDraft);
+
+        if ($conversationStage === 'consultation') {
+            return $this->shouldPreserveConfirmedOrderDraft($slotState, $previousDraft)
+                ? $previousDraft
+                : [
+                    'items' => [],
+                    'summary' => '',
+                    'source' => 'consultation',
+                    'confidence' => null,
+                ];
+        }
 
         if ($this->shouldPreserveConfirmedOrderDraft($slotState, $previousDraft)) {
             return $previousDraft;
@@ -2560,12 +2607,282 @@ class ChatAiAssistantService
             return null;
         }
 
+        // Не вважаємо консультаційний інтерес повноцінною позицією замовлення без кількості.
+        if ($quantity === null) {
+            return null;
+        }
+
         return [
             'id' => 'item-1',
             'model' => $model,
             'color' => $color,
             'size' => $size,
             'quantity' => $quantity,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $slotState
+     * @param  array{
+     *     items: array<int, array<string, mixed>>,
+     *     summary: string,
+     *     source: string,
+     *     confidence: ?float
+     * }  $previousDraft
+     * @return array{
+     *     stage: string,
+     *     source: string,
+     *     reason: ?string,
+     *     confidence: ?float
+     * }
+     */
+    private function resolveConversationStage(
+        ChatConversation $conversation,
+        ChatMessage $message,
+        ?ChatAiTopic $topic,
+        Collection $products,
+        array $slotState,
+        array $previousDraft,
+        array $settings
+    ): array {
+        $text = trim((string) ($message->text ?? ''));
+        $orderIntent = (string) ($slotState['order_intent'] ?? 'none');
+        $nextSlot = is_string($slotState['next'] ?? null) ? $slotState['next'] : null;
+        $checkoutKeys = ['customer_name', 'phone', 'city', 'delivery', 'payment'];
+        $hasDraftItems = !empty($previousDraft['items']);
+
+        if ($this->isVisualBrowsingRequest($text) || $this->isProductInfoConsultationText($text)) {
+            return [
+                'stage' => 'consultation',
+                'source' => 'heuristic',
+                'reason' => 'Клієнт перебуває в режимі консультації або перегляду товару.',
+                'confidence' => null,
+            ];
+        }
+
+        if (in_array($orderIntent, ['multi_item_add', 'multi_item_edit', 'multi_item_confirm', 'single_item_quantity'], true)) {
+            return [
+                'stage' => 'ordering',
+                'source' => 'order_intent',
+                'reason' => 'AI визначив, що клієнт формує або підтверджує товарну частину замовлення.',
+                'confidence' => null,
+            ];
+        }
+
+        if (
+            $hasDraftItems
+            && (
+                in_array($nextSlot, $checkoutKeys, true)
+                || $this->hasCheckoutFieldContent($text)
+                || (bool) ($slotState['single_item_just_confirmed'] ?? false)
+                || (bool) ($slotState['multi_item_just_confirmed'] ?? false)
+            )
+        ) {
+            return [
+                'stage' => 'checkout',
+                'source' => 'heuristic',
+                'reason' => 'Позиції вже зібрані, клієнт перейшов до оформлення.',
+                'confidence' => null,
+            ];
+        }
+
+        if (
+            $hasDraftItems
+            || $this->hasExplicitOrderStartCue($text)
+            || (bool) ($slotState['single_item_review_pending'] ?? false)
+            || (bool) ($slotState['single_item_review_completed'] ?? false)
+            || (bool) ($slotState['multi_item_pending'] ?? false)
+            || (bool) ($slotState['multi_item_review_completed'] ?? false)
+        ) {
+            return [
+                'stage' => 'ordering',
+                'source' => 'heuristic',
+                'reason' => 'У діалозі вже формується замовлення, але оформлення ще не завершено.',
+                'confidence' => null,
+            ];
+        }
+
+        $classified = $this->classifyConversationStageWithAi(
+            $conversation,
+            $message,
+            $topic,
+            $products,
+            $slotState,
+            $previousDraft,
+            $settings
+        );
+
+        if ($classified !== null) {
+            return $classified;
+        }
+
+        return [
+            'stage' => 'consultation',
+            'source' => 'fallback',
+            'reason' => 'За замовчуванням діалог лишається консультаційним, поки клієнт явно не перейде до замовлення.',
+            'confidence' => null,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $slotState
+     * @param  array{
+     *     items: array<int, array<string, mixed>>,
+     *     summary: string,
+     *     source: string,
+     *     confidence: ?float
+     * }  $previousDraft
+     * @return array{
+     *     stage: string,
+     *     source: string,
+     *     reason: ?string,
+     *     confidence: ?float
+     * }|null
+     */
+    private function classifyConversationStageWithAi(
+        ChatConversation $conversation,
+        ChatMessage $message,
+        ?ChatAiTopic $topic,
+        Collection $products,
+        array $slotState,
+        array $previousDraft,
+        array $settings
+    ): ?array {
+        $text = trim((string) ($message->text ?? ''));
+        if ($text === '') {
+            return null;
+        }
+
+        $slots = is_array($slotState['slots'] ?? null) ? $slotState['slots'] : [];
+        $currentModel = $this->normalizeSlotValue('model', $slots['model'] ?? ($topic?->name ?? null));
+        $currentColor = $this->normalizeSlotValue('color', $slots['color'] ?? null);
+        $currentSize = $this->normalizeSlotValue('size', $slots['size'] ?? null);
+        $currentQuantity = $this->normalizeSlotValue('quantity', $slots['quantity'] ?? null);
+        $memory = $this->buildConversationMemoryBlock($conversation);
+        $history = $this->buildHistoryForPrompt($conversation->id, 8);
+        $draftJson = json_encode($previousDraft['items'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $productHints = $products
+            ->map(function (array $product) {
+                $parts = array_filter([
+                    trim((string) ($product['title'] ?? '')),
+                    trim((string) ($product['color_name'] ?? '')),
+                ]);
+
+                return $parts !== [] ? '- ' . implode(' | ', $parts) : null;
+            })
+            ->filter()
+            ->take(8)
+            ->implode("\n");
+
+        $input = implode("\n\n", array_filter([
+            'Останнє повідомлення клієнта: ' . $text,
+            $memory,
+            'Поточний стан діалогу:'
+                . ($currentModel !== null ? "\n- модель: {$currentModel}" : "\n- модель: не визначена")
+                . ($currentColor !== null ? "\n- колір: {$currentColor}" : '')
+                . ($currentSize !== null ? "\n- розмір: {$currentSize}" : '')
+                . ($currentQuantity !== null ? "\n- кількість: {$currentQuantity}" : '')
+                . "\n- order_intent: " . ((string) ($slotState['order_intent'] ?? 'none'))
+                . "\n- next_slot: " . ((string) ($slotState['next'] ?? 'none')),
+            $draftJson !== false ? "Поточні позиції замовлення JSON: {$draftJson}" : null,
+            $productHints !== '' ? "Підказки по моделі:\n{$productHints}" : null,
+            "Останні повідомлення діалогу:\n{$history}",
+        ]));
+
+        $schema = [
+            'type' => 'object',
+            'additionalProperties' => false,
+            'properties' => [
+                'stage' => [
+                    'type' => 'string',
+                    'enum' => ['consultation', 'ordering', 'checkout'],
+                ],
+                'confidence' => [
+                    'type' => 'number',
+                    'minimum' => 0,
+                    'maximum' => 1,
+                ],
+                'reason' => [
+                    'type' => 'string',
+                ],
+            ],
+            'required' => ['stage', 'confidence', 'reason'],
+        ];
+
+        $instructions = implode("\n", [
+            'Ти визначаєш поточну стадію діалогу в продажі.',
+            'consultation — клієнт дивиться модель, фото, кольори, питає про матеріал, підошву, хутро, наявність, варіанти або просто консультується.',
+            'ordering — клієнт вже формує склад замовлення: вибирає пари, кольори, розміри, кількість, але ще не заповнює доставку й оплату.',
+            'checkout — товарна частина вже зібрана, і клієнт дає або підтверджує місто, відділення, телефон, ПІБ чи спосіб оплати.',
+            'Якщо клієнт ставить товарне питання або просить фото, це consultation, навіть якщо модель уже відома.',
+            'Якщо клієнт складає або підтверджує список пар, це ordering.',
+            'Якщо клієнт пише дані для доставки чи оплати, це checkout.',
+            'Поверни тільки stage, confidence і коротку reason.',
+        ]);
+
+        $response = $this->openAi->createStructuredResponse(
+            $instructions,
+            $input,
+            $schema,
+            'chat_conversation_stage_router',
+            (string) ($settings['model'] ?? '')
+        );
+
+        $stage = trim((string) ($response['stage'] ?? ''));
+        $confidence = isset($response['confidence']) ? (float) $response['confidence'] : 0.0;
+        $reason = trim((string) ($response['reason'] ?? ''));
+
+        if (!in_array($stage, ['consultation', 'ordering', 'checkout'], true) || $confidence < 0.6) {
+            return null;
+        }
+
+        return [
+            'stage' => $stage,
+            'source' => 'ai_classifier',
+            'reason' => $reason !== '' ? $reason : 'Стадію діалогу визначено AI-класифікатором.',
+            'confidence' => round($confidence, 3),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $slotState
+     * @return array{
+     *     summary: ?string,
+     *     fields: array<int, array<string, string>>
+     * }
+     */
+    private function buildConsultationContext(?ChatAiTopic $topic, array $slotState): array
+    {
+        $slots = is_array($slotState['slots'] ?? null) ? $slotState['slots'] : [];
+        $model = $this->normalizeSlotValue('model', $slots['model'] ?? ($topic?->name ?? null));
+        $color = $this->normalizeSlotValue('color', $slots['color'] ?? null);
+        $size = $this->normalizeSlotValue('size', $slots['size'] ?? null);
+        $fields = [];
+
+        foreach ([
+            'model' => ['label' => 'Модель', 'value' => $model],
+            'color' => ['label' => 'Колір', 'value' => $color],
+            'size' => ['label' => 'Розмір', 'value' => $size],
+        ] as $key => $row) {
+            $value = is_string($row['value']) ? trim($row['value']) : '';
+            if ($value === '') {
+                continue;
+            }
+
+            $fields[] = [
+                'key' => $key,
+                'label' => $row['label'],
+                'value' => $value,
+            ];
+        }
+
+        $summary = $fields !== []
+            ? implode(', ', array_map(fn (array $field) => $field['value'], $fields))
+            : null;
+
+        return [
+            'summary' => $summary,
+            'fields' => $fields,
         ];
     }
 
@@ -4814,6 +5131,54 @@ class ChatAiAssistantService
         }
 
         return 'AI відповів клієнту у вільному режимі без визначеної теми.';
+    }
+
+    private function isProductInfoConsultationText(string $text): bool
+    {
+        $normalized = $this->normalizeText($text);
+        if ($normalized === '') {
+            return false;
+        }
+
+        return (bool) preg_match(
+            '/(підошв|матеріал|матерiал|матеріял|натураль|еко-хутр|екохутр|хутр|склад|з чого|яка тканина|який ворс|мяк|мʼяк|мяг|для вулиц|домашн|на двір|на двiр|показати ще|які кольори|якi кольори|яки кольори|які є ще|якi є ще|яки є ще|можете показати|можна показати|можна побачити|можна глянути|хочу глянути)/u',
+            $normalized
+        );
+    }
+
+    private function hasExplicitOrderStartCue(string $text): bool
+    {
+        $normalized = $this->normalizeText($text);
+        if ($normalized === '') {
+            return false;
+        }
+
+        return (bool) preg_match(
+            '/(хочу замов|хочу купит|хочу придбат|беру|давайте|оформляєм|оформлюєм|оформит|замовляєм|замовляю|мені одну|мені дві|мені двi|потрібно замов|потрібно оформ|замовлення)/u',
+            $normalized
+        );
+    }
+
+    private function hasCheckoutFieldContent(string $text): bool
+    {
+        $normalized = $this->normalizeText($text);
+        if ($normalized === '') {
+            return false;
+        }
+
+        if ($this->extractPhoneValue($text) !== null || $this->extractPaymentValue($text) !== null) {
+            return true;
+        }
+
+        $bundled = $this->extractBundledDeliveryDetails($text, null);
+        if ($bundled['city'] !== null || $bundled['delivery'] !== null) {
+            return true;
+        }
+
+        return (bool) preg_match(
+            '/(відділення|відділ|поштомат|кур[\'’`ʼ]?єр|адрес|місто|населен|село|смт|нова пошта|отримувач|телефон|післяплат|на карт|оплата)/u',
+            $normalized
+        );
     }
 
     private function isPhotoRequest(string $text): bool

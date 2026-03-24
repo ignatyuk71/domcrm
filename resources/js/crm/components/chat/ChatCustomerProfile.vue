@@ -300,7 +300,30 @@
                       <span v-if="aiOrderReady" class="ai-ready-badge">Усі дані зібрано</span>
                     </div>
 
-                    <div class="ai-panel-section">
+                    <div v-if="aiConsultationFields.length > 0 || aiConsultationSummaryText" class="ai-panel-section">
+                      <div class="ai-panel-section-head">
+                        <span class="ai-collected-title">Поточний інтерес</span>
+                        <span v-if="aiConversationStage === 'consultation'" class="ai-order-item-badge is-pending">
+                          Консультація
+                        </span>
+                      </div>
+
+                      <div class="ai-collected-list">
+                        <ul v-if="aiConsultationFields.length > 0" class="ai-collected-items">
+                          <li v-for="row in aiConsultationFields" :key="row.key">
+                            <strong>{{ row.label }}:</strong> {{ row.value }}
+                          </li>
+                        </ul>
+                        <span v-else class="ai-qualification-collected">Клієнт ще не вибрав конкретну модель.</span>
+                      </div>
+
+                      <div v-if="aiConsultationSummaryText" class="ai-order-summary-block">
+                        <span class="ai-collected-title">Короткий підсумок</span>
+                        <pre class="ai-order-summary-text">{{ aiConsultationSummaryText }}</pre>
+                      </div>
+                    </div>
+
+                    <div v-if="aiOrderItems.length > 0 || aiOrderSummaryText" class="ai-panel-section">
                       <div class="ai-panel-section-head">
                         <span class="ai-collected-title">Позиції замовлення</span>
                         <span class="ai-panel-count">{{ aiOrderItems.length }}</span>
@@ -322,15 +345,13 @@
                           </div>
                         </div>
                       </div>
-                      <span v-else class="ai-qualification-collected">Ще немає жодної сформованої позиції.</span>
-
                       <div v-if="aiOrderSummaryText" class="ai-order-summary-block">
                         <span class="ai-collected-title">Поточна чернетка</span>
                         <pre class="ai-order-summary-text">{{ aiOrderSummaryText }}</pre>
                       </div>
                     </div>
 
-                    <div class="ai-panel-section">
+                    <div v-if="aiShowCheckoutSection" class="ai-panel-section">
                       <div class="ai-panel-section-head">
                         <span class="ai-collected-title">Оформлення</span>
                         <span class="ai-panel-count">{{ aiFilledCheckoutFields.length }}/{{ aiCheckoutFields.length }}</span>
@@ -355,8 +376,8 @@
                       </div>
                     </div>
 
-                    <div v-if="aiNextSlotLabel" class="ai-next-slot">
-                      <strong>Наступний крок:</strong> {{ aiNextSlotLabel }}
+                    <div v-if="aiDisplayNextSlotLabel" class="ai-next-slot">
+                      <strong>Наступний крок:</strong> {{ aiDisplayNextSlotLabel }}
                     </div>
                   </div>
                 </template>
@@ -612,6 +633,19 @@ const aiOrderItems = computed(() => (
     : []
 ));
 const aiOrderSummaryText = computed(() => String(props.customer?.ai?.order_summary_text || '').trim());
+const aiConversationStage = computed(() => String(props.customer?.ai?.conversation_stage || 'consultation').trim() || 'consultation');
+const aiConsultationSummaryText = computed(() => String(props.customer?.ai?.consultation_summary_text || '').trim());
+const aiConsultationFields = computed(() => (
+  Array.isArray(props.customer?.ai?.consultation_fields)
+    ? props.customer.ai.consultation_fields
+        .map((field) => ({
+          key: String(field?.key || '').trim(),
+          label: String(field?.label || field?.key || '').trim(),
+          value: String(field?.value || '').trim(),
+        }))
+        .filter((field) => field.key !== '' && field.value !== '')
+    : []
+));
 const aiCheckoutFields = computed(() => (
   Array.isArray(props.customer?.ai?.checkout_fields)
     ? props.customer.ai.checkout_fields
@@ -635,6 +669,15 @@ const aiCheckoutMissingLabels = computed(() => {
         .filter((label) => label !== '')
     : [];
 });
+const aiShowCheckoutSection = computed(() => {
+  if (aiConversationStage.value === 'checkout') {
+    return true;
+  }
+
+  return aiOrderItems.value.length > 0
+    || aiFilledCheckoutFields.value.length > 0
+    || aiCheckoutMissingLabels.value.length > 0;
+});
 const aiMissingSlotLabels = computed(() => {
   return Array.isArray(props.customer?.ai?.missing_slot_labels)
     ? props.customer.ai.missing_slot_labels
@@ -643,6 +686,13 @@ const aiMissingSlotLabels = computed(() => {
     : [];
 });
 const aiNextSlotLabel = computed(() => String(props.customer?.ai?.next_slot_label || '').trim());
+const aiDisplayNextSlotLabel = computed(() => {
+  if (aiConversationStage.value === 'consultation' && aiOrderItems.value.length === 0) {
+    return '';
+  }
+
+  return aiNextSlotLabel.value;
+});
 const aiOrderReady = computed(() => Boolean(props.customer?.ai?.order_ready));
 const aiStatusNote = computed(() => {
   const lastError = String(props.customer?.ai?.last_error || '').trim();
