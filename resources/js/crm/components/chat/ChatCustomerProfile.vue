@@ -65,6 +65,50 @@
       <hr class="divider" />
 
       <div class="fields-section">
+        <div class="contacts-deck">
+          <div class="contact-card" :class="{ 'is-invalid': form.phone && !isPhoneValid, 'is-active': phoneFocused }">
+            <div class="contact-card-head">
+              <div class="contact-label">
+                <i class="bi bi-telephone"></i>
+                <span>Телефон</span>
+              </div>
+              <button v-if="form.phone" type="button" class="contact-clear-btn" title="Очистити телефон" @click="form.phone = ''">
+                <i class="bi bi-x-lg"></i>
+              </button>
+            </div>
+            <input
+              v-model="form.phone"
+              type="tel"
+              class="contact-input"
+              placeholder="380XXXXXXXXX"
+              @focus="phoneFocused = true"
+              @blur="phoneFocused = false"
+            >
+            <small v-if="form.phone && !isPhoneValid" class="contact-error">Телефон має бути у форматі 380XXXXXXXXX</small>
+          </div>
+
+          <div class="contact-card" :class="{ 'is-invalid': form.email && !isEmailValid, 'is-active': emailFocused }">
+            <div class="contact-card-head">
+              <div class="contact-label">
+                <i class="bi bi-envelope"></i>
+                <span>E-mail</span>
+              </div>
+              <button v-if="form.email" type="button" class="contact-clear-btn" title="Очистити email" @click="form.email = ''">
+                <i class="bi bi-x-lg"></i>
+              </button>
+            </div>
+            <input
+              v-model="form.email"
+              type="email"
+              class="contact-input"
+              placeholder="email@example.com"
+              @focus="emailFocused = true"
+              @blur="emailFocused = false"
+            >
+            <small v-if="form.email && !isEmailValid" class="contact-error">Вкажіть коректний email</small>
+          </div>
+        </div>
+
         <div class="action-row">
           <button class="btn-save-modern" @click="saveData" :disabled="!canSaveProfile">
             <span v-if="isLoading" class="spinner"></span>
@@ -215,6 +259,8 @@ const props = defineProps({ customer: Object });
 const emit = defineEmits(['close', 'update-stage']);
 
 const showNameInput = ref(false);
+const phoneFocused = ref(false);
+const emailFocused = ref(false);
 const isLoading = ref(false);
 const isOrderSaving = ref(false);
 const historyOrders = ref([]);
@@ -302,10 +348,13 @@ const orderSubmitState = reactive({
 
 const form = reactive({ 
   first_name: '',
-  last_name: ''
+  last_name: '',
+  phone: '',
+  email: '',
 });
 
 const cyrillicRegex = /^[А-Яа-яЁёЇїІіЄєҐґ' \-]+$/;
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const isNameValid = computed(() => {
   return form.first_name.trim().length >= 2 && 
@@ -314,22 +363,33 @@ const isNameValid = computed(() => {
          cyrillicRegex.test(form.last_name);
 });
 
-const isProfileComplete = computed(() => isNameValid.value);
+const normalizePhone = (value) => String(value || '').replace(/\D/g, '').slice(0, 12);
+const isPhoneValid = computed(() => /^380\d{9}$/.test(normalizePhone(form.phone)));
+const isEmailValid = computed(() => !String(form.email || '').trim() || emailRegex.test(String(form.email || '').trim()));
+const isProfileComplete = computed(() => isNameValid.value && isPhoneValid.value);
 const normalizedProfilePayload = computed(() => ({
   first_name: form.first_name.trim(),
   last_name: form.last_name.trim(),
+  phone: normalizePhone(form.phone),
+  email: String(form.email || '').trim(),
 }));
 const originalProfilePayload = computed(() => ({
   first_name: String(props.customer?.first_name || '').trim(),
   last_name: String(props.customer?.last_name || '').trim(),
+  phone: normalizePhone(props.customer?.phone || ''),
+  email: String(props.customer?.email || '').trim(),
 }));
 const hasProfileChanges = computed(() => (
   normalizedProfilePayload.value.first_name !== originalProfilePayload.value.first_name ||
-  normalizedProfilePayload.value.last_name !== originalProfilePayload.value.last_name
+  normalizedProfilePayload.value.last_name !== originalProfilePayload.value.last_name ||
+  normalizedProfilePayload.value.phone !== originalProfilePayload.value.phone ||
+  normalizedProfilePayload.value.email !== originalProfilePayload.value.email
 ));
 const canSaveProfile = computed(() => (
   !isLoading.value &&
-  hasProfileChanges.value
+  hasProfileChanges.value &&
+  (!normalizedProfilePayload.value.phone || isPhoneValid.value) &&
+  isEmailValid.value
 ));
 
 const customerId = computed(() => {
@@ -354,6 +414,8 @@ function syncFormFromCustomer(customer, { resetPanels = false } = {}) {
 
   form.first_name = customer.first_name || '';
   form.last_name = customer.last_name || '';
+  form.phone = String(customer.phone || '');
+  form.email = String(customer.email || '');
 
   if (resetPanels) {
     showNameInput.value = false;
@@ -461,6 +523,14 @@ const getStatusLabel = (order) => {
 const saveData = async () => {
   if (!customerId.value) return;
   if (!canSaveProfile.value) {
+    if (normalizedProfilePayload.value.phone && !isPhoneValid.value) {
+      showToast('Телефон має бути у форматі 380XXXXXXXXX.', 'error');
+      return;
+    }
+    if (!isEmailValid.value) {
+      showToast('Вкажіть коректний email.', 'error');
+      return;
+    }
     showToast('Немає змін для збереження.', 'error');
     return;
   }
@@ -525,6 +595,14 @@ const createOrderFromDraft = async () => {
     showToast('Оберіть відділення.', 'error');
     return;
   }
+  if (!normalizedProfilePayload.value.phone) {
+    showToast('Вкажіть телефон клієнта.', 'error');
+    return;
+  }
+  if (!isPhoneValid.value) {
+    showToast('Телефон має бути у форматі 380XXXXXXXXX.', 'error');
+    return;
+  }
   if (isOrderSaving.value) return;
   isOrderSaving.value = true;
   orderSubmitState.status = 'loading';
@@ -542,6 +620,8 @@ const createOrderFromDraft = async () => {
     customer: {
       first_name: form.first_name || '',
       last_name: form.last_name || '',
+      phone: normalizedProfilePayload.value.phone || '',
+      email: normalizedProfilePayload.value.email || '',
     },
     order: {
       status: 'confirmed',
@@ -578,7 +658,7 @@ const createOrderFromDraft = async () => {
       apartment: delivery.apartment || '',
       address_note: delivery.address_note || '',
       recipient_name: [delivery.last_name, delivery.first_name, delivery.middle_name].filter(Boolean).join(' '),
-      recipient_phone: delivery.phone || '',
+      recipient_phone: normalizePhone(delivery.phone || '') || normalizedProfilePayload.value.phone || '',
     },
   };
 
@@ -727,6 +807,19 @@ const handleOrderClose = () => {
 .id-badge { font-size: 11px; color: #a0aec0; margin-top: 4px; display: inline-block; background: #f7fafc; padding: 2px 6px; border-radius: 4px; }
 .divider { border: 0; border-top: 1px solid #e5e7eb; margin: 0; }
 .fields-section { display: flex; flex-direction: column; gap: 12px; padding: 16px; }
+.contacts-deck { display: grid; gap: 10px; }
+.contact-card { border: 1px solid #e2e8f0; border-radius: 12px; background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%); padding: 10px 12px; transition: border-color 0.2s ease, box-shadow 0.2s ease; }
+.contact-card.is-active { border-color: #93c5fd; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12); }
+.contact-card.is-invalid { border-color: #fca5a5; }
+.contact-card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.contact-label { display: inline-flex; align-items: center; gap: 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 700; color: #64748b; }
+.contact-label i { font-size: 13px; color: #94a3b8; }
+.contact-input { width: 100%; border: none; background: transparent; color: #0f172a; font-size: 15px; font-weight: 600; outline: none; padding: 0; }
+.contact-input::placeholder { color: #94a3b8; font-weight: 500; }
+.contact-clear-btn { width: 24px; height: 24px; border: none; border-radius: 6px; background: transparent; color: #94a3b8; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.contact-clear-btn:hover { background: #e2e8f0; color: #475569; }
+.contact-clear-btn i { font-size: 11px; }
+.contact-error { display: block; margin-top: 4px; color: #dc2626; font-size: 11px; }
 .action-row { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
 .history-container { margin-top: 18px; }
 .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding: 0 4px; }
