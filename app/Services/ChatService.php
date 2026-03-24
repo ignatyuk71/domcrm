@@ -716,7 +716,8 @@ class ChatService
             || str_contains($normalized, 'comment_id=');
         $mentionsStory = str_contains($normalized, 'сторіс')
             || str_contains($normalized, 'сториз')
-            || str_contains($normalized, 'story')
+            || (bool) preg_match('/\bstory\b/u', $normalized)
+            || str_contains($normalized, '/stories/')
             || str_contains($normalized, 'відповідь на сторіс');
         $mentionsReel = str_contains($normalized, 'reel');
         $mentionsAd = str_contains($normalized, 'реклам')
