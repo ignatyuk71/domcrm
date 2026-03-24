@@ -95,6 +95,8 @@ return [
     'chat_ai' => [
         'enabled' => env('CHAT_AI_ENABLED', true),
         'default_agent_code' => env('CHAT_AI_DEFAULT_AGENT_CODE', 'sales_assistant_v1'),
+        'reply_delay_seconds' => (int) env('CHAT_AI_REPLY_DELAY_SECONDS', 12),
+        'allow_assigned_conversations' => env('CHAT_AI_ALLOW_ASSIGNED_CONVERSATIONS', true),
         'max_messages' => (int) env('CHAT_AI_MAX_MESSAGES', 12),
     ],
 

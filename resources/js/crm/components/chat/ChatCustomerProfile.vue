@@ -231,6 +231,67 @@
           </div>
         </div>
 
+        <div class="ai-container">
+          <div class="section-header">
+            <span class="section-title">Поведінка AI</span>
+            <span class="counter-badge" :class="aiEnabled ? 'is-on' : 'is-off'">
+              {{ aiEnabled ? 'ON' : 'OFF' }}
+            </span>
+          </div>
+
+          <div class="ai-card" :class="{ 'is-open': aiBlockOpen }">
+            <button type="button" class="ai-header" @click="aiBlockOpen = !aiBlockOpen">
+              <div class="ai-header-main">
+                <i class="bi bi-robot"></i>
+                <div>
+                  <div class="ai-title">AI-агент у цьому діалозі</div>
+                  <div class="ai-subtitle">{{ aiStageLabel }}</div>
+                </div>
+              </div>
+              <i class="bi" :class="aiBlockOpen ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+            </button>
+
+            <div class="ai-body-wrap">
+              <div class="ai-body">
+                <div class="ai-switch-row">
+                  <div>
+                    <div class="ai-switch-title">Відповідати автоматично</div>
+                    <div class="ai-switch-hint">Можна вимкнути AI тільки для цього клієнта.</div>
+                  </div>
+                  <button
+                    type="button"
+                    class="ai-switch-btn"
+                    :class="{ 'is-on': aiEnabled, 'is-loading': aiToggleLoading }"
+                    :disabled="aiToggleLoading || !props.customer?.conversation_id"
+                    @click="toggleAiForConversation"
+                  >
+                    <span class="ai-switch-knob"></span>
+                  </button>
+                </div>
+
+                <div class="ai-meta-grid">
+                  <div class="ai-meta-item">
+                    <span>Агент</span>
+                    <strong>{{ aiAgentCode }}</strong>
+                  </div>
+                  <div class="ai-meta-item">
+                    <span>Етап</span>
+                    <strong>{{ aiStageLabel }}</strong>
+                  </div>
+                  <div class="ai-meta-item">
+                    <span>Затримка</span>
+                    <strong>{{ aiReplyDelayText }}</strong>
+                  </div>
+                  <div class="ai-meta-item">
+                    <span>Оновлено</span>
+                    <strong>{{ aiUpdatedAtText }}</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
 
     </div>
@@ -259,6 +320,7 @@
 import { ref, reactive, watch, nextTick, computed } from 'vue';
 import axios from 'axios';
 import ChatOrderPanel from '@/crm/components/chat/ChatOrderPanel.vue';
+import { updateConversationAiSettings } from '@/crm/services/chatApi';
 
 const props = defineProps({ customer: Object });
 const emit = defineEmits(['close', 'update-stage']);
@@ -281,6 +343,8 @@ const orderRefs = reactive({});
 
 // Стан для панелі замовлення
 const showOrderPanel = ref(false);
+const aiBlockOpen = ref(true);
+const aiToggleLoading = ref(false);
 const orderDraft = reactive({
   items: [],
   delivery: {
@@ -433,6 +497,41 @@ const displayInitial = computed(() => (displayName.value ? displayName.value[0].
 const avatarUrl = computed(() => props.customer?.fb_profile_pic || props.customer?.customer_avatar || '');
 const safeAvatarUrl = computed(() => (avatarFailed.value ? '' : avatarUrl.value));
 const isInstagram = computed(() => (props.customer?.source || props.customer?.platform) === 'instagram' || !!props.customer?.instagram_user_id);
+const aiPayload = computed(() => (
+  props.customer?.ai && typeof props.customer.ai === 'object'
+    ? props.customer.ai
+    : {}
+));
+const aiEnabled = computed(() => aiPayload.value.enabled !== false);
+const aiAgentCode = computed(() => aiPayload.value.agent_code || 'sales_assistant_v1');
+const aiStageLabel = computed(() => {
+  const map = {
+    interest: 'Зацікавлення',
+    selection: 'Підбір',
+    checkout_ready: 'Готовність до оформлення',
+    checkout: 'Оформлення',
+  };
+
+  const stage = String(aiPayload.value.stage || '').trim();
+  return map[stage] || 'Початковий';
+});
+const aiReplyDelayText = computed(() => {
+  const seconds = Number(aiPayload.value.reply_delay_seconds || 0);
+  return Number.isFinite(seconds) && seconds > 0 ? `${seconds} сек` : '—';
+});
+const aiUpdatedAtText = computed(() => {
+  const raw = String(aiPayload.value.updated_at || '').trim();
+  if (!raw) return '—';
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString('uk-UA', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+});
 
 function syncFormFromCustomer(customer, { resetPanels = false } = {}) {
   if (!customer) {
@@ -585,6 +684,38 @@ const saveData = async () => {
     showToast(validationErrors[0] || e?.response?.data?.message || 'Не вдалося зберегти дані покупця.', 'error');
   } finally { 
     isLoading.value = false; 
+  }
+};
+
+const toggleAiForConversation = async () => {
+  const conversationId = Number(props.customer?.conversation_id || 0);
+  if (!conversationId || aiToggleLoading.value) return;
+
+  const nextValue = !aiEnabled.value;
+  const prevMeta = {
+    ...(props.customer?.ai && typeof props.customer.ai === 'object' ? props.customer.ai : {}),
+  };
+
+  if (!props.customer.ai || typeof props.customer.ai !== 'object') {
+    props.customer.ai = {};
+  }
+  props.customer.ai.enabled = nextValue;
+  props.customer.ai.updated_at = new Date().toISOString();
+
+  aiToggleLoading.value = true;
+  try {
+    const { data } = await updateConversationAiSettings(conversationId, nextValue);
+    const snapshot = data?.data || null;
+    if (snapshot && props.customer) {
+      Object.assign(props.customer, snapshot);
+    }
+    showToast(nextValue ? 'AI увімкнено для цього діалогу.' : 'AI вимкнено для цього діалогу.');
+  } catch (e) {
+    console.error(e);
+    props.customer.ai = prevMeta;
+    showToast('Не вдалося оновити AI режим діалогу.', 'error');
+  } finally {
+    aiToggleLoading.value = false;
   }
 };
 
@@ -857,8 +988,68 @@ const handleOrderClose = () => {
 .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding: 0 4px; }
 .section-title { font-size: 12px; font-weight: 800; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.05em; }
 .counter-badge { background: #f1f5f9; color: #475569; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
+.counter-badge.is-on { background: #dcfce7; color: #15803d; }
+.counter-badge.is-off { background: #fee2e2; color: #b91c1c; }
 .counter-badge--success { background: #dcfce7; color: #15803d; }
 .counter-badge--neutral { background: #e2e8f0; color: #475569; }
+.ai-container { margin-top: 16px; }
+.ai-card { border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; background: #fff; }
+.ai-header {
+  width: 100%;
+  border: none;
+  background: #fff;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  text-align: left;
+}
+.ai-header-main { display: flex; gap: 10px; align-items: center; }
+.ai-header-main i { color: #0ea5e9; font-size: 18px; }
+.ai-title { font-size: 13px; font-weight: 700; color: #0f172a; }
+.ai-subtitle { font-size: 11px; color: #64748b; margin-top: 2px; }
+.ai-body-wrap { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
+.ai-card.is-open .ai-body-wrap { max-height: 360px; border-top: 1px solid #f1f5f9; }
+.ai-body { padding: 12px; display: flex; flex-direction: column; gap: 12px; background: #f8fafc; }
+.ai-switch-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px;
+}
+.ai-switch-title { font-size: 13px; font-weight: 700; color: #0f172a; }
+.ai-switch-hint { font-size: 11px; color: #64748b; margin-top: 2px; }
+.ai-switch-btn {
+  width: 48px;
+  height: 28px;
+  border-radius: 999px;
+  border: none;
+  background: #cbd5e1;
+  padding: 2px;
+  position: relative;
+  transition: background 0.2s ease;
+}
+.ai-switch-btn.is-on { background: #16a34a; }
+.ai-switch-btn.is-loading { opacity: 0.7; }
+.ai-switch-knob {
+  width: 24px;
+  height: 24px;
+  background: #fff;
+  border-radius: 50%;
+  display: block;
+  transform: translateX(0);
+  transition: transform 0.2s ease;
+}
+.ai-switch-btn.is-on .ai-switch-knob { transform: translateX(20px); }
+.ai-meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ai-meta-item { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
+.ai-meta-item span { font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: .04em; font-weight: 700; }
+.ai-meta-item strong { font-size: 12px; color: #0f172a; }
 .empty-history { text-align: center; padding: 24px; border: 1px dashed #e2e8f0; border-radius: 12px; color: #94a3b8; }
 .empty-icon { font-size: 24px; margin-bottom: 8px; opacity: 0.5; }
 .orders-list { display: flex; flex-direction: column; gap: 12px; }

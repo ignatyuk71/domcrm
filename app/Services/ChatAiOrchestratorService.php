@@ -30,11 +30,58 @@ class ChatAiOrchestratorService
         self::STAGE_CHECKOUT_READY => 3,
         self::STAGE_CHECKOUT => 4,
     ];
+    private ?array $settingsCache = null;
 
     public function __construct(
         private readonly ChatService $chatService,
-        private readonly MetaService $metaService
+        private readonly MetaService $metaService,
+        private readonly ChatAiSettingsService $chatAiSettingsService
     ) {
+    }
+
+    public function handleBufferedInboundMessageById(int $messageId): void
+    {
+        $message = ChatMessage::query()
+            ->with(['conversation.contact', 'conversation.customer'])
+            ->find($messageId);
+
+        if (!$message || $message->direction !== 'inbound' || $message->source !== 'webhook') {
+            return;
+        }
+
+        $delaySeconds = $this->resolveReplyDelaySeconds();
+        if ($delaySeconds > 0) {
+            usleep($delaySeconds * 1_000_000);
+        }
+
+        $message = ChatMessage::query()
+            ->with(['conversation.contact', 'conversation.customer'])
+            ->find($messageId);
+
+        if (!$message || $message->direction !== 'inbound' || $message->source !== 'webhook') {
+            return;
+        }
+
+        if (!$this->isLatestInboundWebhookMessage($message->conversation_id, $message->id)) {
+            return;
+        }
+
+        $conversation = $message->conversation;
+        $contact = $conversation?->contact;
+        $customer = $conversation?->customer;
+        $platform = (string) ($contact?->platform ?? '');
+
+        if (!$conversation || !$contact || !$customer || !in_array($platform, ['messenger', 'instagram'], true)) {
+            return;
+        }
+
+        $this->handleInboundMessage(
+            $conversation,
+            $message,
+            $customer,
+            $contact,
+            $platform
+        );
     }
 
     public function handleInboundMessage(
@@ -48,8 +95,21 @@ class ChatAiOrchestratorService
             return;
         }
 
-        // Не блокуємо AI тільки через assigned_user_id.
-        // Блокуємо лише коли оператор щойно відповідав вручну.
+        if (!$this->isConversationAiEnabled($conversation)) {
+            return;
+        }
+
+        if (
+            !$this->allowAssignedConversations()
+            && $conversation->assigned_user_id !== null
+        ) {
+            return;
+        }
+
+        if (!$this->isLatestInboundWebhookMessage($conversation->id, $inboundMessage->id)) {
+            return;
+        }
+
         if ($this->hasRecentOperatorActivity($conversation->id)) {
             return;
         }
@@ -73,7 +133,7 @@ class ChatAiOrchestratorService
         if (!$agent) {
             Log::warning('Chat AI: активний агент не знайдений.', [
                 'conversation_id' => $conversation->id,
-                'agent_code' => config('services.chat_ai.default_agent_code'),
+                'agent_code' => $this->settings()['default_agent_code'],
             ]);
 
             return;
@@ -245,12 +305,12 @@ class ChatAiOrchestratorService
 
     private function isEnabled(): bool
     {
-        return (bool) config('services.chat_ai.enabled', true);
+        return (bool) $this->settings()['enabled'];
     }
 
     private function resolveAgent(): ?ChatAiAgent
     {
-        $code = (string) config('services.chat_ai.default_agent_code', 'sales_assistant_v1');
+        $code = (string) $this->settings()['default_agent_code'];
 
         return ChatAiAgent::query()
             ->where('code', $code)
@@ -913,8 +973,11 @@ class ChatAiOrchestratorService
         int $runId
     ): void {
         $meta = is_array($conversation->meta) ? $conversation->meta : [];
+        $existingAiMeta = is_array($meta['ai'] ?? null) ? $meta['ai'] : [];
         $meta['ai'] = [
-            'enabled' => true,
+            'enabled' => array_key_exists('enabled', $existingAiMeta)
+                ? (bool) $existingAiMeta['enabled']
+                : true,
             'agent_code' => $agentCode,
             'stage' => $stage,
             'state_id' => $stateId,
@@ -952,7 +1015,7 @@ class ChatAiOrchestratorService
      */
     private function loadHistory(int $conversationId): \Illuminate\Support\Collection
     {
-        $limit = max(4, (int) config('services.chat_ai.max_messages', 12));
+        $limit = max(4, (int) $this->settings()['max_messages']);
 
         return ChatMessage::query()
             ->where('conversation_id', $conversationId)
@@ -1042,5 +1105,52 @@ class ChatAiOrchestratorService
             ->where('source', 'operator')
             ->where('created_at', '>=', now()->subMinutes(15))
             ->exists();
+    }
+
+    private function isConversationAiEnabled(ChatConversation $conversation): bool
+    {
+        $enabled = data_get($conversation->meta, 'ai.enabled');
+
+        return $enabled === null ? true : (bool) $enabled;
+    }
+
+    private function allowAssignedConversations(): bool
+    {
+        return (bool) $this->settings()['allow_assigned_conversations'];
+    }
+
+    private function resolveReplyDelaySeconds(): int
+    {
+        return (int) $this->settings()['reply_delay_seconds'];
+    }
+
+    private function isLatestInboundWebhookMessage(int $conversationId, int $messageId): bool
+    {
+        $latestInboundId = ChatMessage::query()
+            ->where('conversation_id', $conversationId)
+            ->where('direction', 'inbound')
+            ->where('source', 'webhook')
+            ->latest('id')
+            ->value('id');
+
+        return (int) $latestInboundId === $messageId;
+    }
+
+    /**
+     * @return array{
+     *   enabled: bool,
+     *   default_agent_code: string,
+     *   reply_delay_seconds: int,
+     *   allow_assigned_conversations: bool,
+     *   max_messages: int
+     * }
+     */
+    private function settings(): array
+    {
+        if ($this->settingsCache === null) {
+            $this->settingsCache = $this->chatAiSettingsService->get();
+        }
+
+        return $this->settingsCache;
     }
 }

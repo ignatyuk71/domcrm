@@ -8,6 +8,7 @@ use App\Models\ChatMessage;
 use App\Models\ChatMessageAttachment;
 use App\Models\ChatStage;
 use App\Models\Customer;
+use App\Services\ChatAiSettingsService;
 use App\Services\ChatService;
 use App\Services\MetaService;
 use Carbon\Carbon;
@@ -22,8 +23,11 @@ class ChatApiController extends Controller
 {
     public function __construct(
         private readonly ChatService $chatService,
+        private readonly ChatAiSettingsService $chatAiSettingsService,
     ) {
     }
+
+    private ?array $aiDefaultsCache = null;
 
     public function list(): JsonResponse
     {
@@ -95,6 +99,27 @@ class ChatApiController extends Controller
 
         return response()->json([
             'stage' => $targetCode === 'no_stage' ? null : $targetCode,
+        ]);
+    }
+
+    public function updateAi(Request $request, ChatConversation $conversation): JsonResponse
+    {
+        $validated = $request->validate([
+            'enabled' => ['required', 'boolean'],
+        ]);
+
+        $meta = is_array($conversation->meta) ? $conversation->meta : [];
+        $aiMeta = is_array($meta['ai'] ?? null) ? $meta['ai'] : [];
+        $aiMeta['enabled'] = (bool) $validated['enabled'];
+        $aiMeta['updated_at'] = now()->toDateTimeString();
+        $meta['ai'] = $aiMeta;
+
+        $conversation->meta = $meta;
+        $conversation->save();
+        $conversation = $conversation->fresh(['contact', 'customer', 'stage', 'assignedUser', 'lastMessage.attachments']);
+
+        return response()->json([
+            'data' => $this->formatConversation($conversation),
         ]);
     }
 
@@ -562,6 +587,12 @@ class ChatApiController extends Controller
             $stageCode = null;
         }
 
+        $aiDefaults = $this->getAiDefaults();
+        $aiMeta = is_array(data_get($conversation->meta, 'ai')) ? data_get($conversation->meta, 'ai') : [];
+        $aiEnabled = array_key_exists('enabled', $aiMeta)
+            ? (bool) $aiMeta['enabled']
+            : true;
+
         return [
             'conversation_id' => $conversation->id,
             'customer_id' => $conversation->customer_id,
@@ -595,7 +626,24 @@ class ChatApiController extends Controller
                 'id' => $conversation->assignedUser->id,
                 'name' => $conversation->assignedUser->name,
             ] : null,
+            'ai' => [
+                'enabled' => $aiEnabled,
+                'stage' => is_string($aiMeta['stage'] ?? null) ? $aiMeta['stage'] : null,
+                'agent_code' => is_string($aiMeta['agent_code'] ?? null) ? $aiMeta['agent_code'] : $aiDefaults['default_agent_code'],
+                'last_run_id' => is_numeric($aiMeta['last_run_id'] ?? null) ? (int) $aiMeta['last_run_id'] : null,
+                'updated_at' => is_string($aiMeta['updated_at'] ?? null) ? $aiMeta['updated_at'] : null,
+                'reply_delay_seconds' => (int) $aiDefaults['reply_delay_seconds'],
+            ],
         ];
+    }
+
+    private function getAiDefaults(): array
+    {
+        if ($this->aiDefaultsCache === null) {
+            $this->aiDefaultsCache = $this->chatAiSettingsService->get();
+        }
+
+        return $this->aiDefaultsCache;
     }
 
     private function formatMessage(ChatMessage $message): array

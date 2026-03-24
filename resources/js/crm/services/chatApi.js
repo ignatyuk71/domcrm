@@ -22,6 +22,10 @@ export function updateConversationStage(conversationId, stage) {
   return axios.patch(`/api/chat/conversations/${conversationId}/stage`, { stage });
 }
 
+export function updateConversationAiSettings(conversationId, enabled) {
+  return axios.patch(`/api/chat/conversations/${conversationId}/ai`, { enabled: !!enabled });
+}
+
 export function archiveConversation(conversationId) {
   return axios.delete(`/api/chat/conversations/${conversationId}`);
 }

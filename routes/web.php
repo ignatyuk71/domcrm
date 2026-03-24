@@ -16,6 +16,7 @@ use App\Http\Controllers\PackingController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\MessageTemplateController;
 use App\Http\Controllers\ChatApiController;
+use App\Http\Controllers\ChatAiSettingsController;
 use App\Http\Controllers\MetaConnectionController;
 use App\Http\Controllers\SavedFileController;
 use App\Http\Controllers\NovaPoshtaSettingsController;
@@ -184,6 +185,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/api/chat/tags', [ChatApiController::class, 'listConversationTags'])->name('chat.tags');
     Route::patch('/api/chat/conversations/{conversation}/stage', [ChatApiController::class, 'updateStage'])
         ->name('chat.stage');
+    Route::patch('/api/chat/conversations/{conversation}/ai', [ChatApiController::class, 'updateAi'])
+        ->name('chat.ai');
     Route::delete('/api/chat/conversations/{conversation}', [ChatApiController::class, 'archiveConversation'])
         ->name('chat.archive');
     Route::delete('/api/chat/conversations/{conversation}/history', [ChatApiController::class, 'clearConversationHistory'])
@@ -314,6 +317,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/meta/redirect', [MetaConnectionController::class, 'redirectToFacebook'])->name('meta.redirect');
         Route::get('/meta/callback', [MetaConnectionController::class, 'handleFacebookCallback'])->name('meta.callback');
         Route::post('/meta/disconnect', [MetaConnectionController::class, 'disconnect'])->name('meta.disconnect');
+        Route::get('/ai', [ChatAiSettingsController::class, 'index'])->name('ai.index');
+        Route::post('/ai', [ChatAiSettingsController::class, 'save'])->name('ai.save');
+        Route::patch('/ai/agents/{agent}', [ChatAiSettingsController::class, 'updateAgent'])->name('ai.agents.update');
         Route::get('/nova-poshta', [NovaPoshtaSettingsController::class, 'index'])->name('novaPoshta.index');
         Route::post('/nova-poshta', [NovaPoshtaSettingsController::class, 'save'])->name('novaPoshta.save');
         Route::post('/nova-poshta/fetch-refs', [NovaPoshtaSettingsController::class, 'fetchRefs'])->name('novaPoshta.fetchRefs');

@@ -32,13 +32,11 @@ class ChatMessageObserver
         }
 
         try {
-            app(ChatAiOrchestratorService::class)->handleInboundMessage(
-                $conversation,
-                $message,
-                $conversation->customer,
-                $conversation->contact,
-                $platform
-            );
+            $messageId = (int) $message->id;
+
+            dispatch(function () use ($messageId): void {
+                app(ChatAiOrchestratorService::class)->handleBufferedInboundMessageById($messageId);
+            })->afterResponse();
         } catch (\Throwable $e) {
             Log::error('Chat AI observer failed', [
                 'message_id' => $message->id,
