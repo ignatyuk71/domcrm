@@ -10,7 +10,7 @@
       </div>
     </transition>
 
-    <div v-if="customerId" v-show="!showOrderPanel" class="profile-content custom-scrollbar" ref="profileContainer">
+    <div v-if="props.customer" v-show="!showOrderPanel" class="profile-content custom-scrollbar" ref="profileContainer">
       <div class="profile-mobile-header">
         <button class="profile-back-btn" type="button" @click="emit('close')">
           <i class="bi bi-arrow-left"></i>
