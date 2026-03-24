@@ -141,11 +141,21 @@ class OrderController extends Controller
         return response()->json($payload);
     }
 
-    public function show(Order $order): JsonResponse
+    /**
+     * Відображення замовлення:
+     * - для звичайного переходу в браузері повертаємо HTML-сторінку;
+     * - для XHR/API-запитів повертаємо JSON з даними.
+     */
+    public function show(Request $request, Order $order)
     {
+        if (!$request->expectsJson()) {
+            return view('orders.show', ['orderId' => $order->id]);
+        }
+
         $order->load([
             'customer' => fn ($q) => $q->withCount('orders'),
             'statusRef',
+            'source',
             'tags',
             'delivery',
             'items.product',

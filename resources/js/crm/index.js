@@ -3,6 +3,7 @@ import { createApp } from 'vue';
 import OrderCreatePage from './pages/orders/OrderCreatePage.vue';
 import OrderEditPage from './pages/orders/OrderEditPage.vue';
 import OrderListPage from './pages/orders/OrderListPage.vue';
+import OrderShowPage from './pages/orders/OrderShowPage.vue';
 import ProductListPage from './pages/products/ProductListPage.vue';
 import ProductFormPage from './pages/products/ProductFormPage.vue';
 import ChatPage from './pages/chat/ChatPage.vue';
@@ -66,6 +67,17 @@ export function mountOrderList(selector = '#crm-order-list') {
     if (!el) return;
 
     const app = createApp(OrderListPage);
+    app.mount(el);
+    return app;
+}
+
+export function mountOrderShow(selector = '#crm-order-show') {
+    const el = document.querySelector(selector);
+    if (!el) return;
+
+    const app = createApp(OrderShowPage, {
+        initialOrderId: el.dataset.orderId || null,
+    });
     app.mount(el);
     return app;
 }
@@ -205,6 +217,7 @@ function autoMount() {
     mountOrderCreate();
     mountOrderEdit();
     mountOrderList();
+    mountOrderShow();
     mountCustomerList();
     mountProductList();
     mountProductForm();
