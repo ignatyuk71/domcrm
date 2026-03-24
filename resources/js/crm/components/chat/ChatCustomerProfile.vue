@@ -391,7 +391,12 @@ watch(() => form.phone, (newVal) => {
   }
 });
 
-const customerId = computed(() => props.customer?.id ?? props.customer?.customer_id ?? null);
+const customerId = computed(() => {
+  const rawId = props.customer?.id ?? props.customer?.customer_id ?? null;
+  const normalizedId = Number(rawId);
+
+  return Number.isFinite(normalizedId) && normalizedId > 0 ? normalizedId : null;
+});
 const displayName = computed(() => {
   const name = `${form.first_name} ${form.last_name}`.trim();
   return name || props.customer?.customer_name || 'Не заповнено';
@@ -434,24 +439,6 @@ watch(
     }
   },
   { immediate: true }
-);
-
-watch(
-  () => [props.customer?.first_name, props.customer?.last_name, props.customer?.phone, props.customer?.email],
-  () => {
-    // Не перетираємо локальний ввід, поки користувач редагує профіль.
-    if (
-      !props.customer ||
-      showNameInput.value ||
-      phoneFocused.value ||
-      emailFocused.value ||
-      hasProfileChanges.value
-    ) {
-      return;
-    }
-
-    syncFormFromCustomer(props.customer, { resetPanels: false });
-  }
 );
 
 watch(avatarUrl, () => {
