@@ -1,6 +1,6 @@
 <template>
   <div class="chat-message" :class="{ mine: isMine }">
-    <div class="chat-message-bubble">
+    <div class="chat-message-bubble" :class="{ 'is-media-only': isMediaOnly }">
       <div v-if="message.reply_to" class="reply-wrapper">
         <div v-if="hasReplyAttachment" class="reply-media">
           <div v-if="isReplyVideo" class="reply-video-placeholder">
@@ -155,6 +155,16 @@ const normalizedAttachments = computed(() => {
   }).filter((att) => att.url);
 });
 
+const isMediaOnly = computed(() => {
+  const plainText = String(props.message.text || '').trim();
+  const hasReply = Boolean(props.message.reply_to);
+  const hasOrigin = Boolean(originContext.value);
+  const hasOnlyImages = normalizedAttachments.value.length > 0
+    && normalizedAttachments.value.every((att) => att.type === 'image');
+
+  return hasOnlyImages && plainText === '' && !hasReply && !hasOrigin;
+});
+
 const attachmentState = ref([]);
 
 watch(
@@ -249,6 +259,21 @@ const statusIcon = computed(() => {
   color: #fff;
   border-bottom-left-radius: 16px;
   border-bottom-right-radius: 4px;
+}
+
+.chat-message-bubble.is-media-only {
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+  border-radius: 14px;
+}
+
+.chat-message.mine .chat-message-bubble.is-media-only {
+  background: transparent;
+}
+
+.chat-message-bubble.is-media-only .message-attachments {
+  margin-bottom: 0;
 }
 
 .origin-message-card {
@@ -466,9 +491,16 @@ const statusIcon = computed(() => {
 /* Картинки */
 .attachment-img-wrapper {
   position: relative;
-  border-radius: 8px;
+  border-radius: 14px;
   overflow: hidden;
-  background: #f1f5f9;
+  background: #f8fafc;
+  border: 1px solid #dbe4ee;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+}
+
+.chat-message.mine .attachment-img-wrapper {
+  border-color: #c7d8ff;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.18);
 }
 
 .attachment-spinner,
@@ -500,7 +532,7 @@ const statusIcon = computed(() => {
   max-width: 100%;
   max-height: 350px; /* Обмеження висоти, щоб не рвало чат */
   object-fit: cover;
-  border-radius: 8px;
+  border-radius: 13px;
   cursor: pointer; /* Курсор при наведенні */
   transition: opacity 0.2s;
 }
