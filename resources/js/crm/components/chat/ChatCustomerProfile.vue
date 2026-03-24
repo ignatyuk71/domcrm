@@ -66,50 +66,50 @@
 
       <div class="fields-section">
         <div class="contacts-deck">
-          <div class="contact-card contact-card--compact" :class="{ 'is-invalid': (form.phone && !isPhoneValid) || (form.email && !isEmailValid) }">
-            <div class="contact-grid">
-              <div class="contact-item" :class="{ 'is-active': phoneFocused, 'is-invalid': form.phone && !isPhoneValid }">
-                <div class="contact-card-head">
-                  <div class="contact-label">
-                    <i class="bi bi-telephone"></i>
-                    <span>Телефон</span>
-                  </div>
-                  <button v-if="form.phone" type="button" class="contact-clear-btn" title="Очистити телефон" @click="form.phone = ''">
-                    <i class="bi bi-x-lg"></i>
-                  </button>
+          <div class="contact-card contact-card--stack" :class="{ 'is-invalid': (form.phone && !isPhoneValid) || (form.email && !isEmailValid) }">
+            <div class="contact-row" :class="{ 'is-active': phoneFocused, 'is-invalid': form.phone && !isPhoneValid }">
+              <div class="contact-card-head">
+                <div class="contact-label">
+                  <i class="bi bi-telephone"></i>
+                  <span>Телефон</span>
                 </div>
-                <input
-                  v-model="form.phone"
-                  type="tel"
-                  class="contact-input"
-                  placeholder="380XXXXXXXXX"
-                  @input="applyLegacyPhoneFilter"
-                  @focus="phoneFocused = true"
-                  @blur="handlePhoneBlur"
-                >
-                <small v-if="form.phone && !isPhoneValid" class="contact-error">Телефон має бути у форматі 380XXXXXXXXX</small>
+                <button v-if="form.phone" type="button" class="contact-clear-btn" title="Очистити телефон" @click="form.phone = ''">
+                  <i class="bi bi-x-lg"></i>
+                </button>
               </div>
+              <input
+                v-model="form.phone"
+                type="tel"
+                class="contact-input"
+                placeholder="380XXXXXXXXX"
+                @input="applyLegacyPhoneFilter"
+                @focus="phoneFocused = true"
+                @blur="handlePhoneBlur"
+              >
+              <small v-if="form.phone && !isPhoneValid" class="contact-error">Телефон має бути у форматі 380XXXXXXXXX</small>
+            </div>
 
-              <div class="contact-item" :class="{ 'is-active': emailFocused, 'is-invalid': form.email && !isEmailValid }">
-                <div class="contact-card-head">
-                  <div class="contact-label">
-                    <i class="bi bi-envelope"></i>
-                    <span>E-mail</span>
-                  </div>
-                  <button v-if="form.email" type="button" class="contact-clear-btn" title="Очистити email" @click="form.email = ''">
-                    <i class="bi bi-x-lg"></i>
-                  </button>
+            <div class="contact-divider"></div>
+
+            <div class="contact-row" :class="{ 'is-active': emailFocused, 'is-invalid': form.email && !isEmailValid }">
+              <div class="contact-card-head">
+                <div class="contact-label">
+                  <i class="bi bi-envelope"></i>
+                  <span>E-mail</span>
                 </div>
-                <input
-                  v-model="form.email"
-                  type="email"
-                  class="contact-input"
-                  placeholder="email@example.com"
-                  @focus="emailFocused = true"
-                  @blur="emailFocused = false"
-                >
-                <small v-if="form.email && !isEmailValid" class="contact-error">Вкажіть коректний email</small>
+                <button v-if="form.email" type="button" class="contact-clear-btn" title="Очистити email" @click="form.email = ''">
+                  <i class="bi bi-x-lg"></i>
+                </button>
               </div>
+              <input
+                v-model="form.email"
+                type="email"
+                class="contact-input"
+                placeholder="email@example.com"
+                @focus="emailFocused = true"
+                @blur="emailFocused = false"
+              >
+              <small v-if="form.email && !isEmailValid" class="contact-error">Вкажіть коректний email</small>
             </div>
           </div>
         </div>
@@ -838,20 +838,20 @@ const handleOrderClose = () => {
 .contact-card { border: 1px solid #e2e8f0; border-radius: 12px; background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%); padding: 10px 12px; transition: border-color 0.2s ease, box-shadow 0.2s ease; }
 .contact-card.is-active { border-color: #93c5fd; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12); }
 .contact-card.is-invalid { border-color: #fca5a5; }
-.contact-card--compact { padding: 8px 10px; }
-.contact-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.contact-item { border: 1px solid transparent; border-radius: 10px; padding: 8px 10px; transition: border-color 0.2s ease, box-shadow 0.2s ease; }
-.contact-item.is-active { border-color: #93c5fd; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1); }
-.contact-item.is-invalid { border-color: #fca5a5; }
-.contact-card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
-.contact-label { display: inline-flex; align-items: center; gap: 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 700; color: #64748b; }
+.contact-card--stack { padding: 8px 10px; }
+.contact-row { border: 1px solid transparent; border-radius: 8px; padding: 6px 8px; transition: border-color 0.2s ease, box-shadow 0.2s ease; }
+.contact-row.is-active { border-color: #bfdbfe; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.08); }
+.contact-row.is-invalid { border-color: #fecaca; }
+.contact-divider { height: 1px; background: #d1d5db; margin: 6px 2px; }
+.contact-card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.contact-label { display: inline-flex; align-items: center; gap: 6px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 700; color: #64748b; }
 .contact-label i { font-size: 13px; color: #94a3b8; }
-.contact-input { width: 100%; border: none; background: transparent; color: #0f172a; font-size: 15px; font-weight: 600; outline: none; padding: 0; }
+.contact-input { width: 100%; border: none; background: transparent; color: #0f172a; font-size: 14px; font-weight: 600; outline: none; padding: 0; }
 .contact-input::placeholder { color: #94a3b8; font-weight: 500; }
-.contact-clear-btn { width: 24px; height: 24px; border: none; border-radius: 6px; background: transparent; color: #94a3b8; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.contact-clear-btn { width: 20px; height: 20px; border: none; border-radius: 6px; background: transparent; color: #94a3b8; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
 .contact-clear-btn:hover { background: #e2e8f0; color: #475569; }
-.contact-clear-btn i { font-size: 11px; }
-.contact-error { display: block; margin-top: 4px; color: #dc2626; font-size: 11px; }
+.contact-clear-btn i { font-size: 10px; }
+.contact-error { display: block; margin-top: 3px; color: #dc2626; font-size: 10px; }
 .action-row { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
 .history-container { margin-top: 18px; }
 .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding: 0 4px; }
@@ -963,11 +963,6 @@ const handleOrderClose = () => {
 
   .profile-mobile-header {
     display: flex;
-  }
-
-  .contact-grid {
-    grid-template-columns: 1fr;
-    gap: 8px;
   }
 }
 
