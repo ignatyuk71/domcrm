@@ -1,5 +1,15 @@
 <template>
   <div class="ai-settings-page">
+    <transition name="toast">
+      <div v-if="toast.show" class="toast-notification" :class="toast.type">
+        <i class="bi" :class="toast.type === 'success' ? 'bi-check-circle-fill' : 'bi-exclamation-triangle-fill'"></i>
+        <div class="toast-copy">
+          <strong>{{ toast.type === 'success' ? 'Готово' : 'Помилка' }}</strong>
+          <span>{{ toast.message }}</span>
+        </div>
+      </div>
+    </transition>
+
     <div class="ai-shell">
       <section class="hero-card">
         <div>
@@ -20,10 +30,6 @@
           </div>
         </div>
       </section>
-
-      <div v-if="flashMessage" class="alert" :class="flashType === 'error' ? 'alert-danger' : 'alert-success'">
-        {{ flashMessage }}
-      </div>
 
       <div class="grid">
         <section class="card-block">
@@ -137,7 +143,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import http from '@/crm/api/http';
 
 const loading = ref(false);
@@ -145,8 +151,12 @@ const saving = ref(false);
 const agentsBusy = ref(false);
 const busyAgentIds = ref(new Set());
 const agents = ref([]);
-const flashMessage = ref('');
-const flashType = ref('success');
+const toast = reactive({
+  show: false,
+  message: '',
+  type: 'success',
+});
+let toastTimer = null;
 
 const settings = reactive({
   enabled: true,
@@ -165,8 +175,22 @@ const activeAgentsCount = computed(() => (
 ));
 
 function setFlash(message, type = 'success') {
-  flashMessage.value = message || '';
-  flashType.value = type;
+  const normalizedMessage = String(message || '').trim();
+  if (!normalizedMessage) {
+    return;
+  }
+
+  toast.message = normalizedMessage;
+  toast.type = type === 'error' ? 'error' : 'success';
+  toast.show = true;
+
+  if (toastTimer) {
+    clearTimeout(toastTimer);
+  }
+
+  toastTimer = setTimeout(() => {
+    toast.show = false;
+  }, 3000);
 }
 
 async function loadData() {
@@ -272,11 +296,90 @@ async function setAllAgents(status) {
 }
 
 onMounted(loadData);
+
+onBeforeUnmount(() => {
+  if (toastTimer) {
+    clearTimeout(toastTimer);
+  }
+});
 </script>
 
 <style scoped>
-.ai-settings-page { color: #1f2937; }
+.ai-settings-page { color: #1f2937; position: relative; }
 .ai-shell { display: flex; flex-direction: column; gap: 16px; }
+
+.toast-notification {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 1100;
+  min-width: 240px;
+  max-width: min(360px, calc(100vw - 24px));
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid #d1fae5;
+  background: rgba(240, 253, 244, 0.98);
+  box-shadow: 0 14px 30px -20px rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(6px);
+}
+
+.toast-notification.success {
+  border-color: #bbf7d0;
+  background: rgba(240, 253, 244, 0.98);
+}
+
+.toast-notification.error {
+  border-color: #fecaca;
+  background: rgba(254, 242, 242, 0.98);
+}
+
+.toast-notification > i {
+  margin-top: 1px;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.toast-notification.success > i {
+  color: #16a34a;
+}
+
+.toast-notification.error > i {
+  color: #dc2626;
+}
+
+.toast-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.toast-copy strong {
+  font-size: 12px;
+  line-height: 1.2;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.toast-copy span {
+  font-size: 13px;
+  line-height: 1.35;
+  color: #334155;
+}
+
+.toast-enter-active,
+.toast-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
 .hero-card {
   background: linear-gradient(135deg, #ecfeff 0%, #f8fafc 100%);
   border: 1px solid #c7d2fe;
