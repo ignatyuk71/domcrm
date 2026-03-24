@@ -9,18 +9,13 @@ return [
     | а не жорсткі ID. ID нижче лишаємо як fallback для сумісності.
     */
     'status_codes' => [
-        // Статуси, які формують чергу пакування.
-        // in_process + confirmed + packed покривають весь складський етап.
-        'queue' => ['in_process', 'confirmed', 'packed'],
-
-        // Статус після натискання "Запаковано".
-        'packed' => 'packing',
-
-        // Статус після "Проблема / Нема товару".
-        'problem' => 'in_process',
-
-        // Фінальні статуси, які не мають бути в історії пакувальника.
-        'shipped' => ['shipped', 'delivered', 'delivered_paid', 'cancelled', 'returned'],
+        // На прод/стейдж можуть відрізнятися коди packed/packing,
+        // тому тут за замовчуванням вимкнено резолв по code і
+        // використовується fallback через status_ids.
+        'queue' => [],
+        'packed' => null,
+        'problem' => null,
+        'shipped' => [],
     ],
 
     /*
