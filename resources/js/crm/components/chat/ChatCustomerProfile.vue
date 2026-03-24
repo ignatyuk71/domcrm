@@ -66,47 +66,51 @@
 
       <div class="fields-section">
         <div class="contacts-deck">
-          <div class="contact-card" :class="{ 'is-invalid': form.phone && !isPhoneValid, 'is-active': phoneFocused }">
-            <div class="contact-card-head">
-              <div class="contact-label">
-                <i class="bi bi-telephone"></i>
-                <span>Телефон</span>
+          <div class="contact-card contact-card--compact" :class="{ 'is-invalid': (form.phone && !isPhoneValid) || (form.email && !isEmailValid) }">
+            <div class="contact-grid">
+              <div class="contact-item" :class="{ 'is-active': phoneFocused, 'is-invalid': form.phone && !isPhoneValid }">
+                <div class="contact-card-head">
+                  <div class="contact-label">
+                    <i class="bi bi-telephone"></i>
+                    <span>Телефон</span>
+                  </div>
+                  <button v-if="form.phone" type="button" class="contact-clear-btn" title="Очистити телефон" @click="form.phone = ''">
+                    <i class="bi bi-x-lg"></i>
+                  </button>
+                </div>
+                <input
+                  v-model="form.phone"
+                  type="tel"
+                  class="contact-input"
+                  placeholder="380XXXXXXXXX"
+                  @input="applyLegacyPhoneFilter"
+                  @focus="phoneFocused = true"
+                  @blur="handlePhoneBlur"
+                >
+                <small v-if="form.phone && !isPhoneValid" class="contact-error">Телефон має бути у форматі 380XXXXXXXXX</small>
               </div>
-              <button v-if="form.phone" type="button" class="contact-clear-btn" title="Очистити телефон" @click="form.phone = ''">
-                <i class="bi bi-x-lg"></i>
-              </button>
-            </div>
-            <input
-              v-model="form.phone"
-              type="tel"
-              class="contact-input"
-              placeholder="380XXXXXXXXX"
-              @input="applyLegacyPhoneFilter"
-              @focus="phoneFocused = true"
-              @blur="handlePhoneBlur"
-            >
-            <small v-if="form.phone && !isPhoneValid" class="contact-error">Телефон має бути у форматі 380XXXXXXXXX</small>
-          </div>
 
-          <div class="contact-card" :class="{ 'is-invalid': form.email && !isEmailValid, 'is-active': emailFocused }">
-            <div class="contact-card-head">
-              <div class="contact-label">
-                <i class="bi bi-envelope"></i>
-                <span>E-mail</span>
+              <div class="contact-item" :class="{ 'is-active': emailFocused, 'is-invalid': form.email && !isEmailValid }">
+                <div class="contact-card-head">
+                  <div class="contact-label">
+                    <i class="bi bi-envelope"></i>
+                    <span>E-mail</span>
+                  </div>
+                  <button v-if="form.email" type="button" class="contact-clear-btn" title="Очистити email" @click="form.email = ''">
+                    <i class="bi bi-x-lg"></i>
+                  </button>
+                </div>
+                <input
+                  v-model="form.email"
+                  type="email"
+                  class="contact-input"
+                  placeholder="email@example.com"
+                  @focus="emailFocused = true"
+                  @blur="emailFocused = false"
+                >
+                <small v-if="form.email && !isEmailValid" class="contact-error">Вкажіть коректний email</small>
               </div>
-              <button v-if="form.email" type="button" class="contact-clear-btn" title="Очистити email" @click="form.email = ''">
-                <i class="bi bi-x-lg"></i>
-              </button>
             </div>
-            <input
-              v-model="form.email"
-              type="email"
-              class="contact-input"
-              placeholder="email@example.com"
-              @focus="emailFocused = true"
-              @blur="emailFocused = false"
-            >
-            <small v-if="form.email && !isEmailValid" class="contact-error">Вкажіть коректний email</small>
           </div>
         </div>
 
@@ -834,6 +838,11 @@ const handleOrderClose = () => {
 .contact-card { border: 1px solid #e2e8f0; border-radius: 12px; background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%); padding: 10px 12px; transition: border-color 0.2s ease, box-shadow 0.2s ease; }
 .contact-card.is-active { border-color: #93c5fd; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12); }
 .contact-card.is-invalid { border-color: #fca5a5; }
+.contact-card--compact { padding: 8px 10px; }
+.contact-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.contact-item { border: 1px solid transparent; border-radius: 10px; padding: 8px 10px; transition: border-color 0.2s ease, box-shadow 0.2s ease; }
+.contact-item.is-active { border-color: #93c5fd; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1); }
+.contact-item.is-invalid { border-color: #fca5a5; }
 .contact-card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
 .contact-label { display: inline-flex; align-items: center; gap: 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 700; color: #64748b; }
 .contact-label i { font-size: 13px; color: #94a3b8; }
@@ -954,6 +963,11 @@ const handleOrderClose = () => {
 
   .profile-mobile-header {
     display: flex;
+  }
+
+  .contact-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
   }
 }
 
