@@ -214,7 +214,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import ChatInput from './ChatInput.vue';
 import ChatMessage from './ChatMessage.vue';
 import {
@@ -251,6 +251,7 @@ const threadBody = ref(null);
 const localStage = ref('');
 const avatarFailed = ref(false);
 const isOriginExpanded = ref(false);
+let scrollTimeoutId = null;
 
 const stageOptions = [
   { value: '', label: 'Без етапу' },
@@ -357,13 +358,36 @@ function scrollToBottom() {
   threadBody.value.scrollTop = threadBody.value.scrollHeight;
 }
 
-onMounted(scrollToBottom);
+function queueScrollToBottom() {
+  scrollToBottom();
+  requestAnimationFrame(() => scrollToBottom());
+
+  if (scrollTimeoutId) {
+    clearTimeout(scrollTimeoutId);
+  }
+
+  scrollTimeoutId = window.setTimeout(() => {
+    scrollToBottom();
+    scrollTimeoutId = null;
+  }, 120);
+}
+
+onMounted(queueScrollToBottom);
+
+onUnmounted(() => {
+  if (!scrollTimeoutId) {
+    return;
+  }
+
+  clearTimeout(scrollTimeoutId);
+  scrollTimeoutId = null;
+});
 
 watch(
   () => props.messages.length,
   async () => {
     await nextTick();
-    scrollToBottom();
+    queueScrollToBottom();
   }
 );
 
@@ -372,7 +396,7 @@ watch(
   async (value) => {
     if (!value) {
       await nextTick();
-      scrollToBottom();
+      queueScrollToBottom();
     }
   }
 );
@@ -394,8 +418,10 @@ watch(
 
 watch(
   () => props.activeChat?.conversation_id,
-  () => {
+  async () => {
     isOriginExpanded.value = false;
+    await nextTick();
+    queueScrollToBottom();
   },
   { immediate: true }
 );

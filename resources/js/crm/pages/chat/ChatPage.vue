@@ -11,8 +11,9 @@
           @click="platformFilter = tab.value"
         >
           {{ tab.label }}
-          <span v-if="getPlatformTotal(tab.value) > 0" class="tab-count">{{ getPlatformTotal(tab.value) }}</span>
-          <span v-if="getPlatformUnread(tab.value) > 0" class="tab-unread-dot"></span>
+          <span v-if="getPlatformUnread(tab.value) > 0" class="tab-count is-unread">
+            {{ formatUnreadCount(getPlatformUnread(tab.value)) }}
+          </span>
         </button>
       </div>
     </template>
@@ -148,31 +149,30 @@ const filteredConversations = computed(() => {
 
 const tabStats = computed(() => {
   const stats = Object.fromEntries(
-    platformTabs.map((tab) => [tab.value, { total: 0, unread: 0 }])
+    platformTabs.map((tab) => [tab.value, { unread: 0 }])
   );
 
   conversations.value.forEach((chat) => {
+    const unreadCount = Math.max(0, Number(chat.unread_count || 0));
+
     platformTabs.forEach((tab) => {
       if (!matchConversationByTab(chat, tab.value)) {
         return;
       }
 
-      stats[tab.value].total += 1;
-      if (Number(chat.unread_count || 0) > 0) {
-        stats[tab.value].unread += 1;
-      }
+      stats[tab.value].unread += unreadCount;
     });
   });
 
   return stats;
 });
 
-function getPlatformTotal(platform) {
-  return tabStats.value[platform]?.total || 0;
-}
-
 function getPlatformUnread(platform) {
   return tabStats.value[platform]?.unread || 0;
+}
+
+function formatUnreadCount(count) {
+  return count > 99 ? '99+' : count;
 }
 
 function handleSelectChat(chat) {
@@ -351,11 +351,9 @@ onUnmounted(stopPolling);
   font-weight: 700;
 }
 
-.tab-unread-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #b42318;
+.tab-count.is-unread {
+  background: #fee2e2;
+  color: #b42318;
 }
 
 @media (max-width: 768px) {
