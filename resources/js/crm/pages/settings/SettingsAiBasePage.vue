@@ -305,77 +305,196 @@
         <header class="panel-head panel-head-split">
           <div>
             <h2>Мапінг "модель -> товар"</h2>
-            <p>Підкажіть агенту, як розпізнавати формулювання клієнта і привʼязувати їх до потрібних товарів.</p>
+            <p>Групуйте позиції за моделлю. Кожна модель може мати кілька колажів і багато товарів.</p>
           </div>
           <button type="button" class="btn btn-sm btn-outline-success" @click="addModelMap">
             <i class="bi bi-plus-lg me-1"></i>
-            Додати мапінг
+            Додати модель
           </button>
         </header>
 
         <div class="hint-box">
-          Одна модель = багато рядків у цій таблиці. Для кожного коду з колажу вкажіть товар.
+          Формат: спочатку модель і URL колажів, потім коди (20, 21, 41...) з привʼязкою до товару.
         </div>
 
-        <div class="stack-list">
-          <article v-for="map in modelMaps" :key="map.local_id" class="stack-card">
-            <div class="stack-grid">
-              <label class="field wide">
-                <span>Назва моделі</span>
-                <input v-model="map.model_phrase" type="text" placeholder="Домашні пухнасті тапки">
-              </label>
+        <div class="model-group-list">
+          <article v-for="group in groupedModelMaps" :key="group.key" class="model-group-card">
+            <header class="model-group-head">
+              <div class="model-group-main">
+                <h3>{{ group.modelPhrase || 'Нова модель' }}</h3>
+                <p>{{ group.items.length }} позицій • {{ group.activeCount }} активних</p>
 
-              <label class="field">
-                <span>Код у колажі</span>
-                <input v-model="map.item_code" type="text" placeholder="20">
-              </label>
+                <div v-if="group.collageUrls.length" class="model-collage-links">
+                  <a
+                    v-for="(url, idx) in group.collageUrls"
+                    :key="`${group.key}-${idx}-${url}`"
+                    :href="url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="model-collage-link"
+                  >
+                    Колаж {{ idx + 1 }}
+                  </a>
+                </div>
+                <p v-else class="model-empty-hint">Колажі ще не додані.</p>
+              </div>
 
-              <label class="field">
-                <span>URL колажу</span>
-                <input v-model="map.collage_url" type="text" placeholder="https://.../collage.jpg">
-              </label>
+              <div class="model-group-head-actions">
+                <button
+                  type="button"
+                  class="btn btn-sm btn-outline-dark"
+                  @click="toggleModelGroupEditor(group.key)"
+                >
+                  <i class="bi" :class="isModelGroupEditorOpen(group.key) ? 'bi-x-lg' : 'bi-pencil-square'"></i>
+                  {{ isModelGroupEditorOpen(group.key) ? 'Закрити' : 'Редагувати модель' }}
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-success" @click="addModelMapToGroup(group)">
+                  <i class="bi bi-plus-lg me-1"></i>
+                  Додати позицію
+                </button>
+                <button
+                  type="button"
+                  class="stage-toggle"
+                  :aria-expanded="isModelGroupExpanded(group.key)"
+                  @click="toggleModelGroupExpanded(group.key)"
+                >
+                  <i class="bi" :class="isModelGroupExpanded(group.key) ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+                  {{ isModelGroupExpanded(group.key) ? 'Згорнути' : 'Розгорнути' }}
+                </button>
+              </div>
+            </header>
 
-              <label class="field">
-                <span>Товар</span>
-                <select v-model="map.product_id" @change="onMapProductChange(map)">
-                  <option :value="null">—</option>
-                  <option v-for="product in products" :key="product.id" :value="product.id">
-                    #{{ product.id }} — {{ product.title }}
-                  </option>
-                </select>
-              </label>
+            <transition name="stage-collapse">
+              <div v-show="isModelGroupEditorOpen(group.key)" class="model-group-editor">
+                <div class="model-group-editor-grid">
+                  <label class="field">
+                    <span>Назва моделі</span>
+                    <input
+                      v-model="modelGroupDrafts[group.key].model_phrase"
+                      type="text"
+                      placeholder="Домашні пухнасті тапки"
+                    >
+                  </label>
 
-              <label class="field">
-                <span>Пріоритет</span>
-                <input v-model.number="map.priority" type="number" min="1" max="9999">
-              </label>
+                  <label class="field">
+                    <span>URL колажів</span>
+                    <textarea
+                      v-model="modelGroupDrafts[group.key].collage_urls_text"
+                      rows="3"
+                      placeholder="https://.../collage-1.jpg&#10;https://.../collage-2.jpg"
+                    ></textarea>
+                    <small class="field-hint">Можна 2-3 посилання. Одне посилання = один рядок.</small>
+                  </label>
+                </div>
 
-              <label class="switch-field">
-                <span>Активний</span>
-                <input v-model="map.is_active" type="checkbox">
-              </label>
-            </div>
+                <div class="card-actions">
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-dark"
+                    :disabled="modelGroupSaving[group.key]"
+                    @click="saveModelGroup(group)"
+                  >
+                    <span v-if="modelGroupSaving[group.key]" class="spinner-border spinner-border-sm me-2"></span>
+                    Зберегти модель
+                  </button>
+                </div>
+              </div>
+            </transition>
 
-            <label class="field">
-              <span>Нотатки</span>
-              <textarea v-model="map.notes" rows="3" placeholder="Службова примітка для команди"></textarea>
-            </label>
+            <transition name="stage-collapse">
+              <div v-show="isModelGroupExpanded(group.key)" class="model-item-list">
+                <article
+                  v-for="map in group.items"
+                  :key="map.local_id"
+                  class="model-item-card"
+                  :class="{ 'is-editing': isModelMapEditing(map), 'is-inactive': !map.is_active }"
+                >
+                  <div class="model-item-row">
+                    <div class="model-item-main">
+                      <h4>Код: {{ map.item_code || '—' }}</h4>
+                      <p>{{ productTitleById(map.product_id) }}</p>
+                    </div>
 
-            <div class="card-actions">
-              <button type="button" class="btn btn-sm btn-dark" :disabled="map.saving" @click="saveModelMap(map)">
-                <span v-if="map.saving" class="spinner-border spinner-border-sm me-2"></span>
-                Зберегти
-              </button>
-              <button
-                type="button"
-                class="btn btn-sm btn-outline-danger"
-                :disabled="map.saving"
-                @click="deleteModelMap(map)"
-              >
-                Видалити
-              </button>
-            </div>
+                    <div class="model-item-meta">
+                      <span class="knowledge-meta-chip">Пріоритет: {{ map.priority || 100 }}</span>
+                      <span class="knowledge-meta-chip" :class="map.is_active ? 'is-active' : 'is-disabled'">
+                        {{ map.is_active ? 'Активний' : 'Вимкнений' }}
+                      </span>
+                    </div>
+
+                    <div class="knowledge-actions">
+                      <button
+                        type="button"
+                        class="icon-action-btn"
+                        :title="isModelMapEditing(map) ? 'Закрити редактор' : 'Редагувати'"
+                        :disabled="map.saving"
+                        @click="toggleModelMapEditor(map)"
+                      >
+                        <i class="bi" :class="isModelMapEditing(map) ? 'bi-x-lg' : 'bi-pencil-square'"></i>
+                      </button>
+                      <button
+                        type="button"
+                        class="icon-action-btn danger"
+                        title="Видалити"
+                        :disabled="map.saving"
+                        @click="deleteModelMap(map)"
+                      >
+                        <i class="bi bi-trash3"></i>
+                      </button>
+                    </div>
+                  </div>
+
+                  <transition name="stage-collapse">
+                    <div v-show="isModelMapEditing(map)" class="model-item-editor">
+                      <div class="model-item-editor-grid">
+                        <label class="field">
+                          <span>Код у колажі</span>
+                          <input v-model="map.item_code" type="text" placeholder="20">
+                        </label>
+
+                        <label class="field">
+                          <span>Товар</span>
+                          <select v-model="map.product_id" @change="onMapProductChange(map)">
+                            <option :value="null">—</option>
+                            <option v-for="product in products" :key="product.id" :value="product.id">
+                              #{{ product.id }} — {{ product.title }}
+                            </option>
+                          </select>
+                        </label>
+
+                        <label class="field">
+                          <span>Пріоритет</span>
+                          <input v-model.number="map.priority" type="number" min="1" max="9999">
+                        </label>
+
+                        <label class="switch-field">
+                          <span>Активний</span>
+                          <input v-model="map.is_active" type="checkbox">
+                        </label>
+                      </div>
+
+                      <label class="field">
+                        <span>Нотатки</span>
+                        <textarea v-model="map.notes" rows="3" placeholder="Службова примітка для команди"></textarea>
+                      </label>
+
+                      <div class="card-actions">
+                        <button type="button" class="btn btn-sm btn-dark" :disabled="map.saving" @click="saveModelMap(map)">
+                          <span v-if="map.saving" class="spinner-border spinner-border-sm me-2"></span>
+                          Зберегти
+                        </button>
+                      </div>
+                    </div>
+                  </transition>
+                </article>
+              </div>
+            </transition>
           </article>
+
+          <div v-if="groupedModelMaps.length === 0" class="knowledge-empty">
+            <i class="bi bi-diagram-3"></i>
+            <p>Ще немає моделей. Натисніть "Додати модель", щоб почати.</p>
+          </div>
         </div>
       </section>
     </div>
@@ -383,7 +502,7 @@
 </template>
 
 <script setup>
-import { onBeforeUnmount, onMounted, reactive, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import http from '@/crm/api/http';
 
 const stageDefs = [
@@ -441,18 +560,21 @@ const knowledgeTypeOptions = [
 const loading = ref(false);
 const agents = ref([]);
 const products = ref([]);
-const colors = ref([]);
 const knowledgeItems = ref([]);
 const modelMaps = ref([]);
 const selectedAgentCode = ref('');
 const promptSaving = reactive({});
 const prompts = reactive({});
 const promptDrafts = reactive({});
-const variantOptionsByProduct = reactive({});
 const stageExpanded = reactive(
   Object.fromEntries(stageDefs.map((stage) => [stage.code, false]))
 );
 const knowledgeEditorId = ref(null);
+const modelMapEditorId = ref(null);
+const modelGroupExpanded = reactive({});
+const modelGroupEditorOpen = reactive({});
+const modelGroupDrafts = reactive({});
+const modelGroupSaving = reactive({});
 
 const toast = reactive({
   show: false,
@@ -570,34 +692,251 @@ function normalizeModelMapRow(map = {}) {
   };
 }
 
-async function ensureVariantsLoaded(productId) {
+function normalizeModelPhrase(value) {
+  return String(value || '').trim();
+}
+
+function parseCollageUrls(rawValue) {
+  const values = String(rawValue || '')
+    .split(/\r?\n|,/g)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+
+  return [...new Set(values)];
+}
+
+function collageUrlsToText(urls = []) {
+  return [...new Set((Array.isArray(urls) ? urls : []).map((url) => String(url || '').trim()).filter((url) => url.length > 0))]
+    .join('\n');
+}
+
+function buildModelGroupDraft(group) {
+  return {
+    model_phrase: String(group?.modelPhrase || ''),
+    collage_urls_text: collageUrlsToText(group?.collageUrls || []),
+  };
+}
+
+function modelGroupKeyByMap(map) {
+  const phrase = normalizeModelPhrase(map?.model_phrase);
+  if (phrase.length > 0) {
+    return `model:${phrase.toLocaleLowerCase('uk-UA')}`;
+  }
+
+  return `draft:${map?.local_id || Math.random()}`;
+}
+
+const productTitleMap = computed(() => {
+  const map = new Map();
+  for (const product of products.value) {
+    map.set(Number(product.id), String(product.title || 'Товар без назви'));
+  }
+  return map;
+});
+
+function productTitleById(productId) {
   const normalizedId = Number(productId || 0);
   if (!normalizedId) {
-    return;
+    return 'Товар не обрано';
   }
 
-  if (Array.isArray(variantOptionsByProduct[normalizedId])) {
-    return;
+  const title = productTitleMap.value.get(normalizedId) || 'Товар без назви';
+  return `#${normalizedId} — ${title}`;
+}
+
+const groupedModelMaps = computed(() => {
+  const groups = new Map();
+
+  for (const map of modelMaps.value) {
+    const key = modelGroupKeyByMap(map);
+    const modelPhrase = normalizeModelPhrase(map.model_phrase);
+
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        modelPhrase,
+        items: [],
+        activeCount: 0,
+        collageUrls: [],
+      });
+    }
+
+    const group = groups.get(key);
+    group.items.push(map);
+    if (map.is_active) {
+      group.activeCount += 1;
+    }
   }
 
-  try {
-    const { data } = await http.get(`/settings/ai/base/products/${normalizedId}/variants`);
-    variantOptionsByProduct[normalizedId] = Array.isArray(data?.data) ? data.data : [];
-  } catch (error) {
-    variantOptionsByProduct[normalizedId] = [];
-    showToast(error.response?.data?.message || 'Не вдалося завантажити варіанти товару.', 'error');
+  const result = [...groups.values()].map((group) => {
+    const urls = [];
+    const seen = new Set();
+
+    group.items.sort((left, right) => {
+      const priorityDiff = Number(left.priority || 100) - Number(right.priority || 100);
+      if (priorityDiff !== 0) {
+        return priorityDiff;
+      }
+
+      return String(left.item_code || '').localeCompare(String(right.item_code || ''), 'uk', { sensitivity: 'base' });
+    });
+
+    for (const item of group.items) {
+      for (const url of parseCollageUrls(item.collage_url)) {
+        if (!seen.has(url)) {
+          seen.add(url);
+          urls.push(url);
+        }
+      }
+    }
+
+    group.collageUrls = urls;
+    return group;
+  });
+
+  result.sort((left, right) => {
+    const leftTitle = left.modelPhrase || '';
+    const rightTitle = right.modelPhrase || '';
+    if (!leftTitle && rightTitle) {
+      return -1;
+    }
+    if (leftTitle && !rightTitle) {
+      return 1;
+    }
+    return leftTitle.localeCompare(rightTitle, 'uk', { sensitivity: 'base' });
+  });
+
+  return result;
+});
+
+watch(
+  groupedModelMaps,
+  (groups) => {
+    const keys = new Set(groups.map((group) => group.key));
+
+    for (const key of Object.keys(modelGroupExpanded)) {
+      if (!keys.has(key)) {
+        delete modelGroupExpanded[key];
+      }
+    }
+    for (const key of Object.keys(modelGroupEditorOpen)) {
+      if (!keys.has(key)) {
+        delete modelGroupEditorOpen[key];
+      }
+    }
+    for (const key of Object.keys(modelGroupDrafts)) {
+      if (!keys.has(key)) {
+        delete modelGroupDrafts[key];
+      }
+    }
+    for (const key of Object.keys(modelGroupSaving)) {
+      if (!keys.has(key)) {
+        delete modelGroupSaving[key];
+      }
+    }
+
+    for (const group of groups) {
+      if (typeof modelGroupExpanded[group.key] === 'undefined') {
+        modelGroupExpanded[group.key] = false;
+      }
+      if (typeof modelGroupEditorOpen[group.key] === 'undefined') {
+        modelGroupEditorOpen[group.key] = false;
+      }
+      if (!modelGroupDrafts[group.key]) {
+        modelGroupDrafts[group.key] = buildModelGroupDraft(group);
+      }
+      if (typeof modelGroupSaving[group.key] === 'undefined') {
+        modelGroupSaving[group.key] = false;
+      }
+    }
+  },
+  { immediate: true }
+);
+
+function isModelGroupExpanded(groupKey) {
+  return modelGroupExpanded[groupKey] === true;
+}
+
+function toggleModelGroupExpanded(groupKey) {
+  modelGroupExpanded[groupKey] = !isModelGroupExpanded(groupKey);
+}
+
+function isModelGroupEditorOpen(groupKey) {
+  return modelGroupEditorOpen[groupKey] === true;
+}
+
+function toggleModelGroupEditor(groupKey) {
+  modelGroupEditorOpen[groupKey] = !isModelGroupEditorOpen(groupKey);
+  if (modelGroupEditorOpen[groupKey]) {
+    const group = groupedModelMaps.value.find((entry) => entry.key === groupKey);
+    modelGroupDrafts[groupKey] = buildModelGroupDraft(group || {});
   }
 }
 
-function variantsByProduct(productId) {
-  const normalizedId = Number(productId || 0);
-  if (!normalizedId) {
-    return [];
+function isModelMapEditing(map) {
+  return modelMapEditorId.value === map.local_id;
+}
+
+function toggleModelMapEditor(map) {
+  modelMapEditorId.value = isModelMapEditing(map) ? null : map.local_id;
+}
+
+async function saveModelGroup(group) {
+  const draft = modelGroupDrafts[group.key];
+  if (!draft) {
+    return;
   }
 
-  return Array.isArray(variantOptionsByProduct[normalizedId])
-    ? variantOptionsByProduct[normalizedId]
-    : [];
+  const modelPhrase = normalizeModelPhrase(draft.model_phrase);
+  if (!modelPhrase) {
+    showToast('Вкажіть назву моделі.', 'error');
+    return;
+  }
+
+  const collageUrlText = collageUrlsToText(parseCollageUrls(draft.collage_urls_text));
+  modelGroupSaving[group.key] = true;
+
+  try {
+    let skippedRows = 0;
+    let savedRows = 0;
+
+    for (const row of group.items) {
+      row.model_phrase = modelPhrase;
+      row.collage_url = collageUrlText;
+
+      if (!row.id && (!normalizeModelPhrase(row.item_code) || !row.product_id)) {
+        skippedRows += 1;
+        continue;
+      }
+
+      // eslint-disable-next-line no-await-in-loop
+      const isSaved = await saveModelMap(row, { silent: true });
+      if (isSaved) {
+        savedRows += 1;
+      }
+    }
+
+    modelGroupEditorOpen[group.key] = false;
+
+    if (savedRows > 0 && skippedRows > 0) {
+      showToast(`Модель оновлено. ${skippedRows} нових позицій не збережено: заповніть код і товар.`, 'error');
+      return;
+    }
+
+    if (savedRows > 0) {
+      showToast('Модель оновлено.');
+      return;
+    }
+
+    if (skippedRows > 0) {
+      showToast('Спочатку заповніть код і товар хоча б для однієї позиції.', 'error');
+      return;
+    }
+
+    showToast('Змін не було.');
+  } finally {
+    modelGroupSaving[group.key] = false;
+  }
 }
 
 async function loadData() {
@@ -612,7 +951,6 @@ async function loadData() {
 
     agents.value = Array.isArray(data?.agents) ? data.agents : [];
     products.value = Array.isArray(data?.products) ? data.products : [];
-    colors.value = Array.isArray(data?.colors) ? data.colors : [];
     selectedAgentCode.value = String(data?.selected_agent_code || agents.value[0]?.code || '');
 
     const serverPrompts = data?.prompts && typeof data.prompts === 'object' ? data.prompts : {};
@@ -635,12 +973,7 @@ async function loadData() {
     modelMaps.value = Array.isArray(data?.model_maps)
       ? data.model_maps.map((map) => normalizeModelMapRow(map))
       : [];
-
-    const productIds = [...new Set(modelMaps.value.map((item) => Number(item.product_id || 0)).filter((id) => id > 0))];
-    for (const productId of productIds) {
-      // eslint-disable-next-line no-await-in-loop
-      await ensureVariantsLoaded(productId);
-    }
+    modelMapEditorId.value = null;
   } catch (error) {
     showToast(error.response?.data?.message || 'Не вдалося завантажити AI базу.', 'error');
   } finally {
@@ -748,30 +1081,64 @@ async function deleteKnowledgeItem(item) {
 }
 
 function addModelMap() {
-  modelMaps.value.unshift(normalizeModelMapRow());
+  const created = normalizeModelMapRow({
+    model_phrase: '',
+    collage_url: '',
+    priority: 100,
+    is_active: true,
+  });
+  modelMaps.value.unshift(created);
+  modelMapEditorId.value = created.local_id;
+
+  const groupKey = modelGroupKeyByMap(created);
+  modelGroupExpanded[groupKey] = true;
+  modelGroupEditorOpen[groupKey] = true;
+  modelGroupDrafts[groupKey] = buildModelGroupDraft({
+    modelPhrase: '',
+    collageUrls: [],
+  });
 }
 
-async function onMapProductChange(map) {
-  map.variant_id = null;
-  await ensureVariantsLoaded(map.product_id);
+function addModelMapToGroup(group) {
+  const created = normalizeModelMapRow({
+    model_phrase: String(group.modelPhrase || ''),
+    collage_url: collageUrlsToText(group.collageUrls),
+    priority: 100,
+    is_active: true,
+  });
+
+  modelMaps.value.unshift(created);
+  modelMapEditorId.value = created.local_id;
+  modelGroupExpanded[group.key] = true;
 }
 
-async function saveModelMap(map) {
+function onMapProductChange() {
+  // Зарезервовано для подальших реакцій після вибору товару.
+}
+
+async function saveModelMap(map, options = {}) {
+  const silent = options.silent === true;
   map.saving = true;
   try {
     if (!map.model_phrase || !String(map.model_phrase).trim()) {
-      showToast('Вкажіть назву моделі.', 'error');
-      return;
+      if (!silent) {
+        showToast('Вкажіть назву моделі.', 'error');
+      }
+      return false;
     }
 
     if (!map.item_code || !String(map.item_code).trim()) {
-      showToast('Вкажіть код з колажу.', 'error');
-      return;
+      if (!silent) {
+        showToast('Вкажіть код з колажу.', 'error');
+      }
+      return false;
     }
 
     if (!map.product_id) {
-      showToast('Оберіть товар для мапінгу.', 'error');
-      return;
+      if (!silent) {
+        showToast('Оберіть товар для мапінгу.', 'error');
+      }
+      return false;
     }
 
     const payload = {
@@ -794,12 +1161,17 @@ async function saveModelMap(map) {
     const savedMap = response?.data?.map;
     if (savedMap) {
       Object.assign(map, normalizeModelMapRow(savedMap));
-      await ensureVariantsLoaded(map.product_id);
     }
 
-    showToast(response?.data?.message || 'Мапінг збережено.');
+    if (!silent) {
+      showToast(response?.data?.message || 'Мапінг збережено.');
+    }
+    return true;
   } catch (error) {
-    showToast(error.response?.data?.message || 'Не вдалося зберегти мапінг.', 'error');
+    if (!silent) {
+      showToast(error.response?.data?.message || 'Не вдалося зберегти мапінг.', 'error');
+    }
+    return false;
   } finally {
     map.saving = false;
   }
@@ -808,6 +1180,9 @@ async function saveModelMap(map) {
 async function deleteModelMap(map) {
   if (!map.id) {
     modelMaps.value = modelMaps.value.filter((row) => row.local_id !== map.local_id);
+    if (modelMapEditorId.value === map.local_id) {
+      modelMapEditorId.value = null;
+    }
     return;
   }
 
@@ -815,6 +1190,9 @@ async function deleteModelMap(map) {
   try {
     const { data } = await http.delete(`/settings/ai/base/model-maps/${map.id}`);
     modelMaps.value = modelMaps.value.filter((row) => row.id !== map.id);
+    if (modelMapEditorId.value === map.local_id) {
+      modelMapEditorId.value = null;
+    }
     showToast(data?.message || 'Мапінг видалено.');
   } catch (error) {
     showToast(error.response?.data?.message || 'Не вдалося видалити мапінг.', 'error');
@@ -1286,6 +1664,159 @@ h1 {
   font-size: 13px;
 }
 
+.model-group-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.model-group-card {
+  border: 1px solid #dbe4ef;
+  border-radius: 14px;
+  background: #fcfdff;
+  box-shadow: 0 10px 24px -30px rgba(15, 23, 42, 0.4);
+  overflow: hidden;
+}
+
+.model-group-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 12px;
+  align-items: center;
+}
+
+.model-group-main h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.model-group-main p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.model-collage-links {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.model-collage-link {
+  text-decoration: none;
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 6px 10px;
+}
+
+.model-collage-link:hover {
+  border-color: #93c5fd;
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.model-empty-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.model-group-head-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.model-group-editor {
+  border-top: 1px dashed #dbe4ef;
+  background: #fbfdff;
+  padding: 12px;
+}
+
+.model-group-editor-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.model-item-list {
+  border-top: 1px dashed #dbe4ef;
+  background: #fbfdff;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.model-item-card {
+  border: 1px solid #dbe4ef;
+  border-radius: 12px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.model-item-card.is-editing {
+  border-color: #bfd8ff;
+  box-shadow: 0 12px 26px -30px rgba(37, 99, 235, 0.55);
+}
+
+.model-item-card.is-inactive {
+  opacity: 0.88;
+}
+
+.model-item-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 11px;
+}
+
+.model-item-main h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.model-item-main p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.model-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.model-item-editor {
+  border-top: 1px dashed #dbe4ef;
+  background: #fbfdff;
+  padding: 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.model-item-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
 .stage-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -1638,6 +2169,28 @@ h1 {
     grid-template-columns: 1fr;
   }
 
+  .model-group-head {
+    grid-template-columns: 1fr;
+    align-items: flex-start;
+  }
+
+  .model-group-head-actions {
+    justify-content: flex-start;
+  }
+
+  .model-group-editor-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .model-item-row {
+    grid-template-columns: 1fr;
+    align-items: flex-start;
+  }
+
+  .model-item-editor-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .stack-grid {
     grid-template-columns: 1fr 1fr;
   }
@@ -1677,6 +2230,10 @@ h1 {
 
   .stack-grid .field.wide {
     grid-column: span 1;
+  }
+
+  .model-item-editor-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>
