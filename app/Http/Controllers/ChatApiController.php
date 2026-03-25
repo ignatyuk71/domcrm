@@ -34,7 +34,16 @@ class ChatApiController extends Controller
         try {
             $conversations = ChatConversation::query()
                 ->where('status', '!=', 'archived')
-                ->with(['contact', 'customer', 'stage', 'assignedUser'])
+                ->with([
+                    'contact',
+                    'customer',
+                    'stage',
+                    'assignedUser',
+                    'aiState',
+                    'aiState.selectedProduct:id,title',
+                    'aiState.selectedVariant:id,size',
+                    'aiState.selectedColor:id,name',
+                ])
                 ->orderByDesc('last_message_at')
                 ->paginate(20);
 
@@ -57,7 +66,16 @@ class ChatApiController extends Controller
     {
         $conversations = ChatConversation::query()
             ->where('status', '!=', 'archived')
-            ->with(['contact', 'customer', 'stage', 'assignedUser'])
+            ->with([
+                'contact',
+                'customer',
+                'stage',
+                'assignedUser',
+                'aiState',
+                'aiState.selectedProduct:id,title',
+                'aiState.selectedVariant:id,size',
+                'aiState.selectedColor:id,name',
+            ])
             ->orderByDesc('last_message_at')
             ->get();
 
@@ -116,7 +134,17 @@ class ChatApiController extends Controller
 
         $conversation->meta = $meta;
         $conversation->save();
-        $conversation = $conversation->fresh(['contact', 'customer', 'stage', 'assignedUser', 'lastMessage.attachments']);
+        $conversation = $conversation->fresh([
+            'contact',
+            'customer',
+            'stage',
+            'assignedUser',
+            'lastMessage.attachments',
+            'aiState',
+            'aiState.selectedProduct:id,title',
+            'aiState.selectedVariant:id,size',
+            'aiState.selectedColor:id,name',
+        ]);
 
         return response()->json([
             'data' => $this->formatConversation($conversation),
@@ -550,7 +578,17 @@ class ChatApiController extends Controller
         }
 
         $conversation = $this->chatService->hydrateConversationProfile($conversation, $metaService, true);
-        $conversation = $conversation->fresh(['contact', 'customer', 'stage', 'assignedUser', 'lastMessage.attachments']);
+        $conversation = $conversation->fresh([
+            'contact',
+            'customer',
+            'stage',
+            'assignedUser',
+            'lastMessage.attachments',
+            'aiState',
+            'aiState.selectedProduct:id,title',
+            'aiState.selectedVariant:id,size',
+            'aiState.selectedColor:id,name',
+        ]);
 
         return response()->json(['data' => $this->formatConversation($conversation)]);
     }
@@ -592,6 +630,24 @@ class ChatApiController extends Controller
         $aiEnabled = array_key_exists('enabled', $aiMeta)
             ? (bool) $aiMeta['enabled']
             : true;
+        $aiStage = is_string($aiMeta['stage'] ?? null) ? $aiMeta['stage'] : null;
+        $aiState = $conversation->aiState;
+        $slots = is_array($aiState?->slots_json) ? $aiState->slots_json : [];
+        $delivery = is_array($slots['delivery'] ?? null) ? $slots['delivery'] : [];
+        $selectedSize = $aiState?->selected_size ?: ($aiState?->selectedVariant?->size ?? null);
+
+        $summaryParts = [];
+        if ($aiState?->selectedProduct?->title) {
+            $summaryParts[] = (string) $aiState->selectedProduct->title;
+        }
+        if ($aiState?->selectedColor?->name) {
+            $summaryParts[] = (string) $aiState->selectedColor->name;
+        }
+        if ($selectedSize) {
+            $summaryParts[] = (string) $selectedSize;
+        }
+
+        $stageOrder = $this->resolveAiStageOrder($aiStage);
 
         return [
             'conversation_id' => $conversation->id,
@@ -628,13 +684,73 @@ class ChatApiController extends Controller
             ] : null,
             'ai' => [
                 'enabled' => $aiEnabled,
-                'stage' => is_string($aiMeta['stage'] ?? null) ? $aiMeta['stage'] : null,
+                'stage' => $aiStage,
+                'stage_order' => $stageOrder,
+                'stage_label' => $this->resolveAiStageLabel($aiStage),
+                'stage_badge' => $this->resolveAiStageBadge($aiStage),
                 'agent_code' => is_string($aiMeta['agent_code'] ?? null) ? $aiMeta['agent_code'] : $aiDefaults['default_agent_code'],
                 'last_run_id' => is_numeric($aiMeta['last_run_id'] ?? null) ? (int) $aiMeta['last_run_id'] : null,
                 'updated_at' => is_string($aiMeta['updated_at'] ?? null) ? $aiMeta['updated_at'] : null,
                 'reply_delay_seconds' => (int) $aiDefaults['reply_delay_seconds'],
+                'collected' => [
+                    'product' => $aiState?->selectedProduct ? [
+                        'id' => $aiState->selectedProduct->id,
+                        'title' => $aiState->selectedProduct->title,
+                    ] : null,
+                    'variant' => $aiState?->selectedVariant ? [
+                        'id' => $aiState->selectedVariant->id,
+                        'size' => $aiState->selectedVariant->size,
+                    ] : null,
+                    'color' => $aiState?->selectedColor ? [
+                        'id' => $aiState->selectedColor->id,
+                        'name' => $aiState->selectedColor->name,
+                    ] : null,
+                    'size' => $selectedSize,
+                    'intent_purchase' => (bool) ($aiState?->intent_purchase ?? false),
+                    'delivery' => [
+                        'name' => is_string($delivery['name'] ?? null) ? $delivery['name'] : null,
+                        'phone' => is_string($delivery['phone'] ?? null) ? $delivery['phone'] : null,
+                        'city' => is_string($delivery['city'] ?? null) ? $delivery['city'] : null,
+                        'warehouse' => is_string($delivery['warehouse'] ?? null) ? $delivery['warehouse'] : null,
+                    ],
+                    'missing_slots' => is_array($aiState?->missing_slots_json) ? $aiState->missing_slots_json : [],
+                    'summary' => $summaryParts !== [] ? implode(', ', $summaryParts) : null,
+                ],
             ],
         ];
+    }
+
+    private function resolveAiStageOrder(?string $stage): int
+    {
+        return match ($stage) {
+            'interest' => 1,
+            'selection' => 2,
+            'checkout_ready' => 3,
+            'checkout' => 4,
+            default => 1,
+        };
+    }
+
+    private function resolveAiStageLabel(?string $stage): string
+    {
+        return match ($stage) {
+            'interest' => 'Зацікавлення',
+            'selection' => 'Підбір',
+            'checkout_ready' => 'Готовність до оформлення',
+            'checkout' => 'Оформлення',
+            default => 'Зацікавлення',
+        };
+    }
+
+    private function resolveAiStageBadge(?string $stage): string
+    {
+        return match ($stage) {
+            'interest' => 'Консультація',
+            'selection' => 'Підбір',
+            'checkout_ready' => 'Перед оформленням',
+            'checkout' => 'Оформлення',
+            default => 'Консультація',
+        };
     }
 
     private function getAiDefaults(): array

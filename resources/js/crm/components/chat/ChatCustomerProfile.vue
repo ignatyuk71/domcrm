@@ -233,7 +233,7 @@
 
         <div class="ai-container">
           <div class="section-header">
-            <span class="section-title">Поведінка AI</span>
+            <span class="section-title">Поля для збору</span>
             <span class="counter-badge" :class="aiEnabled ? 'is-on' : 'is-off'">
               {{ aiEnabled ? 'ON' : 'OFF' }}
             </span>
@@ -269,22 +269,57 @@
                   </button>
                 </div>
 
-                <div class="ai-meta-grid">
-                  <div class="ai-meta-item">
-                    <span>Агент</span>
-                    <strong>{{ aiAgentCode }}</strong>
+                <div class="ai-pipeline-card">
+                  <div class="ai-pipeline-head">
+                    <span class="ai-pipeline-title">Етап процесу</span>
+                    <span class="ai-stage-chip">{{ aiStageBadge }}</span>
                   </div>
-                  <div class="ai-meta-item">
-                    <span>Етап</span>
-                    <strong>{{ aiStageLabel }}</strong>
+
+                  <div class="ai-steps">
+                    <div
+                      v-for="step in aiSteps"
+                      :key="step.code"
+                      class="ai-step"
+                      :class="`state-${step.state}`"
+                    >
+                      <span class="ai-step-dot"></span>
+                      <span class="ai-step-label">{{ step.title }}</span>
+                    </div>
                   </div>
-                  <div class="ai-meta-item">
-                    <span>Затримка</span>
-                    <strong>{{ aiReplyDelayText }}</strong>
+                </div>
+
+                <div class="ai-pipeline-card">
+                  <div class="ai-pipeline-head">
+                    <span class="ai-pipeline-title">Поля для збору</span>
+                    <span class="ai-stage-mini">{{ aiStageBadge }}</span>
                   </div>
-                  <div class="ai-meta-item">
-                    <span>Оновлено</span>
-                    <strong>{{ aiUpdatedAtText }}</strong>
+
+                  <div class="ai-collected-block">
+                    <div class="ai-collected-subtitle">Поточний інтерес</div>
+                    <ul class="ai-collected-list">
+                      <li><strong>Модель:</strong> {{ aiCollectedModel }}</li>
+                      <li><strong>Колір:</strong> {{ aiCollectedColor }}</li>
+                      <li><strong>Розмір:</strong> {{ aiCollectedSize }}</li>
+                    </ul>
+                  </div>
+
+                  <div class="ai-collected-block">
+                    <div class="ai-collected-subtitle">Поля оформлення</div>
+                    <div class="ai-delivery-grid">
+                      <div v-for="row in aiDeliveryRows" :key="row.key" class="ai-delivery-item" :class="{ 'is-done': row.done }">
+                        <i class="bi" :class="row.done ? 'bi-check-circle-fill' : 'bi-circle'"></i>
+                        <span>{{ row.label }}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="ai-collected-block">
+                    <div class="ai-collected-subtitle">Короткий підсумок</div>
+                    <div class="ai-summary-box">{{ aiSummaryText }}</div>
+                  </div>
+
+                  <div v-if="aiMissingSlotsText" class="ai-missing-slots">
+                    Потрібно ще: {{ aiMissingSlotsText }}
                   </div>
                 </div>
               </div>
@@ -503,7 +538,7 @@ const aiPayload = computed(() => (
     : {}
 ));
 const aiEnabled = computed(() => aiPayload.value.enabled !== false);
-const aiAgentCode = computed(() => aiPayload.value.agent_code || 'sales_assistant_v1');
+const aiStageCode = computed(() => String(aiPayload.value.stage || '').trim());
 const aiStageLabel = computed(() => {
   const map = {
     interest: 'Зацікавлення',
@@ -512,25 +547,102 @@ const aiStageLabel = computed(() => {
     checkout: 'Оформлення',
   };
 
-  const stage = String(aiPayload.value.stage || '').trim();
-  return map[stage] || 'Початковий';
+  return String(aiPayload.value.stage_label || map[aiStageCode.value] || 'Зацікавлення');
 });
-const aiReplyDelayText = computed(() => {
-  const seconds = Number(aiPayload.value.reply_delay_seconds || 0);
-  return Number.isFinite(seconds) && seconds > 0 ? `${seconds} сек` : '—';
+const aiStageBadge = computed(() => {
+  const map = {
+    interest: 'Консультація',
+    selection: 'Підбір',
+    checkout_ready: 'Перед оформленням',
+    checkout: 'Оформлення',
+  };
+
+  return String(aiPayload.value.stage_badge || map[aiStageCode.value] || 'Консультація');
 });
-const aiUpdatedAtText = computed(() => {
-  const raw = String(aiPayload.value.updated_at || '').trim();
-  if (!raw) return '—';
-  const date = new Date(raw);
-  if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleString('uk-UA', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+const aiCollected = computed(() => (
+  aiPayload.value.collected && typeof aiPayload.value.collected === 'object'
+    ? aiPayload.value.collected
+    : {}
+));
+const aiCurrentStep = computed(() => {
+  const raw = Number(aiPayload.value.stage_order || 0);
+  if (raw >= 1 && raw <= 4) {
+    return raw;
+  }
+
+  const map = {
+    interest: 1,
+    selection: 2,
+    checkout_ready: 3,
+    checkout: 4,
+  };
+
+  return map[aiStageCode.value] || 1;
+});
+const aiSteps = computed(() => {
+  const steps = [
+    { code: 'interest', title: 'Зацікавлення', order: 1 },
+    { code: 'selection', title: 'Підбір', order: 2 },
+    { code: 'checkout_ready', title: 'Готовність', order: 3 },
+    { code: 'checkout', title: 'Оформлення', order: 4 },
+  ];
+
+  return steps.map((step) => ({
+    ...step,
+    state: step.order < aiCurrentStep.value
+      ? 'done'
+      : step.order === aiCurrentStep.value
+        ? 'current'
+        : 'pending',
+  }));
+});
+const aiCollectedModel = computed(() => String(aiCollected.value?.product?.title || '—'));
+const aiCollectedColor = computed(() => String(aiCollected.value?.color?.name || '—'));
+const aiCollectedSize = computed(() => String(aiCollected.value?.size || aiCollected.value?.variant?.size || '—'));
+const aiDelivery = computed(() => (
+  aiCollected.value.delivery && typeof aiCollected.value.delivery === 'object'
+    ? aiCollected.value.delivery
+    : {}
+));
+const aiDeliveryRows = computed(() => ([
+  { key: 'name', label: 'Імʼя та прізвище', done: !!String(aiDelivery.value.name || '').trim() },
+  { key: 'phone', label: 'Телефон', done: !!String(aiDelivery.value.phone || '').trim() },
+  { key: 'city', label: 'Місто', done: !!String(aiDelivery.value.city || '').trim() },
+  { key: 'warehouse', label: 'Відділення/поштомат', done: !!String(aiDelivery.value.warehouse || '').trim() },
+]));
+const aiSummaryText = computed(() => {
+  const summary = String(aiCollected.value.summary || '').trim();
+  if (summary !== '') {
+    return summary;
+  }
+
+  const parts = [];
+  if (aiCollectedModel.value !== '—') parts.push(aiCollectedModel.value);
+  if (aiCollectedColor.value !== '—') parts.push(aiCollectedColor.value);
+  if (aiCollectedSize.value !== '—') parts.push(aiCollectedSize.value);
+
+  return parts.length ? parts.join(', ') : 'Ще немає достатньо даних для підсумку.';
+});
+const aiMissingSlotsText = computed(() => {
+  const missing = Array.isArray(aiCollected.value?.missing_slots) ? aiCollected.value.missing_slots : [];
+  if (!missing.length) {
+    return '';
+  }
+
+  const labels = {
+    selected_product: 'модель товару',
+    selected_size: 'розмір',
+    selected_variant: 'варіант',
+    purchase_intent: 'підтвердження наміру купити',
+    name: 'імʼя',
+    phone: 'телефон',
+    city: 'місто',
+    warehouse: 'відділення/поштомат',
+  };
+
+  return missing
+    .map((key) => labels[key] || key)
+    .join(', ');
 });
 
 function syncFormFromCustomer(customer, { resetPanels = false } = {}) {
@@ -1046,10 +1158,152 @@ const handleOrderClose = () => {
   transition: transform 0.2s ease;
 }
 .ai-switch-btn.is-on .ai-switch-knob { transform: translateX(20px); }
-.ai-meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.ai-meta-item { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
-.ai-meta-item span { font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: .04em; font-weight: 700; }
-.ai-meta-item strong { font-size: 12px; color: #0f172a; }
+.ai-pipeline-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ai-pipeline-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ai-pipeline-title {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+.ai-stage-chip {
+  background: #fff7ed;
+  color: #c2410c;
+  border: 1px solid #fed7aa;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.ai-stage-mini {
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.ai-steps {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.ai-step {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+.ai-step-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #cbd5e1;
+  flex-shrink: 0;
+}
+.ai-step-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #475569;
+}
+.ai-step.state-done {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+.ai-step.state-done .ai-step-dot { background: #16a34a; }
+.ai-step.state-done .ai-step-label { color: #166534; }
+.ai-step.state-current {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+.ai-step.state-current .ai-step-dot { background: #2563eb; }
+.ai-step.state-current .ai-step-label { color: #1d4ed8; }
+
+.ai-collected-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ai-collected-subtitle {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #64748b;
+  letter-spacing: .04em;
+}
+.ai-collected-list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #334155;
+}
+.ai-collected-list li {
+  font-size: 13px;
+}
+.ai-summary-box {
+  border: 1px solid #dbeafe;
+  background: #f8fbff;
+  color: #1e293b;
+  border-radius: 10px;
+  padding: 10px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+.ai-delivery-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+.ai-delivery-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+.ai-delivery-item i {
+  color: #94a3b8;
+  font-size: 12px;
+}
+.ai-delivery-item.is-done {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+}
+.ai-delivery-item.is-done i {
+  color: #16a34a;
+}
+.ai-missing-slots {
+  border-top: 1px dashed #e2e8f0;
+  padding-top: 8px;
+  font-size: 11px;
+  color: #64748b;
+}
 .empty-history { text-align: center; padding: 24px; border: 1px dashed #e2e8f0; border-radius: 12px; color: #94a3b8; }
 .empty-icon { font-size: 24px; margin-bottom: 8px; opacity: 0.5; }
 .orders-list { display: flex; flex-direction: column; gap: 12px; }
@@ -1154,6 +1408,11 @@ const handleOrderClose = () => {
 
   .profile-mobile-header {
     display: flex;
+  }
+
+  .ai-steps,
+  .ai-delivery-grid {
+    grid-template-columns: 1fr;
   }
 }
 
