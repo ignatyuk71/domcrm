@@ -158,59 +158,146 @@
           Порада: виносьте сюди стабільні правила бізнесу (доставка, оплата, гарантія, тон), а не тимчасові акції.
         </div>
 
-        <div class="stack-list">
-          <article v-for="item in knowledgeItems" :key="item.local_id" class="stack-card">
-            <div class="stack-grid">
-              <label class="field">
-                <span>Ключ</span>
-                <input v-model="item.key" type="text" placeholder="delivery_rules_v1">
-              </label>
-
-              <label class="field">
-                <span>Тип</span>
-                <select v-model="item.item_type">
-                  <option v-for="option in knowledgeTypeOptions" :key="option" :value="option">
-                    {{ option }}
-                  </option>
-                </select>
-              </label>
-
-              <label class="field">
-                <span>Порядок</span>
-                <input v-model.number="item.sort_order" type="number" min="1" max="9999">
-              </label>
-
-              <label class="switch-field">
-                <span>Активний</span>
-                <input v-model="item.is_active" type="checkbox">
-              </label>
+        <div class="knowledge-type-guide">
+          <article
+            v-for="type in knowledgeTypeOptions"
+            :key="type.value"
+            class="knowledge-guide-card"
+          >
+            <div class="knowledge-guide-head">
+              <i class="bi" :class="type.icon"></i>
+              <strong>{{ type.label }}</strong>
             </div>
-
-            <label class="field">
-              <span>Назва</span>
-              <input v-model="item.title" type="text" placeholder="Правила оформлення">
-            </label>
-
-            <label class="field">
-              <span>Текст</span>
-              <textarea v-model="item.content" rows="5" placeholder="Що саме агент має враховувати..."></textarea>
-            </label>
-
-            <div class="card-actions">
-              <button type="button" class="btn btn-sm btn-dark" :disabled="item.saving" @click="saveKnowledgeItem(item)">
-                <span v-if="item.saving" class="spinner-border spinner-border-sm me-2"></span>
-                Зберегти
-              </button>
-              <button
-                type="button"
-                class="btn btn-sm btn-outline-danger"
-                :disabled="item.saving"
-                @click="deleteKnowledgeItem(item)"
-              >
-                Видалити
-              </button>
-            </div>
+            <p>{{ type.hint }}</p>
           </article>
+        </div>
+
+        <div class="knowledge-list">
+          <article
+            v-for="item in knowledgeItems"
+            :key="item.local_id"
+            class="knowledge-list-card"
+            :class="{ 'is-editing': isKnowledgeEditing(item), 'is-inactive': !item.is_active }"
+          >
+            <div class="knowledge-row">
+              <div class="knowledge-main">
+                <h3>{{ item.title || 'Без назви' }}</h3>
+                <p>{{ item.key || 'Ключ не заповнено' }}</p>
+              </div>
+
+              <div class="knowledge-meta">
+                <span class="knowledge-type-pill" :class="`type-${item.item_type}`">
+                  <i class="bi" :class="knowledgeTypeIcon(item.item_type)"></i>
+                  {{ knowledgeTypeLabel(item.item_type) }}
+                </span>
+                <span class="knowledge-meta-chip">Порядок: {{ item.sort_order || 100 }}</span>
+                <span class="knowledge-meta-chip" :class="item.is_active ? 'is-active' : 'is-disabled'">
+                  {{ item.is_active ? 'Активний' : 'Вимкнений' }}
+                </span>
+              </div>
+
+              <div class="knowledge-actions">
+                <button
+                  type="button"
+                  class="icon-action-btn"
+                  :title="isKnowledgeEditing(item) ? 'Закрити редактор' : 'Редагувати'"
+                  :disabled="item.saving"
+                  @click="toggleKnowledgeEditor(item)"
+                >
+                  <i class="bi" :class="isKnowledgeEditing(item) ? 'bi-x-lg' : 'bi-pencil-square'"></i>
+                </button>
+                <button
+                  type="button"
+                  class="icon-action-btn danger"
+                  title="Видалити"
+                  :disabled="item.saving"
+                  @click="deleteKnowledgeItem(item)"
+                >
+                  <i class="bi bi-trash3"></i>
+                </button>
+              </div>
+            </div>
+
+            <transition name="stage-collapse">
+              <div v-show="isKnowledgeEditing(item)" class="knowledge-editor">
+                <div class="knowledge-editor-grid">
+                  <label class="field">
+                    <span>Назва</span>
+                    <input v-model="item.title" type="text" placeholder="Правила оформлення">
+                    <small class="field-hint">Коротка назва для команди, щоб швидко знайти запис.</small>
+                  </label>
+
+                  <label class="field">
+                    <span>Ключ</span>
+                    <input v-model="item.key" type="text" placeholder="delivery_rules_v1">
+                    <small class="field-hint">Унікальний ключ латиницею. Наприклад: `delivery_rules_v1`.</small>
+                  </label>
+                </div>
+
+                <div class="knowledge-editor-grid knowledge-editor-grid-meta">
+                  <div class="field">
+                    <span>Тип</span>
+                    <div class="knowledge-type-segment">
+                      <button
+                        v-for="type in knowledgeTypeOptions"
+                        :key="type.value"
+                        type="button"
+                        class="segment-btn"
+                        :class="{ active: item.item_type === type.value }"
+                        @click="setKnowledgeType(item, type.value)"
+                      >
+                        <i class="bi" :class="type.icon"></i>
+                        {{ type.label }}
+                      </button>
+                    </div>
+                    <small class="field-hint">{{ knowledgeTypeHint(item.item_type) }}</small>
+                  </div>
+
+                  <label class="field">
+                    <span>Порядок</span>
+                    <input v-model.number="item.sort_order" type="number" min="1" max="9999">
+                    <small class="field-hint">Менше число = вищий пріоритет у контексті.</small>
+                  </label>
+
+                  <label class="switch-field">
+                    <span>Активний</span>
+                    <input v-model="item.is_active" type="checkbox">
+                  </label>
+                </div>
+
+                <label class="field">
+                  <span>Текст</span>
+                  <textarea v-model="item.content" rows="5" placeholder="Що саме агент має враховувати..."></textarea>
+                  <small class="field-hint">Пиши коротко, структуровано і без суперечливих правил.</small>
+                </label>
+
+                <div class="card-actions">
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-dark"
+                    :disabled="item.saving"
+                    @click="saveKnowledgeItem(item)"
+                  >
+                    <span v-if="item.saving" class="spinner-border spinner-border-sm me-2"></span>
+                    Зберегти
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline-secondary"
+                    :disabled="item.saving"
+                    @click="closeKnowledgeEditor"
+                  >
+                    Згорнути
+                  </button>
+                </div>
+              </div>
+            </transition>
+          </article>
+
+          <div v-if="knowledgeItems.length === 0" class="knowledge-empty">
+            <i class="bi bi-journal-text"></i>
+            <p>Ще немає жодного запису. Натисніть "Додати текст", щоб створити перший елемент.</p>
+          </div>
         </div>
       </section>
 
@@ -345,7 +432,26 @@ const stageDefs = [
   },
 ];
 
-const knowledgeTypeOptions = ['instruction', 'template', 'faq'];
+const knowledgeTypeOptions = [
+  {
+    value: 'instruction',
+    label: 'Правило',
+    icon: 'bi-shield-check',
+    hint: 'Глобальні правила поведінки агента: тон, заборони, пріоритети.',
+  },
+  {
+    value: 'template',
+    label: 'Шаблон',
+    icon: 'bi-chat-square-text',
+    hint: 'Готові формулювання для типових відповідей і сценаріїв діалогу.',
+  },
+  {
+    value: 'faq',
+    label: 'FAQ',
+    icon: 'bi-patch-question',
+    hint: 'Короткі часті питання та відповіді для швидкого уточнення клієнту.',
+  },
+];
 
 const loading = ref(false);
 const agents = ref([]);
@@ -361,6 +467,7 @@ const variantOptionsByProduct = reactive({});
 const stageExpanded = reactive(
   Object.fromEntries(stageDefs.map((stage) => [stage.code, false]))
 );
+const knowledgeEditorId = ref(null);
 
 const toast = reactive({
   show: false,
@@ -400,6 +507,38 @@ function isStageExpanded(stageCode) {
 
 function toggleStageExpanded(stageCode) {
   stageExpanded[stageCode] = !isStageExpanded(stageCode);
+}
+
+function getKnowledgeTypeMeta(typeValue) {
+  return knowledgeTypeOptions.find((option) => option.value === typeValue) || knowledgeTypeOptions[0];
+}
+
+function knowledgeTypeLabel(typeValue) {
+  return getKnowledgeTypeMeta(typeValue).label;
+}
+
+function knowledgeTypeHint(typeValue) {
+  return getKnowledgeTypeMeta(typeValue).hint;
+}
+
+function knowledgeTypeIcon(typeValue) {
+  return getKnowledgeTypeMeta(typeValue).icon;
+}
+
+function setKnowledgeType(item, typeValue) {
+  item.item_type = typeValue;
+}
+
+function isKnowledgeEditing(item) {
+  return knowledgeEditorId.value === item.local_id;
+}
+
+function toggleKnowledgeEditor(item) {
+  knowledgeEditorId.value = isKnowledgeEditing(item) ? null : item.local_id;
+}
+
+function closeKnowledgeEditor() {
+  knowledgeEditorId.value = null;
 }
 
 function ensurePromptDraft(stageCode, prompt = {}) {
@@ -504,6 +643,7 @@ async function loadData() {
     knowledgeItems.value = Array.isArray(data?.knowledge_items)
       ? data.knowledge_items.map((item) => normalizeKnowledgeRow(item))
       : [];
+    knowledgeEditorId.value = null;
 
     modelMaps.value = Array.isArray(data?.model_maps)
       ? data.model_maps.map((map) => normalizeModelMapRow(map))
@@ -558,7 +698,9 @@ async function savePrompt(stageCode) {
 }
 
 function addKnowledgeItem() {
-  knowledgeItems.value.unshift(normalizeKnowledgeRow());
+  const createdItem = normalizeKnowledgeRow();
+  knowledgeItems.value.unshift(createdItem);
+  knowledgeEditorId.value = createdItem.local_id;
 }
 
 async function saveKnowledgeItem(item) {
@@ -585,6 +727,7 @@ async function saveKnowledgeItem(item) {
       Object.assign(item, normalizeKnowledgeRow(savedItem));
     }
 
+    knowledgeEditorId.value = null;
     showToast(response?.data?.message || 'Елемент бази знань збережено.');
   } catch (error) {
     showToast(error.response?.data?.message || 'Не вдалося зберегти елемент бази знань.', 'error');
@@ -596,6 +739,9 @@ async function saveKnowledgeItem(item) {
 async function deleteKnowledgeItem(item) {
   if (!item.id) {
     knowledgeItems.value = knowledgeItems.value.filter((row) => row.local_id !== item.local_id);
+    if (knowledgeEditorId.value === item.local_id) {
+      knowledgeEditorId.value = null;
+    }
     return;
   }
 
@@ -603,6 +749,9 @@ async function deleteKnowledgeItem(item) {
   try {
     const { data } = await http.delete(`/settings/ai/base/knowledge-items/${item.id}`);
     knowledgeItems.value = knowledgeItems.value.filter((row) => row.id !== item.id);
+    if (knowledgeEditorId.value === item.local_id) {
+      knowledgeEditorId.value = null;
+    }
     showToast(data?.message || 'Елемент бази знань видалено.');
   } catch (error) {
     showToast(error.response?.data?.message || 'Не вдалося видалити елемент бази знань.', 'error');
@@ -890,6 +1039,255 @@ h1 {
   color: #334155;
   font-size: 13px;
   line-height: 1.4;
+}
+
+.knowledge-type-guide {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.knowledge-guide-card {
+  border: 1px solid #dbe4ef;
+  background: #fbfdff;
+  border-radius: 12px;
+  padding: 10px 11px;
+}
+
+.knowledge-guide-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.knowledge-guide-head i {
+  color: #2563eb;
+}
+
+.knowledge-guide-head strong {
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.knowledge-guide-card p {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.45;
+}
+
+.knowledge-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.knowledge-list-card {
+  border: 1px solid #dbe4ef;
+  border-radius: 14px;
+  background: #fcfdff;
+  box-shadow: 0 10px 24px -30px rgba(15, 23, 42, 0.4);
+  overflow: hidden;
+}
+
+.knowledge-list-card.is-editing {
+  border-color: #bfd8ff;
+  box-shadow: 0 14px 30px -30px rgba(37, 99, 235, 0.5);
+}
+
+.knowledge-list-card.is-inactive {
+  opacity: 0.88;
+}
+
+.knowledge-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.95fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+}
+
+.knowledge-main h3 {
+  margin: 0;
+  font-size: 15px;
+  color: #0f172a;
+  font-weight: 800;
+}
+
+.knowledge-main p {
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.knowledge-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.knowledge-type-pill,
+.knowledge-meta-chip {
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.knowledge-type-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid #dbe4ef;
+  color: #334155;
+  background: #f8fafc;
+}
+
+.knowledge-type-pill.type-instruction {
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+  background: #ecf5ff;
+}
+
+.knowledge-type-pill.type-template {
+  border-color: #c7d2fe;
+  color: #4338ca;
+  background: #eef2ff;
+}
+
+.knowledge-type-pill.type-faq {
+  border-color: #bbf7d0;
+  color: #15803d;
+  background: #f0fdf4;
+}
+
+.knowledge-meta-chip {
+  border: 1px solid #dbe4ef;
+  color: #475569;
+  background: #f8fafc;
+}
+
+.knowledge-meta-chip.is-active {
+  border-color: #bbf7d0;
+  color: #15803d;
+  background: #f0fdf4;
+}
+
+.knowledge-meta-chip.is-disabled {
+  border-color: #e2e8f0;
+  color: #64748b;
+  background: #f8fafc;
+}
+
+.knowledge-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.icon-action-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px solid #dbe4ef;
+  background: #fff;
+  color: #334155;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.icon-action-btn:hover {
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+  background: #eff6ff;
+}
+
+.icon-action-btn.danger:hover {
+  border-color: #fecaca;
+  color: #dc2626;
+  background: #fef2f2;
+}
+
+.knowledge-editor {
+  border-top: 1px dashed #dbe4ef;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: #fbfdff;
+}
+
+.knowledge-editor-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.knowledge-editor-grid-meta {
+  grid-template-columns: 1.2fr 0.8fr auto;
+  align-items: end;
+}
+
+.knowledge-type-segment {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.segment-btn {
+  border: 1px solid #dbe4ef;
+  border-radius: 10px;
+  background: #fff;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  min-height: 35px;
+  padding: 7px 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+}
+
+.segment-btn:hover {
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.segment-btn.active {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.field-hint {
+  margin-top: -2px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: #64748b;
+}
+
+.knowledge-empty {
+  border: 1px dashed #dbe4ef;
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 18px 14px;
+  text-align: center;
+  color: #64748b;
+}
+
+.knowledge-empty i {
+  font-size: 18px;
+}
+
+.knowledge-empty p {
+  margin: 7px 0 0;
+  font-size: 13px;
 }
 
 .stage-grid {
@@ -1223,6 +1621,24 @@ h1 {
 
 @media (max-width: 980px) {
   .stage-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .knowledge-type-guide {
+    grid-template-columns: 1fr;
+  }
+
+  .knowledge-row {
+    grid-template-columns: 1fr;
+    align-items: flex-start;
+  }
+
+  .knowledge-editor-grid,
+  .knowledge-editor-grid-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .knowledge-type-segment {
     grid-template-columns: 1fr;
   }
 
