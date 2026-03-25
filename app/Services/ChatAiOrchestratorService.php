@@ -111,10 +111,6 @@ class ChatAiOrchestratorService
             return;
         }
 
-        if ($this->hasRecentOperatorActivity($conversation->id)) {
-            return;
-        }
-
         $inputText = trim((string) $inboundMessage->text);
         if ($inputText === '' && !$inboundMessage->attachments()->exists()) {
             return;
@@ -1494,16 +1490,6 @@ class ChatAiOrchestratorService
         }
 
         return $sum;
-    }
-
-    private function hasRecentOperatorActivity(int $conversationId): bool
-    {
-        return ChatMessage::query()
-            ->where('conversation_id', $conversationId)
-            ->where('direction', 'outbound')
-            ->where('source', 'operator')
-            ->where('created_at', '>=', now()->subMinutes(15))
-            ->exists();
     }
 
     private function isConversationAiEnabled(ChatConversation $conversation): bool
