@@ -973,7 +973,7 @@ const handleOrderClose = () => {
 <style scoped>
 .right-sidebar { width: 100%; height: 100%; background: #ffffff; border-left: 1px solid #e5e7eb; display: flex; flex-direction: column; position: relative; overflow: hidden; font-family: 'Segoe UI', sans-serif; color: #334155; }
 .right-sidebar.is-order-mode { background: #ffffff; }
-.profile-content { flex: 1; overflow-y: auto; padding: 0; scroll-behavior: smooth; }
+.profile-content { flex: 1; min-height: 0; overflow-y: auto; padding: 0 0 20px; scroll-behavior: smooth; overscroll-behavior: contain; }
 .custom-scrollbar::-webkit-scrollbar { width: 6px; } .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; } .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 
 .toast-notification {
@@ -1122,7 +1122,7 @@ const handleOrderClose = () => {
 .ai-title { font-size: 13px; font-weight: 700; color: #0f172a; }
 .ai-subtitle { font-size: 11px; color: #64748b; margin-top: 2px; }
 .ai-body-wrap { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
-.ai-card.is-open .ai-body-wrap { max-height: 360px; border-top: 1px solid #f1f5f9; }
+.ai-card.is-open .ai-body-wrap { max-height: 1800px; border-top: 1px solid #f1f5f9; }
 .ai-body { padding: 12px; display: flex; flex-direction: column; gap: 12px; background: #f8fafc; }
 .ai-switch-row {
   display: flex;
