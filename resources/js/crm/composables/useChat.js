@@ -79,6 +79,28 @@ export function useChat() {
     }));
   }
 
+  // Оновлюємо runtime-поля діалогу (AI/етап/останнє повідомлення) без перетирання ручно відредагованого профілю.
+  function patchConversationRuntimeSnapshot(snapshot) {
+    if (!snapshot?.conversation_id) {
+      return;
+    }
+
+    patchConversation(snapshot.conversation_id, (chat) => ({
+      ...chat,
+      last_message: snapshot.last_message ?? chat.last_message,
+      last_message_time: snapshot.last_message_time ?? chat.last_message_time,
+      unread_count: Number.isFinite(Number(snapshot.unread_count))
+        ? Number(snapshot.unread_count)
+        : chat.unread_count,
+      stage: Object.prototype.hasOwnProperty.call(snapshot, 'stage')
+        ? snapshot.stage
+        : chat.stage,
+      ai: snapshot.ai && typeof snapshot.ai === 'object'
+        ? snapshot.ai
+        : chat.ai,
+    }));
+  }
+
   function moveConversationToTop(conversationId) {
     const index = conversations.value.findIndex((chat) => chat.conversation_id === conversationId);
     if (index <= 0) {
@@ -434,7 +456,9 @@ export function useChat() {
           }));
         }
 
-        // Не перетираємо профіль клієнта під час активного редагування в сайдбарі.
+        if (data?.conversation) {
+          patchConversationRuntimeSnapshot(data.conversation);
+        }
       } catch (e) {
         console.warn('Polling skip:', e.message);
       }

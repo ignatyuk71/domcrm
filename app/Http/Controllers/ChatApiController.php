@@ -881,6 +881,7 @@ class ChatApiController extends Controller
         ?string $fallbackSize
     ): array {
         $items = [];
+        $indexByKey = [];
         foreach ($rawCartItems as $rawItem) {
             if (!is_array($rawItem)) {
                 continue;
@@ -888,7 +889,35 @@ class ChatApiController extends Controller
 
             $normalized = $this->normalizeAiCartItem($rawItem);
             if ($normalized !== null) {
-                $items[] = $normalized;
+                $key = $this->buildAiCartItemKey($normalized);
+                if ($key === null) {
+                    $items[] = $normalized;
+                    continue;
+                }
+
+                if (!array_key_exists($key, $indexByKey)) {
+                    $indexByKey[$key] = count($items);
+                    $items[] = $normalized;
+                    continue;
+                }
+
+                $existingIndex = $indexByKey[$key];
+                $existing = $items[$existingIndex];
+                $existingQty = max(1, (int) ($existing['qty'] ?? 1));
+                $incomingQty = max(1, (int) ($normalized['qty'] ?? 1));
+                $nextQty = max($existingQty, $incomingQty);
+                $price = $normalized['price'] ?? $existing['price'] ?? null;
+
+                $items[$existingIndex] = [
+                    'model' => $normalized['model'] ?? $existing['model'] ?? null,
+                    'color' => $normalized['color'] ?? $existing['color'] ?? null,
+                    'size' => $normalized['size'] ?? $existing['size'] ?? null,
+                    'price' => $price,
+                    'qty' => $nextQty,
+                    'line_total' => $price !== null ? round($price * $nextQty, 2) : ($normalized['line_total'] ?? $existing['line_total'] ?? null),
+                    'product_id' => $normalized['product_id'] ?? $existing['product_id'] ?? null,
+                    'variant_id' => $normalized['variant_id'] ?? $existing['variant_id'] ?? null,
+                ];
             }
         }
 
@@ -941,14 +970,13 @@ class ChatApiController extends Controller
         $productId = is_numeric($item['product_id'] ?? null) ? (int) $item['product_id'] : null;
         $variantId = is_numeric($item['variant_id'] ?? null) ? (int) $item['variant_id'] : null;
 
-        if (
-            $model === ''
-            && $color === ''
-            && $size === ''
-            && $price === null
-            && $productId === null
-            && $variantId === null
-        ) {
+        $hasModelSignal = $model !== '' || $productId !== null || $variantId !== null;
+        $hasColorSignal = $color !== '';
+        $hasSizeSignal = $size !== '';
+        $isMeaningfulItem = ($hasModelSignal && ($hasColorSignal || $hasSizeSignal))
+            || ($hasColorSignal && $hasSizeSignal);
+
+        if (!$isMeaningfulItem) {
             return null;
         }
 
@@ -962,6 +990,40 @@ class ChatApiController extends Controller
             'product_id' => $productId,
             'variant_id' => $variantId,
         ];
+    }
+
+    /**
+     * @param  array<string,mixed>  $item
+     */
+    private function buildAiCartItemKey(array $item): ?string
+    {
+        $variantId = is_numeric($item['variant_id'] ?? null) ? (int) $item['variant_id'] : null;
+        if ($variantId !== null) {
+            return 'v:' . $variantId;
+        }
+
+        $productId = is_numeric($item['product_id'] ?? null) ? (int) $item['product_id'] : null;
+        $size = trim((string) ($item['size'] ?? ''));
+        $color = mb_strtolower(trim((string) ($item['color'] ?? '')));
+        $model = mb_strtolower(trim((string) ($item['model'] ?? '')));
+
+        if ($productId !== null && $size !== '' && $color !== '') {
+            return 'p:' . $productId . '|s:' . $size . '|c:' . $color;
+        }
+
+        if ($model !== '' && $size !== '' && $color !== '') {
+            return 'm:' . $model . '|s:' . $size . '|c:' . $color;
+        }
+
+        if ($size !== '' && $color !== '') {
+            return 's:' . $size . '|c:' . $color;
+        }
+
+        if ($model !== '' && $color !== '') {
+            return 'm:' . $model . '|c:' . $color;
+        }
+
+        return null;
     }
 
     /**

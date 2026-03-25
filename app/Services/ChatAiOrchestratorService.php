@@ -1233,14 +1233,14 @@ class ChatAiOrchestratorService
             }
         }
 
-        $hasSignal = $model !== null
-            || $color !== null
-            || $size !== null
-            || $productId !== null
-            || $variantId !== null
-            || $colorId !== null;
+        // У кошик пускаємо тільки осмислені позиції, щоб не накопичувати "сміття" (лише колір/лише одне поле).
+        $hasModelSignal = $model !== null || $productId !== null || $variantId !== null;
+        $hasColorSignal = $color !== null || $colorId !== null;
+        $hasSizeSignal = $size !== null;
+        $isMeaningfulItem = ($hasModelSignal && ($hasColorSignal || $hasSizeSignal))
+            || ($hasColorSignal && $hasSizeSignal);
 
-        if (!$hasSignal) {
+        if (!$isMeaningfulItem) {
             return null;
         }
 
@@ -1275,8 +1275,8 @@ class ChatAiOrchestratorService
         $productId = $this->nullableInt($item['product_id'] ?? null);
         $size = $this->normalizeSize((string) ($item['size'] ?? ''));
         $colorId = $this->nullableInt($item['color_id'] ?? null);
-        $color = mb_strtolower((string) ($item['color'] ?? ''));
-        $model = mb_strtolower((string) ($item['model'] ?? ''));
+        $color = mb_strtolower(trim((string) ($item['color'] ?? '')));
+        $model = mb_strtolower(trim((string) ($item['model'] ?? '')));
 
         if ($productId !== null && $size !== null && ($colorId !== null || $color !== '')) {
             return implode('|', [
@@ -1291,6 +1291,21 @@ class ChatAiOrchestratorService
                 'm:' . $model,
                 's:' . $size,
                 'c:' . $color,
+            ]);
+        }
+
+        // Fallback: коли модель ще не визначена, але є колір+розмір.
+        if ($size !== null && ($colorId !== null || $color !== '')) {
+            return implode('|', [
+                's:' . $size,
+                'c:' . ($colorId !== null ? $colorId : $color),
+            ]);
+        }
+
+        if ($model !== '' && ($colorId !== null || $color !== '')) {
+            return implode('|', [
+                'm:' . $model,
+                'c:' . ($colorId !== null ? $colorId : $color),
             ]);
         }
 
