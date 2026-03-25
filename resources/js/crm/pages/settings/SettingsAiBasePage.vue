@@ -358,7 +358,9 @@ const promptSaving = reactive({});
 const prompts = reactive({});
 const promptDrafts = reactive({});
 const variantOptionsByProduct = reactive({});
-const stageExpanded = reactive({});
+const stageExpanded = reactive(
+  Object.fromEntries(stageDefs.map((stage) => [stage.code, false]))
+);
 
 const toast = reactive({
   show: false,
@@ -393,7 +395,7 @@ function promptVersion(stageCode) {
 }
 
 function isStageExpanded(stageCode) {
-  return stageExpanded[stageCode] !== false;
+  return stageExpanded[stageCode] === true;
 }
 
 function toggleStageExpanded(stageCode) {
@@ -496,6 +498,7 @@ async function loadData() {
         policy_json: {},
       };
       ensurePromptDraft(stage.code, prompts[stage.code]);
+      stageExpanded[stage.code] = false;
     }
 
     knowledgeItems.value = Array.isArray(data?.knowledge_items)
@@ -545,6 +548,7 @@ async function savePrompt(stageCode) {
     const { data } = await http.post(`/settings/ai/base/prompts/${stageCode}`, payload);
     prompts[stageCode] = data?.prompt || prompts[stageCode];
     ensurePromptDraft(stageCode, prompts[stageCode]);
+    stageExpanded[stageCode] = false;
     showToast(data?.message || `Етап ${stageCode} збережено.`);
   } catch (error) {
     showToast(error.response?.data?.message || `Не вдалося зберегти етап ${stageCode}.`, 'error');
