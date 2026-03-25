@@ -591,7 +591,18 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.ai-base-page { color: #1f2937; display: flex; flex-direction: column; gap: 16px; position: relative; }
+.ai-base-page {
+  color: #1f2937;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: relative;
+  width: 100%;
+  max-width: 1540px;
+  margin: 0 auto;
+  padding-inline: clamp(10px, 1.4vw, 24px);
+  box-sizing: border-box;
+}
 .hero-card {
   background: linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%);
   border: 1px solid #bfdbfe;
