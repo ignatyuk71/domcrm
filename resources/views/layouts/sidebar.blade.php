@@ -478,9 +478,13 @@
                 <span class="icon-frame"><i class="bi bi-share-fill"></i></span>
                 <span class="item-text-sub">Соц. мережі</span>
             </a>
-            <a href="{{ route('settings.ai.index') }}" class="sidebar-link-sub {{ request()->is('settings/ai*') ? 'active' : '' }}">
+            <a href="{{ route('settings.ai.index') }}" class="sidebar-link-sub {{ request()->is('settings/ai') ? 'active' : '' }}">
                 <span class="icon-frame"><i class="bi bi-robot"></i></span>
                 <span class="item-text-sub">AI Асистент</span>
+            </a>
+            <a href="{{ route('settings.ai.base.index') }}" class="sidebar-link-sub {{ request()->is('settings/ai/base*') ? 'active' : '' }}">
+                <span class="icon-frame"><i class="bi bi-database"></i></span>
+                <span class="item-text-sub">AI База</span>
             </a>
              <a href="{{ route('settings.novaPoshta.index') }}" class="sidebar-link-sub {{ request()->is('settings/nova-poshta') ? 'active' : '' }}">
                 <span class="icon-frame"><i class="bi bi-box-seam"></i></span>

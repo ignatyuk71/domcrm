@@ -18,6 +18,7 @@ import SettingsStatusesPage from './pages/settings/SettingsStatusesPage.vue';
 import SettingsNovaPoshtaPage from './pages/settings/SettingsNovaPoshtaPage.vue';
 import SettingsMetaPage from './pages/settings/SettingsMetaPage.vue';
 import SettingsAiPage from './pages/settings/SettingsAiPage.vue';
+import SettingsAiBasePage from './pages/settings/SettingsAiBasePage.vue';
 import './styles/crm.css';
 import PackingListPage from '../Pages/Packing/PackingList.vue';
 import PackingWorkspacePage from '../Pages/Packing/PackingWorkspace.vue';
@@ -222,6 +223,15 @@ export function mountSettingsAi(selector = '#crm-settings-ai') {
     return app;
 }
 
+export function mountSettingsAiBase(selector = '#crm-settings-ai-base') {
+    const el = document.querySelector(selector);
+    if (!el) return;
+
+    const app = createApp(SettingsAiBasePage);
+    app.mount(el);
+    return app;
+}
+
 // Auto-mount if element exists
 function autoMount() {
     mountOrderCreate();
@@ -244,6 +254,7 @@ function autoMount() {
     mountSettingsNovaPoshta();
     mountSettingsMeta();
     mountSettingsAi();
+    mountSettingsAiBase();
 }
 
 if (document.readyState !== 'loading') {

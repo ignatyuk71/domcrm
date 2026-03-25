@@ -35,7 +35,8 @@ class ChatAiOrchestratorService
     public function __construct(
         private readonly ChatService $chatService,
         private readonly MetaService $metaService,
-        private readonly ChatAiSettingsService $chatAiSettingsService
+        private readonly ChatAiSettingsService $chatAiSettingsService,
+        private readonly ChatAiKnowledgeService $chatAiKnowledgeService
     ) {
     }
 
@@ -413,8 +414,9 @@ class ChatAiOrchestratorService
         $policyJson = is_array($policy)
             ? json_encode($policy, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
             : '{}';
+        $knowledgeBlock = $this->chatAiKnowledgeService->buildKnowledgePromptBlock();
 
-        return trim($promptVersion->system_prompt) . "\n\n"
+        $basePrompt = trim($promptVersion->system_prompt) . "\n\n"
             . "Працюй тільки українською мовою.\n"
             . "Відповідь повертай ТІЛЬКИ у JSON без markdown.\n"
             . "Схема JSON:\n"
@@ -434,6 +436,12 @@ class ChatAiOrchestratorService
             . "Не запитуй дані доставки (ПІБ, телефон, місто, відділення/поштомат), доки stage не дійшов до checkout_ready.\n"
             . "Одне уточнююче питання за раз.\n"
             . "policy_json=" . $policyJson;
+
+        if ($knowledgeBlock !== '') {
+            $basePrompt .= "\n\n" . $knowledgeBlock;
+        }
+
+        return $basePrompt;
     }
 
     private function buildStateContext(
@@ -454,6 +462,7 @@ class ChatAiOrchestratorService
             'slots' => $state->slots_json ?? [],
             'missing_slots' => $state->missing_slots_json ?? [],
             'policy_json' => $promptVersion->policy_json ?? [],
+            'product_model_maps' => $this->chatAiKnowledgeService->productMapContext(30),
         ];
 
         return 'Контекст діалогу: ' . json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -652,6 +661,25 @@ class ChatAiOrchestratorService
         $selectedVariantId = $state->selected_variant_id;
         $selectedColorId = $state->selected_color_id;
         $selectedSize = $state->selected_size;
+
+        $mapped = $this->chatAiKnowledgeService->resolveMappedProduct($inputText);
+        if ($mapped) {
+            if (!$selectedProductId && !empty($mapped['product_id'])) {
+                $selectedProductId = (int) $mapped['product_id'];
+            }
+
+            if (!$selectedVariantId && !empty($mapped['variant_id'])) {
+                $selectedVariantId = (int) $mapped['variant_id'];
+            }
+
+            if (!$selectedColorId && !empty($mapped['color_id'])) {
+                $selectedColorId = (int) $mapped['color_id'];
+            }
+
+            if (!$selectedSize && !empty($mapped['size_hint'])) {
+                $selectedSize = (string) $mapped['size_hint'];
+            }
+        }
 
         $candidateProductId = $this->nullableInt($normalized['selected_product_id']);
         if ($candidateProductId && Product::query()->whereKey($candidateProductId)->exists()) {

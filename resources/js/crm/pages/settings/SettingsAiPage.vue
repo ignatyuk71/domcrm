@@ -18,6 +18,12 @@
           <p class="subtitle">
             Керуйте глобальною поведінкою агента, затримкою відповіді та активними агентами.
           </p>
+          <div class="hero-actions">
+            <a class="btn btn-sm btn-outline-dark" href="/settings/ai/base">
+              <i class="bi bi-database me-1"></i>
+              База AI
+            </a>
+          </div>
         </div>
         <div class="hero-stats">
           <div class="stat-pill">
@@ -404,6 +410,7 @@ onBeforeUnmount(() => {
 .eyebrow { font-size: 12px; font-weight: 700; text-transform: uppercase; color: #0369a1; letter-spacing: .04em; }
 h1 { margin: 6px 0 8px; font-size: 28px; font-weight: 700; color: #0f172a; }
 .subtitle { margin: 0; color: #334155; max-width: 720px; }
+.hero-actions { margin-top: 12px; display: flex; gap: 8px; }
 .hero-stats { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .stat-pill { background: #ffffff; border: 1px solid #dbeafe; border-radius: 12px; padding: 10px 12px; min-width: 170px; }
 .stat-pill span { display: block; color: #64748b; font-size: 12px; }
