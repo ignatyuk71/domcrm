@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ChatAiConversationState;
+use App\Models\ChatAiEvent;
+use App\Models\ChatAiRun;
 use App\Models\ChatContact;
 use App\Models\ChatConversation;
 use App\Models\ChatMessage;
@@ -193,6 +196,19 @@ class ChatApiController extends Controller
                     ->where('conversation_id', $conversation->id)
                     ->delete();
 
+                // Очищаємо AI-контекст діалогу, щоб після reset не лишалися попередні поля підбору.
+                ChatAiEvent::query()
+                    ->where('conversation_id', $conversation->id)
+                    ->delete();
+
+                ChatAiRun::query()
+                    ->where('conversation_id', $conversation->id)
+                    ->delete();
+
+                ChatAiConversationState::query()
+                    ->where('conversation_id', $conversation->id)
+                    ->delete();
+
                 $conversation->last_message_id = null;
                 $conversation->last_message_preview = null;
                 $conversation->last_message_at = null;
@@ -215,6 +231,10 @@ class ChatApiController extends Controller
                 'stage',
                 'assignedUser',
                 'lastMessage.attachments',
+                'aiState',
+                'aiState.selectedProduct:id,title',
+                'aiState.selectedVariant:id,size',
+                'aiState.selectedColor:id,name',
             ]);
 
             return response()->json([
@@ -236,7 +256,29 @@ class ChatApiController extends Controller
     private function resetConversationMetaAfterHistoryClear(ChatConversation $conversation): array
     {
         $meta = is_array($conversation->meta) ? $conversation->meta : [];
-        unset($meta['ai']);
+        $meta['history_cleared_at'] = now()->toDateTimeString();
+        $aiMeta = is_array($meta['ai'] ?? null) ? $meta['ai'] : null;
+        if ($aiMeta === null) {
+            unset($meta['ai']);
+
+            return $meta;
+        }
+
+        // Залишаємо тільки налаштування доступності, а runtime-дані AI повністю скидаємо.
+        $nextAiMeta = [];
+        if (array_key_exists('enabled', $aiMeta)) {
+            $nextAiMeta['enabled'] = (bool) $aiMeta['enabled'];
+        }
+        if (is_string($aiMeta['agent_code'] ?? null) && trim($aiMeta['agent_code']) !== '') {
+            $nextAiMeta['agent_code'] = trim((string) $aiMeta['agent_code']);
+        }
+
+        if ($nextAiMeta === []) {
+            unset($meta['ai']);
+        } else {
+            $nextAiMeta['updated_at'] = now()->toDateTimeString();
+            $meta['ai'] = $nextAiMeta;
+        }
 
         return $meta;
     }
@@ -272,7 +314,11 @@ class ChatApiController extends Controller
                 ->where('conversation_id', $conversation->id)
                 ->exists();
 
-            if (!$hasMessages) {
+            $historyClearedAt = data_get($conversation->meta, 'history_cleared_at');
+            $skipAutoSync = is_string($historyClearedAt) && trim($historyClearedAt) !== '';
+
+            // Після ручного очищення історії не підтягуємо Meta-архів автоматично.
+            if (!$hasMessages && !$skipAutoSync) {
                 $metaService->syncHistory($customer, $conversation->contact->platform);
                 $conversation = $conversation->fresh(['contact', 'customer', 'stage', 'lastMessage.attachments']);
             }

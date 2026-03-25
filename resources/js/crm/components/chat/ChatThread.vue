@@ -76,7 +76,7 @@
           type="button"
           class="thread-action-btn thread-clear-btn"
           :disabled="isClearingHistory || loading || !activeChat?.conversation_id"
-          title="Очистити історію в CRM"
+          title="Очистити історію в CRM та скинути AI-стан діалогу"
           @click="$emit('clear-history')"
         >
           <i class="bi bi-eraser"></i>
