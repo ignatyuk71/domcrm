@@ -10,241 +10,243 @@
       </div>
     </transition>
 
-    <section class="hero-card">
-      <div>
-        <div class="eyebrow">AI база керування</div>
-        <h1>База знань та шаблони AI</h1>
-        <p class="subtitle">
-          Тут ви керуєте текстами, шаблонами етапів і мапінгом "модель клієнта -> товар у CRM".
-        </p>
-        <div class="hero-actions">
-          <a href="/settings/ai" class="btn btn-sm btn-outline-secondary">
-            <i class="bi bi-arrow-left me-1"></i>
-            Назад до параметрів
-          </a>
-          <button type="button" class="btn btn-sm btn-outline-dark" :disabled="loading" @click="loadData">
-            Оновити
+    <div class="ai-shell">
+      <section class="hero-card">
+        <div>
+          <div class="eyebrow">AI база керування</div>
+          <h1>База знань та шаблони AI</h1>
+          <p class="subtitle">
+            Тут ви керуєте текстами, шаблонами етапів і мапінгом "модель клієнта -> товар у CRM".
+          </p>
+          <div class="hero-actions">
+            <a href="/settings/ai" class="btn btn-sm btn-outline-secondary">
+              <i class="bi bi-arrow-left me-1"></i>
+              Назад до параметрів
+            </a>
+            <button type="button" class="btn btn-sm btn-outline-dark" :disabled="loading" @click="loadData">
+              Оновити
+            </button>
+          </div>
+        </div>
+
+        <div class="hero-stats">
+          <div class="stat-pill">
+            <span>Елементів бази знань</span>
+            <strong>{{ knowledgeItems.length }}</strong>
+          </div>
+          <div class="stat-pill">
+            <span>Мапінгів модель -> товар</span>
+            <strong>{{ modelMaps.length }}</strong>
+          </div>
+        </div>
+      </section>
+
+      <div class="card-block">
+        <div class="section-head">
+          <h2>Шаблони етапів діалогу</h2>
+          <div class="head-right">
+            <label class="inline-select">
+              <span>Агент</span>
+              <select v-model="selectedAgentCode" :disabled="loading" @change="loadData">
+                <option v-for="agent in agents" :key="agent.code" :value="agent.code">
+                  {{ agent.name }} ({{ agent.code }})
+                </option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div class="hint-box">
+          Редагуйте промпт і policy_json по кожному етапу. При збереженні створюється нова версія шаблону.
+        </div>
+
+        <div class="prompt-grid">
+          <article v-for="stage in stageDefs" :key="stage.code" class="prompt-card">
+            <header class="prompt-head">
+              <div>
+                <h3>{{ stage.title }}</h3>
+                <p>{{ stage.description }}</p>
+              </div>
+              <span class="version-badge">v{{ promptVersion(stage.code) }}</span>
+            </header>
+
+            <label class="field">
+              <span>System prompt</span>
+              <textarea
+                v-model="promptDrafts[stage.code].system_prompt"
+                rows="6"
+                placeholder="Основна інструкція для етапу"
+              ></textarea>
+            </label>
+
+            <label class="field">
+              <span>policy_json</span>
+              <textarea
+                v-model="promptDrafts[stage.code].policy_json_text"
+                rows="6"
+                class="mono"
+                placeholder="{ }"
+              ></textarea>
+            </label>
+
+            <div class="card-actions">
+              <button
+                type="button"
+                class="btn btn-sm btn-dark"
+                :disabled="loading || promptSaving[stage.code]"
+                @click="savePrompt(stage.code)"
+              >
+                <span v-if="promptSaving[stage.code]" class="spinner-border spinner-border-sm me-2"></span>
+                Зберегти етап
+              </button>
+            </div>
+          </article>
+        </div>
+      </div>
+
+      <div class="card-block">
+        <div class="section-head">
+          <h2>База знань (ручні тексти)</h2>
+          <button type="button" class="btn btn-sm btn-outline-success" @click="addKnowledgeItem">
+            <i class="bi bi-plus-lg me-1"></i>
+            Додати текст
           </button>
         </div>
-      </div>
-
-      <div class="hero-stats">
-        <div class="stat-pill">
-          <span>Елементів бази знань</span>
-          <strong>{{ knowledgeItems.length }}</strong>
+        <div class="hint-box">
+          Ці тексти додаються в системний контекст AI. Використовуйте їх для правил тону, обмежень, скриптів та FAQ.
         </div>
-        <div class="stat-pill">
-          <span>Мапінгів модель -> товар</span>
-          <strong>{{ modelMaps.length }}</strong>
-        </div>
-      </div>
-    </section>
 
-    <div class="card-block">
-      <div class="section-head">
-        <h2>Шаблони етапів діалогу</h2>
-        <div class="head-right">
-          <label class="inline-select">
-            <span>Агент</span>
-            <select v-model="selectedAgentCode" :disabled="loading" @change="loadData">
-              <option v-for="agent in agents" :key="agent.code" :value="agent.code">
-                {{ agent.name }} ({{ agent.code }})
-              </option>
-            </select>
-          </label>
-        </div>
-      </div>
-      <div class="hint-box">
-        Редагуйте промпт і policy_json по кожному етапу. При збереженні створюється нова версія шаблону.
-      </div>
-
-      <div class="prompt-grid">
-        <article v-for="stage in stageDefs" :key="stage.code" class="prompt-card">
-          <header class="prompt-head">
-            <div>
-              <h3>{{ stage.title }}</h3>
-              <p>{{ stage.description }}</p>
+        <div class="stack-list">
+          <div v-for="item in knowledgeItems" :key="item.local_id" class="stack-card">
+            <div class="stack-grid">
+              <label class="field">
+                <span>Ключ</span>
+                <input v-model="item.key" type="text" placeholder="delivery_rules_v1">
+              </label>
+              <label class="field">
+                <span>Тип</span>
+                <select v-model="item.item_type">
+                  <option value="instruction">instruction</option>
+                  <option value="template">template</option>
+                  <option value="faq">faq</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Порядок</span>
+                <input v-model.number="item.sort_order" type="number" min="1" max="9999">
+              </label>
+              <label class="switch-label">
+                <span>Активний</span>
+                <input v-model="item.is_active" type="checkbox">
+              </label>
             </div>
-            <span class="version-badge">v{{ promptVersion(stage.code) }}</span>
-          </header>
 
-          <label class="field">
-            <span>System prompt</span>
-            <textarea
-              v-model="promptDrafts[stage.code].system_prompt"
-              rows="6"
-              placeholder="Основна інструкція для етапу"
-            ></textarea>
-          </label>
-
-          <label class="field">
-            <span>policy_json</span>
-            <textarea
-              v-model="promptDrafts[stage.code].policy_json_text"
-              rows="6"
-              class="mono"
-              placeholder="{ }"
-            ></textarea>
-          </label>
-
-          <div class="card-actions">
-            <button
-              type="button"
-              class="btn btn-sm btn-dark"
-              :disabled="loading || promptSaving[stage.code]"
-              @click="savePrompt(stage.code)"
-            >
-              <span v-if="promptSaving[stage.code]" class="spinner-border spinner-border-sm me-2"></span>
-              Зберегти етап
-            </button>
-          </div>
-        </article>
-      </div>
-    </div>
-
-    <div class="card-block">
-      <div class="section-head">
-        <h2>База знань (ручні тексти)</h2>
-        <button type="button" class="btn btn-sm btn-outline-success" @click="addKnowledgeItem">
-          <i class="bi bi-plus-lg me-1"></i>
-          Додати текст
-        </button>
-      </div>
-      <div class="hint-box">
-        Ці тексти додаються в системний контекст AI. Використовуйте їх для правил тону, обмежень, скриптів та FAQ.
-      </div>
-
-      <div class="stack-list">
-        <div v-for="item in knowledgeItems" :key="item.local_id" class="stack-card">
-          <div class="stack-grid">
             <label class="field">
-              <span>Ключ</span>
-              <input v-model="item.key" type="text" placeholder="delivery_rules_v1">
+              <span>Назва</span>
+              <input v-model="item.title" type="text" placeholder="Правила оформлення">
             </label>
+
             <label class="field">
-              <span>Тип</span>
-              <select v-model="item.item_type">
-                <option value="instruction">instruction</option>
-                <option value="template">template</option>
-                <option value="faq">faq</option>
-              </select>
+              <span>Текст</span>
+              <textarea v-model="item.content" rows="5" placeholder="Що саме агент має враховувати..."></textarea>
             </label>
-            <label class="field">
-              <span>Порядок</span>
-              <input v-model.number="item.sort_order" type="number" min="1" max="9999">
-            </label>
-            <label class="switch-label">
-              <span>Активний</span>
-              <input v-model="item.is_active" type="checkbox">
-            </label>
-          </div>
 
-          <label class="field">
-            <span>Назва</span>
-            <input v-model="item.title" type="text" placeholder="Правила оформлення">
-          </label>
-
-          <label class="field">
-            <span>Текст</span>
-            <textarea v-model="item.content" rows="5" placeholder="Що саме агент має враховувати..."></textarea>
-          </label>
-
-          <div class="card-actions">
-            <button type="button" class="btn btn-sm btn-dark" :disabled="item.saving" @click="saveKnowledgeItem(item)">
-              <span v-if="item.saving" class="spinner-border spinner-border-sm me-2"></span>
-              Зберегти
-            </button>
-            <button
-              type="button"
-              class="btn btn-sm btn-outline-danger"
-              :disabled="item.saving"
-              @click="deleteKnowledgeItem(item)"
-            >
-              Видалити
-            </button>
+            <div class="card-actions">
+              <button type="button" class="btn btn-sm btn-dark" :disabled="item.saving" @click="saveKnowledgeItem(item)">
+                <span v-if="item.saving" class="spinner-border spinner-border-sm me-2"></span>
+                Зберегти
+              </button>
+              <button
+                type="button"
+                class="btn btn-sm btn-outline-danger"
+                :disabled="item.saving"
+                @click="deleteKnowledgeItem(item)"
+              >
+                Видалити
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <div class="card-block">
-      <div class="section-head">
-        <h2>Мапінг "модель -> товар"</h2>
-        <button type="button" class="btn btn-sm btn-outline-success" @click="addModelMap">
-          <i class="bi bi-plus-lg me-1"></i>
-          Додати мапінг
-        </button>
-      </div>
-      <div class="hint-box">
-        Якщо клієнт називає модель словом/фразою, AI використає цей мапінг для вибору товару і варіанта.
-      </div>
+      <div class="card-block">
+        <div class="section-head">
+          <h2>Мапінг "модель -> товар"</h2>
+          <button type="button" class="btn btn-sm btn-outline-success" @click="addModelMap">
+            <i class="bi bi-plus-lg me-1"></i>
+            Додати мапінг
+          </button>
+        </div>
+        <div class="hint-box">
+          Якщо клієнт називає модель словом/фразою, AI використає цей мапінг для вибору товару і варіанта.
+        </div>
 
-      <div class="stack-list">
-        <div v-for="map in modelMaps" :key="map.local_id" class="stack-card">
-          <div class="stack-grid">
-            <label class="field wide">
-              <span>Фраза моделі</span>
-              <input v-model="map.model_phrase" type="text" placeholder="тапочки класик чорні">
-            </label>
-            <label class="field">
-              <span>Товар</span>
-              <select v-model="map.product_id" @change="onMapProductChange(map)">
-                <option :value="null">—</option>
-                <option v-for="product in products" :key="product.id" :value="product.id">
-                  #{{ product.id }} — {{ product.title }}
-                </option>
-              </select>
-            </label>
-            <label class="field">
-              <span>Варіант</span>
-              <select v-model="map.variant_id" :disabled="!map.product_id">
-                <option :value="null">—</option>
-                <option v-for="variant in variantsByProduct(map.product_id)" :key="variant.id" :value="variant.id">
-                  #{{ variant.id }} — {{ variant.size || 'без розміру' }} ({{ variant.stock_qty }} шт.)
-                </option>
-              </select>
-            </label>
-            <label class="field">
-              <span>Колір</span>
-              <select v-model="map.color_id">
-                <option :value="null">—</option>
-                <option v-for="color in colors" :key="color.id" :value="color.id">
-                  {{ color.name }}
-                </option>
-              </select>
-            </label>
-            <label class="field">
-              <span>Підказка розміру</span>
-              <input v-model="map.size_hint" type="text" placeholder="37">
-            </label>
-            <label class="field">
-              <span>Пріоритет</span>
-              <input v-model.number="map.priority" type="number" min="1" max="9999">
-            </label>
-            <label class="switch-label">
-              <span>Активний</span>
-              <input v-model="map.is_active" type="checkbox">
-            </label>
-          </div>
+        <div class="stack-list">
+          <div v-for="map in modelMaps" :key="map.local_id" class="stack-card">
+            <div class="stack-grid">
+              <label class="field wide">
+                <span>Фраза моделі</span>
+                <input v-model="map.model_phrase" type="text" placeholder="тапочки класик чорні">
+              </label>
+              <label class="field">
+                <span>Товар</span>
+                <select v-model="map.product_id" @change="onMapProductChange(map)">
+                  <option :value="null">—</option>
+                  <option v-for="product in products" :key="product.id" :value="product.id">
+                    #{{ product.id }} — {{ product.title }}
+                  </option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Варіант</span>
+                <select v-model="map.variant_id" :disabled="!map.product_id">
+                  <option :value="null">—</option>
+                  <option v-for="variant in variantsByProduct(map.product_id)" :key="variant.id" :value="variant.id">
+                    #{{ variant.id }} — {{ variant.size || 'без розміру' }} ({{ variant.stock_qty }} шт.)
+                  </option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Колір</span>
+                <select v-model="map.color_id">
+                  <option :value="null">—</option>
+                  <option v-for="color in colors" :key="color.id" :value="color.id">
+                    {{ color.name }}
+                  </option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Підказка розміру</span>
+                <input v-model="map.size_hint" type="text" placeholder="37">
+              </label>
+              <label class="field">
+                <span>Пріоритет</span>
+                <input v-model.number="map.priority" type="number" min="1" max="9999">
+              </label>
+              <label class="switch-label">
+                <span>Активний</span>
+                <input v-model="map.is_active" type="checkbox">
+              </label>
+            </div>
 
-          <label class="field">
-            <span>Нотатки</span>
-            <textarea v-model="map.notes" rows="3" placeholder="Службова примітка для команди"></textarea>
-          </label>
+            <label class="field">
+              <span>Нотатки</span>
+              <textarea v-model="map.notes" rows="3" placeholder="Службова примітка для команди"></textarea>
+            </label>
 
-          <div class="card-actions">
-            <button type="button" class="btn btn-sm btn-dark" :disabled="map.saving" @click="saveModelMap(map)">
-              <span v-if="map.saving" class="spinner-border spinner-border-sm me-2"></span>
-              Зберегти
-            </button>
-            <button
-              type="button"
-              class="btn btn-sm btn-outline-danger"
-              :disabled="map.saving"
-              @click="deleteModelMap(map)"
-            >
-              Видалити
-            </button>
+            <div class="card-actions">
+              <button type="button" class="btn btn-sm btn-dark" :disabled="map.saving" @click="saveModelMap(map)">
+                <span v-if="map.saving" class="spinner-border spinner-border-sm me-2"></span>
+                Зберегти
+              </button>
+              <button
+                type="button"
+                class="btn btn-sm btn-outline-danger"
+                :disabled="map.saving"
+                @click="deleteModelMap(map)"
+              >
+                Видалити
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -593,80 +595,279 @@ onBeforeUnmount(() => {
 <style scoped>
 .ai-base-page {
   color: #1f2937;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
   position: relative;
   width: 100%;
-  max-width: 1540px;
+}
+
+.ai-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: 100%;
+  max-width: 1320px;
   margin: 0 auto;
-  padding-inline: clamp(10px, 1.4vw, 24px);
+  padding-inline: clamp(12px, 1.8vw, 28px);
+  padding-bottom: 22px;
   box-sizing: border-box;
 }
+
 .hero-card {
-  background: linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%);
-  border: 1px solid #bfdbfe;
-  border-radius: 18px;
-  padding: 20px 24px;
+  background: linear-gradient(132deg, #eef4ff 0%, #f8fbff 46%, #f6fffb 100%);
+  border: 1px solid #c7d8f2;
+  border-radius: 20px;
+  padding: 22px 24px;
   display: flex;
   justify-content: space-between;
-  gap: 16px;
+  gap: 18px;
+  flex-wrap: wrap;
+  box-shadow: 0 14px 34px -28px rgba(15, 23, 42, 0.36);
+}
+
+.hero-card > div:first-child {
+  flex: 1 1 520px;
+  min-width: 320px;
+}
+
+.eyebrow {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #1e40af;
+  letter-spacing: 0.05em;
+}
+
+h1 {
+  margin: 8px 0 10px;
+  font-size: clamp(28px, 2.25vw, 34px);
+  line-height: 1.08;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.subtitle {
+  margin: 0;
+  color: #334155;
+  max-width: 760px;
+}
+
+.hero-actions {
+  margin-top: 14px;
+  display: flex;
+  gap: 8px;
   flex-wrap: wrap;
 }
-.eyebrow { font-size: 12px; font-weight: 700; text-transform: uppercase; color: #1d4ed8; letter-spacing: .04em; }
-h1 { margin: 6px 0 8px; font-size: 28px; font-weight: 700; color: #0f172a; }
-.subtitle { margin: 0; color: #334155; max-width: 740px; }
-.hero-actions { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
-.hero-stats { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-.stat-pill { background: #ffffff; border: 1px solid #dbeafe; border-radius: 12px; padding: 10px 12px; min-width: 200px; }
-.stat-pill span { display: block; color: #64748b; font-size: 12px; }
-.stat-pill strong { color: #0f172a; font-size: 16px; }
 
-.card-block { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 16px; }
-.section-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
-.section-head h2 { margin: 0; font-size: 18px; font-weight: 700; color: #0f172a; }
-.head-right { display: flex; align-items: center; gap: 8px; }
-.inline-select { display: flex; align-items: center; gap: 8px; margin: 0; }
-.inline-select span { font-size: 12px; color: #64748b; font-weight: 600; }
-.inline-select select { height: 34px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0 10px; }
+.hero-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+  align-items: stretch;
+  min-width: min(420px, 100%);
+}
+
+.stat-pill {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #d6e4fb;
+  border-radius: 14px;
+  padding: 11px 13px;
+  min-height: 74px;
+  box-shadow: 0 12px 24px -26px rgba(29, 78, 216, 0.45);
+}
+
+.stat-pill span {
+  display: block;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.stat-pill strong {
+  color: #0f172a;
+  font-size: 21px;
+  font-weight: 800;
+}
+
+.card-block {
+  background: #fff;
+  border: 1px solid #dbe4f0;
+  border-radius: 18px;
+  padding: 18px;
+  box-shadow: 0 18px 36px -34px rgba(15, 23, 42, 0.32);
+}
+
+.section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed #dbe4f0;
+}
+
+.section-head h2 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #0f172a;
+}
+
+.head-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inline-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #dbe4f0;
+}
+
+.inline-select span {
+  font-size: 12px;
+  color: #475569;
+  font-weight: 700;
+}
+
+.inline-select select {
+  height: 34px;
+  min-width: 270px;
+  border: 1px solid #cfdbe9;
+  border-radius: 9px;
+  padding: 0 10px;
+  background: #fff;
+  color: #0f172a;
+}
 
 .hint-box {
   border: 1px solid #dbeafe;
+  border-left: 4px solid #60a5fa;
   background: #f8fbff;
   color: #334155;
   border-radius: 12px;
-  padding: 10px 12px;
+  padding: 11px 12px;
   margin-bottom: 12px;
   font-size: 13px;
+  line-height: 1.4;
 }
 
-.prompt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.prompt-card { border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; background: #fff; display: flex; flex-direction: column; gap: 10px; }
-.prompt-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
-.prompt-head h3 { margin: 0; font-size: 15px; font-weight: 700; color: #0f172a; }
-.prompt-head p { margin: 3px 0 0; color: #64748b; font-size: 12px; }
-.version-badge { background: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8; font-size: 11px; border-radius: 999px; padding: 3px 8px; font-weight: 700; }
+.prompt-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.prompt-card {
+  border: 1px solid #dbe4ef;
+  border-radius: 14px;
+  padding: 13px;
+  background: linear-gradient(180deg, #fcfdff 0%, #f8fbff 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  box-shadow: 0 12px 24px -30px rgba(15, 23, 42, 0.5);
+}
+
+.prompt-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.prompt-head h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.prompt-head p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.version-badge {
+  background: #eaf3ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+  font-size: 11px;
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
 
 .stack-list { display: flex; flex-direction: column; gap: 10px; }
-.stack-card { border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; background: #fff; display: flex; flex-direction: column; gap: 10px; }
+.stack-card {
+  border: 1px solid #dbe4ef;
+  border-radius: 14px;
+  padding: 12px;
+  background: #fdfefe;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 12px 24px -32px rgba(15, 23, 42, 0.4);
+}
 .stack-grid { display: grid; grid-template-columns: 1.4fr 1fr 0.8fr 0.8fr; gap: 10px; align-items: end; }
 .stack-grid .field.wide { grid-column: span 2; }
-.switch-label { display: flex; align-items: center; justify-content: space-between; border: 1px solid #e2e8f0; border-radius: 10px; padding: 9px 10px; background: #f8fafc; min-height: 40px; }
-.switch-label span { font-size: 12px; color: #334155; font-weight: 600; }
+.switch-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid #dbe4ef;
+  border-radius: 10px;
+  padding: 9px 10px;
+  background: #f8fafc;
+  min-height: 40px;
+}
+
+.switch-label span { font-size: 12px; color: #334155; font-weight: 700; }
+.switch-label input[type="checkbox"] { accent-color: #16a34a; }
 
 .field { display: flex; flex-direction: column; gap: 6px; }
-.field span { font-weight: 600; font-size: 12px; color: #334155; }
+.field span {
+  font-weight: 700;
+  font-size: 12px;
+  color: #334155;
+  letter-spacing: 0.01em;
+}
+
 .field input,
 .field select,
 .field textarea {
-  border: 1px solid #cbd5e1;
+  border: 1px solid #cfdae8;
   border-radius: 10px;
   padding: 9px 11px;
   background: #fff;
   color: #0f172a;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
 }
-.field textarea { resize: vertical; min-height: 96px; }
-.field .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; }
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus,
+.inline-select select:focus {
+  outline: none;
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2);
+}
+
+.field textarea { resize: vertical; min-height: 102px; }
+
+.field .mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  background: #f8fafc;
+}
 
 .card-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
@@ -698,16 +899,60 @@ h1 { margin: 6px 0 8px; font-size: 28px; font-weight: 700; color: #0f172a; }
 .toast-enter-active, .toast-leave-active { transition: opacity 0.2s ease, transform 0.2s ease; }
 .toast-enter-from, .toast-leave-to { opacity: 0; transform: translateY(-8px); }
 
+@media (max-width: 1240px) {
+  .hero-stats {
+    min-width: 100%;
+  }
+}
+
 @media (max-width: 1100px) {
   .prompt-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 900px) {
+  .section-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .head-right {
+    width: 100%;
+  }
+
+  .inline-select {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .inline-select select {
+    min-width: 0;
+    flex: 1;
+  }
+
   .stack-grid { grid-template-columns: 1fr 1fr; }
   .stack-grid .field.wide { grid-column: span 2; }
 }
 
 @media (max-width: 640px) {
+  .ai-shell {
+    padding-inline: 10px;
+    gap: 14px;
+  }
+
+  .hero-card {
+    padding: 16px;
+    border-radius: 16px;
+  }
+
+  h1 {
+    font-size: 25px;
+  }
+
+  .card-block {
+    padding: 14px;
+    border-radius: 14px;
+  }
+
   .stack-grid { grid-template-columns: 1fr; }
   .stack-grid .field.wide { grid-column: span 1; }
 }
