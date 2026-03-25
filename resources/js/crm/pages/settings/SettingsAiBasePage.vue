@@ -85,44 +85,59 @@
                 <h3>{{ stage.title }}</h3>
                 <p>{{ stage.description }}</p>
               </div>
-              <span class="version-badge">v{{ promptVersion(stage.code) }}</span>
+              <div class="stage-head-actions">
+                <span class="version-badge">v{{ promptVersion(stage.code) }}</span>
+                <button
+                  type="button"
+                  class="stage-toggle"
+                  :aria-expanded="isStageExpanded(stage.code)"
+                  @click="toggleStageExpanded(stage.code)"
+                >
+                  <i class="bi" :class="isStageExpanded(stage.code) ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+                  {{ isStageExpanded(stage.code) ? 'Згорнути' : 'Розгорнути' }}
+                </button>
+              </div>
             </header>
 
-            <div class="stage-form-grid">
-              <label class="field">
-                <span>System prompt</span>
-                <textarea
-                  v-model="promptDrafts[stage.code].system_prompt"
-                  rows="8"
-                  placeholder="Основна інструкція для етапу"
-                ></textarea>
-              </label>
+            <transition name="stage-collapse">
+              <div v-show="isStageExpanded(stage.code)">
+                <div class="stage-form-grid">
+                  <label class="field">
+                    <span>System prompt</span>
+                    <textarea
+                      v-model="promptDrafts[stage.code].system_prompt"
+                      rows="8"
+                      placeholder="Основна інструкція для етапу"
+                    ></textarea>
+                  </label>
 
-              <label class="field">
-                <div class="field-headline">
-                  <span>policy_json</span>
-                  <small>структуровані правила</small>
+                  <label class="field">
+                    <div class="field-headline">
+                      <span>policy_json</span>
+                      <small>структуровані правила</small>
+                    </div>
+                    <textarea
+                      v-model="promptDrafts[stage.code].policy_json_text"
+                      rows="8"
+                      class="mono"
+                      placeholder="{ }"
+                    ></textarea>
+                  </label>
                 </div>
-                <textarea
-                  v-model="promptDrafts[stage.code].policy_json_text"
-                  rows="8"
-                  class="mono"
-                  placeholder="{ }"
-                ></textarea>
-              </label>
-            </div>
 
-            <div class="card-actions">
-              <button
-                type="button"
-                class="btn btn-sm btn-dark"
-                :disabled="loading || promptSaving[stage.code]"
-                @click="savePrompt(stage.code)"
-              >
-                <span v-if="promptSaving[stage.code]" class="spinner-border spinner-border-sm me-2"></span>
-                Зберегти етап
-              </button>
-            </div>
+                <div class="card-actions">
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-dark"
+                    :disabled="loading || promptSaving[stage.code]"
+                    @click="savePrompt(stage.code)"
+                  >
+                    <span v-if="promptSaving[stage.code]" class="spinner-border spinner-border-sm me-2"></span>
+                    Зберегти етап
+                  </button>
+                </div>
+              </div>
+            </transition>
           </article>
         </div>
       </section>
@@ -343,6 +358,7 @@ const promptSaving = reactive({});
 const prompts = reactive({});
 const promptDrafts = reactive({});
 const variantOptionsByProduct = reactive({});
+const stageExpanded = reactive({});
 
 const toast = reactive({
   show: false,
@@ -374,6 +390,14 @@ function showToast(message, type = 'success') {
 function promptVersion(stageCode) {
   const version = Number(prompts[stageCode]?.version || 0);
   return version > 0 ? version : 1;
+}
+
+function isStageExpanded(stageCode) {
+  return stageExpanded[stageCode] !== false;
+}
+
+function toggleStageExpanded(stageCode) {
+  stageExpanded[stageCode] = !isStageExpanded(stageCode);
 }
 
 function ensurePromptDraft(stageCode, prompt = {}) {
@@ -664,11 +688,12 @@ onBeforeUnmount(() => {
   width: 100%;
   color: #0f172a;
   position: relative;
+  padding-top: 12px;
 }
 
 .layout-shell {
-  width: min(1240px, calc(100% - 56px));
-  margin: 0 auto;
+  width: min(1360px, calc(100% - 48px));
+  margin: 8px auto 0;
   padding-bottom: 28px;
   display: flex;
   flex-direction: column;
@@ -892,6 +917,14 @@ h1 {
   align-items: flex-start;
 }
 
+.stage-head-actions {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 7px;
+}
+
 .stage-meta-row {
   display: flex;
   flex-wrap: wrap;
@@ -933,7 +966,6 @@ h1 {
 }
 
 .version-badge {
-  flex-shrink: 0;
   padding: 4px 9px;
   border-radius: 999px;
   border: 1px solid #bfdbfe;
@@ -943,10 +975,49 @@ h1 {
   font-weight: 800;
 }
 
+.stage-toggle {
+  border: 1px solid #dbe4ef;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 7px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.stage-toggle:hover {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.stage-toggle:focus {
+  outline: none;
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2);
+}
+
 .stage-form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+.stage-collapse-enter-active,
+.stage-collapse-leave-active {
+  transition: all 0.18s ease;
+  transform-origin: top;
+}
+
+.stage-collapse-enter-from,
+.stage-collapse-leave-to {
+  opacity: 0;
+  transform: scaleY(0.98);
 }
 
 .stack-list {
@@ -1138,7 +1209,7 @@ h1 {
 
 @media (max-width: 1220px) {
   .layout-shell {
-    width: min(1240px, calc(100% - 40px));
+    width: min(1360px, calc(100% - 32px));
   }
 
   .hero {
