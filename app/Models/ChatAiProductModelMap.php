@@ -9,6 +9,8 @@ class ChatAiProductModelMap extends Model
 {
     protected $fillable = [
         'model_phrase',
+        'item_code',
+        'collage_url',
         'product_id',
         'variant_id',
         'color_id',
@@ -21,6 +23,8 @@ class ChatAiProductModelMap extends Model
     ];
 
     protected $casts = [
+        'item_code' => 'string',
+        'collage_url' => 'string',
         'product_id' => 'integer',
         'variant_id' => 'integer',
         'color_id' => 'integer',
@@ -53,4 +57,3 @@ class ChatAiProductModelMap extends Model
         return $this->belongsTo(User::class, 'updated_by');
     }
 }
-

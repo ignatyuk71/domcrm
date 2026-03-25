@@ -314,15 +314,25 @@
         </header>
 
         <div class="hint-box">
-          Якщо клієнт пише "класик чорні" або "пухнасті 37", цей блок допоможе AI швидко підхопити потрібний товар.
+          Одна модель = багато рядків у цій таблиці. Для кожного коду з колажу вкажіть товар.
         </div>
 
         <div class="stack-list">
           <article v-for="map in modelMaps" :key="map.local_id" class="stack-card">
             <div class="stack-grid">
               <label class="field wide">
-                <span>Фраза моделі</span>
-                <input v-model="map.model_phrase" type="text" placeholder="тапочки класик чорні">
+                <span>Назва моделі</span>
+                <input v-model="map.model_phrase" type="text" placeholder="Домашні пухнасті тапки">
+              </label>
+
+              <label class="field">
+                <span>Код у колажі</span>
+                <input v-model="map.item_code" type="text" placeholder="20">
+              </label>
+
+              <label class="field">
+                <span>URL колажу</span>
+                <input v-model="map.collage_url" type="text" placeholder="https://.../collage.jpg">
               </label>
 
               <label class="field">
@@ -333,31 +343,6 @@
                     #{{ product.id }} — {{ product.title }}
                   </option>
                 </select>
-              </label>
-
-              <label class="field">
-                <span>Варіант</span>
-                <select v-model="map.variant_id" :disabled="!map.product_id">
-                  <option :value="null">—</option>
-                  <option v-for="variant in variantsByProduct(map.product_id)" :key="variant.id" :value="variant.id">
-                    #{{ variant.id }} — {{ variant.size || 'без розміру' }} ({{ variant.stock_qty }} шт.)
-                  </option>
-                </select>
-              </label>
-
-              <label class="field">
-                <span>Колір</span>
-                <select v-model="map.color_id">
-                  <option :value="null">—</option>
-                  <option v-for="color in colors" :key="color.id" :value="color.id">
-                    {{ color.name }}
-                  </option>
-                </select>
-              </label>
-
-              <label class="field">
-                <span>Підказка розміру</span>
-                <input v-model="map.size_hint" type="text" placeholder="37">
               </label>
 
               <label class="field">
@@ -572,6 +557,8 @@ function normalizeModelMapRow(map = {}) {
     id: map.id ?? null,
     local_id: map.id ? `m_${map.id}` : `m_new_${Date.now()}_${Math.random()}`,
     model_phrase: String(map.model_phrase || ''),
+    item_code: String(map.item_code || ''),
+    collage_url: String(map.collage_url || ''),
     product_id: map.product_id ? Number(map.product_id) : null,
     variant_id: map.variant_id ? Number(map.variant_id) : null,
     color_id: map.color_id ? Number(map.color_id) : null,
@@ -772,6 +759,16 @@ async function onMapProductChange(map) {
 async function saveModelMap(map) {
   map.saving = true;
   try {
+    if (!map.model_phrase || !String(map.model_phrase).trim()) {
+      showToast('Вкажіть назву моделі.', 'error');
+      return;
+    }
+
+    if (!map.item_code || !String(map.item_code).trim()) {
+      showToast('Вкажіть код з колажу.', 'error');
+      return;
+    }
+
     if (!map.product_id) {
       showToast('Оберіть товар для мапінгу.', 'error');
       return;
@@ -779,10 +776,9 @@ async function saveModelMap(map) {
 
     const payload = {
       model_phrase: map.model_phrase,
+      item_code: map.item_code,
+      collage_url: map.collage_url || null,
       product_id: map.product_id,
-      variant_id: map.variant_id || null,
-      color_id: map.color_id || null,
-      size_hint: map.size_hint || null,
       priority: Number(map.priority || 100),
       notes: map.notes || null,
       is_active: !!map.is_active,

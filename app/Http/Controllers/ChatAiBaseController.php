@@ -83,11 +83,14 @@ class ChatAiBaseController extends Controller
                 'variant:id,product_id,size,sku,stock_qty,is_active',
                 'color:id,name',
             ])
+            ->orderBy('model_phrase')
             ->orderBy('priority')
             ->orderBy('id')
             ->get([
                 'id',
                 'model_phrase',
+                'item_code',
+                'collage_url',
                 'product_id',
                 'variant_id',
                 'color_id',
@@ -275,9 +278,25 @@ class ChatAiBaseController extends Controller
 
     public function storeModelMap(Request $request): JsonResponse
     {
+        $modelPhrase = trim((string) $request->input('model_phrase'));
+
         $validated = $request->validate([
             'model_phrase' => ['required', 'string', 'max:160'],
-            'product_id' => ['required', 'integer', Rule::exists('products', 'id')],
+            'item_code' => [
+                'required',
+                'string',
+                'max:40',
+                Rule::unique('chat_ai_product_model_maps', 'item_code')
+                    ->where(fn ($query) => $query->where('model_phrase', $modelPhrase)),
+            ],
+            'collage_url' => ['nullable', 'string', 'max:2048'],
+            'product_id' => [
+                'required',
+                'integer',
+                Rule::exists('products', 'id'),
+                Rule::unique('chat_ai_product_model_maps', 'product_id')
+                    ->where(fn ($query) => $query->where('model_phrase', $modelPhrase)),
+            ],
             'variant_id' => ['nullable', 'integer', Rule::exists('product_variants', 'id')],
             'color_id' => ['nullable', 'integer', Rule::exists('colors', 'id')],
             'size_hint' => ['nullable', 'string', 'max:50'],
@@ -289,7 +308,9 @@ class ChatAiBaseController extends Controller
         $this->validateVariantOwnership($validated['variant_id'] ?? null, (int) $validated['product_id']);
 
         $map = ChatAiProductModelMap::query()->create([
-            'model_phrase' => trim((string) $validated['model_phrase']),
+            'model_phrase' => $modelPhrase,
+            'item_code' => trim((string) ($validated['item_code'] ?? '')) ?: null,
+            'collage_url' => trim((string) ($validated['collage_url'] ?? '')) ?: null,
             'product_id' => (int) $validated['product_id'],
             'variant_id' => $validated['variant_id'] ?? null,
             'color_id' => $validated['color_id'] ?? null,
@@ -309,9 +330,27 @@ class ChatAiBaseController extends Controller
 
     public function updateModelMap(Request $request, ChatAiProductModelMap $modelMap): JsonResponse
     {
+        $modelPhrase = trim((string) $request->input('model_phrase'));
+
         $validated = $request->validate([
             'model_phrase' => ['required', 'string', 'max:160'],
-            'product_id' => ['required', 'integer', Rule::exists('products', 'id')],
+            'item_code' => [
+                'required',
+                'string',
+                'max:40',
+                Rule::unique('chat_ai_product_model_maps', 'item_code')
+                    ->ignore($modelMap->id)
+                    ->where(fn ($query) => $query->where('model_phrase', $modelPhrase)),
+            ],
+            'collage_url' => ['nullable', 'string', 'max:2048'],
+            'product_id' => [
+                'required',
+                'integer',
+                Rule::exists('products', 'id'),
+                Rule::unique('chat_ai_product_model_maps', 'product_id')
+                    ->ignore($modelMap->id)
+                    ->where(fn ($query) => $query->where('model_phrase', $modelPhrase)),
+            ],
             'variant_id' => ['nullable', 'integer', Rule::exists('product_variants', 'id')],
             'color_id' => ['nullable', 'integer', Rule::exists('colors', 'id')],
             'size_hint' => ['nullable', 'string', 'max:50'],
@@ -323,7 +362,9 @@ class ChatAiBaseController extends Controller
         $this->validateVariantOwnership($validated['variant_id'] ?? null, (int) $validated['product_id']);
 
         $modelMap->fill([
-            'model_phrase' => trim((string) $validated['model_phrase']),
+            'model_phrase' => $modelPhrase,
+            'item_code' => trim((string) ($validated['item_code'] ?? '')) ?: null,
+            'collage_url' => trim((string) ($validated['collage_url'] ?? '')) ?: null,
             'product_id' => (int) $validated['product_id'],
             'variant_id' => $validated['variant_id'] ?? null,
             'color_id' => $validated['color_id'] ?? null,
@@ -399,4 +440,3 @@ class ChatAiBaseController extends Controller
         ]);
     }
 }
-

@@ -46,6 +46,8 @@ class ChatAiKnowledgeService
      * @return array<int, array{
      *   id:int,
      *   model_phrase:string,
+     *   item_code:?string,
+     *   collage_url:?string,
      *   product_id:int,
      *   product_title:?string,
      *   variant_id:?int,
@@ -72,7 +74,9 @@ class ChatAiKnowledgeService
      *   variant_id:?int,
      *   color_id:?int,
      *   size_hint:?string,
-     *   model_phrase:string
+     *   model_phrase:string,
+     *   item_code:?string,
+     *   collage_url:?string
      * }|null
      */
     public function resolveMappedProduct(string $inputText): ?array
@@ -80,6 +84,33 @@ class ChatAiKnowledgeService
         $text = mb_strtolower(trim($inputText));
         if ($text === '') {
             return null;
+        }
+
+        $codeMatches = [];
+        foreach ($this->activeModelMaps() as $map) {
+            $itemCode = trim((string) ($map['item_code'] ?? ''));
+            if ($itemCode === '') {
+                continue;
+            }
+
+            if ($this->textHasToken($text, mb_strtolower($itemCode))) {
+                $codeMatches[] = $map;
+            }
+        }
+
+        if (count($codeMatches) === 1) {
+            return $this->normalizeResolvedMap($codeMatches[0]);
+        }
+
+        if (count($codeMatches) > 1) {
+            $scopedByPhrase = array_values(array_filter($codeMatches, function (array $map) use ($text) {
+                $phrase = mb_strtolower(trim((string) ($map['model_phrase'] ?? '')));
+                return $phrase !== '' && mb_stripos($text, $phrase) !== false;
+            }));
+
+            if (count($scopedByPhrase) === 1) {
+                return $this->normalizeResolvedMap($scopedByPhrase[0]);
+            }
         }
 
         $best = null;
@@ -100,13 +131,7 @@ class ChatAiKnowledgeService
             $priority = (int) ($map['priority'] ?? 100);
 
             if ($phraseLength > $bestLength || ($phraseLength === $bestLength && $priority < $bestPriority)) {
-                $best = [
-                    'product_id' => (int) $map['product_id'],
-                    'variant_id' => isset($map['variant_id']) ? (int) $map['variant_id'] : null,
-                    'color_id' => isset($map['color_id']) ? (int) $map['color_id'] : null,
-                    'size_hint' => isset($map['size_hint']) ? (string) $map['size_hint'] : null,
-                    'model_phrase' => (string) $map['model_phrase'],
-                ];
+                $best = $this->normalizeResolvedMap($map);
                 $bestLength = $phraseLength;
                 $bestPriority = $priority;
             }
@@ -162,6 +187,8 @@ class ChatAiKnowledgeService
             ->get([
                 'id',
                 'model_phrase',
+                'item_code',
+                'collage_url',
                 'product_id',
                 'variant_id',
                 'color_id',
@@ -171,6 +198,8 @@ class ChatAiKnowledgeService
             ->map(fn (ChatAiProductModelMap $map) => [
                 'id' => (int) $map->id,
                 'model_phrase' => (string) $map->model_phrase,
+                'item_code' => $map->item_code ? (string) $map->item_code : null,
+                'collage_url' => $map->collage_url ? (string) $map->collage_url : null,
                 'product_id' => (int) $map->product_id,
                 'product_title' => $map->product?->title,
                 'variant_id' => $map->variant_id ? (int) $map->variant_id : null,
@@ -184,5 +213,41 @@ class ChatAiKnowledgeService
             ->all();
 
         return $this->activeModelMapCache;
+    }
+
+    /**
+     * @param  array<string, mixed>  $map
+     * @return array{
+     *   product_id:int,
+     *   variant_id:?int,
+     *   color_id:?int,
+     *   size_hint:?string,
+     *   model_phrase:string,
+     *   item_code:?string,
+     *   collage_url:?string
+     * }
+     */
+    private function normalizeResolvedMap(array $map): array
+    {
+        return [
+            'product_id' => (int) ($map['product_id'] ?? 0),
+            'variant_id' => isset($map['variant_id']) ? (int) $map['variant_id'] : null,
+            'color_id' => isset($map['color_id']) ? (int) $map['color_id'] : null,
+            'size_hint' => isset($map['size_hint']) ? (string) $map['size_hint'] : null,
+            'model_phrase' => (string) ($map['model_phrase'] ?? ''),
+            'item_code' => isset($map['item_code']) ? (string) $map['item_code'] : null,
+            'collage_url' => isset($map['collage_url']) ? (string) $map['collage_url'] : null,
+        ];
+    }
+
+    private function textHasToken(string $text, string $token): bool
+    {
+        $token = trim($token);
+        if ($token === '') {
+            return false;
+        }
+
+        $pattern = '/(?<![\p{L}\p{N}])' . preg_quote($token, '/') . '(?![\p{L}\p{N}])/u';
+        return (bool) preg_match($pattern, $text);
     }
 }
