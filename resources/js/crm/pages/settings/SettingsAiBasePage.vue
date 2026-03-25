@@ -13,17 +13,19 @@
     <div class="layout-shell">
       <header class="hero">
         <div class="hero-main">
-          <div class="hero-kicker">AI база керування</div>
+          <p class="hero-kicker">AI база керування</p>
           <h1>База знань та шаблони AI</h1>
           <p class="hero-subtitle">
-            Керуйте логікою етапів, базою знань і мапінгом "модель клієнта -> товар у CRM" в одному місці.
+            Центр керування поведінкою агента: етапи діалогу, база знань та мапінг моделі клієнта на товари CRM.
           </p>
+
           <div class="hero-actions">
             <a href="/settings/ai" class="btn btn-sm btn-outline-secondary">
               <i class="bi bi-arrow-left me-1"></i>
               Назад до параметрів
             </a>
             <button type="button" class="btn btn-sm btn-outline-dark" :disabled="loading" @click="loadData">
+              <i class="bi bi-arrow-clockwise me-1"></i>
               Оновити
             </button>
           </div>
@@ -49,48 +51,66 @@
               <strong>{{ modelMaps.length }}</strong>
             </article>
           </div>
+
+          <nav class="quick-nav" aria-label="Швидка навігація AI Base">
+            <a href="#stage-templates" class="quick-link">Етапи</a>
+            <a href="#knowledge-base" class="quick-link">База знань</a>
+            <a href="#model-map" class="quick-link">Мапінг</a>
+          </nav>
         </aside>
       </header>
 
-      <section class="panel">
+      <section id="stage-templates" class="panel">
         <header class="panel-head">
           <div>
             <h2>Шаблони етапів діалогу</h2>
-            <p>Редагуйте system prompt і policy_json для кожного етапу.</p>
+            <p>Кожен етап керує тоном відповіді й правилом переходу до наступного кроку.</p>
           </div>
+          <span class="panel-chip">{{ stageDefs.length }} етапи</span>
         </header>
 
         <div class="stage-grid">
-          <article v-for="stage in stageDefs" :key="stage.code" class="stage-card" :class="`stage-${stage.code}`">
+          <article
+            v-for="stage in stageDefs"
+            :key="stage.code"
+            class="stage-card"
+            :class="`stage-${stage.code}`"
+          >
             <header class="stage-card-head">
               <div>
+                <div class="stage-meta-row">
+                  <span class="stage-order">{{ stage.short }}</span>
+                  <span class="stage-kind">{{ stage.badge }}</span>
+                </div>
                 <h3>{{ stage.title }}</h3>
                 <p>{{ stage.description }}</p>
               </div>
               <span class="version-badge">v{{ promptVersion(stage.code) }}</span>
             </header>
 
-            <label class="field">
-              <span>System prompt</span>
-              <textarea
-                v-model="promptDrafts[stage.code].system_prompt"
-                rows="6"
-                placeholder="Основна інструкція для етапу"
-              ></textarea>
-            </label>
+            <div class="stage-form-grid">
+              <label class="field">
+                <span>System prompt</span>
+                <textarea
+                  v-model="promptDrafts[stage.code].system_prompt"
+                  rows="8"
+                  placeholder="Основна інструкція для етапу"
+                ></textarea>
+              </label>
 
-            <label class="field">
-              <div class="field-headline">
-                <span>policy_json</span>
-                <small>структуровані правила етапу</small>
-              </div>
-              <textarea
-                v-model="promptDrafts[stage.code].policy_json_text"
-                rows="6"
-                class="mono"
-                placeholder="{ }"
-              ></textarea>
-            </label>
+              <label class="field">
+                <div class="field-headline">
+                  <span>policy_json</span>
+                  <small>структуровані правила</small>
+                </div>
+                <textarea
+                  v-model="promptDrafts[stage.code].policy_json_text"
+                  rows="8"
+                  class="mono"
+                  placeholder="{ }"
+                ></textarea>
+              </label>
+            </div>
 
             <div class="card-actions">
               <button
@@ -107,11 +127,11 @@
         </div>
       </section>
 
-      <section class="panel">
+      <section id="knowledge-base" class="panel">
         <header class="panel-head panel-head-split">
           <div>
             <h2>База знань</h2>
-            <p>Ручні тексти для інструкцій, шаблонів і FAQ.</p>
+            <p>Ручні правила, шаблони і FAQ, які підмішуються у контекст AI.</p>
           </div>
           <button type="button" class="btn btn-sm btn-outline-success" @click="addKnowledgeItem">
             <i class="bi bi-plus-lg me-1"></i>
@@ -120,7 +140,7 @@
         </header>
 
         <div class="hint-box">
-          Ці тексти додаються в системний контекст AI. Використовуйте їх для правил тону, обмежень та скриптів.
+          Порада: виносьте сюди стабільні правила бізнесу (доставка, оплата, гарантія, тон), а не тимчасові акції.
         </div>
 
         <div class="stack-list">
@@ -179,11 +199,11 @@
         </div>
       </section>
 
-      <section class="panel">
+      <section id="model-map" class="panel">
         <header class="panel-head panel-head-split">
           <div>
             <h2>Мапінг "модель -> товар"</h2>
-            <p>Підказуйте AI, як звʼязувати фрази клієнта з товарами CRM.</p>
+            <p>Підкажіть агенту, як розпізнавати формулювання клієнта і привʼязувати їх до потрібних товарів.</p>
           </div>
           <button type="button" class="btn btn-sm btn-outline-success" @click="addModelMap">
             <i class="bi bi-plus-lg me-1"></i>
@@ -192,7 +212,7 @@
         </header>
 
         <div class="hint-box">
-          Якщо клієнт називає модель словом або фразою, AI використовує цей мапінг для підбору потрібного товару.
+          Якщо клієнт пише "класик чорні" або "пухнасті 37", цей блок допоможе AI швидко підхопити потрібний товар.
         </div>
 
         <div class="stack-list">
@@ -280,10 +300,34 @@ import { onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import http from '@/crm/api/http';
 
 const stageDefs = [
-  { code: 'interest', title: '1. Зацікавлення', description: 'Питання про ціну, фото, наявність, кольори.' },
-  { code: 'selection', title: '2. Підбір', description: 'Уточнення розміру/моделі/кольору без тиску.' },
-  { code: 'checkout_ready', title: '3. Готовність до оформлення', description: 'Збір полів доставки після явного наміру купити.' },
-  { code: 'checkout', title: '4. Оформлення', description: 'Фінальне підтвердження замовлення та передача в обробку.' },
+  {
+    code: 'interest',
+    title: 'Зацікавлення',
+    short: 'Етап 1',
+    badge: 'Консультація',
+    description: 'Ціна, фото, наявність, кольори. Без тиску і без збору доставки.',
+  },
+  {
+    code: 'selection',
+    title: 'Підбір',
+    short: 'Етап 2',
+    badge: 'Вибір',
+    description: 'Уточнення моделі/кольору/розміру, щоб вивести релевантний варіант.',
+  },
+  {
+    code: 'checkout_ready',
+    title: 'Готовність до оформлення',
+    short: 'Етап 3',
+    badge: 'Підтвердження',
+    description: 'Клієнт підтверджує намір купити. Починаємо збір даних доставки.',
+  },
+  {
+    code: 'checkout',
+    title: 'Оформлення',
+    short: 'Етап 4',
+    badge: 'Фінал',
+    description: 'Фінальна перевірка, підтвердження замовлення і передача менеджеру.',
+  },
 ];
 
 const knowledgeTypeOptions = ['instruction', 'template', 'faq'];
@@ -623,9 +667,9 @@ onBeforeUnmount(() => {
 }
 
 .layout-shell {
-  width: min(1180px, calc(100% - 64px));
+  width: min(1240px, calc(100% - 56px));
   margin: 0 auto;
-  padding-bottom: 30px;
+  padding-bottom: 28px;
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -633,13 +677,13 @@ onBeforeUnmount(() => {
 
 .hero {
   display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.95fr);
+  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.95fr);
   gap: 14px;
   border-radius: 20px;
-  border: 1px solid #dbe7f4;
-  background: linear-gradient(134deg, #eef5ff 0%, #f8fbff 60%, #f5fffb 100%);
-  box-shadow: 0 18px 40px -30px rgba(15, 23, 42, 0.35);
+  border: 1px solid #dce8f5;
+  background: linear-gradient(137deg, #eef6ff 0%, #f8fbff 64%, #f3fffb 100%);
   padding: 20px;
+  box-shadow: 0 20px 42px -34px rgba(15, 23, 42, 0.4);
 }
 
 .hero-kicker {
@@ -654,7 +698,7 @@ onBeforeUnmount(() => {
 
 h1 {
   margin: 10px 0 10px;
-  font-size: clamp(27px, 2.3vw, 33px);
+  font-size: clamp(28px, 2.3vw, 34px);
   line-height: 1.08;
   font-weight: 800;
   letter-spacing: -0.015em;
@@ -681,25 +725,25 @@ h1 {
 }
 
 .agent-picker {
+  margin: 0;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin: 0;
   padding: 11px 12px;
   border-radius: 12px;
   border: 1px solid #d4e0ed;
-  background: rgba(255, 255, 255, 0.76);
+  background: rgba(255, 255, 255, 0.8);
 }
 
 .agent-picker span {
   font-size: 12px;
-  font-weight: 700;
   color: #475569;
+  font-weight: 700;
 }
 
 .agent-picker select {
   height: 36px;
-  border-radius: 9px;
+  border-radius: 10px;
   border: 1px solid #cfdbe9;
   padding: 0 10px;
   background: #fff;
@@ -715,7 +759,7 @@ h1 {
 .stat-card {
   border-radius: 12px;
   border: 1px solid #d7e3f3;
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.92);
   min-height: 74px;
   padding: 10px 12px;
   display: flex;
@@ -735,12 +779,37 @@ h1 {
   color: #0f172a;
 }
 
+.quick-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.quick-link {
+  text-decoration: none;
+  border: 1px solid #d6e3f2;
+  background: #ffffff;
+  color: #1e3a8a;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 6px 10px;
+  transition: all 0.15s ease;
+}
+
+.quick-link:hover {
+  border-color: #93c5fd;
+  color: #1d4ed8;
+  background: #eff6ff;
+}
+
 .panel {
   border-radius: 18px;
-  border: 1px solid #dbe4f0;
+  border: 1px solid #dde6f1;
   background: #fff;
-  box-shadow: 0 14px 34px -32px rgba(15, 23, 42, 0.4);
+  box-shadow: 0 15px 34px -32px rgba(15, 23, 42, 0.45);
   padding: 18px;
+  scroll-margin-top: 14px;
 }
 
 .panel-head {
@@ -749,7 +818,7 @@ h1 {
   align-items: flex-start;
   gap: 12px;
   padding-bottom: 10px;
-  border-bottom: 1px dashed #dbe4f0;
+  border-bottom: 1px dashed #dbe4ef;
 }
 
 .panel-head h2 {
@@ -770,6 +839,17 @@ h1 {
   flex-wrap: wrap;
 }
 
+.panel-chip {
+  align-self: center;
+  border-radius: 999px;
+  border: 1px solid #cfe0f3;
+  background: #f8fbff;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 10px;
+}
+
 .hint-box {
   margin-top: 12px;
   margin-bottom: 12px;
@@ -780,20 +860,20 @@ h1 {
   background: #f8fbff;
   color: #334155;
   font-size: 13px;
-  line-height: 1.38;
+  line-height: 1.4;
 }
 
 .stage-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 13px;
+  grid-template-columns: 1fr;
+  gap: 12px;
 }
 
 .stage-card {
   border-radius: 14px;
   border: 1px solid #dbe4ef;
   background: #fcfdff;
-  box-shadow: 0 10px 24px -28px rgba(15, 23, 42, 0.45);
+  box-shadow: 0 10px 24px -30px rgba(15, 23, 42, 0.4);
   padding: 13px;
   display: flex;
   flex-direction: column;
@@ -810,6 +890,33 @@ h1 {
   justify-content: space-between;
   gap: 10px;
   align-items: flex-start;
+}
+
+.stage-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.stage-order,
+.stage-kind {
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+}
+
+.stage-order {
+  border: 1px solid #dbe4ef;
+  background: #f8fafc;
+  color: #334155;
+}
+
+.stage-kind {
+  border: 1px solid #bfdbfe;
+  background: #ecf5ff;
+  color: #1d4ed8;
 }
 
 .stage-card-head h3 {
@@ -836,6 +943,12 @@ h1 {
   font-weight: 800;
 }
 
+.stage-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
 .stack-list {
   display: flex;
   flex-direction: column;
@@ -855,7 +968,7 @@ h1 {
 
 .stack-grid {
   display: grid;
-  grid-template-columns: 1.4fr 1fr 0.85fr 0.9fr;
+  grid-template-columns: 1.4fr 1fr 0.9fr 0.95fr;
   gap: 10px;
   align-items: end;
 }
@@ -899,7 +1012,7 @@ h1 {
 
 .field textarea {
   resize: vertical;
-  min-height: 102px;
+  min-height: 104px;
 }
 
 .field .mono {
@@ -1023,22 +1136,18 @@ h1 {
   transform: translateY(-8px);
 }
 
-@media (max-width: 1200px) {
+@media (max-width: 1220px) {
   .layout-shell {
-    width: min(1180px, calc(100% - 44px));
+    width: min(1240px, calc(100% - 40px));
   }
 
   .hero {
     grid-template-columns: 1fr;
   }
-
-  .stats-grid {
-    grid-template-columns: 1fr 1fr;
-  }
 }
 
-@media (max-width: 1040px) {
-  .stage-grid {
+@media (max-width: 980px) {
+  .stage-form-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1053,13 +1162,8 @@ h1 {
 
 @media (max-width: 740px) {
   .layout-shell {
-    width: calc(100% - 20px);
+    width: calc(100% - 16px);
     gap: 14px;
-  }
-
-  .panel {
-    border-radius: 14px;
-    padding: 14px;
   }
 
   .hero {
@@ -1069,6 +1173,11 @@ h1 {
 
   h1 {
     font-size: 25px;
+  }
+
+  .panel {
+    border-radius: 14px;
+    padding: 14px;
   }
 
   .stats-grid {
