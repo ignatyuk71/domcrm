@@ -275,7 +275,7 @@
                     <span class="ai-stage-chip">{{ aiStageBadge }}</span>
                   </div>
 
-                  <div class="ai-steps">
+                  <div class="ai-steps ai-steps--compact">
                     <div
                       v-for="step in aiSteps"
                       :key="step.code"
@@ -295,12 +295,43 @@
                   </div>
 
                   <div class="ai-collected-block">
-                    <div class="ai-collected-subtitle">Поточний інтерес</div>
-                    <ul class="ai-collected-list">
-                      <li><strong>Модель:</strong> {{ aiCollectedModel }}</li>
-                      <li><strong>Колір:</strong> {{ aiCollectedColor }}</li>
-                      <li><strong>Розмір:</strong> {{ aiCollectedSize }}</li>
-                    </ul>
+                    <div class="ai-collected-subtitle">
+                      Кошик ({{ aiCartHeaderText }})
+                    </div>
+
+                    <div v-if="aiCartItems.length" class="ai-cart-list">
+                      <div
+                        v-for="(item, index) in aiCartItems"
+                        :key="`cart-item-${index}`"
+                        class="ai-cart-item"
+                      >
+                        <div class="ai-cart-item-head">
+                          <span class="ai-cart-item-index">{{ index + 1 }})</span>
+                          <span class="ai-cart-item-model">{{ item.model || 'Товар без назви' }}</span>
+                        </div>
+                        <div class="ai-cart-item-meta">
+                          Колір: {{ item.color || '—' }} • Розмір: {{ item.size || '—' }}
+                        </div>
+                        <div v-if="item.price !== null && item.line_total !== null" class="ai-cart-item-price">
+                          {{ aiFormatMoney(item.price) }} грн × {{ item.qty }} = {{ aiFormatMoney(item.line_total) }} грн
+                        </div>
+                        <div v-else class="ai-cart-item-price ai-cart-item-price--muted">Ціна уточнюється</div>
+                      </div>
+                    </div>
+
+                    <div v-else class="ai-summary-box">
+                      Кошик ще не сформований.
+                    </div>
+                  </div>
+
+                  <div class="ai-collected-block">
+                    <div class="ai-collected-subtitle">Для менеджера</div>
+                    <div class="ai-summary-box ai-summary-box--manager">{{ aiManagerNote }}</div>
+                  </div>
+
+                  <div class="ai-collected-block">
+                    <div class="ai-collected-subtitle">Статус діалогу</div>
+                    <div class="ai-dialog-status">{{ aiDialogStatus }}</div>
                   </div>
 
                   <div class="ai-collected-block">
@@ -311,11 +342,6 @@
                         <span>{{ row.label }}</span>
                       </div>
                     </div>
-                  </div>
-
-                  <div class="ai-collected-block">
-                    <div class="ai-collected-subtitle">Короткий підсумок</div>
-                    <div class="ai-summary-box">{{ aiSummaryText }}</div>
                   </div>
 
                   <div v-if="aiMissingSlotsText" class="ai-missing-slots">
@@ -596,9 +622,78 @@ const aiSteps = computed(() => {
         : 'pending',
   }));
 });
-const aiCollectedModel = computed(() => String(aiCollected.value?.product?.title || '—'));
-const aiCollectedColor = computed(() => String(aiCollected.value?.color?.name || '—'));
-const aiCollectedSize = computed(() => String(aiCollected.value?.size || aiCollected.value?.variant?.size || '—'));
+const aiCartItems = computed(() => {
+  const rawItems = Array.isArray(aiCollected.value?.cart_items) ? aiCollected.value.cart_items : [];
+  const normalized = rawItems
+    .map((item) => {
+      if (!item || typeof item !== 'object') {
+        return null;
+      }
+
+      const qty = Math.max(1, Number(item.qty || 1) || 1);
+      const priceNum = Number(item.price);
+      const lineTotalNum = Number(item.line_total);
+      const price = Number.isFinite(priceNum) ? priceNum : null;
+      const lineTotal = Number.isFinite(lineTotalNum)
+        ? lineTotalNum
+        : (price !== null ? price * qty : null);
+
+      return {
+        model: String(item.model || '').trim() || null,
+        color: String(item.color || '').trim() || null,
+        size: String(item.size || '').trim() || null,
+        price,
+        qty,
+        line_total: lineTotal,
+      };
+    })
+    .filter(Boolean);
+
+  if (normalized.length) {
+    return normalized;
+  }
+
+  const fallbackModel = String(aiCollected.value?.product?.title || '').trim();
+  const fallbackColor = String(aiCollected.value?.color?.name || '').trim();
+  const fallbackSize = String(aiCollected.value?.size || aiCollected.value?.variant?.size || '').trim();
+  if (!fallbackModel && !fallbackColor && !fallbackSize) {
+    return [];
+  }
+
+  return [{
+    model: fallbackModel || null,
+    color: fallbackColor || null,
+    size: fallbackSize || null,
+    price: null,
+    qty: 1,
+    line_total: null,
+  }];
+});
+const aiCartMeta = computed(() => (
+  aiCollected.value?.cart && typeof aiCollected.value.cart === 'object'
+    ? aiCollected.value.cart
+    : {}
+));
+const aiCartPositions = computed(() => {
+  const backendCount = Number(aiCartMeta.value.positions);
+  if (Number.isFinite(backendCount) && backendCount > 0) {
+    return backendCount;
+  }
+
+  return aiCartItems.value.length;
+});
+const aiCartPairs = computed(() => {
+  const backendPairs = Number(aiCartMeta.value.pairs);
+  if (Number.isFinite(backendPairs) && backendPairs > 0) {
+    return backendPairs;
+  }
+
+  return aiCartItems.value.reduce((sum, item) => sum + Number(item.qty || 0), 0);
+});
+const aiCartHeaderText = computed(() => (
+  `${aiCartPositions.value} ${pluralizeUa(aiCartPositions.value, ['позиція', 'позиції', 'позицій'])} • `
+  + `${aiCartPairs.value} ${pluralizeUa(aiCartPairs.value, ['пара', 'пари', 'пар'])}`
+));
 const aiDelivery = computed(() => (
   aiCollected.value.delivery && typeof aiCollected.value.delivery === 'object'
     ? aiCollected.value.delivery
@@ -610,19 +705,6 @@ const aiDeliveryRows = computed(() => ([
   { key: 'city', label: 'Місто', done: !!String(aiDelivery.value.city || '').trim() },
   { key: 'warehouse', label: 'Відділення/поштомат', done: !!String(aiDelivery.value.warehouse || '').trim() },
 ]));
-const aiSummaryText = computed(() => {
-  const summary = String(aiCollected.value.summary || '').trim();
-  if (summary !== '') {
-    return summary;
-  }
-
-  const parts = [];
-  if (aiCollectedModel.value !== '—') parts.push(aiCollectedModel.value);
-  if (aiCollectedColor.value !== '—') parts.push(aiCollectedColor.value);
-  if (aiCollectedSize.value !== '—') parts.push(aiCollectedSize.value);
-
-  return parts.length ? parts.join(', ') : 'Ще немає достатньо даних для підсумку.';
-});
 const aiMissingSlotsText = computed(() => {
   const missing = Array.isArray(aiCollected.value?.missing_slots) ? aiCollected.value.missing_slots : [];
   if (!missing.length) {
@@ -631,6 +713,7 @@ const aiMissingSlotsText = computed(() => {
 
   const labels = {
     selected_product: 'модель товару',
+    selected_color: 'колір',
     selected_size: 'розмір',
     selected_variant: 'варіант',
     purchase_intent: 'підтвердження наміру купити',
@@ -643,6 +726,51 @@ const aiMissingSlotsText = computed(() => {
   return missing
     .map((key) => labels[key] || key)
     .join(', ');
+});
+const aiDialogStatus = computed(() => {
+  const status = String(aiCollected.value?.dialog_status || '').trim();
+  if (status) {
+    return status;
+  }
+
+  if (aiStageCode.value === 'checkout' && aiDeliveryRows.value.every((row) => row.done)) {
+    return 'Оформлення завершено';
+  }
+  if (aiStageCode.value === 'checkout_ready' || aiCollected.value?.intent_purchase) {
+    return 'Підтверджено клієнтом';
+  }
+  if (aiStageCode.value === 'selection') {
+    return 'Підбір позицій';
+  }
+
+  return 'Консультація';
+});
+const aiManagerNote = computed(() => {
+  const note = String(aiCollected.value?.manager_note || '').trim();
+  if (note) {
+    return note;
+  }
+
+  if (!aiCartItems.value.length) {
+    return 'Клієнт ще формує вибір. Поки немає підтверджених позицій у кошику.';
+  }
+
+  const positions = aiCartItems.value
+    .map((item) => {
+      const color = item.color ? item.color.toLowerCase() : 'без кольору';
+      const size = item.size || 'без розміру';
+      return `${color} ${size} (${item.qty})`;
+    })
+    .join(', ');
+
+  const prefix = aiCollected.value?.intent_purchase
+    ? 'Клієнт підтвердив замовлення.'
+    : 'Клієнт сформував позиції у кошику, очікуємо підтвердження.';
+  const suffix = aiMissingSlotsText.value
+    ? `Потрібно дозібрати: ${aiMissingSlotsText.value}.`
+    : 'Дані доставки зібрано.';
+
+  return `${prefix}\nПозиції: ${positions}.\n${suffix}`;
 });
 
 function syncFormFromCustomer(customer, { resetPanels = false } = {}) {
@@ -749,6 +877,21 @@ const formatPrice = (value) => {
   }).format(num).replace(/\.00$/, ''); 
 };
 const formatMoney = formatPrice;
+const aiFormatMoney = (value) => formatMoney(Number.isFinite(Number(value)) ? Number(value) : 0);
+const pluralizeUa = (count, forms) => {
+  const abs = Math.abs(Number(count) || 0);
+  const mod10 = abs % 10;
+  const mod100 = abs % 100;
+
+  if (mod10 === 1 && mod100 !== 11) {
+    return forms[0];
+  }
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
+    return forms[1];
+  }
+
+  return forms[2];
+};
 
 const getStatusRef = (order) => {
   return order?.statusRef || order?.status_ref || null;
@@ -1122,7 +1265,7 @@ const handleOrderClose = () => {
 .ai-title { font-size: 13px; font-weight: 700; color: #0f172a; }
 .ai-subtitle { font-size: 11px; color: #64748b; margin-top: 2px; }
 .ai-body-wrap { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
-.ai-card.is-open .ai-body-wrap { max-height: 1800px; border-top: 1px solid #f1f5f9; }
+.ai-card.is-open .ai-body-wrap { max-height: 6000px; border-top: 1px solid #f1f5f9; }
 .ai-body { padding: 12px; display: flex; flex-direction: column; gap: 12px; background: #f8fafc; }
 .ai-switch-row {
   display: flex;
@@ -1203,6 +1346,10 @@ const handleOrderClose = () => {
   grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
+.ai-steps--compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
 .ai-step {
   display: flex;
   align-items: center;
@@ -1249,16 +1396,48 @@ const handleOrderClose = () => {
   color: #64748b;
   letter-spacing: .04em;
 }
-.ai-collected-list {
-  margin: 0;
-  padding-left: 18px;
+.ai-cart-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ai-cart-item {
+  border: 1px solid #dbeafe;
+  background: #f8fbff;
+  border-radius: 10px;
+  padding: 10px;
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+.ai-cart-item-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.ai-cart-item-index {
+  font-size: 13px;
+  font-weight: 700;
   color: #334155;
 }
-.ai-collected-list li {
+.ai-cart-item-model {
   font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.25;
+}
+.ai-cart-item-meta {
+  font-size: 12px;
+  color: #475569;
+}
+.ai-cart-item-price {
+  font-size: 12px;
+  color: #0f172a;
+  font-weight: 600;
+}
+.ai-cart-item-price--muted {
+  color: #64748b;
+  font-weight: 500;
 }
 .ai-summary-box {
   border: 1px solid #dbeafe;
@@ -1268,6 +1447,18 @@ const handleOrderClose = () => {
   padding: 10px;
   font-size: 13px;
   line-height: 1.35;
+}
+.ai-summary-box--manager {
+  white-space: pre-line;
+}
+.ai-dialog-status {
+  border: 1px solid #bbf7d0;
+  background: #f0fdf4;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #166534;
 }
 .ai-delivery-grid {
   display: grid;
@@ -1410,7 +1601,14 @@ const handleOrderClose = () => {
     display: flex;
   }
 
-  .ai-steps,
+  .ai-steps {
+    grid-template-columns: 1fr;
+  }
+
+  .ai-steps--compact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .ai-delivery-grid {
     grid-template-columns: 1fr;
   }

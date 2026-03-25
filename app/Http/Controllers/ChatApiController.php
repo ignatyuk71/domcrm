@@ -681,19 +681,73 @@ class ChatApiController extends Controller
         $slots = is_array($aiState?->slots_json) ? $aiState->slots_json : [];
         $delivery = is_array($slots['delivery'] ?? null) ? $slots['delivery'] : [];
         $selectedSize = $aiState?->selected_size ?: ($aiState?->selectedVariant?->size ?? null);
+        $selectedModelTitle = $aiState?->selectedProduct?->title
+            ? (string) $aiState->selectedProduct->title
+            : null;
+        $selectedColorName = $aiState?->selectedColor?->name
+            ? (string) $aiState->selectedColor->name
+            : null;
+        $intentPurchase = (bool) ($aiState?->intent_purchase ?? false);
+        $missingSlots = is_array($aiState?->missing_slots_json)
+            ? array_values($aiState->missing_slots_json)
+            : [];
+
+        $cartItems = $this->normalizeAiCartItems(
+            is_array($slots['cart_items'] ?? null) ? $slots['cart_items'] : [],
+            $selectedModelTitle,
+            $selectedColorName,
+            $selectedSize
+        );
+        $cartPairsCount = 0;
+        $cartTotalAmount = 0.0;
+        foreach ($cartItems as $item) {
+            $cartPairsCount += (int) ($item['qty'] ?? 0);
+            $cartTotalAmount += (float) ($item['line_total'] ?? 0);
+        }
+        $cartPositionCount = count($cartItems);
 
         $summaryParts = [];
-        if ($aiState?->selectedProduct?->title) {
-            $summaryParts[] = (string) $aiState->selectedProduct->title;
-        }
-        if ($aiState?->selectedColor?->name) {
-            $summaryParts[] = (string) $aiState->selectedColor->name;
-        }
-        if ($selectedSize) {
-            $summaryParts[] = (string) $selectedSize;
+        if ($cartItems !== []) {
+            foreach ($cartItems as $item) {
+                $rowParts = [];
+                if (is_string($item['model'] ?? null) && trim((string) $item['model']) !== '') {
+                    $rowParts[] = trim((string) $item['model']);
+                }
+                if (is_string($item['color'] ?? null) && trim((string) $item['color']) !== '') {
+                    $rowParts[] = trim((string) $item['color']);
+                }
+                if (is_string($item['size'] ?? null) && trim((string) $item['size']) !== '') {
+                    $rowParts[] = trim((string) $item['size']);
+                }
+                if ($rowParts !== []) {
+                    $summaryParts[] = implode(', ', $rowParts);
+                }
+            }
+        } else {
+            if ($selectedModelTitle) {
+                $summaryParts[] = $selectedModelTitle;
+            }
+            if ($selectedColorName) {
+                $summaryParts[] = $selectedColorName;
+            }
+            if ($selectedSize) {
+                $summaryParts[] = (string) $selectedSize;
+            }
         }
 
         $stageOrder = $this->resolveAiStageOrder($aiStage);
+        $dialogStatus = $this->resolveAiDialogStatus(
+            $aiStage,
+            $intentPurchase,
+            $missingSlots,
+            $cartPositionCount,
+            $delivery
+        );
+        $managerNote = $this->buildAiManagerNote(
+            $intentPurchase,
+            $cartItems,
+            $missingSlots
+        );
 
         return [
             'conversation_id' => $conversation->id,
@@ -752,14 +806,22 @@ class ChatApiController extends Controller
                         'name' => $aiState->selectedColor->name,
                     ] : null,
                     'size' => $selectedSize,
-                    'intent_purchase' => (bool) ($aiState?->intent_purchase ?? false),
+                    'intent_purchase' => $intentPurchase,
                     'delivery' => [
                         'name' => is_string($delivery['name'] ?? null) ? $delivery['name'] : null,
                         'phone' => is_string($delivery['phone'] ?? null) ? $delivery['phone'] : null,
                         'city' => is_string($delivery['city'] ?? null) ? $delivery['city'] : null,
                         'warehouse' => is_string($delivery['warehouse'] ?? null) ? $delivery['warehouse'] : null,
                     ],
-                    'missing_slots' => is_array($aiState?->missing_slots_json) ? $aiState->missing_slots_json : [],
+                    'missing_slots' => $missingSlots,
+                    'cart_items' => $cartItems,
+                    'cart' => [
+                        'positions' => $cartPositionCount,
+                        'pairs' => $cartPairsCount,
+                        'amount' => round($cartTotalAmount, 2),
+                    ],
+                    'manager_note' => $managerNote,
+                    'dialog_status' => $dialogStatus,
                     'summary' => $summaryParts !== [] ? implode(', ', $summaryParts) : null,
                 ],
             ],
@@ -797,6 +859,209 @@ class ChatApiController extends Controller
             'checkout' => 'Оформлення',
             default => 'Консультація',
         };
+    }
+
+    /**
+     * @param  array<int, mixed>  $rawCartItems
+     * @return array<int, array{
+     *   model:?string,
+     *   color:?string,
+     *   size:?string,
+     *   price:?float,
+     *   qty:int,
+     *   line_total:?float,
+     *   product_id:?int,
+     *   variant_id:?int
+     * }>
+     */
+    private function normalizeAiCartItems(
+        array $rawCartItems,
+        ?string $fallbackModel,
+        ?string $fallbackColor,
+        ?string $fallbackSize
+    ): array {
+        $items = [];
+        foreach ($rawCartItems as $rawItem) {
+            if (!is_array($rawItem)) {
+                continue;
+            }
+
+            $normalized = $this->normalizeAiCartItem($rawItem);
+            if ($normalized !== null) {
+                $items[] = $normalized;
+            }
+        }
+
+        // Підтримуємо старий single-item стан, якщо кошик ще не заповнений.
+        if ($items === []) {
+            $hasFallbackData = trim((string) $fallbackModel) !== ''
+                || trim((string) $fallbackColor) !== ''
+                || trim((string) $fallbackSize) !== '';
+
+            if ($hasFallbackData) {
+                $items[] = [
+                    'model' => trim((string) $fallbackModel) !== '' ? trim((string) $fallbackModel) : null,
+                    'color' => trim((string) $fallbackColor) !== '' ? trim((string) $fallbackColor) : null,
+                    'size' => trim((string) $fallbackSize) !== '' ? trim((string) $fallbackSize) : null,
+                    'price' => null,
+                    'qty' => 1,
+                    'line_total' => null,
+                    'product_id' => null,
+                    'variant_id' => null,
+                ];
+            }
+        }
+
+        return $items;
+    }
+
+    /**
+     * @param  array<string, mixed>  $item
+     * @return array{
+     *   model:?string,
+     *   color:?string,
+     *   size:?string,
+     *   price:?float,
+     *   qty:int,
+     *   line_total:?float,
+     *   product_id:?int,
+     *   variant_id:?int
+     * }|null
+     */
+    private function normalizeAiCartItem(array $item): ?array
+    {
+        $model = is_scalar($item['model'] ?? null) ? trim((string) $item['model']) : '';
+        $color = is_scalar($item['color'] ?? null) ? trim((string) $item['color']) : '';
+        $size = is_scalar($item['size'] ?? null) ? trim((string) $item['size']) : '';
+        $qty = max(1, (int) ($item['qty'] ?? 1));
+        $price = is_numeric($item['price'] ?? null) ? (float) $item['price'] : null;
+        $lineTotal = is_numeric($item['line_total'] ?? null)
+            ? (float) $item['line_total']
+            : ($price !== null ? round($price * $qty, 2) : null);
+        $productId = is_numeric($item['product_id'] ?? null) ? (int) $item['product_id'] : null;
+        $variantId = is_numeric($item['variant_id'] ?? null) ? (int) $item['variant_id'] : null;
+
+        if (
+            $model === ''
+            && $color === ''
+            && $size === ''
+            && $price === null
+            && $productId === null
+            && $variantId === null
+        ) {
+            return null;
+        }
+
+        return [
+            'model' => $model !== '' ? $model : null,
+            'color' => $color !== '' ? $color : null,
+            'size' => $size !== '' ? $size : null,
+            'price' => $price,
+            'qty' => $qty,
+            'line_total' => $lineTotal,
+            'product_id' => $productId,
+            'variant_id' => $variantId,
+        ];
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $cartItems
+     * @param  array<int, string>  $missingSlots
+     */
+    private function buildAiManagerNote(
+        bool $intentPurchase,
+        array $cartItems,
+        array $missingSlots
+    ): string {
+        if ($cartItems === []) {
+            return 'Клієнт ще формує вибір. Поки немає підтверджених позицій у кошику.';
+        }
+
+        $lines = [];
+        $lines[] = $intentPurchase
+            ? 'Клієнт підтвердив замовлення.'
+            : 'Клієнт сформував позиції у кошику, очікуємо підтвердження.';
+
+        $positionParts = [];
+        foreach ($cartItems as $item) {
+            $color = is_scalar($item['color'] ?? null) && trim((string) $item['color']) !== ''
+                ? mb_strtolower(trim((string) $item['color']))
+                : 'без кольору';
+            $size = is_scalar($item['size'] ?? null) && trim((string) $item['size']) !== ''
+                ? trim((string) $item['size'])
+                : 'без розміру';
+            $qty = max(1, (int) ($item['qty'] ?? 1));
+            $positionParts[] = $color . ' ' . $size . ' (' . $qty . ')';
+        }
+        if ($positionParts !== []) {
+            $lines[] = 'Позиції: ' . implode(', ', $positionParts) . '.';
+        }
+
+        $deliveryMissing = [];
+        $deliveryMap = [
+            'name' => 'імʼя та прізвище',
+            'phone' => 'телефон',
+            'city' => 'місто',
+            'warehouse' => 'відділення/поштомат',
+        ];
+        foreach ($deliveryMap as $key => $label) {
+            if (in_array($key, $missingSlots, true)) {
+                $deliveryMissing[] = $label;
+            }
+        }
+
+        if ($deliveryMissing !== []) {
+            $lines[] = 'Потрібно дозібрати: ' . implode(', ', $deliveryMissing) . '.';
+        } else {
+            $lines[] = 'Дані доставки зібрано.';
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * @param  array<int, string>  $missingSlots
+     */
+    private function resolveAiDialogStatus(
+        ?string $stage,
+        bool $intentPurchase,
+        array $missingSlots,
+        int $cartPositionCount,
+        array $delivery
+    ): string {
+        $hasDelivery = true;
+        foreach (['name', 'phone', 'city', 'warehouse'] as $field) {
+            if (!is_string($delivery[$field] ?? null) || trim((string) $delivery[$field]) === '') {
+                $hasDelivery = false;
+                break;
+            }
+        }
+
+        if ($hasDelivery && $intentPurchase) {
+            return 'Оформлення завершено';
+        }
+
+        if ($intentPurchase && $cartPositionCount > 0) {
+            return 'Підтверджено клієнтом';
+        }
+
+        if ($stage === 'checkout_ready') {
+            return 'Готовий до оформлення';
+        }
+
+        if ($stage === 'checkout') {
+            return 'Оформлення';
+        }
+
+        if ($stage === 'selection' || $cartPositionCount > 0) {
+            return 'Підбір позицій';
+        }
+
+        if (in_array('purchase_intent', $missingSlots, true)) {
+            return 'Консультація';
+        }
+
+        return 'Активний діалог';
     }
 
     private function getAiDefaults(): array

@@ -430,9 +430,24 @@ class ChatAiOrchestratorService
             . "  \"selected_color\": \"string|null\",\n"
             . "  \"selected_product_id\": number|null,\n"
             . "  \"selected_variant_id\": number|null,\n"
+            . "  \"cart_items\": [\n"
+            . "    {\n"
+            . "      \"model\": \"string|null\",\n"
+            . "      \"color\": \"string|null\",\n"
+            . "      \"size\": \"string|null\",\n"
+            . "      \"price\": number|null,\n"
+            . "      \"qty\": number,\n"
+            . "      \"line_total\": number|null,\n"
+            . "      \"product_id\": number|null,\n"
+            . "      \"variant_id\": number|null,\n"
+            . "      \"color_id\": number|null\n"
+            . "    }\n"
+            . "  ],\n"
             . "  \"missing_slots\": [\"selected_product\",\"selected_size\",\"selected_variant\",\"purchase_intent\",\"name\",\"phone\",\"city\",\"warehouse\"],\n"
             . "  \"delivery_fields\": {\"name\": \"string|null\", \"phone\": \"string|null\", \"city\": \"string|null\", \"warehouse\": \"string|null\"}\n"
             . "}\n"
+            . "Дозволено кілька позицій у одному замовленні. Якщо клієнт просить 2+ товари, додай їх у cart_items.\n"
+            . "Заборонено змушувати клієнта обрати лише одну позицію, якщо він явно хоче кілька.\n"
             . "Не запитуй дані доставки (ПІБ, телефон, місто, відділення/поштомат), доки stage не дійшов до checkout_ready.\n"
             . "Одне уточнююче питання за раз.\n"
             . "policy_json=" . $policyJson;
@@ -460,6 +475,7 @@ class ChatAiOrchestratorService
             'selected_color_id' => $state->selected_color_id,
             'selected_size' => $state->selected_size,
             'slots' => $state->slots_json ?? [],
+            'current_cart' => is_array($state->slots_json['cart_items'] ?? null) ? $state->slots_json['cart_items'] : [],
             'missing_slots' => $state->missing_slots_json ?? [],
             'policy_json' => $promptVersion->policy_json ?? [],
             'product_model_maps' => $this->chatAiKnowledgeService->productMapContext(30),
@@ -627,6 +643,7 @@ class ChatAiOrchestratorService
             'selected_color' => $this->cleanNullableString($payload['selected_color'] ?? $payload['color'] ?? null),
             'selected_product_id' => $this->nullableInt($payload['selected_product_id'] ?? $payload['product_id'] ?? null),
             'selected_variant_id' => $this->nullableInt($payload['selected_variant_id'] ?? $payload['variant_id'] ?? null),
+            'cart_items' => $this->normalizeCartItems($payload['cart_items'] ?? []),
             'missing_slots' => array_values(array_unique(array_filter(array_map(
                 fn ($slot) => $this->cleanNullableString($slot),
                 $missingSlots
@@ -644,6 +661,7 @@ class ChatAiOrchestratorService
     {
         $slots = is_array($state->slots_json) ? $state->slots_json : [];
         $delivery = is_array($slots['delivery'] ?? null) ? $slots['delivery'] : [];
+        $cartItems = $this->normalizeCartItems($slots['cart_items'] ?? []);
         $incomingDelivery = $normalized['delivery_fields'] ?? [];
 
         foreach (['name', 'phone', 'city', 'warehouse'] as $field) {
@@ -715,6 +733,39 @@ class ChatAiOrchestratorService
             $selectedColorId = $resolvedColorId;
         }
 
+        foreach (($normalized['cart_items'] ?? []) as $incomingItem) {
+            $cartItems = $this->upsertCartItem($cartItems, $incomingItem);
+        }
+
+        // Backward compatibility: якщо модель ще повернула тільки single slots, формуємо 1 позицію кошика.
+        if ($cartItems === []) {
+            $fallbackItem = $this->buildFallbackCartItem(
+                $selectedProductId,
+                $selectedVariantId,
+                $selectedColorId,
+                $normalized['selected_color'] ?? null,
+                $selectedSize
+            );
+
+            if ($fallbackItem !== null) {
+                $cartItems[] = $fallbackItem;
+            }
+        }
+
+        if ($cartItems !== []) {
+            $slots['cart_items'] = $cartItems;
+        } else {
+            unset($slots['cart_items']);
+        }
+
+        $primaryItem = $cartItems[0] ?? null;
+        if (is_array($primaryItem)) {
+            $selectedProductId = $this->nullableInt($primaryItem['product_id'] ?? null) ?: $selectedProductId;
+            $selectedVariantId = $this->nullableInt($primaryItem['variant_id'] ?? null) ?: $selectedVariantId;
+            $selectedColorId = $this->nullableInt($primaryItem['color_id'] ?? null) ?: $selectedColorId;
+            $selectedSize = $this->normalizeSize((string) ($primaryItem['size'] ?? '')) ?: $selectedSize;
+        }
+
         $intentPurchase = (bool) (
             $state->intent_purchase
             || $normalized['intent_purchase']
@@ -729,8 +780,21 @@ class ChatAiOrchestratorService
                 'selected_size' => $selectedSize,
                 'intent_purchase' => $intentPurchase,
                 'delivery' => $delivery,
+                'cart_items' => $cartItems,
             ]);
         }
+
+        $hasCartItems = $cartItems !== [];
+        $hasReadyCartItem = collect($cartItems)->contains(function (array $item): bool {
+            $hasModel = $this->cleanNullableString($item['model'] ?? null) !== null
+                || $this->nullableInt($item['product_id'] ?? null) !== null
+                || $this->nullableInt($item['variant_id'] ?? null) !== null;
+            $hasColor = $this->cleanNullableString($item['color'] ?? null) !== null
+                || $this->nullableInt($item['color_id'] ?? null) !== null;
+            $hasSize = $this->normalizeSize((string) ($item['size'] ?? '')) !== null;
+
+            return $hasModel && $hasColor && $hasSize;
+        });
 
         return [
             'slots_json' => $slots,
@@ -741,6 +805,8 @@ class ChatAiOrchestratorService
             'selected_size' => $selectedSize,
             'intent_purchase' => $intentPurchase,
             'delivery_complete' => $this->isDeliveryComplete($delivery),
+            'has_cart_items' => $hasCartItems,
+            'has_ready_cart_item' => $hasReadyCartItem,
         ];
     }
 
@@ -749,15 +815,14 @@ class ChatAiOrchestratorService
         $stage = isset(self::STAGE_ORDER[$currentStage]) ? $currentStage : self::STAGE_INTEREST;
 
         $hasSelection = (bool) (
-            $slotPatch['selected_size']
+            ($slotPatch['has_cart_items'] ?? false)
+            || $slotPatch['selected_size']
             || $slotPatch['selected_product_id']
             || $slotPatch['selected_variant_id']
             || $slotPatch['selected_color_id']
         );
         $hasCheckoutPrerequisites = (bool) (
-            $slotPatch['selected_product_id']
-            && $slotPatch['selected_size']
-            && ($slotPatch['selected_variant_id'] || $slotPatch['selected_color_id'])
+            ($slotPatch['has_ready_cart_item'] ?? false)
             && $slotPatch['intent_purchase']
         );
 
@@ -820,8 +885,18 @@ class ChatAiOrchestratorService
         $missing = is_array($slotPatch['missing_slots_json'] ?? null)
             ? $slotPatch['missing_slots_json']
             : [];
+        $hasCartItems = (bool) ($slotPatch['has_cart_items'] ?? false);
+        $intentPurchase = (bool) ($slotPatch['intent_purchase'] ?? false);
 
         if ($stage === self::STAGE_INTEREST || $stage === self::STAGE_SELECTION) {
+            if ($hasCartItems && !$intentPurchase) {
+                return 'Додав позиції у кошик. Підкажіть, будь ласка, чи додаємо ще щось, чи вже оформляємо замовлення?';
+            }
+
+            if ($hasCartItems && $intentPurchase) {
+                return 'Чудово, позиції зафіксував. Можу переходити до оформлення замовлення?';
+            }
+
             if (($slotPatch['selected_size'] ?? null) === null || in_array('selected_size', $missing, true)) {
                 return 'Підкажіть, будь ласка, ваш розмір. Тоді одразу скажу, які варіанти є в наявності саме для вас.';
             }
@@ -956,16 +1031,44 @@ class ChatAiOrchestratorService
     {
         $missing = [];
 
-        if (empty($data['selected_product_id'])) {
-            $missing[] = 'selected_product';
-        }
+        $cartItems = is_array($data['cart_items'] ?? null) ? $data['cart_items'] : [];
+        if ($cartItems !== []) {
+            $hasReadyItem = false;
+            foreach ($cartItems as $item) {
+                if (!is_array($item)) {
+                    continue;
+                }
 
-        if (empty($data['selected_size'])) {
-            $missing[] = 'selected_size';
-        }
+                $hasModel = $this->cleanNullableString($item['model'] ?? null) !== null
+                    || $this->nullableInt($item['product_id'] ?? null) !== null
+                    || $this->nullableInt($item['variant_id'] ?? null) !== null;
+                $hasColor = $this->cleanNullableString($item['color'] ?? null) !== null
+                    || $this->nullableInt($item['color_id'] ?? null) !== null;
+                $hasSize = $this->normalizeSize((string) ($item['size'] ?? '')) !== null;
 
-        if (empty($data['selected_variant_id'])) {
-            $missing[] = 'selected_variant';
+                if ($hasModel && $hasColor && $hasSize) {
+                    $hasReadyItem = true;
+                    break;
+                }
+            }
+
+            if (!$hasReadyItem) {
+                $missing[] = 'selected_product';
+                $missing[] = 'selected_size';
+                $missing[] = 'selected_variant';
+            }
+        } else {
+            if (empty($data['selected_product_id'])) {
+                $missing[] = 'selected_product';
+            }
+
+            if (empty($data['selected_size'])) {
+                $missing[] = 'selected_size';
+            }
+
+            if (empty($data['selected_variant_id'])) {
+                $missing[] = 'selected_variant';
+            }
         }
 
         if (empty($data['intent_purchase'])) {
@@ -980,6 +1083,237 @@ class ChatAiOrchestratorService
         }
 
         return $missing;
+    }
+
+    /**
+     * @return array<int, array{
+     *   model:?string,color:?string,size:?string,price:?float,qty:int,line_total:?float,
+     *   product_id:?int,variant_id:?int,color_id:?int
+     * }>
+     */
+    private function normalizeCartItems(mixed $items): array
+    {
+        if (!is_array($items)) {
+            return [];
+        }
+
+        $normalized = [];
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $normalizedItem = $this->normalizeCartItem($item);
+            if ($normalizedItem === null) {
+                continue;
+            }
+
+            $normalized = $this->upsertCartItem($normalized, $normalizedItem);
+        }
+
+        return array_values($normalized);
+    }
+
+    /**
+     * @param  array<int, array<string,mixed>>  $cartItems
+     * @param  array<string,mixed>  $item
+     * @return array<int, array<string,mixed>>
+     */
+    private function upsertCartItem(array $cartItems, array $item): array
+    {
+        $normalizedItem = $this->normalizeCartItem($item);
+        if ($normalizedItem === null) {
+            return $cartItems;
+        }
+
+        $key = $this->buildCartItemKey($normalizedItem);
+        if ($key === null) {
+            $cartItems[] = $normalizedItem;
+
+            return array_values($cartItems);
+        }
+
+        foreach ($cartItems as $index => $existing) {
+            $existingKey = $this->buildCartItemKey(is_array($existing) ? $existing : []);
+            if ($existingKey !== $key) {
+                continue;
+            }
+
+            $existingQty = max(1, (int) ($existing['qty'] ?? 1));
+            $incomingQty = max(1, (int) ($normalizedItem['qty'] ?? 1));
+            $nextQty = max($existingQty, $incomingQty);
+            $price = $normalizedItem['price'] ?? $existing['price'] ?? null;
+
+            $cartItems[$index] = [
+                'model' => $normalizedItem['model'] ?? $existing['model'] ?? null,
+                'color' => $normalizedItem['color'] ?? $existing['color'] ?? null,
+                'size' => $normalizedItem['size'] ?? $existing['size'] ?? null,
+                'price' => $price !== null ? (float) $price : null,
+                'qty' => $nextQty,
+                'line_total' => $price !== null ? round(((float) $price) * $nextQty, 2) : null,
+                'product_id' => $normalizedItem['product_id'] ?? $existing['product_id'] ?? null,
+                'variant_id' => $normalizedItem['variant_id'] ?? $existing['variant_id'] ?? null,
+                'color_id' => $normalizedItem['color_id'] ?? $existing['color_id'] ?? null,
+            ];
+
+            return array_values($cartItems);
+        }
+
+        $cartItems[] = $normalizedItem;
+
+        return array_values($cartItems);
+    }
+
+    /**
+     * @param  array<string,mixed>  $item
+     * @return array<string,mixed>|null
+     */
+    private function normalizeCartItem(array $item): ?array
+    {
+        $productId = $this->nullableInt($item['product_id'] ?? $item['selected_product_id'] ?? null);
+        $variantId = $this->nullableInt($item['variant_id'] ?? $item['selected_variant_id'] ?? null);
+        $colorId = $this->nullableInt($item['color_id'] ?? $item['selected_color_id'] ?? null);
+
+        $model = $this->cleanNullableString($item['model'] ?? $item['product'] ?? null);
+        $color = $this->cleanNullableString($item['color'] ?? null);
+        $size = $this->normalizeSize($this->cleanNullableString($item['size'] ?? $item['selected_size'] ?? null) ?? '');
+
+        $price = $this->nullableFloat($item['price'] ?? null);
+        $qty = max(1, (int) ($item['qty'] ?? $item['quantity'] ?? 1));
+
+        if ($variantId) {
+            $variant = ProductVariant::query()
+                ->select(['id', 'product_id', 'size'])
+                ->find($variantId);
+            if ($variant) {
+                $variantId = $variant->id;
+                $productId = $variant->product_id ?: $productId;
+                if ($size === null && $variant->size) {
+                    $size = $this->normalizeSize((string) $variant->size);
+                }
+            } else {
+                $variantId = null;
+            }
+        }
+
+        if ($productId) {
+            $product = Product::query()
+                ->select(['id', 'title', 'sale_price'])
+                ->find($productId);
+            if ($product) {
+                if ($model === null) {
+                    $model = $this->cleanNullableString((string) $product->title);
+                }
+                if ($price === null && $product->sale_price !== null) {
+                    $price = (float) $product->sale_price;
+                }
+            } else {
+                $productId = null;
+            }
+        }
+
+        if ($colorId) {
+            $colorModel = Color::query()
+                ->select(['id', 'name'])
+                ->find($colorId);
+            if ($colorModel) {
+                $colorId = (int) $colorModel->id;
+                if ($color === null) {
+                    $color = $this->cleanNullableString((string) $colorModel->name);
+                }
+            } else {
+                $colorId = null;
+            }
+        }
+
+        if ($colorId === null && $color !== null) {
+            $resolvedColor = $this->resolveColorId($color, $color);
+            if ($resolvedColor !== null) {
+                $colorId = $resolvedColor;
+            }
+        }
+
+        $hasSignal = $model !== null
+            || $color !== null
+            || $size !== null
+            || $productId !== null
+            || $variantId !== null
+            || $colorId !== null;
+
+        if (!$hasSignal) {
+            return null;
+        }
+
+        $lineTotal = $this->nullableFloat($item['line_total'] ?? null);
+        if ($lineTotal === null && $price !== null) {
+            $lineTotal = round($price * $qty, 2);
+        }
+
+        return [
+            'model' => $model,
+            'color' => $color,
+            'size' => $size,
+            'price' => $price,
+            'qty' => $qty,
+            'line_total' => $lineTotal,
+            'product_id' => $productId,
+            'variant_id' => $variantId,
+            'color_id' => $colorId,
+        ];
+    }
+
+    /**
+     * @param  array<string,mixed>  $item
+     */
+    private function buildCartItemKey(array $item): ?string
+    {
+        $variantId = $this->nullableInt($item['variant_id'] ?? null);
+        if ($variantId !== null) {
+            return 'v:' . $variantId;
+        }
+
+        $productId = $this->nullableInt($item['product_id'] ?? null);
+        $size = $this->normalizeSize((string) ($item['size'] ?? ''));
+        $colorId = $this->nullableInt($item['color_id'] ?? null);
+        $color = mb_strtolower((string) ($item['color'] ?? ''));
+        $model = mb_strtolower((string) ($item['model'] ?? ''));
+
+        if ($productId !== null && $size !== null && ($colorId !== null || $color !== '')) {
+            return implode('|', [
+                'p:' . $productId,
+                's:' . $size,
+                'c:' . ($colorId !== null ? $colorId : $color),
+            ]);
+        }
+
+        if ($model !== '' && $size !== null && $color !== '') {
+            return implode('|', [
+                'm:' . $model,
+                's:' . $size,
+                'c:' . $color,
+            ]);
+        }
+
+        return null;
+    }
+
+    private function buildFallbackCartItem(
+        ?int $selectedProductId,
+        ?int $selectedVariantId,
+        ?int $selectedColorId,
+        ?string $selectedColorName,
+        ?string $selectedSize
+    ): ?array {
+        $candidate = [
+            'product_id' => $selectedProductId,
+            'variant_id' => $selectedVariantId,
+            'color_id' => $selectedColorId,
+            'color' => $selectedColorName,
+            'size' => $selectedSize,
+            'qty' => 1,
+        ];
+
+        return $this->normalizeCartItem($candidate);
     }
 
     private function isDeliveryComplete(array $delivery): bool
@@ -1096,6 +1430,28 @@ class ChatAiOrchestratorService
         }
 
         return null;
+    }
+
+    private function nullableFloat(mixed $value): ?float
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (is_numeric($value)) {
+            return (float) $value;
+        }
+
+        if (!is_string($value)) {
+            return null;
+        }
+
+        $normalized = str_replace(',', '.', trim($value));
+        if (!is_numeric($normalized)) {
+            return null;
+        }
+
+        return (float) $normalized;
     }
 
     private function toBool(mixed $value): bool
