@@ -2396,8 +2396,8 @@ h1 {
 }
 
 .media-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: 12px;
 }
 
@@ -2524,6 +2524,7 @@ h1 {
   display: grid;
   grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
   gap: 14px;
+  align-items: start;
 }
 
 .media-preview-panel {
@@ -2567,13 +2568,13 @@ h1 {
 
 .media-editor-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
   align-items: end;
 }
 
 .media-editor-grid .field.wide {
-  grid-column: span 3;
+  grid-column: span 4;
 }
 
 .stage-grid {
