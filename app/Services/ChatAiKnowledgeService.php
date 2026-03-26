@@ -111,6 +111,52 @@ class ChatAiKnowledgeService
     }
 
     /**
+     * @return array<string, mixed>|null
+     */
+    public function resolveModelMapByPhrase(?string $modelPhrase): ?array
+    {
+        $phrase = mb_strtolower(trim((string) $modelPhrase));
+        if ($phrase === '') {
+            return null;
+        }
+
+        $matches = array_values(array_filter($this->activeModelMaps(), function (array $map) use ($phrase): bool {
+            $candidate = mb_strtolower(trim((string) ($map['model_phrase'] ?? '')));
+            if ($candidate === '') {
+                return false;
+            }
+
+            return $candidate === $phrase
+                || mb_stripos($candidate, $phrase) !== false
+                || mb_stripos($phrase, $candidate) !== false;
+        }));
+
+        if ($matches === []) {
+            return null;
+        }
+
+        usort($matches, function (array $left, array $right): int {
+            $leftPriority = (int) ($left['priority'] ?? 100);
+            $rightPriority = (int) ($right['priority'] ?? 100);
+
+            if ($leftPriority !== $rightPriority) {
+                return $leftPriority <=> $rightPriority;
+            }
+
+            $leftLength = mb_strlen((string) ($left['model_phrase'] ?? ''));
+            $rightLength = mb_strlen((string) ($right['model_phrase'] ?? ''));
+
+            if ($leftLength !== $rightLength) {
+                return $rightLength <=> $leftLength;
+            }
+
+            return ((int) ($left['id'] ?? 0)) <=> ((int) ($right['id'] ?? 0));
+        });
+
+        return $matches[0] ?? null;
+    }
+
+    /**
      * @return array{
      *   product_id:int,
      *   variant_id:?int,

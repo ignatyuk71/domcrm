@@ -469,11 +469,13 @@ class ChatAiOrchestratorService
             . "Відповідь повертай ТІЛЬКИ у JSON без markdown.\n"
             . "Схема JSON:\n"
             . "{\n"
+            . "  \"action\": \"text|send_product_photo|send_collage|ask_clarifying|checkout_request|none\",\n"
             . "  \"reply\": \"string\",\n"
             . "  \"stage\": \"interest|selection|checkout_ready|checkout\",\n"
             . "  \"last_intent\": \"string|null\",\n"
             . "  \"intent_purchase\": true|false,\n"
             . "  \"requires_human\": true|false,\n"
+            . "  \"model_phrase\": \"string|null\",\n"
             . "  \"selected_size\": \"string|null\",\n"
             . "  \"selected_color\": \"string|null\",\n"
             . "  \"selected_product_id\": number|null,\n"
@@ -497,6 +499,11 @@ class ChatAiOrchestratorService
             . "Дозволено кілька позицій у одному замовленні. Якщо клієнт просить 2+ товари, додай їх у cart_items.\n"
             . "Заборонено змушувати клієнта обрати лише одну позицію, якщо він явно хоче кілька.\n"
             . "Не запитуй дані доставки (ПІБ, телефон, місто, відділення/поштомат), доки stage не дійшов до checkout_ready.\n"
+            . "Ти сам визначаєш action. PHP-код не вирішує intent за клієнта, а лише виконує твою action-команду.\n"
+            . "Якщо клієнт просить фото конкретного кольору або товару, повертай action=send_product_photo.\n"
+            . "Якщо клієнт просить показати всі кольори, моделі, варіанти або асортимент, повертай action=send_collage.\n"
+            . "Якщо потрібно лише відповісти текстом, повертай action=text.\n"
+            . "Якщо потрібно м'яко уточнити модель або колір, повертай action=ask_clarifying.\n"
             . "На етапі interest не вимагай розмір, якщо клієнт просить фото, кольори, модель, усі варіанти або просто цікавиться товаром. У таких запитах спочатку покажи фото/варіанти/кольори і лише потім, за потреби, м'яко уточнюй колір або модель.\n"
             . "Не проси розмір, доки клієнт сам не питає про наявність конкретного розміру, підбір або не переходить до замовлення.\n"
             . "Не вставляй у reply сирі URL фото, відео або колажів. Якщо потрібне фото чи колаж, просто напиши коротко без посилання: наприклад, 'Надсилаю фото.' або 'Надсилаю колаж.' CRM відправить медіа окремо.\n"
@@ -529,6 +536,7 @@ class ChatAiOrchestratorService
             'selected_variant_id' => $state->selected_variant_id,
             'selected_color_id' => $state->selected_color_id,
             'selected_size' => $state->selected_size,
+            'selected_model_phrase' => $state->slots_json['selected_model_phrase'] ?? null,
             'slots' => $state->slots_json ?? [],
             'current_cart' => is_array($state->slots_json['cart_items'] ?? null) ? $state->slots_json['cart_items'] : [],
             'missing_slots' => $shouldExposeMissingSlots ? ($state->missing_slots_json ?? []) : [],
@@ -689,11 +697,13 @@ class ChatAiOrchestratorService
         }
 
         return [
+            'action' => $this->normalizeAction($payload['action'] ?? null),
             'reply' => trim((string) ($payload['reply'] ?? $payload['response'] ?? '')),
             'stage' => $this->normalizeStage($payload['stage'] ?? null),
             'last_intent' => $this->normalizeIntent($payload['last_intent'] ?? null),
             'intent_purchase' => $this->toBool($payload['intent_purchase'] ?? $payload['purchase_intent'] ?? false),
             'requires_human' => $this->toBool($payload['requires_human'] ?? false),
+            'model_phrase' => $this->cleanNullableString($payload['model_phrase'] ?? null),
             'selected_size' => $this->cleanNullableString($payload['selected_size'] ?? $payload['size'] ?? null),
             'selected_color' => $this->cleanNullableString($payload['selected_color'] ?? $payload['color'] ?? null),
             'selected_product_id' => $this->nullableInt($payload['selected_product_id'] ?? $payload['product_id'] ?? null),
@@ -734,9 +744,19 @@ class ChatAiOrchestratorService
         $selectedVariantId = $state->selected_variant_id;
         $selectedColorId = $state->selected_color_id;
         $selectedSize = $state->selected_size;
+        $selectedModelPhrase = $this->cleanNullableString($slots['selected_model_phrase'] ?? null);
+
+        $candidateModelPhrase = $this->cleanNullableString($normalized['model_phrase'] ?? null);
+        if ($candidateModelPhrase !== null) {
+            $selectedModelPhrase = $candidateModelPhrase;
+        }
 
         $mapped = $this->chatAiKnowledgeService->resolveMappedProduct($inputText);
         if ($mapped) {
+            if (!$selectedModelPhrase && !empty($mapped['model_phrase'])) {
+                $selectedModelPhrase = (string) $mapped['model_phrase'];
+            }
+
             if (!$selectedProductId && !empty($mapped['product_id'])) {
                 $selectedProductId = (int) $mapped['product_id'];
             }
@@ -809,8 +829,7 @@ class ChatAiOrchestratorService
             $cartItems = $this->upsertCartItem($cartItems, $incomingItem);
         }
 
-        // Backward compatibility: якщо модель ще повернула тільки single slots, формуємо 1 позицію кошика.
-        if ($cartItems === []) {
+        if ($cartItems === [] && !empty($normalized['intent_purchase'])) {
             $fallbackItem = $this->buildFallbackCartItem(
                 $selectedProductId,
                 $selectedVariantId,
@@ -830,6 +849,12 @@ class ChatAiOrchestratorService
             unset($slots['cart_items']);
         }
 
+        if ($selectedModelPhrase !== null) {
+            $slots['selected_model_phrase'] = $selectedModelPhrase;
+        } else {
+            unset($slots['selected_model_phrase']);
+        }
+
         $primaryItem = $cartItems[0] ?? null;
         if (is_array($primaryItem)) {
             $selectedProductId = $this->nullableInt($primaryItem['product_id'] ?? null) ?: $selectedProductId;
@@ -838,11 +863,7 @@ class ChatAiOrchestratorService
             $selectedSize = $this->normalizeSize((string) ($primaryItem['size'] ?? '')) ?: $selectedSize;
         }
 
-        $intentPurchase = (bool) (
-            $state->intent_purchase
-            || $normalized['intent_purchase']
-            || $this->detectPurchaseIntent($inputText)
-        );
+        $intentPurchase = (bool) ($state->intent_purchase || $normalized['intent_purchase']);
 
         $missingSlots = $normalized['missing_slots'];
         if ($missingSlots === []) {
@@ -871,6 +892,7 @@ class ChatAiOrchestratorService
         return [
             'slots_json' => $slots,
             'missing_slots_json' => $missingSlots,
+            'selected_model_phrase' => $selectedModelPhrase,
             'selected_product_id' => $selectedProductId,
             'selected_variant_id' => $selectedVariantId,
             'selected_color_id' => $selectedColorId,
@@ -884,53 +906,22 @@ class ChatAiOrchestratorService
 
     private function resolveNextStage(string $currentStage, ?string $modelStage, array $slotPatch): string
     {
-        $stage = isset(self::STAGE_ORDER[$currentStage]) ? $currentStage : self::STAGE_INTEREST;
-
-        $hasSelection = (bool) (
-            ($slotPatch['has_cart_items'] ?? false)
-            || $slotPatch['selected_size']
-            || $slotPatch['selected_product_id']
-            || $slotPatch['selected_variant_id']
-            || $slotPatch['selected_color_id']
-        );
-        $hasCheckoutPrerequisites = (bool) (
-            ($slotPatch['has_ready_cart_item'] ?? false)
-            && $slotPatch['intent_purchase']
-        );
-
-        if ($hasSelection) {
-            $stage = $this->promoteStage($stage, self::STAGE_SELECTION);
+        $stage = isset(self::STAGE_ORDER[$modelStage ?? '']) ? $modelStage : $currentStage;
+        if (!isset(self::STAGE_ORDER[$stage])) {
+            $stage = self::STAGE_INTEREST;
         }
 
-        if ($hasCheckoutPrerequisites) {
-            $stage = $this->promoteStage($stage, self::STAGE_CHECKOUT_READY);
+        if ($stage === self::STAGE_CHECKOUT && !$slotPatch['delivery_complete']) {
+            return !empty($slotPatch['intent_purchase'])
+                ? self::STAGE_CHECKOUT_READY
+                : self::STAGE_SELECTION;
         }
 
-        if ($slotPatch['delivery_complete']) {
-            $stage = $this->promoteStage($stage, self::STAGE_CHECKOUT);
-        }
-
-        if ($modelStage === self::STAGE_SELECTION && $hasSelection) {
-            $stage = $this->promoteStage($stage, self::STAGE_SELECTION);
-        }
-
-        if ($modelStage === self::STAGE_CHECKOUT_READY && $hasCheckoutPrerequisites) {
-            $stage = $this->promoteStage($stage, self::STAGE_CHECKOUT_READY);
-        }
-
-        if ($modelStage === self::STAGE_CHECKOUT && $slotPatch['delivery_complete']) {
-            $stage = $this->promoteStage($stage, self::STAGE_CHECKOUT);
+        if ($stage === self::STAGE_CHECKOUT_READY && empty($slotPatch['intent_purchase'])) {
+            return self::STAGE_SELECTION;
         }
 
         return $stage;
-    }
-
-    private function promoteStage(string $current, string $target): string
-    {
-        $currentOrder = self::STAGE_ORDER[$current] ?? 1;
-        $targetOrder = self::STAGE_ORDER[$target] ?? 1;
-
-        return $targetOrder > $currentOrder ? $target : $current;
     }
 
     private function buildSafeReply(string $reply, string $stage, array $slotPatch): string
@@ -963,16 +954,26 @@ class ChatAiOrchestratorService
         ChatAiConversationState $state,
         array $slotPatch
     ): ?array {
-        if (!$this->shouldSendMediaAttachment($inputText, $normalized)) {
+        $action = (string) ($normalized['action'] ?? 'text');
+        if (!$this->actionRequiresMedia($action)) {
             return null;
         }
 
-        $preferCollage = $this->detectCollageIntent($inputText);
+        $preferCollage = $this->actionPrefersCollage($action);
         $productId = $this->nullableInt($slotPatch['selected_product_id'] ?? null) ?: $state->selected_product_id;
         $variantId = $this->nullableInt($slotPatch['selected_variant_id'] ?? null) ?: $state->selected_variant_id;
         $colorId = $this->nullableInt($slotPatch['selected_color_id'] ?? null) ?: $state->selected_color_id;
+        $modelPhrase = $this->cleanNullableString($normalized['model_phrase'] ?? null)
+            ?: $this->cleanNullableString($slotPatch['selected_model_phrase'] ?? null)
+            ?: $this->cleanNullableString($state->slots_json['selected_model_phrase'] ?? null);
 
-        $mapped = $this->chatAiKnowledgeService->resolveMappedProduct($inputText);
+        $mapped = null;
+        if ($modelPhrase !== null) {
+            $mapped = $this->chatAiKnowledgeService->resolveModelMapByPhrase($modelPhrase);
+        }
+        if ($mapped === null) {
+            $mapped = $this->chatAiKnowledgeService->resolveMappedProduct($inputText);
+        }
         if ($mapped === null) {
             $mapped = $this->chatAiKnowledgeService->resolveMappedProduct((string) ($normalized['reply'] ?? ''));
         }
@@ -1041,91 +1042,24 @@ class ChatAiOrchestratorService
         return null;
     }
 
-    /**
-     * @param  array<string, mixed>  $normalized
-     */
-    private function shouldSendMediaAttachment(string $inputText, array $normalized): bool
+    private function actionRequiresMedia(string $action): bool
     {
-        if ($this->detectPhotoIntent($inputText) || $this->detectCollageIntent($inputText)) {
-            return true;
-        }
-
-        $lastIntent = mb_strtolower((string) ($normalized['last_intent'] ?? ''));
-        $reply = $this->cleanNullableString($normalized['reply'] ?? null) ?? '';
-
-        return str_contains($lastIntent, 'фото')
-            || str_contains($lastIntent, 'photo')
-            || str_contains($lastIntent, 'колаж')
-            || $this->replyIndicatesMedia($reply);
+        return in_array($action, ['send_product_photo', 'send_collage'], true);
     }
 
-    private function detectPhotoIntent(string $text): bool
+    private function actionPrefersCollage(string $action): bool
     {
-        $normalized = mb_strtolower(trim($text));
-        if ($normalized === '') {
-            return false;
-        }
-
-        if (
-            preg_match('/\b(фото|фотку|фотки|фотографію|зображення)\b/ui', $normalized) === 1
-            && (
-                preg_match('/\b(покажи|покажіть|скинь|скиньте|надішли|надішліть|кинь|давай|можна|є)\b/ui', $normalized) === 1
-                || str_contains($normalized, '?')
-                || preg_match('/^(фото|фотку|фотки|фотографію|зображення)$/ui', $normalized) === 1
-            )
-        ) {
-            return true;
-        }
-
-        if (
-            preg_match('/\b(покажи|покажіть|скинь|скиньте|надішли|надішліть|кинь|давай)\b/ui', $normalized) === 1
-            && $this->resolveColorId(null, $normalized) !== null
-        ) {
-            return true;
-        }
-
-        return preg_match('/\b(покажи|покажіть|скинь|скиньте|надішли|надішліть|кинь|давай)\b/ui', $normalized) === 1
-            && preg_match('/\b(його|її|це|мені)\b/ui', $normalized) === 1;
+        return $action === 'send_collage';
     }
 
-    private function detectCollageIntent(string $text): bool
+    private function normalizeAction(mixed $value): string
     {
-        $normalized = mb_strtolower(trim($text));
-        if ($normalized === '') {
-            return false;
-        }
+        $action = $this->cleanNullableString(is_scalar($value) ? (string) $value : null);
+        $allowed = ['text', 'send_product_photo', 'send_collage', 'ask_clarifying', 'checkout_request', 'none'];
 
-        if (
-            preg_match('/\b(покажи|покажіть|скинь|скиньте|надішли|надішліть|кинь|давай)\b/ui', $normalized) === 1
-            && preg_match('/\b(всі|усі|все|всі кольори|усі кольори|всі варіанти|усі варіанти|всі моделі|усі моделі)\b/ui', $normalized) === 1
-        ) {
-            return true;
-        }
-
-        if (
-            preg_match('/\b(покажи|покажіть|скинь|скиньте|надішли|надішліть|кинь|давай|хочу побачити|хочу глянути)\b/ui', $normalized) === 1
-            && preg_match('/\b(модель|моделі|варіант|варіанти|кольори|асортимент)\b/ui', $normalized) === 1
-        ) {
-            return true;
-        }
-
-        return preg_match('/\b(колаж|колажі|колажи)\b/ui', $normalized) === 1
-            && (
-                preg_match('/\b(покажи|покажіть|скинь|скиньте|надішли|надішліть|кинь|давай|можна|є)\b/ui', $normalized) === 1
-                || str_contains($normalized, '?')
-                || preg_match('/^(колаж|колажі|колажи)$/ui', $normalized) === 1
-            );
-    }
-
-    private function replyIndicatesMedia(string $reply): bool
-    {
-        $normalized = mb_strtolower(trim($reply));
-        if ($normalized === '') {
-            return false;
-        }
-
-        return preg_match('/\b(надсилаю|скидаю|показую|ось)\b/ui', $normalized) === 1
-            && preg_match('/\b(фото|фотографію|зображення|колаж|кольори|варіанти)\b/ui', $normalized) === 1;
+        return $action !== null && in_array($action, $allowed, true)
+            ? $action
+            : 'text';
     }
 
     /**
@@ -1276,22 +1210,14 @@ class ChatAiOrchestratorService
      */
     private function shouldSuppressTextForMediaAttachment(string $inputText, array $normalized, array $attachment): bool
     {
-        if ($this->detectPhotoIntent($inputText) || $this->detectCollageIntent($inputText)) {
-            return true;
-        }
-
-        $reply = $this->cleanNullableString($normalized['reply'] ?? null) ?? '';
-        if ($this->replyIndicatesMedia($reply)) {
-            return true;
-        }
-
-        return in_array((string) ($attachment['source'] ?? ''), [
+        return $this->actionRequiresMedia((string) ($normalized['action'] ?? 'text'))
+            && in_array((string) ($attachment['source'] ?? ''), [
             'product_media_variant',
             'product_media_color',
             'product_media_primary',
             'main_photo',
             'collage',
-        ], true) && $reply === '';
+        ], true);
     }
 
     private function containsDeliveryRequest(string $text): bool
@@ -1300,34 +1226,6 @@ class ChatAiOrchestratorService
             '/\b(ім[\'’]я|прізвище|телефон|номер телефону|місто|адрес|відділен|поштомат|нова пошта)\b/ui',
             mb_strtolower($text)
         ) === 1;
-    }
-
-    private function detectPurchaseIntent(string $text): bool
-    {
-        $text = mb_strtolower(trim($text));
-        if ($text === '') {
-            return false;
-        }
-
-        $phrases = [
-            'беру',
-            'хочу замовити',
-            'давайте оформ',
-            'оформляємо',
-            'оформимо',
-            'підходить',
-            'замовляю',
-            'замовлення',
-            'купую',
-        ];
-
-        foreach ($phrases as $phrase) {
-            if (str_contains($text, $phrase)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private function normalizeSize(?string $value): ?string
