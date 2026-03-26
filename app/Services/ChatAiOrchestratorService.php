@@ -753,10 +753,15 @@ class ChatAiOrchestratorService
             $slots['delivery'] = $delivery;
         }
 
-        $selectedProductId = $state->selected_product_id;
-        $selectedVariantId = $state->selected_variant_id;
-        $selectedColorId = $state->selected_color_id;
-        $selectedSize = $state->selected_size;
+        $stateSelectedProductId = $state->selected_product_id;
+        $stateSelectedVariantId = $state->selected_variant_id;
+        $stateSelectedColorId = $state->selected_color_id;
+        $stateSelectedSize = $state->selected_size;
+
+        $selectedProductId = $stateSelectedProductId;
+        $selectedVariantId = $stateSelectedVariantId;
+        $selectedColorId = $stateSelectedColorId;
+        $selectedSize = $stateSelectedSize;
         $selectedModelPhrase = $this->cleanNullableString($slots['selected_model_phrase'] ?? null);
 
         $candidateModelPhrase = $this->cleanNullableString($normalized['model_phrase'] ?? null);
@@ -770,19 +775,19 @@ class ChatAiOrchestratorService
                 $selectedModelPhrase = (string) $mapped['model_phrase'];
             }
 
-            if (!$selectedProductId && !empty($mapped['product_id'])) {
+            if (!empty($mapped['product_id'])) {
                 $selectedProductId = (int) $mapped['product_id'];
             }
 
-            if (!$selectedVariantId && !empty($mapped['variant_id'])) {
+            if (!empty($mapped['variant_id'])) {
                 $selectedVariantId = (int) $mapped['variant_id'];
             }
 
-            if (!$selectedColorId && !empty($mapped['color_id'])) {
+            if (!empty($mapped['color_id'])) {
                 $selectedColorId = (int) $mapped['color_id'];
             }
 
-            if (!$selectedSize && !empty($mapped['size_hint'])) {
+            if (!empty($mapped['size_hint'])) {
                 $selectedSize = (string) $mapped['size_hint'];
             }
         }
@@ -807,6 +812,13 @@ class ChatAiOrchestratorService
             }
         }
 
+        $productChanged = $selectedProductId !== null
+            && $selectedProductId !== $stateSelectedProductId;
+        if ($productChanged) {
+            // При перемиканні на інший товар/колір не тягнемо старий variant з попередньої позиції.
+            $selectedVariantId = $candidateVariantId ?: null;
+        }
+
         $candidateSize = $this->normalizeSize($normalized['selected_size'])
             ?: $this->extractSizeFromText($inputText);
         if ($candidateSize !== null) {
@@ -819,6 +831,9 @@ class ChatAiOrchestratorService
         );
         if ($resolvedColorId !== null) {
             $selectedColorId = $resolvedColorId;
+        } elseif ($productChanged) {
+            // Для нового товару колір беремо заново з поточного запиту або самого товару.
+            $selectedColorId = null;
         }
 
         if ($selectedProductId && !$selectedColorId) {
@@ -870,10 +885,19 @@ class ChatAiOrchestratorService
 
         $primaryItem = $cartItems[0] ?? null;
         if (is_array($primaryItem)) {
-            $selectedProductId = $this->nullableInt($primaryItem['product_id'] ?? null) ?: $selectedProductId;
-            $selectedVariantId = $this->nullableInt($primaryItem['variant_id'] ?? null) ?: $selectedVariantId;
-            $selectedColorId = $this->nullableInt($primaryItem['color_id'] ?? null) ?: $selectedColorId;
-            $selectedSize = $this->normalizeSize((string) ($primaryItem['size'] ?? '')) ?: $selectedSize;
+            // Кошик лише заповнює порожні selection-поля, але не має перебивати новий вибір GPT.
+            if ($selectedProductId === null) {
+                $selectedProductId = $this->nullableInt($primaryItem['product_id'] ?? null);
+            }
+            if ($selectedVariantId === null) {
+                $selectedVariantId = $this->nullableInt($primaryItem['variant_id'] ?? null);
+            }
+            if ($selectedColorId === null) {
+                $selectedColorId = $this->nullableInt($primaryItem['color_id'] ?? null);
+            }
+            if ($selectedSize === null) {
+                $selectedSize = $this->normalizeSize((string) ($primaryItem['size'] ?? ''));
+            }
         }
 
         $intentPurchase = (bool) ($state->intent_purchase || $normalized['intent_purchase']);
