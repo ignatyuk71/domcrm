@@ -2148,6 +2148,12 @@ class ChatAiOrchestratorService
             return [];
         }
 
+        $wordParts = preg_split('/[^[:alpha:][:digit:]]+/u', $normalizedText) ?: [];
+        $normalizedWords = array_values(array_filter(array_map(
+            fn (string $word): string => $this->normalizeColorLexeme($word),
+            $wordParts
+        )));
+
         $mentionedColorIds = [];
         $colors = Color::query()
             ->select(['id', 'name'])
@@ -2162,10 +2168,60 @@ class ChatAiOrchestratorService
 
             if (mb_stripos($normalizedText, $colorName) !== false) {
                 $mentionedColorIds[] = (int) $color->id;
+                continue;
+            }
+
+            $colorStem = $this->normalizeColorLexeme($colorName);
+            if ($colorStem === '') {
+                continue;
+            }
+
+            foreach ($normalizedWords as $wordStem) {
+                if ($wordStem === '') {
+                    continue;
+                }
+
+                if (
+                    str_starts_with($wordStem, $colorStem)
+                    || str_starts_with($colorStem, $wordStem)
+                ) {
+                    $mentionedColorIds[] = (int) $color->id;
+                    break;
+                }
             }
         }
 
         return array_values(array_unique($mentionedColorIds));
+    }
+
+    private function normalizeColorLexeme(string $value): string
+    {
+        $normalized = mb_strtolower(trim($value));
+        if ($normalized === '') {
+            return '';
+        }
+
+        $normalized = preg_replace('/[^[:alpha:][:digit:]]+/u', '', $normalized) ?? '';
+        if ($normalized === '') {
+            return '';
+        }
+
+        $suffixes = [
+            'ього', 'ьому', 'ими', 'ями', 'ого', 'ому', 'еві', 'ові', 'ими',
+            'ий', 'ій', 'а', 'я', 'е', 'є', 'і', 'ї', 'у', 'ю', 'о',
+        ];
+
+        foreach ($suffixes as $suffix) {
+            if (
+                mb_strlen($normalized) > mb_strlen($suffix) + 2
+                && str_ends_with($normalized, $suffix)
+            ) {
+                $normalized = mb_substr($normalized, 0, mb_strlen($normalized) - mb_strlen($suffix));
+                break;
+            }
+        }
+
+        return $normalized;
     }
 
     /**
