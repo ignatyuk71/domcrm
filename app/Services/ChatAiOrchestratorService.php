@@ -13,6 +13,7 @@ use App\Models\ChatMessage;
 use App\Models\Color;
 use App\Models\Customer;
 use App\Models\Product;
+use App\Models\ProductMedia;
 use App\Models\ProductVariant;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -183,42 +184,89 @@ class ChatAiOrchestratorService
             $slotPatch = $this->buildSlotPatch($state, $normalized, $inputText);
             $nextStage = $this->resolveNextStage($stageBefore, $normalized['stage'], $slotPatch);
             $reply = $this->buildSafeReply($normalized['reply'], $nextStage, $slotPatch);
+            $mediaAttachment = $this->resolveAiMediaAttachment($inputText, $normalized, $state, $slotPatch);
+            if ($mediaAttachment !== null) {
+                $reply = $this->sanitizeReplyForMediaAttachment($reply, $mediaAttachment);
+            }
 
-            if ($reply === '') {
+            if ($reply === '' && $mediaAttachment === null) {
                 throw new \RuntimeException('Chat AI: порожня відповідь моделі після санітизації.');
             }
 
-            $metaResult = $this->metaService->sendMessage(
-                $customer,
-                $reply,
-                [],
-                $platform,
-                $contact->external_user_id
-            );
+            $outboundMessage = null;
+            if ($mediaAttachment !== null) {
+                $attachmentMetaResult = $this->metaService->sendMessage(
+                    $customer,
+                    '',
+                    [$mediaAttachment['meta_payload']],
+                    $platform,
+                    $contact->external_user_id
+                );
 
-            if (!$metaResult) {
-                throw new \RuntimeException('Chat AI: Meta API повернув помилку при відправці.');
+                if (!$attachmentMetaResult) {
+                    throw new \RuntimeException('Chat AI: Meta API повернув помилку при відправці медіа.');
+                }
+
+                $attachmentMessage = $this->chatService->storeMessage($conversation, [
+                    'direction' => 'outbound',
+                    'external_message_id' => $attachmentMetaResult['message_id'] ?? null,
+                    'delivery_status' => 'sent',
+                    'source' => 'system',
+                    'text' => null,
+                    'meta' => [
+                        'ai' => [
+                            'agent_id' => $agent->id,
+                            'agent_code' => $agent->code,
+                            'run_id' => $run->id,
+                            'stage' => $nextStage,
+                            'media_source' => $mediaAttachment['source'] ?? null,
+                        ],
+                    ],
+                    'sent_at' => now(),
+                ], [$mediaAttachment['stored_attachment']]);
+
+                $this->chatService->updateConversationAfterMessage($conversation, $attachmentMessage, false);
+                $outboundMessage = $attachmentMessage;
             }
 
-            $outboundMessage = $this->chatService->storeMessage($conversation, [
-                'direction' => 'outbound',
-                'message_type' => 'text',
-                'external_message_id' => $metaResult['message_id'] ?? null,
-                'delivery_status' => 'sent',
-                'source' => 'system',
-                'text' => $reply,
-                'meta' => [
-                    'ai' => [
-                        'agent_id' => $agent->id,
-                        'agent_code' => $agent->code,
-                        'run_id' => $run->id,
-                        'stage' => $nextStage,
-                    ],
-                ],
-                'sent_at' => now(),
-            ]);
+            if ($reply !== '') {
+                $metaResult = $this->metaService->sendMessage(
+                    $customer,
+                    $reply,
+                    [],
+                    $platform,
+                    $contact->external_user_id
+                );
 
-            $this->chatService->updateConversationAfterMessage($conversation, $outboundMessage, false);
+                if (!$metaResult) {
+                    throw new \RuntimeException('Chat AI: Meta API повернув помилку при відправці тексту.');
+                }
+
+                $textMessage = $this->chatService->storeMessage($conversation, [
+                    'direction' => 'outbound',
+                    'message_type' => 'text',
+                    'external_message_id' => $metaResult['message_id'] ?? null,
+                    'delivery_status' => 'sent',
+                    'source' => 'system',
+                    'text' => $reply,
+                    'meta' => [
+                        'ai' => [
+                            'agent_id' => $agent->id,
+                            'agent_code' => $agent->code,
+                            'run_id' => $run->id,
+                            'stage' => $nextStage,
+                        ],
+                    ],
+                    'sent_at' => now(),
+                ]);
+
+                $this->chatService->updateConversationAfterMessage($conversation, $textMessage, false);
+                $outboundMessage = $textMessage;
+            }
+
+            if (!$outboundMessage) {
+                throw new \RuntimeException('Chat AI: не вдалося сформувати outbound-повідомлення.');
+            }
 
             $stageChanged = $nextStage !== $stageBefore;
             $stateUpdate = [
@@ -445,6 +493,7 @@ class ChatAiOrchestratorService
             . "Дозволено кілька позицій у одному замовленні. Якщо клієнт просить 2+ товари, додай їх у cart_items.\n"
             . "Заборонено змушувати клієнта обрати лише одну позицію, якщо він явно хоче кілька.\n"
             . "Не запитуй дані доставки (ПІБ, телефон, місто, відділення/поштомат), доки stage не дійшов до checkout_ready.\n"
+            . "Не вставляй у reply сирі URL фото, відео або колажів. Якщо потрібне фото чи колаж, просто напиши коротко без посилання: наприклад, 'Надсилаю фото.' або 'Надсилаю колаж.' CRM відправить медіа окремо.\n"
             . "Одне уточнююче питання за раз.\n"
             . "policy_json=" . $policyJson;
 
@@ -729,6 +778,23 @@ class ChatAiOrchestratorService
             $selectedColorId = $resolvedColorId;
         }
 
+        if ($selectedProductId && !$selectedColorId) {
+            $productColorId = Product::query()
+                ->whereKey($selectedProductId)
+                ->value('color_id');
+
+            if ($productColorId) {
+                $selectedColorId = (int) $productColorId;
+            }
+        }
+
+        if ($selectedProductId && $selectedSize && !$selectedVariantId) {
+            $matchedVariant = $this->findVariantForProductSize($selectedProductId, $selectedSize);
+            if ($matchedVariant) {
+                $selectedVariantId = (int) $matchedVariant->id;
+            }
+        }
+
         foreach (($normalized['cart_items'] ?? []) as $incomingItem) {
             $cartItems = $this->upsertCartItem($cartItems, $incomingItem);
         }
@@ -912,6 +978,287 @@ class ChatAiOrchestratorService
         }
 
         return 'Дякую, передаю замовлення в обробку. Якщо буде потрібно, менеджер уточнить деталі.';
+    }
+
+    /**
+     * @param  array<string, mixed>  $normalized
+     * @param  array<string, mixed>  $slotPatch
+     * @return array<string, mixed>|null
+     */
+    private function resolveAiMediaAttachment(
+        string $inputText,
+        array $normalized,
+        ChatAiConversationState $state,
+        array $slotPatch
+    ): ?array {
+        if (!$this->shouldSendMediaAttachment($inputText, $normalized)) {
+            return null;
+        }
+
+        $preferCollage = $this->detectCollageIntent($inputText);
+        $productId = $this->nullableInt($slotPatch['selected_product_id'] ?? null) ?: $state->selected_product_id;
+        $variantId = $this->nullableInt($slotPatch['selected_variant_id'] ?? null) ?: $state->selected_variant_id;
+        $colorId = $this->nullableInt($slotPatch['selected_color_id'] ?? null) ?: $state->selected_color_id;
+
+        $mapped = $this->chatAiKnowledgeService->resolveMappedProduct($inputText);
+        if (!$productId && !empty($mapped['product_id'])) {
+            $productId = (int) $mapped['product_id'];
+        }
+        if (!$variantId && !empty($mapped['variant_id'])) {
+            $variantId = (int) $mapped['variant_id'];
+        }
+        if (!$colorId && !empty($mapped['color_id'])) {
+            $colorId = (int) $mapped['color_id'];
+        }
+
+        if ($productId && !$colorId) {
+            $productColorId = Product::query()
+                ->whereKey($productId)
+                ->value('color_id');
+            if ($productColorId) {
+                $colorId = (int) $productColorId;
+            }
+        }
+
+        if ($productId && !$preferCollage) {
+            $resolvedMedia = $this->findPreferredProductMedia($productId, $variantId, $colorId);
+            if ($resolvedMedia !== null) {
+                return $resolvedMedia;
+            }
+        }
+
+        if ($productId) {
+            $product = Product::query()
+                ->select(['id', 'main_photo_path', 'color_id'])
+                ->find($productId);
+
+            if ($product && !$preferCollage && $product->main_photo_url) {
+                return $this->buildMediaAttachmentPayload(
+                    $product->main_photo_url,
+                    'image',
+                    'main_photo',
+                    ['product_id' => $productId, 'variant_id' => $variantId, 'color_id' => $colorId ?: $product->color_id]
+                );
+            }
+        }
+
+        $mappedCollageUrl = $this->cleanNullableString($mapped['collage_url'] ?? null);
+        if ($mappedCollageUrl !== null) {
+            return $this->buildMediaAttachmentPayload(
+                $mappedCollageUrl,
+                'image',
+                'collage',
+                ['product_id' => $productId, 'variant_id' => $variantId, 'color_id' => $colorId]
+            );
+        }
+
+        $mapForProduct = $this->chatAiKnowledgeService->resolveModelMapForProduct($productId, $colorId);
+        $fallbackCollageUrl = $this->cleanNullableString($mapForProduct['collage_url'] ?? null);
+        if ($fallbackCollageUrl !== null) {
+            return $this->buildMediaAttachmentPayload(
+                $fallbackCollageUrl,
+                'image',
+                'collage',
+                ['product_id' => $productId, 'variant_id' => $variantId, 'color_id' => $colorId]
+            );
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $normalized
+     */
+    private function shouldSendMediaAttachment(string $inputText, array $normalized): bool
+    {
+        if ($this->detectPhotoIntent($inputText) || $this->detectCollageIntent($inputText)) {
+            return true;
+        }
+
+        $lastIntent = mb_strtolower((string) ($normalized['last_intent'] ?? ''));
+
+        return str_contains($lastIntent, 'фото')
+            || str_contains($lastIntent, 'photo')
+            || str_contains($lastIntent, 'колаж');
+    }
+
+    private function detectPhotoIntent(string $text): bool
+    {
+        $normalized = mb_strtolower(trim($text));
+        if ($normalized === '') {
+            return false;
+        }
+
+        if (
+            preg_match('/\b(фото|фотку|фотки|фотографію|зображення)\b/ui', $normalized) === 1
+            && (
+                preg_match('/\b(покажи|покажіть|скинь|скиньте|надішли|надішліть|кинь|давай|можна|є)\b/ui', $normalized) === 1
+                || str_contains($normalized, '?')
+                || preg_match('/^(фото|фотку|фотки|фотографію|зображення)$/ui', $normalized) === 1
+            )
+        ) {
+            return true;
+        }
+
+        return preg_match('/\b(покажи|покажіть|скинь|скиньте|надішли|надішліть|кинь|давай)\b/ui', $normalized) === 1
+            && preg_match('/\b(його|її|це|мені)\b/ui', $normalized) === 1;
+    }
+
+    private function detectCollageIntent(string $text): bool
+    {
+        $normalized = mb_strtolower(trim($text));
+        if ($normalized === '') {
+            return false;
+        }
+
+        return preg_match('/\b(колаж|колажі|колажи)\b/ui', $normalized) === 1
+            && (
+                preg_match('/\b(покажи|покажіть|скинь|скиньте|надішли|надішліть|кинь|давай|можна|є)\b/ui', $normalized) === 1
+                || str_contains($normalized, '?')
+                || preg_match('/^(колаж|колажі|колажи)$/ui', $normalized) === 1
+            );
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function findPreferredProductMedia(int $productId, ?int $variantId, ?int $colorId): ?array
+    {
+        $baseQuery = ProductMedia::query()
+            ->where('product_id', $productId)
+            ->where('is_active', true)
+            ->where('media_type', 'image');
+
+        if ($variantId) {
+            $variantMedia = (clone $baseQuery)
+                ->where('variant_id', $variantId)
+                ->orderByDesc('is_primary')
+                ->orderBy('sort_order')
+                ->orderBy('id')
+                ->first();
+
+            if ($variantMedia) {
+                return $this->buildMediaAttachmentPayload(
+                    (string) $variantMedia->url,
+                    (string) $variantMedia->media_type,
+                    'product_media_variant',
+                    [
+                        'product_id' => $productId,
+                        'variant_id' => $variantId,
+                        'color_id' => $colorId,
+                        'media_id' => $variantMedia->id,
+                    ]
+                );
+            }
+        }
+
+        if ($colorId) {
+            $colorMedia = (clone $baseQuery)
+                ->whereNull('variant_id')
+                ->where('color_id', $colorId)
+                ->orderByDesc('is_primary')
+                ->orderBy('sort_order')
+                ->orderBy('id')
+                ->first();
+
+            if ($colorMedia) {
+                return $this->buildMediaAttachmentPayload(
+                    (string) $colorMedia->url,
+                    (string) $colorMedia->media_type,
+                    'product_media_color',
+                    [
+                        'product_id' => $productId,
+                        'variant_id' => null,
+                        'color_id' => $colorId,
+                        'media_id' => $colorMedia->id,
+                    ]
+                );
+            }
+        }
+
+        $primaryMedia = (clone $baseQuery)
+            ->whereNull('variant_id')
+            ->orderByDesc('is_primary')
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->first();
+
+        if ($primaryMedia) {
+            return $this->buildMediaAttachmentPayload(
+                (string) $primaryMedia->url,
+                (string) $primaryMedia->media_type,
+                'product_media_primary',
+                [
+                    'product_id' => $productId,
+                    'variant_id' => null,
+                    'color_id' => $primaryMedia->color_id,
+                    'media_id' => $primaryMedia->id,
+                ]
+            );
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $meta
+     * @return array<string, mixed>|null
+     */
+    private function buildMediaAttachmentPayload(string $url, string $type, string $source, array $meta = []): ?array
+    {
+        $publicUrl = $this->normalizePublicMediaUrl($url);
+        if ($publicUrl === null) {
+            return null;
+        }
+
+        $attachmentType = $type === 'video' ? 'video' : 'image';
+
+        return [
+            'source' => $source,
+            'meta_payload' => [
+                'type' => $attachmentType,
+                'url' => $publicUrl,
+            ],
+            'stored_attachment' => [
+                'type' => $attachmentType,
+                'url' => $publicUrl,
+                'original_url' => $publicUrl,
+                'meta' => $meta !== [] ? $meta : null,
+            ],
+        ];
+    }
+
+    private function normalizePublicMediaUrl(?string $url): ?string
+    {
+        $clean = $this->cleanNullableString($url);
+        if ($clean === null) {
+            return null;
+        }
+
+        if (str_starts_with($clean, 'http://') || str_starts_with($clean, 'https://')) {
+            return $clean;
+        }
+
+        return url(ltrim($clean, '/'));
+    }
+
+    /**
+     * @param  array<string, mixed>  $attachment
+     */
+    private function sanitizeReplyForMediaAttachment(string $reply, array $attachment): string
+    {
+        $cleanReply = preg_replace('/https?:\/\/\S+/u', '', $reply) ?? $reply;
+
+        if (($attachment['source'] ?? null) !== 'collage') {
+            $cleanReply = preg_replace('/\(?\s*номер\s+\d+\s+на\s+колажі\s*\)?/ui', '', $cleanReply) ?? $cleanReply;
+        }
+
+        $cleanReply = preg_replace('/\(\s*\)/u', '', $cleanReply) ?? $cleanReply;
+        $cleanReply = preg_replace('/:\s*(?=[,.!?]|$)/u', '', $cleanReply) ?? $cleanReply;
+        $cleanReply = preg_replace('/\s{2,}/u', ' ', $cleanReply) ?? $cleanReply;
+        $cleanReply = preg_replace('/\s+([,.;:!?])/u', '$1', $cleanReply) ?? $cleanReply;
+
+        return trim($cleanReply);
     }
 
     private function containsDeliveryRequest(string $text): bool
@@ -1122,6 +1469,16 @@ class ChatAiOrchestratorService
             return $cartItems;
         }
 
+        foreach ($cartItems as $index => $existing) {
+            if (!is_array($existing) || !$this->canEnrichExistingCartItem($existing, $normalizedItem)) {
+                continue;
+            }
+
+            $cartItems[$index] = $this->mergeCartItems($existing, $normalizedItem);
+
+            return array_values($cartItems);
+        }
+
         $key = $this->buildCartItemKey($normalizedItem);
         if ($key === null) {
             $cartItems[] = $normalizedItem;
@@ -1192,9 +1549,16 @@ class ChatAiOrchestratorService
             }
         }
 
+        if ($productId && $variantId === null && $size !== null) {
+            $matchedVariant = $this->findVariantForProductSize($productId, $size);
+            if ($matchedVariant) {
+                $variantId = (int) $matchedVariant->id;
+            }
+        }
+
         if ($productId) {
             $product = Product::query()
-                ->select(['id', 'title', 'sale_price'])
+                ->select(['id', 'title', 'sale_price', 'color_id'])
                 ->find($productId);
             if ($product) {
                 if ($model === null) {
@@ -1202,6 +1566,9 @@ class ChatAiOrchestratorService
                 }
                 if ($price === null && $product->sale_price !== null) {
                     $price = (float) $product->sale_price;
+                }
+                if ($colorId === null && $product->color_id) {
+                    $colorId = (int) $product->color_id;
                 }
             } else {
                 $productId = null;
@@ -1308,6 +1675,80 @@ class ChatAiOrchestratorService
         return null;
     }
 
+    /**
+     * Якщо є "чернетка" позиції без розміру/варіанта, а новий item її уточнює,
+     * зливаємо це в одну позицію замість дубля.
+     *
+     * @param  array<string, mixed>  $existing
+     * @param  array<string, mixed>  $incoming
+     */
+    private function canEnrichExistingCartItem(array $existing, array $incoming): bool
+    {
+        $existingVariantId = $this->nullableInt($existing['variant_id'] ?? null);
+        $incomingVariantId = $this->nullableInt($incoming['variant_id'] ?? null);
+        $existingSize = $this->normalizeSize((string) ($existing['size'] ?? ''));
+        $incomingSize = $this->normalizeSize((string) ($incoming['size'] ?? ''));
+
+        if ($incomingVariantId === null && $incomingSize === null) {
+            return false;
+        }
+
+        if ($existingVariantId !== null || $existingSize !== null) {
+            return false;
+        }
+
+        $existingProductId = $this->nullableInt($existing['product_id'] ?? null);
+        $incomingProductId = $this->nullableInt($incoming['product_id'] ?? null);
+        if ($existingProductId !== null && $incomingProductId !== null && $existingProductId !== $incomingProductId) {
+            return false;
+        }
+
+        $existingColorId = $this->nullableInt($existing['color_id'] ?? null);
+        $incomingColorId = $this->nullableInt($incoming['color_id'] ?? null);
+        if ($existingColorId !== null && $incomingColorId !== null && $existingColorId !== $incomingColorId) {
+            return false;
+        }
+
+        $existingColor = mb_strtolower(trim((string) ($existing['color'] ?? '')));
+        $incomingColor = mb_strtolower(trim((string) ($incoming['color'] ?? '')));
+        if ($existingColor !== '' && $incomingColor !== '' && $existingColor !== $incomingColor) {
+            return false;
+        }
+
+        $existingModel = mb_strtolower(trim((string) ($existing['model'] ?? '')));
+        $incomingModel = mb_strtolower(trim((string) ($incoming['model'] ?? '')));
+        if ($existingProductId === null && $incomingProductId === null && $existingModel !== '' && $incomingModel !== '' && $existingModel !== $incomingModel) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * @param  array<string, mixed>  $existing
+     * @param  array<string, mixed>  $incoming
+     * @return array<string, mixed>
+     */
+    private function mergeCartItems(array $existing, array $incoming): array
+    {
+        $existingQty = max(1, (int) ($existing['qty'] ?? 1));
+        $incomingQty = max(1, (int) ($incoming['qty'] ?? 1));
+        $nextQty = max($existingQty, $incomingQty);
+        $price = $incoming['price'] ?? $existing['price'] ?? null;
+
+        return [
+            'model' => $incoming['model'] ?? $existing['model'] ?? null,
+            'color' => $incoming['color'] ?? $existing['color'] ?? null,
+            'size' => $incoming['size'] ?? $existing['size'] ?? null,
+            'price' => $price !== null ? (float) $price : null,
+            'qty' => $nextQty,
+            'line_total' => $price !== null ? round(((float) $price) * $nextQty, 2) : null,
+            'product_id' => $incoming['product_id'] ?? $existing['product_id'] ?? null,
+            'variant_id' => $incoming['variant_id'] ?? $existing['variant_id'] ?? null,
+            'color_id' => $incoming['color_id'] ?? $existing['color_id'] ?? null,
+        ];
+    }
+
     private function buildFallbackCartItem(
         ?int $selectedProductId,
         ?int $selectedVariantId,
@@ -1325,6 +1766,46 @@ class ChatAiOrchestratorService
         ];
 
         return $this->normalizeCartItem($candidate);
+    }
+
+    private function findVariantForProductSize(int $productId, string $selectedSize): ?ProductVariant
+    {
+        $variants = ProductVariant::query()
+            ->where('product_id', $productId)
+            ->where('is_active', true)
+            ->orderBy('id')
+            ->get(['id', 'product_id', 'size']);
+
+        foreach ($variants as $variant) {
+            if ($this->variantMatchesSelectedSize((string) $variant->size, $selectedSize)) {
+                return $variant;
+            }
+        }
+
+        return null;
+    }
+
+    private function variantMatchesSelectedSize(string $variantSize, string $selectedSize): bool
+    {
+        $normalizedSelected = $this->normalizeSize($selectedSize);
+        if ($normalizedSelected === null) {
+            return false;
+        }
+
+        $normalizedVariant = $this->normalizeSize($variantSize);
+        if ($normalizedVariant === $normalizedSelected) {
+            return true;
+        }
+
+        $tokens = preg_split('/[^\d.]+/u', $variantSize) ?: [];
+        foreach ($tokens as $token) {
+            $normalizedToken = $this->normalizeSize($token);
+            if ($normalizedToken !== null && $normalizedToken === $normalizedSelected) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function isDeliveryComplete(array $delivery): bool

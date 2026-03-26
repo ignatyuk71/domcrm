@@ -50,6 +50,7 @@ class ChatAiKnowledgeService
      *   collage_url:?string,
      *   product_id:int,
      *   product_title:?string,
+     *   product_sale_price:?float,
      *   variant_id:?int,
      *   variant_size:?string,
      *   color_id:?int,
@@ -66,6 +67,47 @@ class ChatAiKnowledgeService
         }
 
         return $maps;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function resolveModelMapForProduct(?int $productId, ?int $colorId = null): ?array
+    {
+        if (!$productId) {
+            return null;
+        }
+
+        $matches = array_values(array_filter($this->activeModelMaps(), function (array $map) use ($productId, $colorId): bool {
+            if ((int) ($map['product_id'] ?? 0) !== $productId) {
+                return false;
+            }
+
+            if ($colorId === null) {
+                return true;
+            }
+
+            $mapColorId = isset($map['color_id']) ? (int) $map['color_id'] : null;
+
+            return $mapColorId === null || $mapColorId === $colorId;
+        }));
+
+        if ($matches === []) {
+            return null;
+        }
+
+        usort($matches, function (array $left, array $right): int {
+            $leftPriority = (int) ($left['priority'] ?? 100);
+            $rightPriority = (int) ($right['priority'] ?? 100);
+
+            if ($leftPriority !== $rightPriority) {
+                return $leftPriority <=> $rightPriority;
+            }
+
+            return ((int) ($left['id'] ?? 0)) <=> ((int) ($right['id'] ?? 0));
+        });
+
+        return $matches[0] ?? null;
     }
 
     /**
@@ -176,7 +218,7 @@ class ChatAiKnowledgeService
 
         $this->activeModelMapCache = ChatAiProductModelMap::query()
             ->with([
-                'product:id,title',
+                'product:id,title,sale_price,color_id',
                 'variant:id,size',
                 'color:id,name',
             ])
@@ -202,6 +244,7 @@ class ChatAiKnowledgeService
                 'collage_url' => $map->collage_url ? (string) $map->collage_url : null,
                 'product_id' => (int) $map->product_id,
                 'product_title' => $map->product?->title,
+                'product_sale_price' => $map->product?->sale_price !== null ? (float) $map->product->sale_price : null,
                 'variant_id' => $map->variant_id ? (int) $map->variant_id : null,
                 'variant_size' => $map->variant?->size,
                 'color_id' => $map->color_id ? (int) $map->color_id : null,
