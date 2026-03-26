@@ -155,7 +155,8 @@ class ChatAiOrchestratorService
             $promptVersion,
             $state,
             $conversation,
-            $platform
+            $platform,
+            $inputText
         );
         $inputChars = $this->countInputChars($messages);
         $startedAtTs = microtime(true);
@@ -427,7 +428,8 @@ class ChatAiOrchestratorService
         ChatAiPromptVersion $promptVersion,
         ChatAiConversationState $state,
         ChatConversation $conversation,
-        string $platform
+        string $platform,
+        string $inputText
     ): array {
         $messages = [];
 
@@ -438,7 +440,7 @@ class ChatAiOrchestratorService
 
         $messages[] = [
             'role' => 'system',
-            'content' => $this->buildStateContext($state, $conversation, $platform, $promptVersion),
+            'content' => $this->buildStateContext($state, $conversation, $platform, $promptVersion, $inputText),
         ];
 
         foreach ($history as $message) {
@@ -520,6 +522,7 @@ class ChatAiOrchestratorService
             . "Не проси розмір, доки клієнт сам не питає про наявність конкретного розміру, підбір або не переходить до замовлення.\n"
             . "Не став жодних додаткових питань, якщо користувач просить просто показати фото, модель, кольори або асортимент.\n"
             . "Не вважай код з колажу (наприклад 20, 41, 42) розміром. Код колажу — це ідентифікатор позиції в межах моделі.\n"
+            . "Якщо у current_input_map є item_code, трактуй поточне повідомлення як вибір позиції по коду колажу. У такому випадку не інтерпретуй це число як розмір або сантиметри.\n"
             . "Заповнюй missing_slots тільки коли клієнт реально переходить до оформлення або вже хоче купити. На етапах interest та selection для звичайних консультацій missing_slots має бути [].\n"
             . "Не вставляй у reply сирі URL фото, відео або колажів. Якщо потрібне фото чи колаж, просто напиши коротко без посилання: наприклад, 'Надсилаю фото.' або 'Надсилаю колаж.' CRM відправить медіа окремо.\n"
             . "Для action=send_product_gallery не пиши зайвого тексту і не надсилай колаж, якщо клієнт просить лише кілька конкретних кольорів. У gallery_items повинні бути тільки реально доступні позиції.\n"
@@ -538,14 +541,19 @@ class ChatAiOrchestratorService
         ChatAiConversationState $state,
         ChatConversation $conversation,
         string $platform,
-        ChatAiPromptVersion $promptVersion
+        ChatAiPromptVersion $promptVersion,
+        string $inputText
     ): string {
         $shouldExposeMissingSlots = (bool) $state->intent_purchase
             || in_array($state->stage, [self::STAGE_CHECKOUT_READY, self::STAGE_CHECKOUT], true);
 
+        $currentInputMap = $this->resolveCurrentInputMap($inputText, $state);
+
         $context = [
             'conversation_id' => $conversation->id,
             'platform' => $platform,
+            'current_input_text' => $inputText,
+            'current_input_map' => $currentInputMap,
             'current_stage' => $state->stage,
             'intent_purchase' => (bool) $state->intent_purchase,
             'selected_product_id' => $state->selected_product_id,
@@ -562,6 +570,24 @@ class ChatAiOrchestratorService
         ];
 
         return 'Контекст діалогу: ' . json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    /**
+     * @return array{
+     *   product_id:int,
+     *   variant_id:?int,
+     *   color_id:?int,
+     *   size_hint:?string,
+     *   model_phrase:string,
+     *   item_code:?string,
+     *   collage_url:?string
+     * }|null
+     */
+    private function resolveCurrentInputMap(string $inputText, ChatAiConversationState $state): ?array
+    {
+        $selectedModelPhrase = $this->cleanNullableString($state->slots_json['selected_model_phrase'] ?? null);
+
+        return $this->chatAiKnowledgeService->resolveMappedProduct($inputText, $selectedModelPhrase);
     }
 
     private function formatHistoryMessage(ChatMessage $message): string
@@ -1099,6 +1125,9 @@ class ChatAiOrchestratorService
             }
         }
 
+        $isExplicitMappedItemCodeInput = $mapped
+            && $this->isExplicitMappedItemCodeInput($inputText, (string) ($mapped['item_code'] ?? ''));
+
         $candidateProductId = $this->nullableInt($normalized['selected_product_id']);
         if ($candidateProductId && Product::query()->whereKey($candidateProductId)->exists()) {
             $selectedProductId = $candidateProductId;
@@ -1126,10 +1155,12 @@ class ChatAiOrchestratorService
             $selectedVariantId = $candidateVariantId ?: null;
         }
 
-        $candidateSize = $this->normalizeSize($normalized['selected_size'])
-            ?: $this->extractSizeFromText($inputText);
-        if ($candidateSize !== null) {
-            $selectedSize = $candidateSize;
+        if (!$isExplicitMappedItemCodeInput) {
+            $candidateSize = $this->normalizeSize($normalized['selected_size'])
+                ?: $this->extractSizeFromText($inputText);
+            if ($candidateSize !== null) {
+                $selectedSize = $candidateSize;
+            }
         }
 
         $resolvedColorId = $this->resolveColorId(
@@ -1887,6 +1918,33 @@ class ChatAiOrchestratorService
         }
 
         return null;
+    }
+
+    private function isExplicitMappedItemCodeInput(string $text, string $itemCode): bool
+    {
+        $normalizedText = mb_strtolower(trim($text));
+        $normalizedCode = trim($itemCode);
+
+        if ($normalizedText === '' || $normalizedCode === '') {
+            return false;
+        }
+
+        if ($normalizedText === $normalizedCode) {
+            return true;
+        }
+
+        $patterns = [
+            '/^\s*' . preg_quote($normalizedCode, '/') . '\s*(?:номер|код)\s*$/ui',
+            '/^\s*(?:номер|код)\s*' . preg_quote($normalizedCode, '/') . '\s*$/ui',
+        ];
+
+        foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $normalizedText) === 1) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function resolveColorId(?string $candidateColor, string $text): ?int
