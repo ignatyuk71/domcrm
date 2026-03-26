@@ -1160,8 +1160,26 @@ class ChatAiOrchestratorService
             }
         }
 
+        $incomingCartItems = [];
         foreach (($normalized['cart_items'] ?? []) as $incomingItem) {
-            $cartItems = $this->upsertCartItem($cartItems, $incomingItem);
+            $normalizedIncomingItem = $this->normalizeCartItem(is_array($incomingItem) ? $incomingItem : []);
+            if ($normalizedIncomingItem !== null) {
+                $incomingCartItems[] = $normalizedIncomingItem;
+            }
+        }
+
+        $incomingCartItems = $this->filterIncomingCartItemsForCurrentMessage($incomingCartItems, $inputText);
+
+        $replacedCartFromCurrentMessage = false;
+        if ($incomingCartItems !== []) {
+            if ($this->shouldReplaceExistingCartItems($inputText, $incomingCartItems, $cartItems)) {
+                $cartItems = $this->normalizeCartItems($incomingCartItems);
+                $replacedCartFromCurrentMessage = true;
+            } else {
+                foreach ($incomingCartItems as $incomingItem) {
+                    $cartItems = $this->upsertCartItem($cartItems, $incomingItem);
+                }
+            }
         }
 
         if ($cartItems === [] && !empty($normalized['intent_purchase'])) {
@@ -1193,16 +1211,16 @@ class ChatAiOrchestratorService
         $primaryItem = $cartItems[0] ?? null;
         if (is_array($primaryItem)) {
             // Кошик лише заповнює порожні selection-поля, але не має перебивати новий вибір GPT.
-            if ($selectedProductId === null) {
+            if ($selectedProductId === null || $replacedCartFromCurrentMessage) {
                 $selectedProductId = $this->nullableInt($primaryItem['product_id'] ?? null);
             }
-            if ($selectedVariantId === null) {
+            if ($selectedVariantId === null || $replacedCartFromCurrentMessage) {
                 $selectedVariantId = $this->nullableInt($primaryItem['variant_id'] ?? null);
             }
-            if ($selectedColorId === null) {
+            if ($selectedColorId === null || $replacedCartFromCurrentMessage) {
                 $selectedColorId = $this->nullableInt($primaryItem['color_id'] ?? null);
             }
-            if ($selectedSize === null) {
+            if ($selectedSize === null || $replacedCartFromCurrentMessage) {
                 $selectedSize = $this->normalizeSize((string) ($primaryItem['size'] ?? ''));
             }
         }
@@ -1255,7 +1273,7 @@ class ChatAiOrchestratorService
     private function resolveNextStage(string $currentStage, ?string $modelStage, array $slotPatch, string $action = 'text'): string
     {
         if (
-            in_array($action, ['send_product_photo', 'send_collage'], true)
+            in_array($action, ['send_product_photo', 'send_product_gallery', 'send_collage'], true)
             && empty($slotPatch['intent_purchase'])
             && $currentStage === self::STAGE_INTEREST
         ) {
@@ -1870,6 +1888,89 @@ class ChatAiOrchestratorService
     }
 
     /**
+     * @param  array<int, array<string, mixed>>  $incomingCartItems
+     * @return array<int, array<string, mixed>>
+     */
+    private function filterIncomingCartItemsForCurrentMessage(array $incomingCartItems, string $inputText): array
+    {
+        if ($incomingCartItems === []) {
+            return [];
+        }
+
+        $mentionedColorIds = $this->extractMentionedColorIds($inputText);
+        if ($mentionedColorIds === []) {
+            return $incomingCartItems;
+        }
+
+        $filtered = array_values(array_filter($incomingCartItems, function (array $item) use ($mentionedColorIds): bool {
+            $itemColorId = $this->nullableInt($item['color_id'] ?? null);
+            if ($itemColorId !== null) {
+                return in_array($itemColorId, $mentionedColorIds, true);
+            }
+
+            $itemColor = $this->cleanNullableString($item['color'] ?? null);
+            if ($itemColor === null) {
+                return false;
+            }
+
+            $resolvedItemColorId = $this->resolveColorId($itemColor, $itemColor);
+
+            return $resolvedItemColorId !== null
+                && in_array($resolvedItemColorId, $mentionedColorIds, true);
+        }));
+
+        return $filtered !== [] ? $filtered : $incomingCartItems;
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $incomingCartItems
+     * @param  array<int, array<string, mixed>>  $existingCartItems
+     */
+    private function shouldReplaceExistingCartItems(string $inputText, array $incomingCartItems, array $existingCartItems): bool
+    {
+        if ($incomingCartItems === [] || $existingCartItems === []) {
+            return false;
+        }
+
+        $normalizedText = mb_strtolower(trim($inputText));
+        if ($normalizedText === '') {
+            return false;
+        }
+
+        if (preg_match('/\b(ще|додай|додайте|також|плюс)\b/ui', $normalizedText) === 1) {
+            return false;
+        }
+
+        if (preg_match('/\b(давайте|беру|хочу|замовляю|оформляємо|потрібно)\b/ui', $normalizedText) !== 1) {
+            return false;
+        }
+
+        $mentionedColorIds = $this->extractMentionedColorIds($inputText);
+        if ($mentionedColorIds === []) {
+            return count($incomingCartItems) > 1;
+        }
+
+        $existingMentionedItems = array_values(array_filter($existingCartItems, function (array $item) use ($mentionedColorIds): bool {
+            $itemColorId = $this->nullableInt($item['color_id'] ?? null);
+            if ($itemColorId !== null) {
+                return in_array($itemColorId, $mentionedColorIds, true);
+            }
+
+            $itemColor = $this->cleanNullableString($item['color'] ?? null);
+            if ($itemColor === null) {
+                return false;
+            }
+
+            $resolvedItemColorId = $this->resolveColorId($itemColor, $itemColor);
+
+            return $resolvedItemColorId !== null
+                && in_array($resolvedItemColorId, $mentionedColorIds, true);
+        }));
+
+        return count($existingMentionedItems) !== count($incomingCartItems) || count($incomingCartItems) > 1;
+    }
+
+    /**
      * @param  array<int, array<string,mixed>>  $cartItems
      * @param  array<string,mixed>  $item
      * @return array<int, array<string,mixed>>
@@ -2035,6 +2136,36 @@ class ChatAiOrchestratorService
             'variant_id' => $variantId,
             'color_id' => $colorId,
         ];
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function extractMentionedColorIds(string $text): array
+    {
+        $normalizedText = mb_strtolower($text);
+        if ($normalizedText === '') {
+            return [];
+        }
+
+        $mentionedColorIds = [];
+        $colors = Color::query()
+            ->select(['id', 'name'])
+            ->orderByDesc(\DB::raw('CHAR_LENGTH(name)'))
+            ->get();
+
+        foreach ($colors as $color) {
+            $colorName = mb_strtolower(trim((string) $color->name));
+            if ($colorName === '') {
+                continue;
+            }
+
+            if (mb_stripos($normalizedText, $colorName) !== false) {
+                $mentionedColorIds[] = (int) $color->id;
+            }
+        }
+
+        return array_values(array_unique($mentionedColorIds));
     }
 
     /**
