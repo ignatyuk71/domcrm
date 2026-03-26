@@ -1336,6 +1336,13 @@ class ChatAiOrchestratorService
             return [];
         }
 
+        if ($action === 'send_collage') {
+            $collageAttachments = $this->resolveCollageMediaAttachments($inputText, $normalized, $state, $slotPatch);
+            if ($collageAttachments !== []) {
+                return $collageAttachments;
+            }
+        }
+
         if ($action === 'send_product_gallery') {
             $attachments = [];
             $seenUrls = [];
@@ -1397,6 +1404,86 @@ class ChatAiOrchestratorService
         $singleAttachment = $this->resolveAiMediaAttachment($inputText, $normalized, $state, $slotPatch);
 
         return $singleAttachment !== null ? [$singleAttachment] : [];
+    }
+
+    /**
+     * @param  array<string, mixed>  $normalized
+     * @param  array<string, mixed>  $slotPatch
+     * @return array<int, array<string, mixed>>
+     */
+    private function resolveCollageMediaAttachments(
+        string $inputText,
+        array $normalized,
+        ChatAiConversationState $state,
+        array $slotPatch
+    ): array {
+        $attachments = [];
+        $seenUrls = [];
+
+        $productId = $this->nullableInt($slotPatch['selected_product_id'] ?? null) ?: $state->selected_product_id;
+        $variantId = $this->nullableInt($slotPatch['selected_variant_id'] ?? null) ?: $state->selected_variant_id;
+        $colorId = $this->nullableInt($slotPatch['selected_color_id'] ?? null) ?: $state->selected_color_id;
+        $modelPhrase = $this->cleanNullableString($normalized['model_phrase'] ?? null)
+            ?: $this->cleanNullableString($slotPatch['selected_model_phrase'] ?? null)
+            ?: $this->cleanNullableString($state->slots_json['selected_model_phrase'] ?? null);
+
+        $mapped = null;
+        if ($modelPhrase !== null) {
+            $mapped = $this->chatAiKnowledgeService->resolveModelMapByPhrase($modelPhrase);
+        }
+        if ($mapped === null) {
+            $mapped = $this->chatAiKnowledgeService->resolveMappedProduct($inputText, $modelPhrase);
+        }
+        if ($mapped === null) {
+            $mapped = $this->chatAiKnowledgeService->resolveMappedProduct((string) ($normalized['reply'] ?? ''), $modelPhrase);
+        }
+
+        $rawCollageUrls = [];
+        if ($mapped !== null) {
+            $rawCollageUrls[] = (string) ($mapped['collage_url'] ?? '');
+            if (!$productId && !empty($mapped['product_id'])) {
+                $productId = (int) $mapped['product_id'];
+            }
+            if (!$variantId && !empty($mapped['variant_id'])) {
+                $variantId = (int) $mapped['variant_id'];
+            }
+            if (!$colorId && !empty($mapped['color_id'])) {
+                $colorId = (int) $mapped['color_id'];
+            }
+        }
+
+        $mapForProduct = $this->chatAiKnowledgeService->resolveModelMapForProduct($productId, $colorId);
+        if ($mapForProduct !== null) {
+            $rawCollageUrls[] = (string) ($mapForProduct['collage_url'] ?? '');
+        }
+
+        foreach ($rawCollageUrls as $rawCollageUrl) {
+            foreach ($this->explodeMediaUrls($rawCollageUrl) as $collageUrl) {
+                if ($collageUrl === '' || isset($seenUrls[$collageUrl])) {
+                    continue;
+                }
+
+                $attachment = $this->buildMediaAttachmentPayload(
+                    $collageUrl,
+                    'image',
+                    'collage',
+                    ['product_id' => $productId, 'variant_id' => $variantId, 'color_id' => $colorId]
+                );
+
+                if ($attachment === null) {
+                    continue;
+                }
+
+                $seenUrls[$collageUrl] = true;
+                $attachments[] = $attachment;
+
+                if (count($attachments) >= 8) {
+                    return $attachments;
+                }
+            }
+        }
+
+        return $attachments;
     }
 
     private function resolveAiMediaAttachment(
@@ -1663,7 +1750,7 @@ class ChatAiOrchestratorService
 
     private function normalizePublicMediaUrl(?string $url): ?string
     {
-        $clean = $this->cleanNullableString($url);
+        $clean = $this->explodeMediaUrls($url)[0] ?? null;
         if ($clean === null) {
             return null;
         }
@@ -1673,6 +1760,33 @@ class ChatAiOrchestratorService
         }
 
         return url(ltrim($clean, '/'));
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function explodeMediaUrls(mixed $value): array
+    {
+        $clean = $this->cleanNullableString($value);
+        if ($clean === null) {
+            return [];
+        }
+
+        $parts = preg_split('/[\r\n,]+/u', $clean) ?: [];
+        $urls = [];
+        $seen = [];
+
+        foreach ($parts as $part) {
+            $url = trim((string) $part);
+            if ($url === '' || isset($seen[$url])) {
+                continue;
+            }
+
+            $seen[$url] = true;
+            $urls[] = $url;
+        }
+
+        return $urls;
     }
 
     /**
