@@ -8,7 +8,9 @@ use App\Models\ChatAiProductModelMap;
 use App\Models\ChatAiPromptVersion;
 use App\Models\Color;
 use App\Models\Product;
+use App\Models\ProductMedia;
 use App\Models\ProductVariant;
+use App\Models\SavedFile;
 use App\Services\ChatAiSettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -105,11 +107,37 @@ class ChatAiBaseController extends Controller
             ->where('is_active', true)
             ->orderBy('title')
             ->limit(1500)
-            ->get(['id', 'title', 'sku', 'sale_price', 'stock_qty', 'is_active']);
+            ->get(['id', 'title', 'sku', 'sale_price', 'stock_qty', 'is_active', 'color_id', 'main_photo_path']);
 
         $colors = Color::query()
             ->orderBy('name')
             ->get(['id', 'name', 'hex_code']);
+
+        $productMedia = ProductMedia::query()
+            ->with([
+                'product:id,title,sku,sale_price,is_active,color_id,main_photo_path',
+                'variant:id,product_id,size,sku,stock_qty,is_active',
+                'color:id,name',
+                'savedFile:id,url,type',
+            ])
+            ->orderByDesc('is_primary')
+            ->orderBy('sort_order')
+            ->orderByDesc('id')
+            ->get([
+                'id',
+                'product_id',
+                'variant_id',
+                'color_id',
+                'saved_file_id',
+                'media_type',
+                'url',
+                'title',
+                'sort_order',
+                'is_primary',
+                'is_active',
+                'created_at',
+                'updated_at',
+            ]);
 
         return response()->json([
             'settings' => $settings,
@@ -120,6 +148,7 @@ class ChatAiBaseController extends Controller
             'model_maps' => $modelMaps,
             'products' => $products,
             'colors' => $colors,
+            'product_media' => $productMedia,
         ]);
     }
 
@@ -391,6 +420,68 @@ class ChatAiBaseController extends Controller
         ]);
     }
 
+    public function storeProductMedia(Request $request): JsonResponse
+    {
+        $validated = $this->validateProductMediaPayload($request);
+        $this->validateVariantOwnership($validated['variant_id'] ?? null, (int) $validated['product_id']);
+
+        $media = DB::transaction(function () use ($validated, $request) {
+            $payload = $this->prepareProductMediaPayload($validated, $request->user()?->id);
+
+            if ((bool) $payload['is_primary']) {
+                $this->resetPrimaryProductMedia((int) $payload['product_id']);
+            }
+
+            return ProductMedia::query()->create($payload);
+        });
+
+        return response()->json([
+            'message' => 'Медіа товару створено.',
+            'item' => $media->fresh([
+                'product:id,title,sku,sale_price,is_active,color_id,main_photo_path',
+                'variant:id,product_id,size,sku,stock_qty,is_active',
+                'color:id,name',
+                'savedFile:id,url,type',
+            ]),
+        ]);
+    }
+
+    public function updateProductMedia(Request $request, ProductMedia $productMedia): JsonResponse
+    {
+        $validated = $this->validateProductMediaPayload($request);
+        $this->validateVariantOwnership($validated['variant_id'] ?? null, (int) $validated['product_id']);
+
+        DB::transaction(function () use ($validated, $productMedia) {
+            $payload = $this->prepareProductMediaPayload($validated);
+
+            if ((bool) $payload['is_primary']) {
+                $this->resetPrimaryProductMedia((int) $payload['product_id'], $productMedia->id);
+            }
+
+            $productMedia->fill($payload);
+            $productMedia->save();
+        });
+
+        return response()->json([
+            'message' => 'Медіа товару оновлено.',
+            'item' => $productMedia->fresh([
+                'product:id,title,sku,sale_price,is_active,color_id,main_photo_path',
+                'variant:id,product_id,size,sku,stock_qty,is_active',
+                'color:id,name',
+                'savedFile:id,url,type',
+            ]),
+        ]);
+    }
+
+    public function deleteProductMedia(ProductMedia $productMedia): JsonResponse
+    {
+        $productMedia->delete();
+
+        return response()->json([
+            'message' => 'Медіа товару видалено.',
+        ]);
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -438,5 +529,107 @@ class ChatAiBaseController extends Controller
         throw ValidationException::withMessages([
             'variant_id' => 'Обраний варіант не належить цьому товару.',
         ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function validateProductMediaPayload(Request $request): array
+    {
+        return $request->validate([
+            'product_id' => ['required', 'integer', Rule::exists('products', 'id')],
+            'variant_id' => ['nullable', 'integer', Rule::exists('product_variants', 'id')],
+            'color_id' => ['nullable', 'integer', Rule::exists('colors', 'id')],
+            'saved_file_id' => ['nullable', 'integer', Rule::exists('saved_files', 'id')],
+            'media_type' => ['nullable', Rule::in(['image', 'video'])],
+            'url' => ['nullable', 'string', 'max:2048'],
+            'title' => ['nullable', 'string', 'max:160'],
+            'sort_order' => ['nullable', 'integer', 'min:1', 'max:9999'],
+            'is_primary' => ['required', 'boolean'],
+            'is_active' => ['required', 'boolean'],
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>
+     */
+    private function prepareProductMediaPayload(array $validated, ?int $createdBy = null): array
+    {
+        $product = Product::query()
+            ->select(['id', 'color_id'])
+            ->findOrFail((int) $validated['product_id']);
+
+        $savedFile = null;
+        if (!empty($validated['saved_file_id'])) {
+            $savedFile = SavedFile::query()->findOrFail((int) $validated['saved_file_id']);
+        }
+
+        $url = trim((string) ($validated['url'] ?? ''));
+        if ($url === '' && $savedFile) {
+            $url = trim((string) $savedFile->url);
+        }
+
+        if ($url === '') {
+            throw ValidationException::withMessages([
+                'url' => 'Додайте URL або завантажте файл для медіа.',
+            ]);
+        }
+
+        $colorId = $validated['color_id'] ?? null;
+        if (!$colorId && $product->color_id) {
+            $colorId = (int) $product->color_id;
+        }
+
+        $payload = [
+            'product_id' => (int) $validated['product_id'],
+            'variant_id' => !empty($validated['variant_id']) ? (int) $validated['variant_id'] : null,
+            'color_id' => $colorId ? (int) $colorId : null,
+            'saved_file_id' => $savedFile?->id,
+            'media_type' => $this->normalizeMediaType($validated['media_type'] ?? null, $savedFile?->type, $url),
+            'url' => $url,
+            'title' => trim((string) ($validated['title'] ?? '')) ?: null,
+            'sort_order' => (int) ($validated['sort_order'] ?? 100),
+            'is_primary' => (bool) $validated['is_primary'],
+            'is_active' => (bool) $validated['is_active'],
+        ];
+
+        if ($createdBy) {
+            $payload['created_by'] = $createdBy;
+        }
+
+        return $payload;
+    }
+
+    private function normalizeMediaType(?string $type, ?string $savedFileType, string $url): string
+    {
+        $normalizedType = trim((string) ($type ?? ''));
+        if (in_array($normalizedType, ['image', 'video'], true)) {
+            return $normalizedType;
+        }
+
+        $normalizedSavedType = trim((string) ($savedFileType ?? ''));
+        if (in_array($normalizedSavedType, ['image', 'video'], true)) {
+            return $normalizedSavedType;
+        }
+
+        $cleanUrl = Str::lower(preg_replace('/\?.*$/', '', $url) ?: $url);
+        if (preg_match('/\.(mp4|mov|webm|ogg)$/', $cleanUrl) === 1) {
+            return 'video';
+        }
+
+        return 'image';
+    }
+
+    private function resetPrimaryProductMedia(int $productId, ?int $ignoreId = null): void
+    {
+        ProductMedia::query()
+            ->where('product_id', $productId)
+            ->when($ignoreId, fn ($query) => $query->where('id', '!=', $ignoreId))
+            ->where('is_primary', true)
+            ->update([
+                'is_primary' => false,
+                'updated_at' => now(),
+            ]);
     }
 }

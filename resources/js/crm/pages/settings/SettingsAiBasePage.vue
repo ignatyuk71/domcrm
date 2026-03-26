@@ -16,7 +16,7 @@
           <p class="hero-kicker">AI база керування</p>
           <h1>База знань та шаблони AI</h1>
           <p class="hero-subtitle">
-            Центр керування поведінкою агента: етапи діалогу, база знань та мапінг моделі клієнта на товари CRM.
+            Центр керування поведінкою агента: етапи діалогу, база знань, мапінг моделі клієнта на товари CRM і медіа товарів.
           </p>
 
           <div class="hero-actions">
@@ -50,12 +50,17 @@
               <span>Мапінгів модель -> товар</span>
               <strong>{{ modelMaps.length }}</strong>
             </article>
+            <article class="stat-card">
+              <span>Медіа товарів</span>
+              <strong>{{ productMediaItems.length }}</strong>
+            </article>
           </div>
 
           <nav class="quick-nav" aria-label="Швидка навігація AI Base">
             <a href="#stage-templates" class="quick-link">Етапи</a>
             <a href="#knowledge-base" class="quick-link">База знань</a>
             <a href="#model-map" class="quick-link">Мапінг</a>
+            <a href="#product-media" class="quick-link">Медіа</a>
           </nav>
         </aside>
       </header>
@@ -497,6 +502,263 @@
           </div>
         </div>
       </section>
+
+      <section id="product-media" class="panel">
+        <header class="panel-head panel-head-split">
+          <div>
+            <h2>Медіа товарів</h2>
+            <p>Фото та відео для товарів: квадратне превʼю, привʼязка до товару і швидке редагування.</p>
+          </div>
+          <button type="button" class="btn btn-sm btn-outline-success" @click="addProductMedia">
+            <i class="bi bi-plus-lg me-1"></i>
+            Додати медіа
+          </button>
+        </header>
+
+        <div class="hint-box">
+          Завантажуйте реальні фото товарів, відмічайте головне медіа і, якщо потрібно, привʼязуйте окреме фото до конкретного розміру.
+        </div>
+
+        <div class="knowledge-type-guide media-guide">
+          <article
+            v-for="card in mediaGuideCards"
+            :key="card.title"
+            class="knowledge-guide-card media-guide-card"
+          >
+            <div class="knowledge-guide-head">
+              <i class="bi" :class="card.icon"></i>
+              <strong>{{ card.title }}</strong>
+            </div>
+            <p>{{ card.text }}</p>
+          </article>
+        </div>
+
+        <div class="media-list">
+          <article
+            v-for="item in productMediaItems"
+            :key="item.local_id"
+            class="media-list-card"
+            :class="{ 'is-editing': isProductMediaEditing(item), 'is-inactive': !item.is_active }"
+          >
+            <div class="media-row">
+              <div class="media-thumb-preview">
+                <img
+                  v-if="isImageMedia(item) && mediaPreviewUrl(item)"
+                  :src="mediaPreviewUrl(item)"
+                  :alt="item.title || productTitleById(item.product_id)"
+                >
+                <video
+                  v-else-if="isVideoMedia(item) && mediaPreviewUrl(item)"
+                  :src="mediaPreviewUrl(item)"
+                  muted
+                  playsinline
+                  preload="metadata"
+                ></video>
+                <div v-else class="media-thumb-empty">
+                  <i class="bi bi-image"></i>
+                  <span>Немає медіа</span>
+                </div>
+              </div>
+
+              <div class="media-main">
+                <h3>{{ productTitleById(item.product_id) }}</h3>
+                <p>{{ item.title || 'Без підпису' }}</p>
+
+                <div class="media-meta">
+                  <span class="knowledge-type-pill media-type-pill" :class="`type-${mediaTypeValue(item)}`">
+                    <i class="bi" :class="isVideoMedia(item) ? 'bi-camera-reels' : 'bi-image-alt'"></i>
+                    {{ mediaTypeLabel(mediaTypeValue(item)) }}
+                  </span>
+                  <span class="knowledge-meta-chip">Колір: {{ colorNameById(item.color_id) }}</span>
+                  <span v-if="selectedVariantLabel(item)" class="knowledge-meta-chip">
+                    Варіант: {{ selectedVariantLabel(item) }}
+                  </span>
+                  <span class="knowledge-meta-chip">Сортування: {{ item.sort_order || 100 }}</span>
+                  <span class="knowledge-meta-chip" :class="item.is_primary ? 'is-active' : 'is-disabled'">
+                    {{ item.is_primary ? 'Головне медіа' : 'Додаткове' }}
+                  </span>
+                  <span class="knowledge-meta-chip" :class="item.is_active ? 'is-active' : 'is-disabled'">
+                    {{ item.is_active ? 'Активне' : 'Вимкнене' }}
+                  </span>
+                </div>
+              </div>
+
+              <div class="knowledge-actions">
+                <button
+                  type="button"
+                  class="icon-action-btn"
+                  :title="isProductMediaEditing(item) ? 'Закрити редактор' : 'Редагувати'"
+                  :disabled="item.saving || item.uploading"
+                  @click="toggleProductMediaEditor(item)"
+                >
+                  <i class="bi" :class="isProductMediaEditing(item) ? 'bi-x-lg' : 'bi-pencil-square'"></i>
+                </button>
+                <button
+                  type="button"
+                  class="icon-action-btn danger"
+                  title="Видалити"
+                  :disabled="item.saving || item.uploading"
+                  @click="deleteProductMedia(item)"
+                >
+                  <i class="bi bi-trash3"></i>
+                </button>
+              </div>
+            </div>
+
+            <transition name="stage-collapse">
+              <div v-show="isProductMediaEditing(item)" class="media-editor">
+                <div class="media-editor-layout">
+                  <div class="media-preview-panel">
+                    <div class="media-preview-box">
+                      <img
+                        v-if="isImageMedia(item) && mediaPreviewUrl(item)"
+                        :src="mediaPreviewUrl(item)"
+                        :alt="item.title || productTitleById(item.product_id)"
+                      >
+                      <video
+                        v-else-if="isVideoMedia(item) && mediaPreviewUrl(item)"
+                        :src="mediaPreviewUrl(item)"
+                        controls
+                        playsinline
+                        preload="metadata"
+                      ></video>
+                      <div v-else class="media-preview-empty">
+                        <i class="bi bi-cloud-arrow-up"></i>
+                        <strong>Квадратне превʼю 300×300</strong>
+                        <span>Завантаж файл або встав URL нижче.</span>
+                      </div>
+                    </div>
+
+                    <div class="media-upload-toolbar">
+                      <label class="btn btn-sm btn-outline-dark media-upload-trigger">
+                        <input
+                          type="file"
+                          accept="image/*,video/*"
+                          class="d-none"
+                          @change="uploadProductMediaFile($event, item)"
+                        >
+                        <span v-if="item.uploading" class="spinner-border spinner-border-sm me-2"></span>
+                        <i v-else class="bi bi-cloud-arrow-up me-1"></i>
+                        {{ item.uploading ? 'Завантаження...' : 'Завантажити файл' }}
+                      </label>
+                    </div>
+
+                    <small class="field-hint">
+                      Після завантаження превʼю оновиться одразу. Можна працювати і з URL, якщо файл уже лежить у CRM або на сервері.
+                    </small>
+                  </div>
+
+                  <div class="media-editor-form">
+                    <div class="media-editor-grid">
+                      <label class="field">
+                        <span>Товар</span>
+                        <select v-model="item.product_id" @change="onProductMediaProductChange(item)">
+                          <option :value="null">Оберіть товар</option>
+                          <option v-for="product in products" :key="product.id" :value="product.id">
+                            #{{ product.id }} — {{ product.title }}
+                          </option>
+                        </select>
+                      </label>
+
+                      <label class="field">
+                        <span>Варіант</span>
+                        <select
+                          v-model="item.variant_id"
+                          :disabled="!item.product_id"
+                        >
+                          <option :value="null">Загальне фото товару</option>
+                          <option
+                            v-for="variant in variantsForProduct(item.product_id)"
+                            :key="variant.id"
+                            :value="variant.id"
+                          >
+                            {{ variantLabel(variant) }}
+                          </option>
+                        </select>
+                      </label>
+
+                      <label class="field">
+                        <span>Колір</span>
+                        <select v-model="item.color_id">
+                          <option :value="null">Авто від товару</option>
+                          <option v-for="color in colors" :key="color.id" :value="color.id">
+                            {{ color.name }}
+                          </option>
+                        </select>
+                      </label>
+
+                      <label class="field">
+                        <span>Тип</span>
+                        <select v-model="item.media_type">
+                          <option value="image">Фото</option>
+                          <option value="video">Відео</option>
+                        </select>
+                      </label>
+
+                      <label class="field">
+                        <span>Порядок</span>
+                        <input v-model.number="item.sort_order" type="number" min="1" max="9999">
+                      </label>
+
+                      <label class="field wide">
+                        <span>Підпис</span>
+                        <input v-model="item.title" type="text" placeholder="Головне фото червоного кольору">
+                        <small class="field-hint">Внутрішній підпис для команди. У клієнтський чат не відправляється автоматично.</small>
+                      </label>
+
+                      <label class="field wide">
+                        <span>URL медіа</span>
+                        <input
+                          v-model="item.url"
+                          type="text"
+                          placeholder="https://... або /saved/2026/03/..."
+                          @input="onProductMediaUrlInput(item)"
+                        >
+                        <small class="field-hint">Якщо не завантажуєш файл напряму, можеш вставити посилання вручну.</small>
+                      </label>
+
+                      <label class="switch-field">
+                        <span>Головне медіа</span>
+                        <input v-model="item.is_primary" type="checkbox">
+                      </label>
+
+                      <label class="switch-field">
+                        <span>Активне</span>
+                        <input v-model="item.is_active" type="checkbox">
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="card-actions">
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-dark"
+                    :disabled="item.saving || item.uploading"
+                    @click="saveProductMedia(item)"
+                  >
+                    <span v-if="item.saving" class="spinner-border spinner-border-sm me-2"></span>
+                    Зберегти
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline-secondary"
+                    :disabled="item.saving || item.uploading"
+                    @click="toggleProductMediaEditor(item)"
+                  >
+                    Згорнути
+                  </button>
+                </div>
+              </div>
+            </transition>
+          </article>
+
+          <div v-if="productMediaItems.length === 0" class="knowledge-empty">
+            <i class="bi bi-images"></i>
+            <p>Ще немає медіа товарів. Додай перше фото або відео для товару.</p>
+          </div>
+        </div>
+      </section>
     </div>
   </div>
 </template>
@@ -557,11 +819,31 @@ const knowledgeTypeOptions = [
   },
 ];
 
+const mediaGuideCards = [
+  {
+    icon: 'bi-stars',
+    title: 'Головне медіа',
+    text: 'Позначайте головне фото для картки товару. Воно буде першим у списках і в майбутніх сценаріях AI.',
+  },
+  {
+    icon: 'bi-grid-3x3-gap',
+    title: 'Фото під варіант',
+    text: 'Якщо фото стосується лише конкретного розміру або варіанта, оберіть його в полі "Варіант".',
+  },
+  {
+    icon: 'bi-cloud-arrow-up',
+    title: 'Швидке завантаження',
+    text: 'Завантажуй файл напряму в CRM або вставляй URL вручну. Превʼю зʼявиться одразу в квадратному форматі.',
+  },
+];
+
 const loading = ref(false);
 const agents = ref([]);
 const products = ref([]);
+const colors = ref([]);
 const knowledgeItems = ref([]);
 const modelMaps = ref([]);
+const productMediaItems = ref([]);
 const selectedAgentCode = ref('');
 const promptSaving = reactive({});
 const prompts = reactive({});
@@ -575,6 +857,8 @@ const modelGroupExpanded = reactive({});
 const modelGroupEditorOpen = reactive({});
 const modelGroupDrafts = reactive({});
 const modelGroupSaving = reactive({});
+const productVariantsByProduct = reactive({});
+const productMediaEditorId = ref(null);
 
 const toast = reactive({
   show: false,
@@ -692,6 +976,37 @@ function normalizeModelMapRow(map = {}) {
   };
 }
 
+function inferMediaTypeFromUrl(url = '') {
+  const cleanUrl = String(url || '').toLowerCase().split('?')[0];
+  return /\.(mp4|mov|webm|ogg)$/i.test(cleanUrl) ? 'video' : 'image';
+}
+
+function normalizeProductMediaRow(item = {}) {
+  const savedFile = item.saved_file || item.savedFile || null;
+  const resolvedUrl = String(item.url || savedFile?.url || '');
+
+  return {
+    id: item.id ?? null,
+    local_id: item.id ? `pm_${item.id}` : `pm_new_${Date.now()}_${Math.random()}`,
+    product_id: item.product_id ? Number(item.product_id) : null,
+    variant_id: item.variant_id ? Number(item.variant_id) : null,
+    color_id: item.color_id ? Number(item.color_id) : null,
+    saved_file_id: item.saved_file_id ? Number(item.saved_file_id) : (savedFile?.id ? Number(savedFile.id) : null),
+    media_type: String(item.media_type || savedFile?.type || inferMediaTypeFromUrl(resolvedUrl)),
+    url: resolvedUrl,
+    title: String(item.title || ''),
+    sort_order: Number(item.sort_order || 100),
+    is_primary: item.is_primary === true || item.is_primary === 1,
+    is_active: item.is_active !== false,
+    saving: false,
+    uploading: false,
+    product: item.product || null,
+    variant: item.variant || null,
+    color: item.color || null,
+    saved_file: savedFile,
+  };
+}
+
 function normalizeModelPhrase(value) {
   return String(value || '').trim();
 }
@@ -726,6 +1041,14 @@ function modelGroupKeyByMap(map) {
   return `draft:${map?.local_id || Math.random()}`;
 }
 
+const productLookup = computed(() => {
+  const map = new Map();
+  for (const product of products.value) {
+    map.set(Number(product.id), product);
+  }
+  return map;
+});
+
 const productTitleMap = computed(() => {
   const map = new Map();
   for (const product of products.value) {
@@ -733,6 +1056,18 @@ const productTitleMap = computed(() => {
   }
   return map;
 });
+
+const colorLookup = computed(() => {
+  const map = new Map();
+  for (const color of colors.value) {
+    map.set(Number(color.id), color);
+  }
+  return map;
+});
+
+function productById(productId) {
+  return productLookup.value.get(Number(productId || 0)) || null;
+}
 
 function productTitleById(productId) {
   const normalizedId = Number(productId || 0);
@@ -742,6 +1077,59 @@ function productTitleById(productId) {
 
   const title = productTitleMap.value.get(normalizedId) || 'Товар без назви';
   return `#${normalizedId} — ${title}`;
+}
+
+function colorNameById(colorId) {
+  const normalizedId = Number(colorId || 0);
+  if (!normalizedId) {
+    return 'Авто від товару';
+  }
+
+  return colorLookup.value.get(normalizedId)?.name || 'Колір не знайдено';
+}
+
+function mediaPreviewUrl(item) {
+  return String(item?.url || item?.saved_file?.url || '');
+}
+
+function mediaTypeValue(item) {
+  return String(item?.media_type || inferMediaTypeFromUrl(mediaPreviewUrl(item)));
+}
+
+function mediaTypeLabel(type) {
+  return type === 'video' ? 'Відео' : 'Фото';
+}
+
+function isImageMedia(item) {
+  return mediaTypeValue(item) !== 'video';
+}
+
+function isVideoMedia(item) {
+  return mediaTypeValue(item) === 'video';
+}
+
+function variantLabel(variant) {
+  const size = String(variant?.size || 'Без розміру');
+  const stockQty = Number(variant?.stock_qty || 0);
+  return `${size} (${stockQty} шт.)`;
+}
+
+function variantsForProduct(productId) {
+  return productVariantsByProduct[Number(productId || 0)] || [];
+}
+
+function selectedVariantLabel(item) {
+  const variantId = Number(item?.variant_id || 0);
+  if (!variantId) {
+    return '';
+  }
+
+  const variant = variantsForProduct(item.product_id).find((entry) => Number(entry.id) === variantId) || item.variant;
+  if (!variant) {
+    return '';
+  }
+
+  return String(variant.size || '');
 }
 
 const groupedModelMaps = computed(() => {
@@ -951,6 +1339,7 @@ async function loadData() {
 
     agents.value = Array.isArray(data?.agents) ? data.agents : [];
     products.value = Array.isArray(data?.products) ? data.products : [];
+    colors.value = Array.isArray(data?.colors) ? data.colors : [];
     selectedAgentCode.value = String(data?.selected_agent_code || agents.value[0]?.code || '');
 
     const serverPrompts = data?.prompts && typeof data.prompts === 'object' ? data.prompts : {};
@@ -974,6 +1363,14 @@ async function loadData() {
       ? data.model_maps.map((map) => normalizeModelMapRow(map))
       : [];
     modelMapEditorId.value = null;
+
+    productMediaItems.value = Array.isArray(data?.product_media)
+      ? data.product_media.map((item) => normalizeProductMediaRow(item))
+      : [];
+    productMediaEditorId.value = null;
+    Object.keys(productVariantsByProduct).forEach((key) => {
+      delete productVariantsByProduct[key];
+    });
   } catch (error) {
     showToast(error.response?.data?.message || 'Не вдалося завантажити AI базу.', 'error');
   } finally {
@@ -1116,6 +1513,103 @@ function onMapProductChange() {
   // Зарезервовано для подальших реакцій після вибору товару.
 }
 
+async function ensureProductVariants(productId) {
+  const normalizedId = Number(productId || 0);
+  if (!normalizedId || Array.isArray(productVariantsByProduct[normalizedId])) {
+    return;
+  }
+
+  try {
+    const { data } = await http.get(`/settings/ai/base/products/${normalizedId}/variants`);
+    productVariantsByProduct[normalizedId] = Array.isArray(data?.data) ? data.data : [];
+  } catch (error) {
+    productVariantsByProduct[normalizedId] = [];
+    showToast(error.response?.data?.message || 'Не вдалося завантажити варіанти товару.', 'error');
+  }
+}
+
+function isProductMediaEditing(item) {
+  return productMediaEditorId.value === item.local_id;
+}
+
+function toggleProductMediaEditor(item) {
+  productMediaEditorId.value = isProductMediaEditing(item) ? null : item.local_id;
+  if (productMediaEditorId.value === item.local_id && item.product_id) {
+    ensureProductVariants(item.product_id);
+  }
+}
+
+function addProductMedia() {
+  const created = normalizeProductMediaRow({
+    media_type: 'image',
+    sort_order: 100,
+    is_primary: false,
+    is_active: true,
+  });
+
+  productMediaItems.value.unshift(created);
+  productMediaEditorId.value = created.local_id;
+}
+
+function onProductMediaProductChange(item) {
+  item.variant_id = null;
+  const product = productById(item.product_id);
+  item.color_id = product?.color_id ? Number(product.color_id) : null;
+
+  if (item.product_id) {
+    ensureProductVariants(item.product_id);
+  }
+}
+
+function onProductMediaUrlInput(item) {
+  if (!item.url) {
+    return;
+  }
+
+  if (!item.saved_file_id) {
+    item.media_type = inferMediaTypeFromUrl(item.url);
+  }
+}
+
+async function uploadProductMediaFile(event, item) {
+  const file = event?.target?.files?.[0];
+  if (!file) {
+    return;
+  }
+
+  item.uploading = true;
+
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const { data } = await http.post('/api/saved-files', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+
+    const savedFile = data?.data || null;
+    item.saved_file_id = savedFile?.id ? Number(savedFile.id) : null;
+    item.saved_file = savedFile;
+    item.url = String(savedFile?.url || '');
+    item.media_type = String(savedFile?.type || inferMediaTypeFromUrl(item.url));
+
+    if (!item.title && savedFile?.filename) {
+      item.title = String(savedFile.filename);
+    }
+
+    showToast('Файл завантажено.');
+  } catch (error) {
+    showToast(error.response?.data?.message || 'Не вдалося завантажити файл.', 'error');
+  } finally {
+    item.uploading = false;
+    if (event?.target) {
+      event.target.value = '';
+    }
+  }
+}
+
 async function saveModelMap(map, options = {}) {
   const silent = options.silent === true;
   map.saving = true;
@@ -1198,6 +1692,86 @@ async function deleteModelMap(map) {
     showToast(error.response?.data?.message || 'Не вдалося видалити мапінг.', 'error');
   } finally {
     map.saving = false;
+  }
+}
+
+async function saveProductMedia(item) {
+  item.saving = true;
+
+  try {
+    if (!item.product_id) {
+      showToast('Оберіть товар для медіа.', 'error');
+      return;
+    }
+
+    if (!String(item.url || '').trim()) {
+      showToast('Завантаж файл або встав URL медіа.', 'error');
+      return;
+    }
+
+    const payload = {
+      product_id: item.product_id,
+      variant_id: item.variant_id || null,
+      color_id: item.color_id || null,
+      saved_file_id: item.saved_file_id || null,
+      media_type: mediaTypeValue(item),
+      url: item.url || null,
+      title: item.title || null,
+      sort_order: Number(item.sort_order || 100),
+      is_primary: !!item.is_primary,
+      is_active: !!item.is_active,
+    };
+
+    let response;
+    if (item.id) {
+      response = await http.patch(`/settings/ai/base/product-media/${item.id}`, payload);
+    } else {
+      response = await http.post('/settings/ai/base/product-media', payload);
+    }
+
+    const savedItem = response?.data?.item;
+    if (savedItem) {
+      Object.assign(item, normalizeProductMediaRow(savedItem));
+    }
+
+    productMediaEditorId.value = null;
+    showToast(response?.data?.message || 'Медіа товару збережено.');
+  } catch (error) {
+    showToast(error.response?.data?.message || 'Не вдалося зберегти медіа товару.', 'error');
+  } finally {
+    item.saving = false;
+  }
+}
+
+async function deleteProductMedia(item) {
+  if (!item.id) {
+    if (item.saved_file_id) {
+      try {
+        await http.delete(`/api/saved-files/${item.saved_file_id}`);
+      } catch {
+        // Чернетка може мати тимчасовий файл; не зупиняємо видалення картки, якщо його вже немає.
+      }
+    }
+
+    productMediaItems.value = productMediaItems.value.filter((row) => row.local_id !== item.local_id);
+    if (productMediaEditorId.value === item.local_id) {
+      productMediaEditorId.value = null;
+    }
+    return;
+  }
+
+  item.saving = true;
+  try {
+    const { data } = await http.delete(`/settings/ai/base/product-media/${item.id}`);
+    productMediaItems.value = productMediaItems.value.filter((row) => row.id !== item.id);
+    if (productMediaEditorId.value === item.local_id) {
+      productMediaEditorId.value = null;
+    }
+    showToast(data?.message || 'Медіа товару видалено.');
+  } catch (error) {
+    showToast(error.response?.data?.message || 'Не вдалося видалити медіа товару.', 'error');
+  } finally {
+    item.saving = false;
   }
 }
 
@@ -1304,7 +1878,7 @@ h1 {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -1817,6 +2391,191 @@ h1 {
   gap: 10px;
 }
 
+.media-guide-card {
+  background: linear-gradient(180deg, #fbfdff 0%, #f7fbff 100%);
+}
+
+.media-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 12px;
+}
+
+.media-list-card {
+  border: 1px solid #dbe4ef;
+  border-radius: 14px;
+  background: #fcfdff;
+  box-shadow: 0 10px 24px -30px rgba(15, 23, 42, 0.4);
+  overflow: hidden;
+}
+
+.media-list-card.is-editing {
+  border-color: #bfd8ff;
+  box-shadow: 0 14px 30px -30px rgba(37, 99, 235, 0.5);
+}
+
+.media-list-card.is-inactive {
+  opacity: 0.88;
+}
+
+.media-row {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+}
+
+.media-thumb-preview {
+  width: 96px;
+  aspect-ratio: 1 / 1;
+  border-radius: 14px;
+  border: 1px solid #dbe4ef;
+  background: linear-gradient(180deg, #f8fafc 0%, #eef4fb 100%);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.media-thumb-preview img,
+.media-thumb-preview video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.media-thumb-empty,
+.media-preview-empty {
+  padding: 16px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #64748b;
+}
+
+.media-thumb-empty i,
+.media-preview-empty i {
+  font-size: 22px;
+  color: #3b82f6;
+}
+
+.media-thumb-empty span,
+.media-preview-empty span {
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.media-preview-empty strong {
+  color: #0f172a;
+  font-size: 14px;
+}
+
+.media-main {
+  min-width: 0;
+}
+
+.media-main h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.media-main p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.media-meta {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.media-type-pill.type-image {
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+  background: #ecf5ff;
+}
+
+.media-type-pill.type-video {
+  border-color: #c7d2fe;
+  color: #4338ca;
+  background: #eef2ff;
+}
+
+.media-editor {
+  border-top: 1px dashed #dbe4ef;
+  padding: 14px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: #fbfdff;
+}
+
+.media-editor-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
+  gap: 14px;
+}
+
+.media-preview-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.media-preview-box {
+  width: min(100%, 300px);
+  aspect-ratio: 1 / 1;
+  border-radius: 18px;
+  border: 1px solid #dbe4ef;
+  background: linear-gradient(180deg, #f8fbff 0%, #eef6ff 100%);
+  overflow: hidden;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.media-preview-box img,
+.media-preview-box video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.media-upload-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.media-upload-trigger {
+  position: relative;
+  overflow: hidden;
+}
+
+.media-editor-form {
+  min-width: 0;
+}
+
+.media-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+
+.media-editor-grid .field.wide {
+  grid-column: span 3;
+}
+
 .stage-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -2165,6 +2924,24 @@ h1 {
     grid-template-columns: 1fr;
   }
 
+  .media-list {
+    grid-template-columns: 1fr;
+  }
+
+  .media-row {
+    grid-template-columns: 1fr;
+    align-items: flex-start;
+  }
+
+  .media-editor-layout,
+  .media-editor-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .media-editor-grid .field.wide {
+    grid-column: span 1;
+  }
+
   .knowledge-type-segment {
     grid-template-columns: 1fr;
   }
@@ -2222,6 +2999,10 @@ h1 {
 
   .stats-grid {
     grid-template-columns: 1fr;
+  }
+
+  .media-preview-box {
+    width: 100%;
   }
 
   .stack-grid {

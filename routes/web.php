@@ -330,6 +330,9 @@ Route::middleware('auth')->group(function () {
         Route::post('/ai/base/model-maps', [ChatAiBaseController::class, 'storeModelMap'])->name('ai.base.modelMaps.store');
         Route::patch('/ai/base/model-maps/{modelMap}', [ChatAiBaseController::class, 'updateModelMap'])->name('ai.base.modelMaps.update');
         Route::delete('/ai/base/model-maps/{modelMap}', [ChatAiBaseController::class, 'deleteModelMap'])->name('ai.base.modelMaps.delete');
+        Route::post('/ai/base/product-media', [ChatAiBaseController::class, 'storeProductMedia'])->name('ai.base.productMedia.store');
+        Route::patch('/ai/base/product-media/{productMedia}', [ChatAiBaseController::class, 'updateProductMedia'])->name('ai.base.productMedia.update');
+        Route::delete('/ai/base/product-media/{productMedia}', [ChatAiBaseController::class, 'deleteProductMedia'])->name('ai.base.productMedia.delete');
         Route::get('/nova-poshta', [NovaPoshtaSettingsController::class, 'index'])->name('novaPoshta.index');
         Route::post('/nova-poshta', [NovaPoshtaSettingsController::class, 'save'])->name('novaPoshta.save');
         Route::post('/nova-poshta/fetch-refs', [NovaPoshtaSettingsController::class, 'fetchRefs'])->name('novaPoshta.fetchRefs');
