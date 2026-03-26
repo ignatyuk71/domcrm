@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\ChatAiKnowledgeItem;
 use App\Models\ChatAiProductModelMap;
+use App\Models\ProductMedia;
+use App\Models\ProductVariant;
 
 class ChatAiKnowledgeService
 {
@@ -67,6 +69,150 @@ class ChatAiKnowledgeService
         }
 
         return $maps;
+    }
+
+    /**
+     * @return array<int, array{
+     *   model_phrase:string,
+     *   collage_urls:array<int, string>,
+     *   price_min:?float,
+     *   price_max:?float,
+     *   items:array<int, array{
+     *     item_code:?string,
+     *     product_id:int,
+     *     product_title:?string,
+     *     price:?float,
+     *     color_name:?string,
+     *     available_sizes:array<int, string>,
+     *     has_media:bool
+     *   }>
+     * }>
+     */
+    public function productCatalogContext(int $modelLimit = 20, int $itemsPerModel = 12): array
+    {
+        $maps = $this->activeModelMaps();
+        if ($maps === []) {
+            return [];
+        }
+
+        $productIds = array_values(array_unique(array_filter(array_map(
+            fn (array $map) => isset($map['product_id']) ? (int) $map['product_id'] : null,
+            $maps
+        ))));
+
+        $sizesByProduct = ProductVariant::query()
+            ->whereIn('product_id', $productIds)
+            ->where('is_active', true)
+            ->where('stock_qty', '>', 0)
+            ->orderBy('id')
+            ->get(['product_id', 'size'])
+            ->groupBy('product_id')
+            ->map(function ($variants): array {
+                return collect($variants)
+                    ->map(fn (ProductVariant $variant) => trim((string) $variant->size))
+                    ->filter()
+                    ->unique()
+                    ->values()
+                    ->all();
+            })
+            ->all();
+
+        $mediaProductIds = ProductMedia::query()
+            ->whereIn('product_id', $productIds)
+            ->where('is_active', true)
+            ->where('media_type', 'image')
+            ->distinct()
+            ->pluck('product_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+        $mediaProductLookup = array_fill_keys($mediaProductIds, true);
+
+        $grouped = [];
+        foreach ($maps as $map) {
+            $phrase = trim((string) ($map['model_phrase'] ?? ''));
+            if ($phrase === '') {
+                continue;
+            }
+
+            $key = mb_strtolower($phrase);
+            if (!isset($grouped[$key])) {
+                $grouped[$key] = [
+                    'model_phrase' => $phrase,
+                    'collage_urls' => [],
+                    'price_min' => null,
+                    'price_max' => null,
+                    'items' => [],
+                ];
+            }
+
+            $collageUrl = trim((string) ($map['collage_url'] ?? ''));
+            if ($collageUrl !== '' && !in_array($collageUrl, $grouped[$key]['collage_urls'], true)) {
+                $grouped[$key]['collage_urls'][] = $collageUrl;
+            }
+
+            $price = isset($map['product_sale_price']) ? (float) $map['product_sale_price'] : null;
+            if ($price !== null) {
+                $grouped[$key]['price_min'] = $grouped[$key]['price_min'] === null
+                    ? $price
+                    : min((float) $grouped[$key]['price_min'], $price);
+                $grouped[$key]['price_max'] = $grouped[$key]['price_max'] === null
+                    ? $price
+                    : max((float) $grouped[$key]['price_max'], $price);
+            }
+
+            $productId = (int) ($map['product_id'] ?? 0);
+            $itemKey = implode('|', [
+                (string) ($map['item_code'] ?? ''),
+                (string) $productId,
+                (string) ($map['color_id'] ?? ''),
+            ]);
+
+            if (!isset($grouped[$key]['items'][$itemKey])) {
+                $grouped[$key]['items'][$itemKey] = [
+                    'item_code' => $map['item_code'] ?? null,
+                    'product_id' => $productId,
+                    'product_title' => $map['product_title'] ?? null,
+                    'price' => $price,
+                    'color_name' => $map['color_name'] ?? null,
+                    'available_sizes' => $sizesByProduct[$productId] ?? [],
+                    'has_media' => isset($mediaProductLookup[$productId]),
+                ];
+            }
+        }
+
+        $catalog = array_map(function (array $group) use ($itemsPerModel): array {
+            $items = array_values($group['items']);
+            usort($items, function (array $left, array $right): int {
+                $leftCode = trim((string) ($left['item_code'] ?? ''));
+                $rightCode = trim((string) ($right['item_code'] ?? ''));
+
+                if ($leftCode !== '' && $rightCode !== '' && ctype_digit($leftCode) && ctype_digit($rightCode)) {
+                    return (int) $leftCode <=> (int) $rightCode;
+                }
+
+                return $leftCode <=> $rightCode;
+            });
+
+            if ($itemsPerModel > 0 && count($items) > $itemsPerModel) {
+                $items = array_slice($items, 0, $itemsPerModel);
+            }
+
+            return [
+                'model_phrase' => $group['model_phrase'],
+                'collage_urls' => $group['collage_urls'],
+                'price_min' => $group['price_min'],
+                'price_max' => $group['price_max'],
+                'items' => $items,
+            ];
+        }, array_values($grouped));
+
+        usort($catalog, fn (array $left, array $right): int => mb_strlen($right['model_phrase']) <=> mb_strlen($left['model_phrase']));
+
+        if ($modelLimit > 0 && count($catalog) > $modelLimit) {
+            $catalog = array_slice($catalog, 0, $modelLimit);
+        }
+
+        return array_values($catalog);
     }
 
     /**
@@ -167,11 +313,16 @@ class ChatAiKnowledgeService
      *   collage_url:?string
      * }|null
      */
-    public function resolveMappedProduct(string $inputText): ?array
+    public function resolveMappedProduct(string $inputText, ?string $modelPhrase = null): ?array
     {
         $text = mb_strtolower(trim($inputText));
         if ($text === '') {
             return null;
+        }
+
+        $scopedModelPhrase = mb_strtolower(trim((string) $modelPhrase));
+        if ($scopedModelPhrase === '') {
+            $scopedModelPhrase = null;
         }
 
         $codeMatches = [];
@@ -183,6 +334,21 @@ class ChatAiKnowledgeService
 
             if ($this->textHasToken($text, mb_strtolower($itemCode))) {
                 $codeMatches[] = $map;
+            }
+        }
+
+        if ($scopedModelPhrase !== null && $codeMatches !== []) {
+            $scopedMatches = array_values(array_filter($codeMatches, function (array $map) use ($scopedModelPhrase): bool {
+                return $this->modelPhraseMatchesScope((string) ($map['model_phrase'] ?? ''), $scopedModelPhrase);
+            }));
+
+            if (count($scopedMatches) === 1) {
+                return $this->normalizeResolvedMap($scopedMatches[0]);
+            }
+
+            if (count($scopedMatches) > 1) {
+                usort($scopedMatches, fn (array $left, array $right): int => ((int) ($left['priority'] ?? 100)) <=> ((int) ($right['priority'] ?? 100)));
+                return $this->normalizeResolvedMap($scopedMatches[0]);
             }
         }
 
@@ -208,6 +374,10 @@ class ChatAiKnowledgeService
         foreach ($this->activeModelMaps() as $map) {
             $phrase = mb_strtolower(trim((string) ($map['model_phrase'] ?? '')));
             if ($phrase === '') {
+                continue;
+            }
+
+            if ($scopedModelPhrase !== null && !$this->modelPhraseMatchesScope($phrase, $scopedModelPhrase)) {
                 continue;
             }
 
@@ -338,5 +508,17 @@ class ChatAiKnowledgeService
 
         $pattern = '/(?<![\p{L}\p{N}])' . preg_quote($token, '/') . '(?![\p{L}\p{N}])/u';
         return (bool) preg_match($pattern, $text);
+    }
+
+    private function modelPhraseMatchesScope(string $candidatePhrase, string $scopedModelPhrase): bool
+    {
+        $candidate = mb_strtolower(trim($candidatePhrase));
+        if ($candidate === '' || $scopedModelPhrase === '') {
+            return false;
+        }
+
+        return $candidate === $scopedModelPhrase
+            || mb_stripos($candidate, $scopedModelPhrase) !== false
+            || mb_stripos($scopedModelPhrase, $candidate) !== false;
     }
 }

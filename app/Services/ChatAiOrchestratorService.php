@@ -182,7 +182,7 @@ class ChatAiOrchestratorService
             $normalized = $this->normalizeModelPayload($this->decodeModelJson($rawOutput));
 
             $slotPatch = $this->buildSlotPatch($state, $normalized, $inputText);
-            $nextStage = $this->resolveNextStage($stageBefore, $normalized['stage'], $slotPatch);
+            $nextStage = $this->resolveNextStage($stageBefore, $normalized['stage'], $slotPatch, (string) ($normalized['action'] ?? 'text'));
             $reply = $this->buildSafeReply($normalized['reply'], $nextStage, $slotPatch);
             $mediaAttachment = $this->resolveAiMediaAttachment($inputText, $normalized, $state, $slotPatch);
             if ($mediaAttachment !== null) {
@@ -493,19 +493,23 @@ class ChatAiOrchestratorService
             . "      \"color_id\": number|null\n"
             . "    }\n"
             . "  ],\n"
-            . "  \"missing_slots\": [\"selected_product\",\"selected_size\",\"selected_variant\",\"purchase_intent\",\"name\",\"phone\",\"city\",\"warehouse\"],\n"
+            . "  \"missing_slots\": [\"selected_product\",\"selected_size\",\"selected_variant\",\"name\",\"phone\",\"city\",\"warehouse\"],\n"
             . "  \"delivery_fields\": {\"name\": \"string|null\", \"phone\": \"string|null\", \"city\": \"string|null\", \"warehouse\": \"string|null\"}\n"
             . "}\n"
             . "Дозволено кілька позицій у одному замовленні. Якщо клієнт просить 2+ товари, додай їх у cart_items.\n"
             . "Заборонено змушувати клієнта обрати лише одну позицію, якщо він явно хоче кілька.\n"
             . "Не запитуй дані доставки (ПІБ, телефон, місто, відділення/поштомат), доки stage не дійшов до checkout_ready.\n"
             . "Ти сам визначаєш action. PHP-код не вирішує intent за клієнта, а лише виконує твою action-команду.\n"
+            . "На етапах interest та selection ти працюєш як живий консультант, а не як скриптовий бот.\n"
             . "Якщо клієнт просить фото конкретного кольору або товару, повертай action=send_product_photo.\n"
             . "Якщо клієнт просить показати всі кольори, моделі, варіанти або асортимент, повертай action=send_collage.\n"
             . "Якщо потрібно лише відповісти текстом, повертай action=text.\n"
             . "Якщо потрібно м'яко уточнити модель або колір, повертай action=ask_clarifying.\n"
             . "На етапі interest не вимагай розмір, якщо клієнт просить фото, кольори, модель, усі варіанти або просто цікавиться товаром. У таких запитах спочатку покажи фото/варіанти/кольори і лише потім, за потреби, м'яко уточнюй колір або модель.\n"
             . "Не проси розмір, доки клієнт сам не питає про наявність конкретного розміру, підбір або не переходить до замовлення.\n"
+            . "Не став жодних додаткових питань, якщо користувач просить просто показати фото, модель, кольори або асортимент.\n"
+            . "Не вважай код з колажу (наприклад 20, 41, 42) розміром. Код колажу — це ідентифікатор позиції в межах моделі.\n"
+            . "Заповнюй missing_slots тільки коли клієнт реально переходить до оформлення або вже хоче купити. На етапах interest та selection для звичайних консультацій missing_slots має бути [].\n"
             . "Не вставляй у reply сирі URL фото, відео або колажів. Якщо потрібне фото чи колаж, просто напиши коротко без посилання: наприклад, 'Надсилаю фото.' або 'Надсилаю колаж.' CRM відправить медіа окремо.\n"
             . "Якщо клієнт прямо просить показати або скинути фото/усі кольори/усі варіанти, не став додаткових питань і не додавай зайвий текст. У такому випадку reply має бути порожнім або максимально коротким, бо CRM сама відправить потрібне медіа.\n"
             . "Одне уточнююче питання за раз.\n"
@@ -541,6 +545,7 @@ class ChatAiOrchestratorService
             'current_cart' => is_array($state->slots_json['cart_items'] ?? null) ? $state->slots_json['cart_items'] : [],
             'missing_slots' => $shouldExposeMissingSlots ? ($state->missing_slots_json ?? []) : [],
             'policy_json' => $promptVersion->policy_json ?? [],
+            'model_catalog' => $this->chatAiKnowledgeService->productCatalogContext(15, 12),
             'product_model_maps' => $this->chatAiKnowledgeService->productMapContext(30),
         ];
 
@@ -696,12 +701,23 @@ class ChatAiOrchestratorService
             $missingSlots = [];
         }
 
+        $stage = $this->normalizeStage($payload['stage'] ?? null);
+        $intentPurchase = $this->toBool($payload['intent_purchase'] ?? $payload['purchase_intent'] ?? false);
+        $normalizedMissingSlots = array_values(array_unique(array_filter(array_map(
+            fn ($slot) => $this->cleanNullableString($slot),
+            $missingSlots
+        ))));
+
+        if (!$intentPurchase && !in_array($stage, [self::STAGE_CHECKOUT_READY, self::STAGE_CHECKOUT], true)) {
+            $normalizedMissingSlots = [];
+        }
+
         return [
             'action' => $this->normalizeAction($payload['action'] ?? null),
             'reply' => trim((string) ($payload['reply'] ?? $payload['response'] ?? '')),
-            'stage' => $this->normalizeStage($payload['stage'] ?? null),
+            'stage' => $stage,
             'last_intent' => $this->normalizeIntent($payload['last_intent'] ?? null),
-            'intent_purchase' => $this->toBool($payload['intent_purchase'] ?? $payload['purchase_intent'] ?? false),
+            'intent_purchase' => $intentPurchase,
             'requires_human' => $this->toBool($payload['requires_human'] ?? false),
             'model_phrase' => $this->cleanNullableString($payload['model_phrase'] ?? null),
             'selected_size' => $this->cleanNullableString($payload['selected_size'] ?? $payload['size'] ?? null),
@@ -709,10 +725,7 @@ class ChatAiOrchestratorService
             'selected_product_id' => $this->nullableInt($payload['selected_product_id'] ?? $payload['product_id'] ?? null),
             'selected_variant_id' => $this->nullableInt($payload['selected_variant_id'] ?? $payload['variant_id'] ?? null),
             'cart_items' => $this->normalizeCartItems($payload['cart_items'] ?? []),
-            'missing_slots' => array_values(array_unique(array_filter(array_map(
-                fn ($slot) => $this->cleanNullableString($slot),
-                $missingSlots
-            )))),
+            'missing_slots' => $normalizedMissingSlots,
             'delivery_fields' => [
                 'name' => $this->cleanNullableString($delivery['name'] ?? null),
                 'phone' => $this->cleanNullableString($delivery['phone'] ?? null),
@@ -751,9 +764,9 @@ class ChatAiOrchestratorService
             $selectedModelPhrase = $candidateModelPhrase;
         }
 
-        $mapped = $this->chatAiKnowledgeService->resolveMappedProduct($inputText);
+        $mapped = $this->chatAiKnowledgeService->resolveMappedProduct($inputText, $selectedModelPhrase);
         if ($mapped) {
-            if (!$selectedModelPhrase && !empty($mapped['model_phrase'])) {
+            if (!empty($mapped['model_phrase'])) {
                 $selectedModelPhrase = (string) $mapped['model_phrase'];
             }
 
@@ -865,8 +878,12 @@ class ChatAiOrchestratorService
 
         $intentPurchase = (bool) ($state->intent_purchase || $normalized['intent_purchase']);
 
-        $missingSlots = $normalized['missing_slots'];
-        if ($missingSlots === []) {
+        $shouldTrackMissingSlots = !empty($normalized['intent_purchase'])
+            || in_array((string) ($normalized['stage'] ?? $state->stage), [self::STAGE_CHECKOUT_READY, self::STAGE_CHECKOUT], true)
+            || in_array($state->stage, [self::STAGE_CHECKOUT_READY, self::STAGE_CHECKOUT], true);
+
+        $missingSlots = $shouldTrackMissingSlots ? $normalized['missing_slots'] : [];
+        if ($shouldTrackMissingSlots && $missingSlots === []) {
             $missingSlots = $this->calculateMissingSlots([
                 'selected_product_id' => $selectedProductId,
                 'selected_variant_id' => $selectedVariantId,
@@ -904,8 +921,16 @@ class ChatAiOrchestratorService
         ];
     }
 
-    private function resolveNextStage(string $currentStage, ?string $modelStage, array $slotPatch): string
+    private function resolveNextStage(string $currentStage, ?string $modelStage, array $slotPatch, string $action = 'text'): string
     {
+        if (
+            in_array($action, ['send_product_photo', 'send_collage'], true)
+            && empty($slotPatch['intent_purchase'])
+            && $currentStage === self::STAGE_INTEREST
+        ) {
+            return self::STAGE_INTEREST;
+        }
+
         $stage = isset(self::STAGE_ORDER[$modelStage ?? '']) ? $modelStage : $currentStage;
         if (!isset(self::STAGE_ORDER[$stage])) {
             $stage = self::STAGE_INTEREST;
@@ -972,10 +997,10 @@ class ChatAiOrchestratorService
             $mapped = $this->chatAiKnowledgeService->resolveModelMapByPhrase($modelPhrase);
         }
         if ($mapped === null) {
-            $mapped = $this->chatAiKnowledgeService->resolveMappedProduct($inputText);
+            $mapped = $this->chatAiKnowledgeService->resolveMappedProduct($inputText, $modelPhrase);
         }
         if ($mapped === null) {
-            $mapped = $this->chatAiKnowledgeService->resolveMappedProduct((string) ($normalized['reply'] ?? ''));
+            $mapped = $this->chatAiKnowledgeService->resolveMappedProduct((string) ($normalized['reply'] ?? ''), $modelPhrase);
         }
         if (!$productId && !empty($mapped['product_id'])) {
             $productId = (int) $mapped['product_id'];
@@ -1246,10 +1271,16 @@ class ChatAiOrchestratorService
 
     private function extractSizeFromText(string $text): ?string
     {
-        if (preg_match('/(?:розмір|size)?\s*[:#-]?\s*(\d{2,3})(?:[.,](\d))?/ui', $text, $matches) === 1) {
-            return isset($matches[2]) && $matches[2] !== ''
-                ? $matches[1] . '.' . $matches[2]
-                : $matches[1];
+        $patterns = [
+            '/\b(?:розмір|size|р\.?)\s*[:#-]?\s*(\d{2,3}(?:[.,]\d)?(?:\s*\/\s*\d{2,3}(?:[.,]\d)?)?)/ui',
+            '/\b(\d{2,3}(?:[.,]\d)?(?:\s*\/\s*\d{2,3}(?:[.,]\d)?)?)\s*(?:розмір|size|р\.?)\b/ui',
+        ];
+
+        foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $text, $matches) === 1) {
+                $size = preg_replace('/\s*\/\s*/u', '/', (string) ($matches[1] ?? '')) ?? '';
+                return $this->normalizeSize($size);
+            }
         }
 
         return null;
@@ -1306,6 +1337,10 @@ class ChatAiOrchestratorService
         $missing = [];
         $intentPurchase = !empty($data['intent_purchase']);
 
+        if (!$intentPurchase) {
+            return [];
+        }
+
         $cartItems = is_array($data['cart_items'] ?? null) ? $data['cart_items'] : [];
         if ($cartItems !== [] && $intentPurchase) {
             $hasReadyItem = false;
@@ -1344,10 +1379,6 @@ class ChatAiOrchestratorService
             if (empty($data['selected_variant_id'])) {
                 $missing[] = 'selected_variant';
             }
-        }
-
-        if (!$intentPurchase) {
-            $missing[] = 'purchase_intent';
         }
 
         $delivery = is_array($data['delivery'] ?? null) ? $data['delivery'] : [];
