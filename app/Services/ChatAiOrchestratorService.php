@@ -595,7 +595,7 @@ class ChatAiOrchestratorService
             'model' => (string) ($agent->model ?: config('services.openai.model', 'gpt-4.1-mini')),
             'messages' => $messages,
             'temperature' => (float) ($agent->temperature ?? 0.3),
-            'max_tokens' => max(60, (int) ($agent->max_output_tokens ?? 300)),
+            'max_tokens' => $this->resolveStructuredMaxTokens($agent),
             'response_format' => ['type' => 'json_object'],
         ];
 
@@ -636,7 +636,20 @@ class ChatAiOrchestratorService
         }
 
         if (!$this->isValidModelJson($raw)) {
-            [$raw, $repairUsage] = $this->repairModelJson($baseUrl, $apiKey, $timeout, $agent, $raw);
+            Log::warning('Chat AI: сирий JSON моделі невалідний, запускаю repair.', [
+                'raw_preview' => Str::limit($raw, 800),
+            ]);
+
+            try {
+                [$raw, $repairUsage] = $this->repairModelJson($baseUrl, $apiKey, $timeout, $agent, $raw);
+            } catch (\Throwable $repairError) {
+                Log::warning('Chat AI: repair не відновив JSON, запускаю повторну генерацію.', [
+                    'error' => $repairError->getMessage(),
+                    'raw_preview' => Str::limit($raw, 800),
+                ]);
+
+                [$raw, $repairUsage] = $this->retryStructuredJson($baseUrl, $apiKey, $timeout, $agent, $messages, $raw);
+            }
         }
 
         return [
@@ -700,19 +713,18 @@ class ChatAiOrchestratorService
 
     private function decodeModelJson(string $raw): array
     {
-        $trimmed = trim($raw);
-        $trimmed = preg_replace('/^```(?:json)?\s*/i', '', $trimmed) ?? $trimmed;
-        $trimmed = preg_replace('/\s*```$/', '', $trimmed) ?? $trimmed;
-
-        $decoded = json_decode($trimmed, true);
-        if (is_array($decoded)) {
-            return $decoded;
-        }
-
-        if (preg_match('/\{.*\}/s', $trimmed, $matches) === 1) {
-            $decoded = json_decode((string) $matches[0], true);
+        foreach ($this->jsonCandidates($raw) as $candidate) {
+            $decoded = json_decode($candidate, true);
             if (is_array($decoded)) {
                 return $decoded;
+            }
+
+            if (preg_match('/\{.*\}/s', $candidate, $matches) === 1) {
+                $extracted = $this->sanitizeJsonCandidate((string) $matches[0]);
+                $decoded = json_decode($extracted, true);
+                if (is_array($decoded)) {
+                    return $decoded;
+                }
             }
         }
 
@@ -750,7 +762,7 @@ class ChatAiOrchestratorService
                 ],
             ],
             'temperature' => 0,
-            'max_tokens' => max(180, (int) ($agent->max_output_tokens ?? 300)),
+            'max_tokens' => max(500, $this->resolveStructuredMaxTokens($agent)),
             'response_format' => ['type' => 'json_object'],
         ];
 
@@ -791,6 +803,80 @@ class ChatAiOrchestratorService
         ];
     }
 
+    /**
+     * @return array{0:string,1:array{prompt_tokens:?int,completion_tokens:?int,total_tokens:?int}}
+     */
+    private function retryStructuredJson(
+        string $baseUrl,
+        string $apiKey,
+        int $timeout,
+        ChatAiAgent $agent,
+        array $messages,
+        string $raw
+    ): array {
+        $retryMessages = $messages;
+        $retryMessages[] = [
+            'role' => 'system',
+            'content' => implode("\n", [
+                'Попередня спроба повернула невалідний JSON.',
+                'Повтори відповідь заново.',
+                'Поверни тільки валідний JSON без markdown, без пояснень і без зайвого тексту.',
+                'Якщо не вистачає впевненості, залиш невідомі поля null або [].',
+                'Якщо клієнт просить кілька фото, використовуй action=send_product_gallery.',
+                'Якщо клієнт просить одне фото, використовуй action=send_product_photo.',
+                'Якщо клієнт просто пише текстове уточнення, використовуй action=text або ask_clarifying.',
+            ]),
+        ];
+        $retryMessages[] = [
+            'role' => 'assistant',
+            'content' => 'Невдала попередня сира відповідь: ' . Str::limit($raw, 1200),
+        ];
+
+        $payload = [
+            'model' => (string) ($agent->model ?: config('services.openai.model', 'gpt-4.1-mini')),
+            'messages' => $retryMessages,
+            'temperature' => 0,
+            'max_tokens' => max(700, $this->resolveStructuredMaxTokens($agent)),
+            'response_format' => ['type' => 'json_object'],
+        ];
+
+        $response = $this->performOpenAiRequest($baseUrl, $apiKey, $timeout, $payload);
+        if ($response->failed()) {
+            $errorBody = (string) $response->body();
+            $supportsFallback = str_contains(mb_strtolower($errorBody), 'response_format')
+                || str_contains(mb_strtolower($errorBody), 'json_object');
+
+            if ($supportsFallback) {
+                unset($payload['response_format']);
+                $response = $this->performOpenAiRequest($baseUrl, $apiKey, $timeout, $payload);
+            }
+        }
+
+        if ($response->failed()) {
+            throw new \RuntimeException(
+                'Повторна генерація JSON не спрацювала. OpenAI HTTP '
+                . $response->status() . ': ' . Str::limit((string) $response->body(), 500)
+            );
+        }
+
+        $json = $response->json();
+        $content = data_get($json, 'choices.0.message.content');
+        $retriedRaw = $this->normalizeOpenAiContent($content);
+
+        if (!$this->isValidModelJson($retriedRaw)) {
+            throw new \RuntimeException('Відповідь моделі не є валідним JSON навіть після повторної генерації.');
+        }
+
+        return [
+            $retriedRaw,
+            [
+                'prompt_tokens' => $this->nullableInt(data_get($json, 'usage.prompt_tokens')),
+                'completion_tokens' => $this->nullableInt(data_get($json, 'usage.completion_tokens')),
+                'total_tokens' => $this->nullableInt(data_get($json, 'usage.total_tokens')),
+            ],
+        ];
+    }
+
     private function isValidModelJson(string $raw): bool
     {
         try {
@@ -800,6 +886,42 @@ class ChatAiOrchestratorService
         } catch (\Throwable) {
             return false;
         }
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function jsonCandidates(string $raw): array
+    {
+        $base = $this->sanitizeJsonCandidate($raw);
+        $candidates = [$base];
+
+        $decodedString = json_decode($base, true);
+        if (is_string($decodedString) && $decodedString !== '') {
+            $candidates[] = $this->sanitizeJsonCandidate($decodedString);
+        }
+
+        $withoutTrailingCommas = preg_replace('/,\s*([}\]])/', '$1', $base) ?? $base;
+        if ($withoutTrailingCommas !== $base) {
+            $candidates[] = $withoutTrailingCommas;
+        }
+
+        return array_values(array_unique(array_filter($candidates, static fn ($candidate) => trim($candidate) !== '')));
+    }
+
+    private function sanitizeJsonCandidate(string $raw): string
+    {
+        $trimmed = trim($raw);
+        $trimmed = preg_replace('/^```(?:json)?\s*/i', '', $trimmed) ?? $trimmed;
+        $trimmed = preg_replace('/\s*```$/', '', $trimmed) ?? $trimmed;
+        $trimmed = str_replace(["\xEF\xBB\xBF", '“', '”', '’'], ['', '"', '"', "'"], $trimmed);
+
+        return trim($trimmed);
+    }
+
+    private function resolveStructuredMaxTokens(ChatAiAgent $agent): int
+    {
+        return max(500, (int) ($agent->max_output_tokens ?? 300));
     }
 
     private function normalizeModelPayload(array $payload): array
