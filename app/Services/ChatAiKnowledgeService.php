@@ -399,6 +399,62 @@ class ChatAiKnowledgeService
     }
 
     /**
+     * @return array{
+     *   product_id:int,
+     *   variant_id:?int,
+     *   color_id:?int,
+     *   size_hint:?string,
+     *   model_phrase:string,
+     *   item_code:?string,
+     *   collage_url:?string
+     * }|null
+     */
+    public function resolveProductForModelColor(?string $modelPhrase, ?int $colorId = null, ?string $colorName = null): ?array
+    {
+        $phrase = mb_strtolower(trim((string) $modelPhrase));
+        if ($phrase === '') {
+            return null;
+        }
+
+        $normalizedColorName = mb_strtolower(trim((string) $colorName));
+        if ($normalizedColorName === '') {
+            $normalizedColorName = null;
+        }
+
+        $matches = array_values(array_filter($this->activeModelMaps(), function (array $map) use ($phrase, $colorId, $normalizedColorName): bool {
+            $candidatePhrase = mb_strtolower(trim((string) ($map['model_phrase'] ?? '')));
+            if (!$this->modelPhraseMatchesScope($candidatePhrase, $phrase)) {
+                return false;
+            }
+
+            $mapColorId = isset($map['color_id']) ? (int) $map['color_id'] : null;
+            $mapColorName = mb_strtolower(trim((string) ($map['color_name'] ?? '')));
+
+            if ($colorId !== null) {
+                return $mapColorId === $colorId;
+            }
+
+            if ($normalizedColorName !== null) {
+                return $mapColorName !== '' && (
+                    $mapColorName === $normalizedColorName
+                    || mb_stripos($mapColorName, $normalizedColorName) !== false
+                    || mb_stripos($normalizedColorName, $mapColorName) !== false
+                );
+            }
+
+            return false;
+        }));
+
+        if ($matches === []) {
+            return null;
+        }
+
+        usort($matches, fn (array $left, array $right): int => ((int) ($left['priority'] ?? 100)) <=> ((int) ($right['priority'] ?? 100)));
+
+        return $this->normalizeResolvedMap($matches[0]);
+    }
+
+    /**
      * @return array<int, array<string, mixed>>
      */
     private function activeKnowledgeItems(): array

@@ -184,21 +184,22 @@ class ChatAiOrchestratorService
             $slotPatch = $this->buildSlotPatch($state, $normalized, $inputText);
             $nextStage = $this->resolveNextStage($stageBefore, $normalized['stage'], $slotPatch, (string) ($normalized['action'] ?? 'text'));
             $reply = $this->buildSafeReply($normalized['reply'], $nextStage, $slotPatch);
-            $mediaAttachment = $this->resolveAiMediaAttachment($inputText, $normalized, $state, $slotPatch);
-            if ($mediaAttachment !== null) {
-                if ($this->shouldSuppressTextForMediaAttachment($inputText, $normalized, $mediaAttachment)) {
+            $mediaAttachments = $this->resolveAiMediaAttachments($inputText, $normalized, $state, $slotPatch);
+            $primaryMediaAttachment = $mediaAttachments[0] ?? null;
+            if ($primaryMediaAttachment !== null) {
+                if ($this->shouldSuppressTextForMediaAttachment($inputText, $normalized, $primaryMediaAttachment)) {
                     $reply = '';
                 } else {
-                    $reply = $this->sanitizeReplyForMediaAttachment($reply, $mediaAttachment);
+                    $reply = $this->sanitizeReplyForMediaAttachment($reply, $primaryMediaAttachment);
                 }
             }
 
-            if ($reply === '' && $mediaAttachment === null) {
+            if ($reply === '' && $mediaAttachments === []) {
                 throw new \RuntimeException('Chat AI: порожня відповідь моделі після санітизації.');
             }
 
             $outboundMessage = null;
-            if ($mediaAttachment !== null) {
+            foreach ($mediaAttachments as $mediaAttachment) {
                 $attachmentMetaResult = $this->metaService->sendMessage(
                     $customer,
                     '',
@@ -469,7 +470,7 @@ class ChatAiOrchestratorService
             . "Відповідь повертай ТІЛЬКИ у JSON без markdown.\n"
             . "Схема JSON:\n"
             . "{\n"
-            . "  \"action\": \"text|send_product_photo|send_collage|ask_clarifying|checkout_request|none\",\n"
+            . "  \"action\": \"text|send_product_photo|send_product_gallery|send_collage|ask_clarifying|checkout_request|none\",\n"
             . "  \"reply\": \"string\",\n"
             . "  \"stage\": \"interest|selection|checkout_ready|checkout\",\n"
             . "  \"last_intent\": \"string|null\",\n"
@@ -480,6 +481,14 @@ class ChatAiOrchestratorService
             . "  \"selected_color\": \"string|null\",\n"
             . "  \"selected_product_id\": number|null,\n"
             . "  \"selected_variant_id\": number|null,\n"
+            . "  \"gallery_items\": [\n"
+            . "    {\n"
+            . "      \"product_id\": number|null,\n"
+            . "      \"variant_id\": number|null,\n"
+            . "      \"color_id\": number|null,\n"
+            . "      \"color\": \"string|null\"\n"
+            . "    }\n"
+            . "  ],\n"
             . "  \"cart_items\": [\n"
             . "    {\n"
             . "      \"model\": \"string|null\",\n"
@@ -502,15 +511,18 @@ class ChatAiOrchestratorService
             . "Ти сам визначаєш action. PHP-код не вирішує intent за клієнта, а лише виконує твою action-команду.\n"
             . "На етапах interest та selection ти працюєш як живий консультант, а не як скриптовий бот.\n"
             . "Якщо клієнт просить фото конкретного кольору або товару, повертай action=send_product_photo.\n"
+            . "Якщо клієнт просить показати кілька конкретних кольорів або кілька конкретних товарів, повертай action=send_product_gallery і заповнюй gallery_items усіма потрібними позиціями.\n"
             . "Якщо клієнт просить показати всі кольори, моделі, варіанти або асортимент, повертай action=send_collage.\n"
             . "Якщо потрібно лише відповісти текстом, повертай action=text.\n"
             . "Якщо потрібно м'яко уточнити модель або колір, повертай action=ask_clarifying.\n"
+            . "Якщо клієнт питає про колір, якого немає у поточній моделі, не відправляй фото чи колаж. Поверни action=text і коротко скажи, що такого кольору немає, після чого переліч доступні кольори цієї моделі.\n"
             . "На етапі interest не вимагай розмір, якщо клієнт просить фото, кольори, модель, усі варіанти або просто цікавиться товаром. У таких запитах спочатку покажи фото/варіанти/кольори і лише потім, за потреби, м'яко уточнюй колір або модель.\n"
             . "Не проси розмір, доки клієнт сам не питає про наявність конкретного розміру, підбір або не переходить до замовлення.\n"
             . "Не став жодних додаткових питань, якщо користувач просить просто показати фото, модель, кольори або асортимент.\n"
             . "Не вважай код з колажу (наприклад 20, 41, 42) розміром. Код колажу — це ідентифікатор позиції в межах моделі.\n"
             . "Заповнюй missing_slots тільки коли клієнт реально переходить до оформлення або вже хоче купити. На етапах interest та selection для звичайних консультацій missing_slots має бути [].\n"
             . "Не вставляй у reply сирі URL фото, відео або колажів. Якщо потрібне фото чи колаж, просто напиши коротко без посилання: наприклад, 'Надсилаю фото.' або 'Надсилаю колаж.' CRM відправить медіа окремо.\n"
+            . "Для action=send_product_gallery не пиши зайвого тексту і не надсилай колаж, якщо клієнт просить лише кілька конкретних кольорів. У gallery_items повинні бути тільки реально доступні позиції.\n"
             . "Якщо клієнт прямо просить показати або скинути фото/усі кольори/усі варіанти, не став додаткових питань і не додавай зайвий текст. У такому випадку reply має бути порожнім або максимально коротким, бо CRM сама відправить потрібне медіа.\n"
             . "Одне уточнююче питання за раз.\n"
             . "policy_json=" . $policyJson;
@@ -613,17 +625,35 @@ class ChatAiOrchestratorService
         $json = $response->json();
         $content = data_get($json, 'choices.0.message.content');
         $raw = $this->normalizeOpenAiContent($content);
+        $repairUsage = [
+            'prompt_tokens' => 0,
+            'completion_tokens' => 0,
+            'total_tokens' => 0,
+        ];
 
         if (trim($raw) === '') {
             throw new \RuntimeException('OpenAI повернув порожній content.');
         }
 
+        if (!$this->isValidModelJson($raw)) {
+            [$raw, $repairUsage] = $this->repairModelJson($baseUrl, $apiKey, $timeout, $agent, $raw);
+        }
+
         return [
             $raw,
             [
-                'prompt_tokens' => $this->nullableInt(data_get($json, 'usage.prompt_tokens')),
-                'completion_tokens' => $this->nullableInt(data_get($json, 'usage.completion_tokens')),
-                'total_tokens' => $this->nullableInt(data_get($json, 'usage.total_tokens')),
+                'prompt_tokens' => $this->sumNullableInts(
+                    $this->nullableInt(data_get($json, 'usage.prompt_tokens')),
+                    $this->nullableInt($repairUsage['prompt_tokens'] ?? null)
+                ),
+                'completion_tokens' => $this->sumNullableInts(
+                    $this->nullableInt(data_get($json, 'usage.completion_tokens')),
+                    $this->nullableInt($repairUsage['completion_tokens'] ?? null)
+                ),
+                'total_tokens' => $this->sumNullableInts(
+                    $this->nullableInt(data_get($json, 'usage.total_tokens')),
+                    $this->nullableInt($repairUsage['total_tokens'] ?? null)
+                ),
             ],
         ];
     }
@@ -689,6 +719,89 @@ class ChatAiOrchestratorService
         throw new \RuntimeException('Відповідь моделі не є валідним JSON.');
     }
 
+    /**
+     * @return array{0:string,1:array{prompt_tokens:?int,completion_tokens:?int,total_tokens:?int}}
+     */
+    private function repairModelJson(
+        string $baseUrl,
+        string $apiKey,
+        int $timeout,
+        ChatAiAgent $agent,
+        string $raw
+    ): array {
+        $payload = [
+            'model' => (string) ($agent->model ?: config('services.openai.model', 'gpt-4.1-mini')),
+            'messages' => [
+                [
+                    'role' => 'system',
+                    'content' => implode("\n", [
+                        'Ти виправляєш відповідь іншої моделі до валідного JSON.',
+                        'Поверни тільки JSON без markdown і без пояснень.',
+                        'Допустимі action: text, send_product_photo, send_product_gallery, send_collage, ask_clarifying, checkout_request, none.',
+                        'Обовʼязкові ключі верхнього рівня: action, reply, stage, last_intent, intent_purchase, requires_human, model_phrase, selected_size, selected_color, selected_product_id, selected_variant_id, gallery_items, cart_items, missing_slots, delivery_fields.',
+                        'gallery_items має бути масивом обʼєктів з ключами product_id, variant_id, color_id, color.',
+                        'cart_items має бути масивом обʼєктів.',
+                        'delivery_fields має бути обʼєктом з ключами name, phone, city, warehouse.',
+                    ]),
+                ],
+                [
+                    'role' => 'user',
+                    'content' => "Виправ до валідного JSON цей текст:\n\n" . $raw,
+                ],
+            ],
+            'temperature' => 0,
+            'max_tokens' => max(180, (int) ($agent->max_output_tokens ?? 300)),
+            'response_format' => ['type' => 'json_object'],
+        ];
+
+        $response = $this->performOpenAiRequest($baseUrl, $apiKey, $timeout, $payload);
+        if ($response->failed()) {
+            $errorBody = (string) $response->body();
+            $supportsFallback = str_contains(mb_strtolower($errorBody), 'response_format')
+                || str_contains(mb_strtolower($errorBody), 'json_object');
+
+            if ($supportsFallback) {
+                unset($payload['response_format']);
+                $response = $this->performOpenAiRequest($baseUrl, $apiKey, $timeout, $payload);
+            }
+        }
+
+        if ($response->failed()) {
+            throw new \RuntimeException(
+                'Не вдалося відремонтувати JSON-відповідь моделі. OpenAI HTTP '
+                . $response->status() . ': ' . Str::limit((string) $response->body(), 500)
+            );
+        }
+
+        $json = $response->json();
+        $content = data_get($json, 'choices.0.message.content');
+        $repairedRaw = $this->normalizeOpenAiContent($content);
+
+        if (!$this->isValidModelJson($repairedRaw)) {
+            throw new \RuntimeException('Відповідь моделі не є валідним JSON навіть після repair.');
+        }
+
+        return [
+            $repairedRaw,
+            [
+                'prompt_tokens' => $this->nullableInt(data_get($json, 'usage.prompt_tokens')),
+                'completion_tokens' => $this->nullableInt(data_get($json, 'usage.completion_tokens')),
+                'total_tokens' => $this->nullableInt(data_get($json, 'usage.total_tokens')),
+            ],
+        ];
+    }
+
+    private function isValidModelJson(string $raw): bool
+    {
+        try {
+            $this->decodeModelJson($raw);
+
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
     private function normalizeModelPayload(array $payload): array
     {
         $delivery = $payload['delivery_fields'] ?? [];
@@ -724,6 +837,7 @@ class ChatAiOrchestratorService
             'selected_color' => $this->cleanNullableString($payload['selected_color'] ?? $payload['color'] ?? null),
             'selected_product_id' => $this->nullableInt($payload['selected_product_id'] ?? $payload['product_id'] ?? null),
             'selected_variant_id' => $this->nullableInt($payload['selected_variant_id'] ?? $payload['variant_id'] ?? null),
+            'gallery_items' => $this->normalizeGalleryItems($payload['gallery_items'] ?? []),
             'cart_items' => $this->normalizeCartItems($payload['cart_items'] ?? []),
             'missing_slots' => $normalizedMissingSlots,
             'delivery_fields' => [
@@ -733,6 +847,77 @@ class ChatAiOrchestratorService
                 'warehouse' => $this->cleanNullableString($delivery['warehouse'] ?? null),
             ],
         ];
+    }
+
+    /**
+     * @return array<int, array{product_id:?int,variant_id:?int,color_id:?int,color:?string}>
+     */
+    private function normalizeGalleryItems(mixed $items): array
+    {
+        if (!is_array($items)) {
+            return [];
+        }
+
+        $normalized = [];
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $productId = $this->nullableInt($item['product_id'] ?? $item['selected_product_id'] ?? null);
+            $variantId = $this->nullableInt($item['variant_id'] ?? $item['selected_variant_id'] ?? null);
+            $colorId = $this->nullableInt($item['color_id'] ?? $item['selected_color_id'] ?? null);
+            $color = $this->cleanNullableString($item['color'] ?? $item['selected_color'] ?? null);
+
+            if ($variantId) {
+                $variant = ProductVariant::query()
+                    ->select(['id', 'product_id'])
+                    ->find($variantId);
+                if ($variant) {
+                    $variantId = $variant->id;
+                    $productId = $variant->product_id ?: $productId;
+                } else {
+                    $variantId = null;
+                }
+            }
+
+            if ($colorId === null && $color !== null) {
+                $colorId = $this->resolveColorId($color, $color);
+            }
+
+            if ($productId !== null && $colorId === null) {
+                $productColorId = Product::query()
+                    ->whereKey($productId)
+                    ->value('color_id');
+                if ($productColorId) {
+                    $colorId = (int) $productColorId;
+                }
+            }
+
+            if ($productId === null && $variantId === null) {
+                continue;
+            }
+
+            $normalized[] = [
+                'product_id' => $productId,
+                'variant_id' => $variantId,
+                'color_id' => $colorId,
+                'color' => $color,
+            ];
+        }
+
+        $unique = [];
+        foreach ($normalized as $item) {
+            $key = implode('|', [
+                $item['product_id'] ?? 'null',
+                $item['variant_id'] ?? 'null',
+                $item['color_id'] ?? 'null',
+                mb_strtolower((string) ($item['color'] ?? '')),
+            ]);
+            $unique[$key] = $item;
+        }
+
+        return array_values($unique);
     }
 
     private function buildSlotPatch(ChatAiConversationState $state, array $normalized, string $inputText): array
@@ -997,6 +1182,83 @@ class ChatAiOrchestratorService
      * @param  array<string, mixed>  $slotPatch
      * @return array<string, mixed>|null
      */
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function resolveAiMediaAttachments(
+        string $inputText,
+        array $normalized,
+        ChatAiConversationState $state,
+        array $slotPatch
+    ): array {
+        $action = (string) ($normalized['action'] ?? 'text');
+        if (!$this->actionRequiresMedia($action)) {
+            return [];
+        }
+
+        if ($action === 'send_product_gallery') {
+            $attachments = [];
+            $seenUrls = [];
+            $galleryModelPhrase = $this->cleanNullableString($normalized['model_phrase'] ?? null)
+                ?: $this->cleanNullableString($slotPatch['selected_model_phrase'] ?? null)
+                ?: $this->cleanNullableString($state->slots_json['selected_model_phrase'] ?? null);
+
+            foreach (($normalized['gallery_items'] ?? []) as $galleryItem) {
+                if (!is_array($galleryItem)) {
+                    continue;
+                }
+
+                $galleryProductId = $this->nullableInt($galleryItem['product_id'] ?? null);
+                $galleryVariantId = $this->nullableInt($galleryItem['variant_id'] ?? null);
+                $galleryColorId = $this->nullableInt($galleryItem['color_id'] ?? null);
+                $galleryColor = $this->cleanNullableString($galleryItem['color'] ?? null);
+
+                if ($galleryProductId === null && $galleryModelPhrase !== null) {
+                    $resolvedGalleryItem = $this->chatAiKnowledgeService->resolveProductForModelColor(
+                        $galleryModelPhrase,
+                        $galleryColorId,
+                        $galleryColor
+                    );
+                    if ($resolvedGalleryItem !== null) {
+                        $galleryProductId = $this->nullableInt($resolvedGalleryItem['product_id'] ?? null);
+                        $galleryVariantId = $galleryVariantId ?: $this->nullableInt($resolvedGalleryItem['variant_id'] ?? null);
+                        $galleryColorId = $galleryColorId ?: $this->nullableInt($resolvedGalleryItem['color_id'] ?? null);
+                    }
+                }
+
+                $attachment = $this->resolveProductMediaAttachmentBySelection(
+                    $galleryProductId,
+                    $galleryVariantId,
+                    $galleryColorId
+                );
+
+                if ($attachment === null) {
+                    continue;
+                }
+
+                $url = (string) data_get($attachment, 'stored_attachment.url', '');
+                if ($url === '' || isset($seenUrls[$url])) {
+                    continue;
+                }
+
+                $seenUrls[$url] = true;
+                $attachments[] = $attachment;
+
+                if (count($attachments) >= 8) {
+                    break;
+                }
+            }
+
+            if ($attachments !== []) {
+                return $attachments;
+            }
+        }
+
+        $singleAttachment = $this->resolveAiMediaAttachment($inputText, $normalized, $state, $slotPatch);
+
+        return $singleAttachment !== null ? [$singleAttachment] : [];
+    }
+
     private function resolveAiMediaAttachment(
         string $inputText,
         array $normalized,
@@ -1093,7 +1355,7 @@ class ChatAiOrchestratorService
 
     private function actionRequiresMedia(string $action): bool
     {
-        return in_array($action, ['send_product_photo', 'send_collage'], true);
+        return in_array($action, ['send_product_photo', 'send_product_gallery', 'send_collage'], true);
     }
 
     private function actionPrefersCollage(string $action): bool
@@ -1104,11 +1366,50 @@ class ChatAiOrchestratorService
     private function normalizeAction(mixed $value): string
     {
         $action = $this->cleanNullableString(is_scalar($value) ? (string) $value : null);
-        $allowed = ['text', 'send_product_photo', 'send_collage', 'ask_clarifying', 'checkout_request', 'none'];
+        $allowed = ['text', 'send_product_photo', 'send_product_gallery', 'send_collage', 'ask_clarifying', 'checkout_request', 'none'];
 
         return $action !== null && in_array($action, $allowed, true)
             ? $action
             : 'text';
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function resolveProductMediaAttachmentBySelection(?int $productId, ?int $variantId, ?int $colorId): ?array
+    {
+        if (!$productId) {
+            return null;
+        }
+
+        if (!$colorId) {
+            $productColorId = Product::query()
+                ->whereKey($productId)
+                ->value('color_id');
+            if ($productColorId) {
+                $colorId = (int) $productColorId;
+            }
+        }
+
+        $resolvedMedia = $this->findPreferredProductMedia($productId, $variantId, $colorId);
+        if ($resolvedMedia !== null) {
+            return $resolvedMedia;
+        }
+
+        $product = Product::query()
+            ->select(['id', 'main_photo_path', 'color_id'])
+            ->find($productId);
+
+        if ($product && $product->main_photo_url) {
+            return $this->buildMediaAttachmentPayload(
+                $product->main_photo_url,
+                'image',
+                'main_photo',
+                ['product_id' => $productId, 'variant_id' => $variantId, 'color_id' => $colorId ?: $product->color_id]
+            );
+        }
+
+        return null;
     }
 
     /**
@@ -1950,6 +2251,15 @@ class ChatAiOrchestratorService
         }
 
         return in_array(mb_strtolower(trim($value)), ['1', 'true', 'yes', 'так'], true);
+    }
+
+    private function sumNullableInts(?int $left, ?int $right): ?int
+    {
+        if ($left === null && $right === null) {
+            return null;
+        }
+
+        return ($left ?? 0) + ($right ?? 0);
     }
 
     private function countInputChars(array $messages): int
