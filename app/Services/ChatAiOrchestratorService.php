@@ -497,6 +497,8 @@ class ChatAiOrchestratorService
             . "Дозволено кілька позицій у одному замовленні. Якщо клієнт просить 2+ товари, додай їх у cart_items.\n"
             . "Заборонено змушувати клієнта обрати лише одну позицію, якщо він явно хоче кілька.\n"
             . "Не запитуй дані доставки (ПІБ, телефон, місто, відділення/поштомат), доки stage не дійшов до checkout_ready.\n"
+            . "На етапі interest не вимагай розмір, якщо клієнт просить фото, кольори, модель, усі варіанти або просто цікавиться товаром. У таких запитах спочатку покажи фото/варіанти/кольори і лише потім, за потреби, м'яко уточнюй колір або модель.\n"
+            . "Не проси розмір, доки клієнт сам не питає про наявність конкретного розміру, підбір або не переходить до замовлення.\n"
             . "Не вставляй у reply сирі URL фото, відео або колажів. Якщо потрібне фото чи колаж, просто напиши коротко без посилання: наприклад, 'Надсилаю фото.' або 'Надсилаю колаж.' CRM відправить медіа окремо.\n"
             . "Якщо клієнт прямо просить показати або скинути фото/усі кольори/усі варіанти, не став додаткових питань і не додавай зайвий текст. У такому випадку reply має бути порожнім або максимально коротким, бо CRM сама відправить потрібне медіа.\n"
             . "Одне уточнююче питання за раз.\n"
@@ -515,6 +517,9 @@ class ChatAiOrchestratorService
         string $platform,
         ChatAiPromptVersion $promptVersion
     ): string {
+        $shouldExposeMissingSlots = (bool) $state->intent_purchase
+            || in_array($state->stage, [self::STAGE_CHECKOUT_READY, self::STAGE_CHECKOUT], true);
+
         $context = [
             'conversation_id' => $conversation->id,
             'platform' => $platform,
@@ -526,7 +531,7 @@ class ChatAiOrchestratorService
             'selected_size' => $state->selected_size,
             'slots' => $state->slots_json ?? [],
             'current_cart' => is_array($state->slots_json['cart_items'] ?? null) ? $state->slots_json['cart_items'] : [],
-            'missing_slots' => $state->missing_slots_json ?? [],
+            'missing_slots' => $shouldExposeMissingSlots ? ($state->missing_slots_json ?? []) : [],
             'policy_json' => $promptVersion->policy_json ?? [],
             'product_model_maps' => $this->chatAiKnowledgeService->productMapContext(30),
         ];
@@ -934,55 +939,17 @@ class ChatAiOrchestratorService
         $cleanReply = Str::limit($cleanReply, 1200, '...');
 
         if ($cleanReply === '') {
-            return $this->fallbackReplyForStage($stage, $slotPatch);
+            return '';
         }
 
         if (
             in_array($stage, [self::STAGE_INTEREST, self::STAGE_SELECTION], true)
             && $this->containsDeliveryRequest($cleanReply)
         ) {
-            return $this->fallbackReplyForStage($stage, $slotPatch);
+            return '';
         }
 
         return $cleanReply;
-    }
-
-    private function fallbackReplyForStage(string $stage, array $slotPatch): string
-    {
-        $missing = is_array($slotPatch['missing_slots_json'] ?? null)
-            ? $slotPatch['missing_slots_json']
-            : [];
-        $hasCartItems = (bool) ($slotPatch['has_cart_items'] ?? false);
-        $intentPurchase = (bool) ($slotPatch['intent_purchase'] ?? false);
-
-        if ($stage === self::STAGE_INTEREST || $stage === self::STAGE_SELECTION) {
-            if ($hasCartItems && !$intentPurchase) {
-                return 'Додав позиції у кошик. Підкажіть, будь ласка, чи додаємо ще щось, чи вже оформляємо замовлення?';
-            }
-
-            if ($hasCartItems && $intentPurchase) {
-                return 'Чудово, позиції зафіксував. Можу переходити до оформлення замовлення?';
-            }
-
-            if (($slotPatch['selected_size'] ?? null) === null || in_array('selected_size', $missing, true)) {
-                return 'Підкажіть, будь ласка, ваш розмір. Тоді одразу скажу, які варіанти є в наявності саме для вас.';
-            }
-
-            if (
-                ($slotPatch['selected_product_id'] ?? null) === null
-                || in_array('selected_product', $missing, true)
-            ) {
-                return 'Напишіть, будь ласка, яку модель обираєте, і я підкажу актуальну наявність та кольори.';
-            }
-
-            return 'Є кілька варіантів на ваші параметри. Який колір вам більше підходить?';
-        }
-
-        if ($stage === self::STAGE_CHECKOUT_READY) {
-            return 'Чудово, можемо оформити. Напишіть, будь ласка: імʼя та прізвище, номер телефону, місто і відділення або поштомат Нової пошти.';
-        }
-
-        return 'Дякую, передаю замовлення в обробку. Якщо буде потрібно, менеджер уточнить деталі.';
     }
 
     /**
@@ -1131,6 +1098,13 @@ class ChatAiOrchestratorService
         if (
             preg_match('/\b(покажи|покажіть|скинь|скиньте|надішли|надішліть|кинь|давай)\b/ui', $normalized) === 1
             && preg_match('/\b(всі|усі|все|всі кольори|усі кольори|всі варіанти|усі варіанти|всі моделі|усі моделі)\b/ui', $normalized) === 1
+        ) {
+            return true;
+        }
+
+        if (
+            preg_match('/\b(покажи|покажіть|скинь|скиньте|надішли|надішліть|кинь|давай|хочу побачити|хочу глянути)\b/ui', $normalized) === 1
+            && preg_match('/\b(модель|моделі|варіант|варіанти|кольори|асортимент)\b/ui', $normalized) === 1
         ) {
             return true;
         }
@@ -1432,9 +1406,10 @@ class ChatAiOrchestratorService
     private function calculateMissingSlots(array $data): array
     {
         $missing = [];
+        $intentPurchase = !empty($data['intent_purchase']);
 
         $cartItems = is_array($data['cart_items'] ?? null) ? $data['cart_items'] : [];
-        if ($cartItems !== []) {
+        if ($cartItems !== [] && $intentPurchase) {
             $hasReadyItem = false;
             foreach ($cartItems as $item) {
                 if (!is_array($item)) {
@@ -1459,7 +1434,7 @@ class ChatAiOrchestratorService
                 $missing[] = 'selected_size';
                 $missing[] = 'selected_variant';
             }
-        } else {
+        } elseif ($intentPurchase) {
             if (empty($data['selected_product_id'])) {
                 $missing[] = 'selected_product';
             }
@@ -1473,14 +1448,16 @@ class ChatAiOrchestratorService
             }
         }
 
-        if (empty($data['intent_purchase'])) {
+        if (!$intentPurchase) {
             $missing[] = 'purchase_intent';
         }
 
         $delivery = is_array($data['delivery'] ?? null) ? $data['delivery'] : [];
-        foreach (['name', 'phone', 'city', 'warehouse'] as $field) {
-            if ($this->cleanNullableString($delivery[$field] ?? null) === null) {
-                $missing[] = $field;
+        if ($intentPurchase) {
+            foreach (['name', 'phone', 'city', 'warehouse'] as $field) {
+                if ($this->cleanNullableString($delivery[$field] ?? null) === null) {
+                    $missing[] = $field;
+                }
             }
         }
 
