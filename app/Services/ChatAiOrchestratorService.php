@@ -1452,11 +1452,6 @@ class ChatAiOrchestratorService
             }
         }
 
-        $mapForProduct = $this->chatAiKnowledgeService->resolveModelMapForProduct($productId, $colorId);
-        if ($mapForProduct !== null) {
-            $rawCollageUrls[] = (string) ($mapForProduct['collage_url'] ?? '');
-        }
-
         foreach ($rawCollageUrls as $rawCollageUrl) {
             foreach ($this->explodeMediaUrls($rawCollageUrl) as $collageUrl) {
                 if ($collageUrl === '' || isset($seenUrls[$collageUrl])) {
@@ -1479,6 +1474,35 @@ class ChatAiOrchestratorService
 
                 if (count($attachments) >= 8) {
                     return $attachments;
+                }
+            }
+        }
+
+        if ($attachments === []) {
+            $mapForProduct = $this->chatAiKnowledgeService->resolveModelMapForProduct($productId, $colorId);
+            if ($mapForProduct !== null) {
+                foreach ($this->explodeMediaUrls((string) ($mapForProduct['collage_url'] ?? '')) as $collageUrl) {
+                    if ($collageUrl === '' || isset($seenUrls[$collageUrl])) {
+                        continue;
+                    }
+
+                    $attachment = $this->buildMediaAttachmentPayload(
+                        $collageUrl,
+                        'image',
+                        'collage',
+                        ['product_id' => $productId, 'variant_id' => $variantId, 'color_id' => $colorId]
+                    );
+
+                    if ($attachment === null) {
+                        continue;
+                    }
+
+                    $seenUrls[$collageUrl] = true;
+                    $attachments[] = $attachment;
+
+                    if (count($attachments) >= 8) {
+                        break;
+                    }
                 }
             }
         }
