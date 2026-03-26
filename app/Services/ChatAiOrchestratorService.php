@@ -186,7 +186,11 @@ class ChatAiOrchestratorService
             $reply = $this->buildSafeReply($normalized['reply'], $nextStage, $slotPatch);
             $mediaAttachment = $this->resolveAiMediaAttachment($inputText, $normalized, $state, $slotPatch);
             if ($mediaAttachment !== null) {
-                $reply = $this->sanitizeReplyForMediaAttachment($reply, $mediaAttachment);
+                if ($this->shouldSuppressTextForMediaAttachment($inputText, $normalized, $mediaAttachment)) {
+                    $reply = '';
+                } else {
+                    $reply = $this->sanitizeReplyForMediaAttachment($reply, $mediaAttachment);
+                }
             }
 
             if ($reply === '' && $mediaAttachment === null) {
@@ -494,6 +498,7 @@ class ChatAiOrchestratorService
             . "Заборонено змушувати клієнта обрати лише одну позицію, якщо він явно хоче кілька.\n"
             . "Не запитуй дані доставки (ПІБ, телефон, місто, відділення/поштомат), доки stage не дійшов до checkout_ready.\n"
             . "Не вставляй у reply сирі URL фото, відео або колажів. Якщо потрібне фото чи колаж, просто напиши коротко без посилання: наприклад, 'Надсилаю фото.' або 'Надсилаю колаж.' CRM відправить медіа окремо.\n"
+            . "Якщо клієнт прямо просить показати або скинути фото/усі кольори/усі варіанти, не став додаткових питань і не додавай зайвий текст. У такому випадку reply має бути порожнім або максимально коротким, бо CRM сама відправить потрібне медіа.\n"
             . "Одне уточнююче питання за раз.\n"
             . "policy_json=" . $policyJson;
 
@@ -1001,6 +1006,9 @@ class ChatAiOrchestratorService
         $colorId = $this->nullableInt($slotPatch['selected_color_id'] ?? null) ?: $state->selected_color_id;
 
         $mapped = $this->chatAiKnowledgeService->resolveMappedProduct($inputText);
+        if ($mapped === null) {
+            $mapped = $this->chatAiKnowledgeService->resolveMappedProduct((string) ($normalized['reply'] ?? ''));
+        }
         if (!$productId && !empty($mapped['product_id'])) {
             $productId = (int) $mapped['product_id'];
         }
@@ -1076,10 +1084,12 @@ class ChatAiOrchestratorService
         }
 
         $lastIntent = mb_strtolower((string) ($normalized['last_intent'] ?? ''));
+        $reply = $this->cleanNullableString($normalized['reply'] ?? null) ?? '';
 
         return str_contains($lastIntent, 'фото')
             || str_contains($lastIntent, 'photo')
-            || str_contains($lastIntent, 'колаж');
+            || str_contains($lastIntent, 'колаж')
+            || $this->replyIndicatesMedia($reply);
     }
 
     private function detectPhotoIntent(string $text): bool
@@ -1100,6 +1110,13 @@ class ChatAiOrchestratorService
             return true;
         }
 
+        if (
+            preg_match('/\b(покажи|покажіть|скинь|скиньте|надішли|надішліть|кинь|давай)\b/ui', $normalized) === 1
+            && $this->resolveColorId(null, $normalized) !== null
+        ) {
+            return true;
+        }
+
         return preg_match('/\b(покажи|покажіть|скинь|скиньте|надішли|надішліть|кинь|давай)\b/ui', $normalized) === 1
             && preg_match('/\b(його|її|це|мені)\b/ui', $normalized) === 1;
     }
@@ -1111,12 +1128,30 @@ class ChatAiOrchestratorService
             return false;
         }
 
+        if (
+            preg_match('/\b(покажи|покажіть|скинь|скиньте|надішли|надішліть|кинь|давай)\b/ui', $normalized) === 1
+            && preg_match('/\b(всі|усі|все|всі кольори|усі кольори|всі варіанти|усі варіанти|всі моделі|усі моделі)\b/ui', $normalized) === 1
+        ) {
+            return true;
+        }
+
         return preg_match('/\b(колаж|колажі|колажи)\b/ui', $normalized) === 1
             && (
                 preg_match('/\b(покажи|покажіть|скинь|скиньте|надішли|надішліть|кинь|давай|можна|є)\b/ui', $normalized) === 1
                 || str_contains($normalized, '?')
                 || preg_match('/^(колаж|колажі|колажи)$/ui', $normalized) === 1
             );
+    }
+
+    private function replyIndicatesMedia(string $reply): bool
+    {
+        $normalized = mb_strtolower(trim($reply));
+        if ($normalized === '') {
+            return false;
+        }
+
+        return preg_match('/\b(надсилаю|скидаю|показую|ось)\b/ui', $normalized) === 1
+            && preg_match('/\b(фото|фотографію|зображення|колаж|кольори|варіанти)\b/ui', $normalized) === 1;
     }
 
     /**
@@ -1259,6 +1294,30 @@ class ChatAiOrchestratorService
         $cleanReply = preg_replace('/\s+([,.;:!?])/u', '$1', $cleanReply) ?? $cleanReply;
 
         return trim($cleanReply);
+    }
+
+    /**
+     * @param  array<string, mixed>  $normalized
+     * @param  array<string, mixed>  $attachment
+     */
+    private function shouldSuppressTextForMediaAttachment(string $inputText, array $normalized, array $attachment): bool
+    {
+        if ($this->detectPhotoIntent($inputText) || $this->detectCollageIntent($inputText)) {
+            return true;
+        }
+
+        $reply = $this->cleanNullableString($normalized['reply'] ?? null) ?? '';
+        if ($this->replyIndicatesMedia($reply)) {
+            return true;
+        }
+
+        return in_array((string) ($attachment['source'] ?? ''), [
+            'product_media_variant',
+            'product_media_color',
+            'product_media_primary',
+            'main_photo',
+            'collage',
+        ], true) && $reply === '';
     }
 
     private function containsDeliveryRequest(string $text): bool
