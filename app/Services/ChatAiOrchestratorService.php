@@ -1415,23 +1415,6 @@ JSON;
         }
 
         $intentPurchase = (bool) ($state->intent_purchase || $normalized['intent_purchase']);
-
-        $shouldTrackMissingSlots = !empty($normalized['intent_purchase'])
-            || in_array((string) ($normalized['stage'] ?? $state->stage), [self::STAGE_CHECKOUT_READY, self::STAGE_CHECKOUT], true)
-            || in_array($state->stage, [self::STAGE_CHECKOUT_READY, self::STAGE_CHECKOUT], true);
-
-        $missingSlots = $shouldTrackMissingSlots ? $normalized['missing_slots'] : [];
-        if ($shouldTrackMissingSlots && $missingSlots === []) {
-            $missingSlots = $this->calculateMissingSlots([
-                'selected_product_id' => $selectedProductId,
-                'selected_variant_id' => $selectedVariantId,
-                'selected_size' => $selectedSize,
-                'intent_purchase' => $intentPurchase,
-                'delivery' => $delivery,
-                'cart_items' => $cartItems,
-            ]);
-        }
-
         $hasCartItems = $cartItems !== [];
         $hasReadyCartItem = collect($cartItems)->contains(function (array $item): bool {
             $hasModel = $this->cleanNullableString($item['model'] ?? null) !== null
@@ -1443,6 +1426,41 @@ JSON;
 
             return $hasModel && $hasColor && $hasSize;
         });
+
+        $requestedStage = (string) ($normalized['stage'] ?? $state->stage);
+        $checkoutActionRequested = (string) ($normalized['action'] ?? 'text') === 'checkout_request';
+
+        $hasSelectionContext = $selectedProductId !== null
+            || $selectedVariantId !== null
+            || $selectedColorId !== null
+            || $selectedSize !== null
+            || $hasCartItems;
+
+        $hasCompleteSelection = $hasReadyCartItem
+            || (
+                $selectedProductId !== null
+                && $selectedColorId !== null
+                && $selectedSize !== null
+            );
+
+        $shouldTrackMissingSlots = (
+            $checkoutActionRequested
+            || in_array($requestedStage, [self::STAGE_CHECKOUT_READY, self::STAGE_CHECKOUT], true)
+            || in_array($state->stage, [self::STAGE_CHECKOUT_READY, self::STAGE_CHECKOUT], true)
+        ) && $hasCompleteSelection;
+
+        $missingSlots = $shouldTrackMissingSlots ? $normalized['missing_slots'] : [];
+        if ($shouldTrackMissingSlots && $missingSlots === []) {
+            $missingSlots = $this->calculateMissingSlots([
+                'selected_product_id' => $selectedProductId,
+                'selected_variant_id' => $selectedVariantId,
+                'selected_size' => $selectedSize,
+                'intent_purchase' => $intentPurchase,
+                'delivery' => $delivery,
+                'cart_items' => $cartItems,
+                'include_delivery' => $shouldTrackMissingSlots,
+            ]);
+        }
 
         return [
             'slots_json' => $slots,
@@ -1456,6 +1474,8 @@ JSON;
             'delivery_complete' => $this->isDeliveryComplete($delivery),
             'has_cart_items' => $hasCartItems,
             'has_ready_cart_item' => $hasReadyCartItem,
+            'has_selection_context' => $hasSelectionContext,
+            'has_complete_selection' => $hasCompleteSelection,
         ];
     }
 
@@ -1472,6 +1492,22 @@ JSON;
         $stage = isset(self::STAGE_ORDER[$modelStage ?? '']) ? $modelStage : $currentStage;
         if (!isset(self::STAGE_ORDER[$stage])) {
             $stage = self::STAGE_INTEREST;
+        }
+
+        $hasSelectionContext = !empty($slotPatch['has_selection_context']);
+        $hasCompleteSelection = !empty($slotPatch['has_complete_selection']);
+        $checkoutActionRequested = $action === 'checkout_request';
+
+        if ($checkoutActionRequested && !$hasCompleteSelection) {
+            return $hasSelectionContext ? self::STAGE_SELECTION : self::STAGE_INTEREST;
+        }
+
+        if (
+            in_array($action, ['text', 'ask_clarifying', 'send_product_photo', 'send_product_gallery'], true)
+            && $hasSelectionContext
+            && !in_array($stage, [self::STAGE_CHECKOUT_READY, self::STAGE_CHECKOUT], true)
+        ) {
+            return self::STAGE_SELECTION;
         }
 
         if ($stage === self::STAGE_CHECKOUT && !$slotPatch['delivery_complete']) {
@@ -2185,6 +2221,7 @@ JSON;
     {
         $missing = [];
         $intentPurchase = !empty($data['intent_purchase']);
+        $includeDelivery = !empty($data['include_delivery']);
 
         if (!$intentPurchase) {
             return [];
@@ -2231,7 +2268,7 @@ JSON;
         }
 
         $delivery = is_array($data['delivery'] ?? null) ? $data['delivery'] : [];
-        if ($intentPurchase) {
+        if ($intentPurchase && $includeDelivery) {
             foreach (['name', 'phone', 'city', 'warehouse'] as $field) {
                 if ($this->cleanNullableString($delivery[$field] ?? null) === null) {
                     $missing[] = $field;
