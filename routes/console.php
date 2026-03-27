@@ -36,3 +36,9 @@ Schedule::command('packing:auto-release')
     ->withoutOverlapping()
     ->onOneServer()
     ->description('Автоматичне розблокування завислих пакувань');
+
+Schedule::command('meta:sync-recent-conversations --platform=messenger --limit=25 --messages=20')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->description('Fallback sync недавніх Messenger-діалогів з Meta, якщо webhook пропустив повідомлення');

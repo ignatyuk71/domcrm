@@ -260,61 +260,64 @@ class MetaService
             return 0;
         }
 
-        $response = Http::withToken($settings->access_token)->get($this->graphUrl("/{$threadId}/messages"), [
-            'fields' => 'message,created_time,from,attachments,reply_to,id',
-            'limit' => 50,
+        return $this->ingestThreadMessages(
+            $conversation,
+            $recipientId,
+            $platform,
+            (string) $settings->access_token,
+            50
+        );
+    }
+
+    /**
+     * Підтягує недавні діалоги з Meta як fallback, якщо webhook пропустив вхідне повідомлення.
+     */
+    public function syncRecentConversations(string $platform = 'messenger', int $limit = 25, int $messagesLimit = 20): int
+    {
+        $settings = $this->getSettings();
+        $chatService = app(ChatService::class);
+
+        $response = Http::withToken($settings->access_token)->get($this->graphUrl('/me/conversations'), [
+            'platform' => $platform,
+            'fields' => 'participants{id,name},updated_time',
+            'limit' => $limit,
         ]);
 
         if ($response->failed()) {
-            Log::error('Meta API Sync Error', $response->json());
+            Log::error('Meta API recent conversations sync failed', $response->json());
 
             return 0;
         }
 
         $addedCount = 0;
-        foreach (array_reverse($response->json()['data'] ?? []) as $msgData) {
-            $externalMessageId = $msgData['id'] ?? null;
-            if (!$externalMessageId || $chatService->resolveMessageByExternalId($externalMessageId)) {
+        foreach (($response->json()['data'] ?? []) as $thread) {
+            $threadId = (string) ($thread['id'] ?? '');
+            if ($threadId === '') {
                 continue;
             }
 
-            $externalParentId = $msgData['reply_to']['mid'] ?? null;
-            $parentMessageId = $chatService->resolveMessageByExternalId($externalParentId)?->id;
-            $isFromCustomer = isset($msgData['from']['id']) && (string) $msgData['from']['id'] === (string) $recipientId;
-            $sentAt = $this->normalizeTimestamp($msgData['created_time'] ?? null) ?: now();
-
-            $processedAttachments = [];
-            foreach (($msgData['attachments']['data'] ?? []) as $attachment) {
-                $processedAttachments[] = $this->processAttachment($attachment);
+            $participant = $this->resolveExternalParticipant($thread, $settings, $platform);
+            $externalUserId = (string) ($participant['id'] ?? '');
+            if ($externalUserId === '') {
+                continue;
             }
 
-            $text = trim((string) ($msgData['message'] ?? ''));
-            $message = $chatService->storeMessage($conversation, [
-                'parent_message_id' => $parentMessageId,
-                'external_message_id' => $externalMessageId,
-                'external_parent_message_id' => $externalParentId,
-                'direction' => $isFromCustomer ? 'inbound' : 'outbound',
-                'delivery_status' => $isFromCustomer ? 'delivered' : 'sent',
-                'source' => 'sync',
-                'text' => $text !== '' ? $text : null,
-                'sent_at' => $sentAt,
-            ], $processedAttachments);
+            $profile = array_filter([
+                'id' => $externalUserId,
+                'name' => trim((string) ($participant['name'] ?? '')),
+            ], static fn ($value) => $value !== null && $value !== '');
 
-            $originContext = $chatService->extractOriginContext($text, $platform);
-            if ($originContext) {
-                $originContext = $chatService->ensureOriginPreview($originContext);
-                $chatService->syncMessageOrigin($message, $originContext);
-                $chatService->syncConversationOrigin($conversation, $originContext);
-                $message = $message->fresh(['parent', 'attachments']);
-                $conversation = $conversation->fresh();
-            }
+            $customer = $chatService->resolveCustomer($platform, $externalUserId, $profile);
+            $contact = $chatService->findOrCreateContact($settings, $platform, $externalUserId, $customer, $profile);
+            $conversation = $chatService->getOrCreateConversation($contact, $customer, $threadId);
 
-            $conversation = $chatService->updateConversationAfterMessage(
+            $addedCount += $this->ingestThreadMessages(
                 $conversation,
-                $message,
-                $isFromCustomer
+                $externalUserId,
+                $platform,
+                (string) $settings->access_token,
+                $messagesLimit
             );
-            $addedCount++;
         }
 
         return $addedCount;
@@ -588,6 +591,115 @@ class MetaService
         }
 
         return null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $thread
+     * @return array<string, mixed>|null
+     */
+    private function resolveExternalParticipant(array $thread, MetaConnection $settings, string $platform): ?array
+    {
+        $participants = $thread['participants']['data'] ?? [];
+        if (!is_array($participants)) {
+            return null;
+        }
+
+        $ownIds = array_filter([
+            (string) ($settings->facebook_page_id ?? ''),
+            $platform === 'instagram' ? (string) ($settings->instagram_account_id ?? '') : '',
+        ]);
+
+        foreach ($participants as $participant) {
+            if (!is_array($participant)) {
+                continue;
+            }
+
+            $participantId = (string) ($participant['id'] ?? '');
+            if ($participantId === '' || in_array($participantId, $ownIds, true)) {
+                continue;
+            }
+
+            return $participant;
+        }
+
+        return null;
+    }
+
+    private function ingestThreadMessages(
+        \App\Models\ChatConversation $conversation,
+        string $recipientId,
+        string $platform,
+        string $accessToken,
+        int $limit = 50
+    ): int {
+        $threadId = (string) $conversation->external_thread_id;
+        if ($threadId === '') {
+            return 0;
+        }
+
+        $response = Http::withToken($accessToken)->get($this->graphUrl("/{$threadId}/messages"), [
+            'fields' => 'message,created_time,from,attachments,reply_to,id',
+            'limit' => $limit,
+        ]);
+
+        if ($response->failed()) {
+            Log::error('Meta API Sync Error', [
+                'thread_id' => $threadId,
+                'conversation_id' => $conversation->id,
+                'response' => $response->json(),
+            ]);
+
+            return 0;
+        }
+
+        $chatService = app(ChatService::class);
+        $addedCount = 0;
+        foreach (array_reverse($response->json()['data'] ?? []) as $msgData) {
+            $externalMessageId = $msgData['id'] ?? null;
+            if (!$externalMessageId || $chatService->resolveMessageByExternalId($externalMessageId)) {
+                continue;
+            }
+
+            $externalParentId = $msgData['reply_to']['mid'] ?? null;
+            $parentMessageId = $chatService->resolveMessageByExternalId($externalParentId)?->id;
+            $isFromCustomer = isset($msgData['from']['id']) && (string) $msgData['from']['id'] === (string) $recipientId;
+            $sentAt = $this->normalizeTimestamp($msgData['created_time'] ?? null) ?: now();
+
+            $processedAttachments = [];
+            foreach (($msgData['attachments']['data'] ?? []) as $attachment) {
+                $processedAttachments[] = $this->processAttachment($attachment);
+            }
+
+            $text = trim((string) ($msgData['message'] ?? ''));
+            $message = $chatService->storeMessage($conversation, [
+                'parent_message_id' => $parentMessageId,
+                'external_message_id' => $externalMessageId,
+                'external_parent_message_id' => $externalParentId,
+                'direction' => $isFromCustomer ? 'inbound' : 'outbound',
+                'delivery_status' => $isFromCustomer ? 'delivered' : 'sent',
+                'source' => 'sync',
+                'text' => $text !== '' ? $text : null,
+                'sent_at' => $sentAt,
+            ], $processedAttachments);
+
+            $originContext = $chatService->extractOriginContext($text, $platform);
+            if ($originContext) {
+                $originContext = $chatService->ensureOriginPreview($originContext);
+                $chatService->syncMessageOrigin($message, $originContext);
+                $chatService->syncConversationOrigin($conversation, $originContext);
+                $message = $message->fresh(['parent', 'attachments']);
+                $conversation = $conversation->fresh();
+            }
+
+            $conversation = $chatService->updateConversationAfterMessage(
+                $conversation,
+                $message,
+                $isFromCustomer
+            );
+            $addedCount++;
+        }
+
+        return $addedCount;
     }
 
     private function getParticipantProfileSnapshot(string $externalUserId, string $platform): array
