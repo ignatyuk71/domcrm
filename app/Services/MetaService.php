@@ -36,6 +36,10 @@ class MetaService
             return !empty($attachment['url']);
         }));
 
+        $validAttachments = array_values(array_filter(array_map(function ($attachment) use ($platform) {
+            return $this->normalizeOutgoingAttachmentForMeta($attachment, $platform);
+        }, $validAttachments)));
+
         $payload = [
             'recipient' => ['id' => $recipientId],
             'messaging_type' => 'RESPONSE',
@@ -73,6 +77,160 @@ class MetaService
         }
 
         return $response->json();
+    }
+
+    /**
+     * Нормалізує вкладення до формату, який приймає Meta.
+     *
+     * @param  array<string, mixed>  $attachment
+     * @return array<string, mixed>|null
+     */
+    private function normalizeOutgoingAttachmentForMeta(array $attachment, string $platform): ?array
+    {
+        $type = (string) ($attachment['type'] ?? 'image');
+        $url = trim((string) ($attachment['url'] ?? ''));
+
+        if ($url === '') {
+            return null;
+        }
+
+        if ($type !== 'image') {
+            return $attachment;
+        }
+
+        $extension = $this->detectImageExtension($url);
+        if ($extension === null || in_array($extension, ['jpg', 'jpeg', 'png', 'gif'], true)) {
+            return $attachment;
+        }
+
+        $compatibleUrl = $this->ensureMetaCompatibleImageUrl($url, $platform);
+        if ($compatibleUrl === null) {
+            Log::warning('Meta attachment normalization failed', [
+                'platform' => $platform,
+                'original_url' => $url,
+                'extension' => $extension,
+            ]);
+
+            return null;
+        }
+
+        $attachment['url'] = $compatibleUrl;
+
+        return $attachment;
+    }
+
+    private function detectImageExtension(string $url): ?string
+    {
+        $path = parse_url($url, PHP_URL_PATH);
+        if (!is_string($path) || $path === '') {
+            return null;
+        }
+
+        $extension = strtolower((string) pathinfo($path, PATHINFO_EXTENSION));
+
+        return $extension !== '' ? $extension : null;
+    }
+
+    private function ensureMetaCompatibleImageUrl(string $url, string $platform): ?string
+    {
+        $binary = $this->readAttachmentBinary($url);
+        if ($binary === null) {
+            return null;
+        }
+
+        $image = @imagecreatefromstring($binary);
+        if ($image === false) {
+            Log::warning('Meta attachment conversion failed: image decode error', [
+                'platform' => $platform,
+                'original_url' => $url,
+            ]);
+
+            return null;
+        }
+
+        try {
+            ob_start();
+            imagejpeg($image, null, 90);
+            $jpegBinary = ob_get_clean();
+        } finally {
+            imagedestroy($image);
+        }
+
+        if (!is_string($jpegBinary) || $jpegBinary === '') {
+            Log::warning('Meta attachment conversion failed: jpeg encode error', [
+                'platform' => $platform,
+                'original_url' => $url,
+            ]);
+
+            return null;
+        }
+
+        $hash = sha1($platform . '|' . $url);
+        $relativePath = 'meta/compatible/' . date('Y/m') . '/' . $hash . '.jpg';
+
+        if (!Storage::disk('chat_uploads')->exists($relativePath)) {
+            Storage::disk('chat_uploads')->put($relativePath, $jpegBinary);
+            @chmod(public_path('chat/' . $relativePath), 0644);
+        }
+
+        Log::info('Meta attachment normalized to jpeg', [
+            'platform' => $platform,
+            'original_url' => $url,
+            'normalized_url' => 'chat/' . $relativePath,
+        ]);
+
+        return url('chat/' . $relativePath);
+    }
+
+    private function readAttachmentBinary(string $url): ?string
+    {
+        $absolutePath = $this->resolveLocalAttachmentPath($url);
+        if ($absolutePath !== null && is_file($absolutePath)) {
+            $binary = @file_get_contents($absolutePath);
+
+            return is_string($binary) && $binary !== '' ? $binary : null;
+        }
+
+        if (!str_starts_with($url, 'http://') && !str_starts_with($url, 'https://')) {
+            return null;
+        }
+
+        try {
+            $response = Http::timeout(10)->get($url);
+            if ($response->failed()) {
+                Log::warning('Meta attachment download failed', [
+                    'url' => $url,
+                    'status' => $response->status(),
+                ]);
+
+                return null;
+            }
+
+            return $response->body();
+        } catch (\Throwable $e) {
+            Log::warning('Meta attachment download failed', [
+                'url' => $url,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    private function resolveLocalAttachmentPath(string $url): ?string
+    {
+        if (str_starts_with($url, 'http://') || str_starts_with($url, 'https://')) {
+            $appUrl = rtrim((string) config('app.url'), '/');
+            if ($appUrl !== '' && str_starts_with($url, $appUrl)) {
+                $path = parse_url($url, PHP_URL_PATH);
+
+                return is_string($path) && $path !== '' ? public_path(ltrim($path, '/')) : null;
+            }
+
+            return null;
+        }
+
+        return public_path(ltrim($url, '/'));
     }
 
     /**
