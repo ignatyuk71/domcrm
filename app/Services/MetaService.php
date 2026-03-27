@@ -277,11 +277,20 @@ class MetaService
         $settings = $this->getSettings();
         $chatService = app(ChatService::class);
 
-        $response = Http::withToken($settings->access_token)->get($this->graphUrl('/me/conversations'), [
-            'platform' => $platform,
-            'fields' => 'participants{id,name},updated_time',
-            'limit' => $limit,
-        ]);
+        try {
+            $response = Http::withToken($settings->access_token)->get($this->graphUrl('/me/conversations'), [
+                'platform' => $platform,
+                'fields' => 'participants{id,name},updated_time',
+                'limit' => $limit,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Meta API recent conversations sync connection failed', [
+                'platform' => $platform,
+                'error' => $e->getMessage(),
+            ]);
+
+            return 0;
+        }
 
         if ($response->failed()) {
             Log::error('Meta API recent conversations sync failed', $response->json());
@@ -311,13 +320,22 @@ class MetaService
             $contact = $chatService->findOrCreateContact($settings, $platform, $externalUserId, $customer, $profile);
             $conversation = $chatService->getOrCreateConversation($contact, $customer, $threadId);
 
-            $addedCount += $this->ingestThreadMessages(
-                $conversation,
-                $externalUserId,
-                $platform,
-                (string) $settings->access_token,
-                $messagesLimit
-            );
+            try {
+                $addedCount += $this->ingestThreadMessages(
+                    $conversation,
+                    $externalUserId,
+                    $platform,
+                    (string) $settings->access_token,
+                    $messagesLimit
+                );
+            } catch (\Throwable $e) {
+                Log::warning('Meta recent conversation sync skipped thread after error', [
+                    'platform' => $platform,
+                    'thread_id' => $threadId,
+                    'external_user_id' => $externalUserId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
 
         return $addedCount;
@@ -637,10 +655,20 @@ class MetaService
             return 0;
         }
 
-        $response = Http::withToken($accessToken)->get($this->graphUrl("/{$threadId}/messages"), [
-            'fields' => 'message,created_time,from,attachments,reply_to,id',
-            'limit' => $limit,
-        ]);
+        try {
+            $response = Http::withToken($accessToken)->get($this->graphUrl("/{$threadId}/messages"), [
+                'fields' => 'message,created_time,from,attachments,reply_to,id',
+                'limit' => $limit,
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('Meta API Sync Connection Error', [
+                'thread_id' => $threadId,
+                'conversation_id' => $conversation->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return 0;
+        }
 
         if ($response->failed()) {
             Log::error('Meta API Sync Error', [
