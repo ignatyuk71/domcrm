@@ -1658,10 +1658,6 @@ JSON;
 
                 $seenUrls[$url] = true;
                 $attachments[] = $attachment;
-
-                if (count($attachments) >= 8) {
-                    break;
-                }
             }
 
             if ($attachments !== []) {
@@ -1739,10 +1735,6 @@ JSON;
 
                 $seenUrls[$collageUrl] = true;
                 $attachments[] = $attachment;
-
-                if (count($attachments) >= 8) {
-                    return $attachments;
-                }
             }
         }
 
@@ -1768,10 +1760,6 @@ JSON;
 
                             $seenUrls[$collageUrl] = true;
                             $attachments[] = $attachment;
-
-                            if (count($attachments) >= 8) {
-                                return $attachments;
-                            }
                         }
                     }
                 }
@@ -1797,10 +1785,6 @@ JSON;
 
                     $seenUrls[$collageUrl] = true;
                     $attachments[] = $attachment;
-
-                    if (count($attachments) >= 8) {
-                        break;
-                    }
                 }
             }
         }
