@@ -138,6 +138,15 @@ class MetaConnectionService
             ]
         );
 
+        try {
+            $connection = $this->syncWebhookSubscription($connection);
+        } catch (\Throwable $e) {
+            $connection->update([
+                'webhook_subscribed' => false,
+                'last_error' => 'Не вдалося підписати сторінку на webhook: ' . $e->getMessage(),
+            ]);
+        }
+
         return $connection->fresh();
     }
 
@@ -152,6 +161,42 @@ class MetaConnectionService
             'is_active' => false,
             'last_error' => null,
         ]);
+    }
+
+    public function syncWebhookSubscription(?MetaConnection $connection = null): MetaConnection
+    {
+        $connection = $connection ?: $this->current();
+
+        if (!$connection) {
+            throw new RuntimeException('Активне Meta-підключення не знайдено.');
+        }
+
+        if (!$connection->facebook_page_id || !$connection->access_token) {
+            throw new RuntimeException('Для підписки webhook бракує page_id або page access token.');
+        }
+
+        $fields = $this->webhookFields();
+
+        $response = Http::withToken((string) $connection->access_token)
+            ->asForm()
+            ->post($this->graphApiUrl('/' . $connection->facebook_page_id . '/subscribed_apps'), [
+                'subscribed_fields' => implode(',', $fields),
+            ]);
+
+        if (!$response->successful()) {
+            throw new RuntimeException(
+                $response->json('error.message')
+                    ?: 'Meta не підтвердила підписку сторінки на webhook.'
+            );
+        }
+
+        $connection->update([
+            'webhook_subscribed' => true,
+            'webhook_fields' => $fields,
+            'last_error' => $this->normalizeSubscriptionErrorState((string) $connection->last_error),
+        ]);
+
+        return $connection->fresh();
     }
 
     private function exchangeCodeForUserToken(string $code): array
@@ -299,6 +344,18 @@ class MetaConnectionService
         return array_values(array_filter($scopes));
     }
 
+    private function webhookFields(): array
+    {
+        return [
+            'messages',
+            'message_deliveries',
+            'message_reads',
+            'messaging_postbacks',
+            'messaging_optins',
+            'feed',
+        ];
+    }
+
     private function requiredScopes(): array
     {
         return array_values(array_filter([
@@ -314,5 +371,17 @@ class MetaConnectionService
     private function graphApiUrl(string $path): string
     {
         return 'https://graph.facebook.com/' . $this->graphVersion() . $path;
+    }
+
+    private function normalizeSubscriptionErrorState(string $lastError): ?string
+    {
+        $normalized = trim($lastError);
+        if ($normalized === '') {
+            return null;
+        }
+
+        return str_starts_with($normalized, 'Не вдалося підписати сторінку на webhook:')
+            ? null
+            : $normalized;
     }
 }

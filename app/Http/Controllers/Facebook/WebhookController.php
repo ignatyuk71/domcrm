@@ -58,26 +58,49 @@ class WebhookController extends Controller
 
             foreach ($request->input('entry', []) as $entry) {
                 foreach ($entry['messaging'] ?? [] as $event) {
-                    if (isset($event['message'])) {
-                        $this->processMessage($event, $platform, $metaService, $chatService);
-                        continue;
-                    }
+                    try {
+                        if (isset($event['message'])) {
+                            $this->processMessage($event, $platform, $metaService, $chatService);
+                            continue;
+                        }
 
-                    if (isset($event['read'])) {
-                        $this->processReadReceipt($event, $platform);
-                        continue;
-                    }
+                        if (isset($event['read'])) {
+                            $this->processReadReceipt($event, $platform);
+                            continue;
+                        }
 
-                    if (isset($event['delivery'])) {
-                        $this->processDeliveryReceipt($event);
+                        if (isset($event['delivery'])) {
+                            $this->processDeliveryReceipt($event);
+                        }
+                    } catch (\Throwable $e) {
+                        Log::error('Facebook messaging webhook event error', [
+                            'platform' => $platform,
+                            'error' => $e->getMessage(),
+                            'event' => $event,
+                        ]);
                     }
                 }
 
                 foreach ($entry['changes'] ?? [] as $change) {
-                    if (in_array($change['field'] ?? '', ['feed', 'comments'], true)) {
-                        Log::info('Chat comment webhook ignored', [
+                    try {
+                        $processed = $this->processChange($entry, $change, $platform, $metaService, $chatService);
+
+                        if (!$processed) {
+                            Log::info('Chat change webhook ignored', [
+                                'platform' => $platform,
+                                'field' => $change['field'] ?? null,
+                                'item' => data_get($change, 'value.item'),
+                                'verb' => data_get($change, 'value.verb'),
+                                'from_id' => data_get($change, 'value.from.id'),
+                                'comment_id' => data_get($change, 'value.comment_id'),
+                                'post_id' => data_get($change, 'value.post_id'),
+                            ]);
+                        }
+                    } catch (\Throwable $e) {
+                        Log::error('Facebook change webhook event error', [
                             'platform' => $platform,
-                            'field' => $change['field'] ?? null,
+                            'error' => $e->getMessage(),
+                            'change' => $change,
                         ]);
                     }
                 }
@@ -90,6 +113,109 @@ class WebhookController extends Controller
         }
 
         return response('EVENT_RECEIVED', 200);
+    }
+
+    private function processChange(
+        array $entry,
+        array $change,
+        string $platform,
+        MetaService $metaService,
+        ChatService $chatService
+    ): bool {
+        $field = (string) ($change['field'] ?? '');
+        if (!in_array($field, ['feed', 'comments'], true)) {
+            return false;
+        }
+
+        $value = $change['value'] ?? null;
+        if (!is_array($value)) {
+            return false;
+        }
+
+        $externalUserId = trim((string) (data_get($value, 'from.id') ?? data_get($value, 'sender_id') ?? ''));
+        if ($externalUserId === '') {
+            return false;
+        }
+
+        $externalMessageId = $this->resolveChangeExternalMessageId($field, $value);
+        if ($externalMessageId === '') {
+            return false;
+        }
+
+        if (ChatMessage::query()->where('external_message_id', $externalMessageId)->exists()) {
+            return true;
+        }
+
+        $text = $this->resolveChangeText($value);
+        if ($text === '') {
+            return false;
+        }
+
+        $connection = $chatService->getCurrentConnection();
+        $profile = $this->buildProfileFromChange($value, $platform);
+
+        try {
+            $graphProfile = $metaService->getContactProfile($externalUserId, $platform);
+            if ($graphProfile !== []) {
+                $profile = array_merge($profile, $graphProfile);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Meta profile fetch failed for change webhook, using payload fallback', [
+                'platform' => $platform,
+                'external_user_id' => $externalUserId,
+                'field' => $field,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        $customer = $chatService->resolveCustomer($platform, $externalUserId, $profile);
+        $contact = $chatService->findOrCreateContact(
+            $connection,
+            $platform,
+            $externalUserId,
+            $customer,
+            $profile
+        );
+
+        $externalThreadId = $this->resolveChangeThreadId($entry, $value);
+        $conversation = $chatService->getOrCreateConversation($contact, $customer, $externalThreadId);
+
+        $externalParentMessageId = $this->resolveChangeParentExternalMessageId($field, $value);
+        $parentMessageId = $chatService->resolveMessageByExternalId($externalParentMessageId)?->id;
+        $sentAt = $this->resolveChangeTimestamp($value);
+
+        $meta = [
+            'webhook_kind' => 'change',
+            'webhook_field' => $field,
+            'webhook_item' => data_get($value, 'item'),
+            'webhook_verb' => data_get($value, 'verb'),
+            'raw_change' => $change,
+        ];
+
+        $storedMessage = $chatService->storeMessage($conversation, [
+            'parent_message_id' => $parentMessageId,
+            'external_message_id' => $externalMessageId,
+            'external_parent_message_id' => $externalParentMessageId,
+            'direction' => 'inbound',
+            'delivery_status' => 'delivered',
+            'source' => 'webhook',
+            'text' => $text,
+            'meta' => $meta,
+            'sent_at' => $sentAt,
+        ]);
+
+        $originContext = $this->buildOriginContextFromChange($platform, $value);
+        if ($originContext) {
+            $originContext = $chatService->ensureOriginPreview($originContext);
+            $chatService->syncMessageOrigin($storedMessage, $originContext);
+            $chatService->syncConversationOrigin($conversation, $originContext);
+            $storedMessage = $storedMessage->fresh(['parent', 'attachments']);
+            $conversation = $conversation->fresh();
+        }
+
+        $chatService->updateConversationAfterMessage($conversation, $storedMessage, true);
+
+        return true;
     }
 
     private function verifySignature(Request $request): bool
@@ -252,6 +378,121 @@ class WebhookController extends Controller
 
         $conversation = $chatService->updateConversationAfterMessage($conversation, $storedMessage, !$isEcho);
 
+    }
+
+    private function resolveChangeExternalMessageId(string $field, array $value): string
+    {
+        $primaryId = trim((string) (
+            $value['comment_id']
+            ?? $value['message_id']
+            ?? $value['id']
+            ?? $value['mid']
+            ?? ''
+        ));
+
+        if ($primaryId !== '') {
+            return 'change:' . $field . ':' . $primaryId;
+        }
+
+        $hash = sha1(json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+
+        return $hash !== '' ? 'change:' . $field . ':' . $hash : '';
+    }
+
+    private function resolveChangeParentExternalMessageId(string $field, array $value): ?string
+    {
+        $parentId = trim((string) ($value['parent_id'] ?? ''));
+
+        return $parentId !== '' ? 'change:' . $field . ':' . $parentId : null;
+    }
+
+    private function resolveChangeThreadId(array $entry, array $value): ?string
+    {
+        $threadId = trim((string) (
+            $value['thread_id']
+            ?? $value['post_id']
+            ?? $value['comment_id']
+            ?? ($entry['id'] ?? '')
+        ));
+
+        return $threadId !== '' ? $threadId : null;
+    }
+
+    private function resolveChangeText(array $value): string
+    {
+        $text = trim((string) (
+            $value['message']
+            ?? data_get($value, 'text')
+            ?? ''
+        ));
+
+        return $text;
+    }
+
+    private function buildProfileFromChange(array $value, string $platform): array
+    {
+        $name = trim((string) (
+            data_get($value, 'from.name')
+            ?? data_get($value, 'sender_name')
+            ?? ''
+        ));
+
+        if ($name === '') {
+            return [];
+        }
+
+        if ($platform === 'instagram') {
+            return ['name' => $name];
+        }
+
+        return ['name' => $name];
+    }
+
+    private function buildOriginContextFromChange(string $platform, array $value): ?array
+    {
+        $url = trim((string) (
+            $value['permalink_url']
+            ?? $value['link']
+            ?? data_get($value, 'post.permalink_url')
+            ?? ''
+        ));
+
+        $objectType = data_get($value, 'item') === 'comment' ? 'comment' : 'post';
+        $platformLabel = $platform === 'instagram' ? 'Instagram' : 'Facebook';
+
+        return [
+            'kind' => 'comment',
+            'platform' => $platform,
+            'object_type' => $objectType,
+            'object_label' => $objectType === 'comment' ? 'коментаря' : 'допису',
+            'summary' => $objectType === 'comment'
+                ? "Коментар {$platformLabel}"
+                : "Повідомлення {$platformLabel}",
+            'entry_point' => 'meta_change',
+            'url' => $url !== '' ? $url : null,
+            'source_title' => $objectType === 'comment' ? 'Коментар' : 'Джерело',
+            'source_display' => $url !== '' ? $url : null,
+            'comment_id' => $value['comment_id'] ?? null,
+        ];
+    }
+
+    private function resolveChangeTimestamp(array $value): Carbon
+    {
+        $timestamp = $value['created_time'] ?? $value['time'] ?? null;
+
+        if (is_numeric($timestamp)) {
+            return Carbon::createFromTimestampMs((int) $timestamp);
+        }
+
+        if (is_string($timestamp) && trim($timestamp) !== '') {
+            try {
+                return Carbon::parse($timestamp);
+            } catch (\Throwable) {
+                // Нічого не робимо, нижче буде now().
+            }
+        }
+
+        return now();
     }
 
     private function processReadReceipt(array $event, string $platform): void
