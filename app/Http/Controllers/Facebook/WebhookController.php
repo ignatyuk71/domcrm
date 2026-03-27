@@ -55,6 +55,7 @@ class WebhookController extends Controller
 
         try {
             $platform = ($request->input('object') ?? '') === 'instagram' ? 'instagram' : 'messenger';
+            $this->logRawWebhookPayload($request, $platform);
 
             foreach ($request->input('entry', []) as $entry) {
                 foreach ($entry['messaging'] ?? [] as $event) {
@@ -113,6 +114,43 @@ class WebhookController extends Controller
         }
 
         return response('EVENT_RECEIVED', 200);
+    }
+
+    private function logRawWebhookPayload(Request $request, string $platform): void
+    {
+        if ($platform !== 'messenger') {
+            return;
+        }
+
+        $entries = $request->input('entry', []);
+        $changeFields = [];
+        $changeItems = [];
+        $messagingEvents = 0;
+
+        foreach ($entries as $entry) {
+            $messagingEvents += is_array($entry['messaging'] ?? null) ? count($entry['messaging']) : 0;
+
+            foreach ($entry['changes'] ?? [] as $change) {
+                $field = (string) ($change['field'] ?? '');
+                if ($field !== '' && !in_array($field, $changeFields, true)) {
+                    $changeFields[] = $field;
+                }
+
+                $item = (string) data_get($change, 'value.item', '');
+                if ($item !== '' && !in_array($item, $changeItems, true)) {
+                    $changeItems[] = $item;
+                }
+            }
+        }
+
+        Log::info('Messenger webhook raw payload', [
+            'object' => $request->input('object'),
+            'entry_count' => is_array($entries) ? count($entries) : 0,
+            'messaging_events' => $messagingEvents,
+            'change_fields' => $changeFields,
+            'change_items' => $changeItems,
+            'payload' => $request->all(),
+        ]);
     }
 
     private function processChange(
