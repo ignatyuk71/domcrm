@@ -513,6 +513,8 @@ class ChatAiOrchestratorService
             . "Якщо клієнт просить фото конкретного кольору або товару, повертай action=send_product_photo.\n"
             . "Якщо клієнт просить показати кілька конкретних кольорів або кілька конкретних товарів, повертай action=send_product_gallery і заповнюй gallery_items усіма потрібними позиціями.\n"
             . "Якщо клієнт просить показати всі кольори, моделі, варіанти або асортимент, повертай action=send_collage.\n"
+            . "Якщо йдеться про асортимент магазину, використовуй у reply слова 'тапки' або 'тапочки', а не узагальнення 'взуття'.\n"
+            . "Якщо модель ще не визначена і ти показуєш усі доступні моделі, send_collage означає каталог моделей. У такому випадку reply має бути коротким і природним, наприклад: 'Надсилаю варіанти домашніх і вуличних тапок.' або може бути порожнім.\n"
             . "Якщо потрібно лише відповісти текстом, повертай action=text.\n"
             . "Якщо потрібно м'яко уточнити модель або колір, повертай action=ask_clarifying.\n"
             . "Не повертай медіа-дію, якщо в тебе немає конкретної моделі, товару або доступного attachment для виконання. У такому випадку відповідай текстом і коротко уточнюй модель або запит клієнта.\n"
@@ -1641,6 +1643,36 @@ class ChatAiOrchestratorService
         }
 
         if ($attachments === []) {
+            if ($modelPhrase === null && !$productId) {
+                foreach ($this->chatAiKnowledgeService->productCatalogContext(20, 1) as $catalogModel) {
+                    foreach (($catalogModel['collage_urls'] ?? []) as $catalogCollageUrl) {
+                        foreach ($this->explodeMediaUrls((string) $catalogCollageUrl) as $collageUrl) {
+                            if ($collageUrl === '' || isset($seenUrls[$collageUrl])) {
+                                continue;
+                            }
+
+                            $attachment = $this->buildMediaAttachmentPayload(
+                                $collageUrl,
+                                'image',
+                                'collage',
+                                ['product_id' => null, 'variant_id' => null, 'color_id' => null]
+                            );
+
+                            if ($attachment === null) {
+                                continue;
+                            }
+
+                            $seenUrls[$collageUrl] = true;
+                            $attachments[] = $attachment;
+
+                            if (count($attachments) >= 8) {
+                                return $attachments;
+                            }
+                        }
+                    }
+                }
+            }
+
             $mapForProduct = $this->chatAiKnowledgeService->resolveModelMapForProduct($productId, $colorId);
             if ($mapForProduct !== null) {
                 foreach ($this->explodeMediaUrls((string) ($mapForProduct['collage_url'] ?? '')) as $collageUrl) {
