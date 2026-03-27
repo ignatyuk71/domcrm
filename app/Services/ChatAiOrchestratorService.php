@@ -64,7 +64,7 @@ class ChatAiOrchestratorService
             return;
         }
 
-        if (!$this->isLatestInboundWebhookMessage($message->conversation_id, $message->id)) {
+        if (!$this->isLatestInboundMessage($message->conversation_id, $message->id, ['webhook'])) {
             return;
         }
 
