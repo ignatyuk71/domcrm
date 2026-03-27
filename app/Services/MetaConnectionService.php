@@ -119,7 +119,7 @@ class MetaConnectionService
                 'granted_scopes' => $grantedScopes !== [] ? $grantedScopes : $this->scopes(),
                 'verify_token' => $previousConnection?->verify_token ?: Str::random(40),
                 'webhook_secret' => $previousConnection?->webhook_secret ?: Str::random(64),
-                'webhook_fields' => ['messages', 'messaging_postbacks', 'messaging_seen', 'messaging_optins'],
+                'webhook_fields' => $this->webhookFields(),
                 'webhook_subscribed' => false,
                 'is_active' => true,
                 'connected_at' => now(),
