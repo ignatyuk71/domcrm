@@ -6,11 +6,13 @@ use App\Models\ChatContact;
 use App\Models\ChatConversation;
 use App\Models\ChatMessage;
 use App\Models\MetaConnection;
+use App\Services\ChatAiOrchestratorService;
 use App\Services\MetaService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
+use Mockery;
 use Tests\TestCase;
 
 class SyncRecentMetaConversationsTest extends TestCase
@@ -70,6 +72,98 @@ class SyncRecentMetaConversationsTest extends TestCase
         $this->assertSame('sync', $message->source);
     }
 
+    public function test_sync_recent_conversations_triggers_ai_for_fresh_recovered_inbound_message(): void
+    {
+        $createdAt = now()->subMinutes(2)->utc()->format('Y-m-d\TH:i:sO');
+
+        Http::fake([
+            'https://graph.facebook.com/*/me/conversations*' => Http::response([
+                'data' => [[
+                    'id' => 'thread-200',
+                    'participants' => [
+                        'data' => [
+                            ['id' => '103823131052820', 'name' => 'Dream v doma'],
+                            ['id' => 'user-200', 'name' => 'Анастасия Либохоря'],
+                        ],
+                    ],
+                ]],
+            ], 200),
+            'https://graph.facebook.com/*/thread-200/messages*' => Http::response([
+                'data' => [[
+                    'id' => 'mid-200',
+                    'message' => 'Можна замовити тапулі)',
+                    'created_time' => $createdAt,
+                    'from' => ['id' => 'user-200'],
+                ]],
+            ], 200),
+        ]);
+
+        MetaConnection::query()->create([
+            'provider' => 'meta',
+            'name' => 'Dream v doma',
+            'facebook_page_id' => '103823131052820',
+            'access_token' => 'page-token',
+            'verify_token' => 'verify-token',
+            'webhook_secret' => 'webhook-secret',
+            'is_active' => true,
+        ]);
+
+        $orchestrator = Mockery::mock(ChatAiOrchestratorService::class);
+        $orchestrator->shouldReceive('handleRecoveredInboundMessageById')
+            ->once()
+            ->with(Mockery::type('int'));
+        $this->app->instance(ChatAiOrchestratorService::class, $orchestrator);
+
+        app(MetaService::class)->syncRecentConversations('messenger', 10, 10);
+
+        $this->addToAssertionCount(1);
+    }
+
+    public function test_sync_recent_conversations_does_not_trigger_ai_for_old_recovered_message(): void
+    {
+        $createdAt = now()->subHours(2)->utc()->format('Y-m-d\TH:i:sO');
+
+        Http::fake([
+            'https://graph.facebook.com/*/me/conversations*' => Http::response([
+                'data' => [[
+                    'id' => 'thread-300',
+                    'participants' => [
+                        'data' => [
+                            ['id' => '103823131052820', 'name' => 'Dream v doma'],
+                            ['id' => 'user-300', 'name' => 'Іннеса Іванько'],
+                        ],
+                    ],
+                ]],
+            ], 200),
+            'https://graph.facebook.com/*/thread-300/messages*' => Http::response([
+                'data' => [[
+                    'id' => 'mid-300',
+                    'message' => 'Яка вартість?',
+                    'created_time' => $createdAt,
+                    'from' => ['id' => 'user-300'],
+                ]],
+            ], 200),
+        ]);
+
+        MetaConnection::query()->create([
+            'provider' => 'meta',
+            'name' => 'Dream v doma',
+            'facebook_page_id' => '103823131052820',
+            'access_token' => 'page-token',
+            'verify_token' => 'verify-token',
+            'webhook_secret' => 'webhook-secret',
+            'is_active' => true,
+        ]);
+
+        $orchestrator = Mockery::mock(ChatAiOrchestratorService::class);
+        $orchestrator->shouldNotReceive('handleRecoveredInboundMessageById');
+        $this->app->instance(ChatAiOrchestratorService::class, $orchestrator);
+
+        app(MetaService::class)->syncRecentConversations('messenger', 10, 10);
+
+        $this->addToAssertionCount(1);
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -77,6 +171,13 @@ class SyncRecentMetaConversationsTest extends TestCase
         config()->set('services.meta.app_secret', '');
         Bus::fake();
         $this->createMinimalChatSchema();
+    }
+
+    protected function tearDown(): void
+    {
+        Mockery::close();
+
+        parent::tearDown();
     }
 
     private function createMinimalChatSchema(): void

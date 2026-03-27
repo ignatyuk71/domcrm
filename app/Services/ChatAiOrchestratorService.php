@@ -86,12 +86,55 @@ class ChatAiOrchestratorService
         );
     }
 
+    public function handleRecoveredInboundMessageById(int $messageId): void
+    {
+        $message = ChatMessage::query()
+            ->with(['conversation.contact', 'conversation.customer'])
+            ->find($messageId);
+
+        if (!$message || $message->direction !== 'inbound' || $message->source !== 'sync') {
+            return;
+        }
+
+        $sentAt = $message->sent_at ?? $message->created_at;
+        if (!$sentAt || $sentAt->lt(now()->subMinutes(20))) {
+            return;
+        }
+
+        if (!$this->isLatestInboundMessage($message->conversation_id, $message->id, ['webhook', 'sync'])) {
+            return;
+        }
+
+        if ($this->hasOutboundAfterMessage($message)) {
+            return;
+        }
+
+        $conversation = $message->conversation;
+        $contact = $conversation?->contact;
+        $customer = $conversation?->customer;
+        $platform = (string) ($contact?->platform ?? '');
+
+        if (!$conversation || !$contact || !$customer || !in_array($platform, ['messenger', 'instagram'], true)) {
+            return;
+        }
+
+        $this->handleInboundMessage(
+            $conversation,
+            $message,
+            $customer,
+            $contact,
+            $platform,
+            ['webhook', 'sync']
+        );
+    }
+
     public function handleInboundMessage(
         ChatConversation $conversation,
         ChatMessage $inboundMessage,
         Customer $customer,
         ChatContact $contact,
-        string $platform
+        string $platform,
+        array $latestInboundSources = ['webhook']
     ): void {
         if (!$this->isEnabled()) {
             return;
@@ -108,7 +151,7 @@ class ChatAiOrchestratorService
             return;
         }
 
-        if (!$this->isLatestInboundWebhookMessage($conversation->id, $inboundMessage->id)) {
+        if (!$this->isLatestInboundMessage($conversation->id, $inboundMessage->id, $latestInboundSources)) {
             return;
         }
 
@@ -3019,16 +3062,33 @@ JSON;
         return (int) $this->settings()['reply_delay_seconds'];
     }
 
-    private function isLatestInboundWebhookMessage(int $conversationId, int $messageId): bool
+    private function isLatestInboundMessage(int $conversationId, int $messageId, array $sources = ['webhook']): bool
     {
         $latestInboundId = ChatMessage::query()
             ->where('conversation_id', $conversationId)
             ->where('direction', 'inbound')
-            ->where('source', 'webhook')
+            ->whereIn('source', $sources)
             ->latest('id')
             ->value('id');
 
         return (int) $latestInboundId === $messageId;
+    }
+
+    private function hasOutboundAfterMessage(ChatMessage $message): bool
+    {
+        $sentAt = $message->sent_at ?? $message->created_at;
+
+        return ChatMessage::query()
+            ->where('conversation_id', $message->conversation_id)
+            ->where('direction', 'outbound')
+            ->where(function ($query) use ($sentAt, $message): void {
+                $query->where('sent_at', '>', $sentAt)
+                    ->orWhere(function ($nested) use ($sentAt, $message): void {
+                        $nested->where('sent_at', $sentAt)
+                            ->where('id', '>', $message->id);
+                    });
+            })
+            ->exists();
     }
 
     /**

@@ -260,13 +260,15 @@ class MetaService
             return 0;
         }
 
-        return $this->ingestThreadMessages(
+        $result = $this->ingestThreadMessages(
             $conversation,
             $recipientId,
             $platform,
             (string) $settings->access_token,
             50
         );
+
+        return (int) ($result['added'] ?? 0);
     }
 
     /**
@@ -321,13 +323,20 @@ class MetaService
             $conversation = $chatService->getOrCreateConversation($contact, $customer, $threadId);
 
             try {
-                $addedCount += $this->ingestThreadMessages(
+                $result = $this->ingestThreadMessages(
                     $conversation,
                     $externalUserId,
                     $platform,
                     (string) $settings->access_token,
                     $messagesLimit
                 );
+
+                $addedCount += (int) ($result['added'] ?? 0);
+
+                $latestRecoveredInboundMessageId = (int) ($result['latest_inbound_message_id'] ?? 0);
+                if ($latestRecoveredInboundMessageId > 0 && $this->shouldTriggerRecoveredInboundAi($latestRecoveredInboundMessageId)) {
+                    $this->triggerRecoveredInboundAi($latestRecoveredInboundMessageId);
+                }
             } catch (\Throwable $e) {
                 Log::warning('Meta recent conversation sync skipped thread after error', [
                     'platform' => $platform,
@@ -649,10 +658,13 @@ class MetaService
         string $platform,
         string $accessToken,
         int $limit = 50
-    ): int {
+    ): array {
         $threadId = (string) $conversation->external_thread_id;
         if ($threadId === '') {
-            return 0;
+            return [
+                'added' => 0,
+                'latest_inbound_message_id' => null,
+            ];
         }
 
         try {
@@ -667,7 +679,10 @@ class MetaService
                 'error' => $e->getMessage(),
             ]);
 
-            return 0;
+            return [
+                'added' => 0,
+                'latest_inbound_message_id' => null,
+            ];
         }
 
         if ($response->failed()) {
@@ -677,11 +692,15 @@ class MetaService
                 'response' => $response->json(),
             ]);
 
-            return 0;
+            return [
+                'added' => 0,
+                'latest_inbound_message_id' => null,
+            ];
         }
 
         $chatService = app(ChatService::class);
         $addedCount = 0;
+        $latestInboundMessageId = null;
         foreach (array_reverse($response->json()['data'] ?? []) as $msgData) {
             $externalMessageId = $msgData['id'] ?? null;
             if (!$externalMessageId || $chatService->resolveMessageByExternalId($externalMessageId)) {
@@ -725,9 +744,56 @@ class MetaService
                 $isFromCustomer
             );
             $addedCount++;
+
+            if ($isFromCustomer) {
+                $latestInboundMessageId = (int) $message->id;
+            }
         }
 
-        return $addedCount;
+        return [
+            'added' => $addedCount,
+            'latest_inbound_message_id' => $latestInboundMessageId,
+        ];
+    }
+
+    private function triggerRecoveredInboundAi(int $messageId): void
+    {
+        try {
+            app(ChatAiOrchestratorService::class)->handleRecoveredInboundMessageById($messageId);
+        } catch (\Throwable $e) {
+            Log::warning('Meta recent conversation sync AI trigger failed', [
+                'message_id' => $messageId,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function shouldTriggerRecoveredInboundAi(int $messageId): bool
+    {
+        $message = ChatMessage::query()
+            ->select(['id', 'conversation_id', 'direction', 'source', 'sent_at', 'created_at'])
+            ->find($messageId);
+
+        if (!$message || $message->direction !== 'inbound' || $message->source !== 'sync') {
+            return false;
+        }
+
+        $sentAt = $message->sent_at ?? $message->created_at;
+        if (!$sentAt || $sentAt->lt(now()->subMinutes(20))) {
+            return false;
+        }
+
+        return !ChatMessage::query()
+            ->where('conversation_id', $message->conversation_id)
+            ->where('direction', 'outbound')
+            ->where(function ($query) use ($sentAt, $message): void {
+                $query->where('sent_at', '>', $sentAt)
+                    ->orWhere(function ($nested) use ($sentAt, $message): void {
+                        $nested->where('sent_at', $sentAt)
+                            ->where('id', '>', $message->id);
+                    });
+            })
+            ->exists();
     }
 
     private function getParticipantProfileSnapshot(string $externalUserId, string $platform): array
