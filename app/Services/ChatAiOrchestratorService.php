@@ -178,22 +178,19 @@ class ChatAiOrchestratorService
             'started_at' => $startedAt,
         ]);
 
+        $rawOutput = '';
+
         try {
             [$rawOutput, $usage] = $this->callOpenAi($messages, $agent);
-            $normalized = $this->normalizeModelPayload($this->decodeModelJson($rawOutput));
-
-            $slotPatch = $this->buildSlotPatch($state, $normalized, $inputText);
-            $nextStage = $this->resolveNextStage($stageBefore, $normalized['stage'], $slotPatch, (string) ($normalized['action'] ?? 'text'));
-            $reply = $this->buildSafeReply($normalized['reply'], $nextStage, $slotPatch);
-            $mediaAttachments = $this->resolveAiMediaAttachments($inputText, $normalized, $state, $slotPatch);
-            $primaryMediaAttachment = $mediaAttachments[0] ?? null;
-            if ($primaryMediaAttachment !== null) {
-                if ($this->shouldSuppressTextForMediaAttachment($inputText, $normalized, $primaryMediaAttachment)) {
-                    $reply = '';
-                } else {
-                    $reply = $this->sanitizeReplyForMediaAttachment($reply, $primaryMediaAttachment);
-                }
-            }
+            [$rawOutput, $usage, $normalized, $slotPatch, $nextStage, $reply, $mediaAttachments] = $this->prepareStructuredResponse(
+                $agent,
+                $messages,
+                $rawOutput,
+                $usage,
+                $state,
+                $stageBefore,
+                $inputText
+            );
 
             if ($reply === '' && $mediaAttachments === []) {
                 throw new \RuntimeException('Chat AI: порожня відповідь моделі після санітизації.');
@@ -337,6 +334,7 @@ class ChatAiOrchestratorService
                 'status' => 'failed',
                 'error_code' => 'ai_orchestration_failed',
                 'error_message' => Str::limit($e->getMessage(), 900),
+                'output_text' => $rawOutput !== '' ? $rawOutput : null,
                 'latency_ms' => $latencyMs,
                 'finished_at' => now(),
             ]);
@@ -518,6 +516,8 @@ class ChatAiOrchestratorService
             . "Якщо потрібно лише відповісти текстом, повертай action=text.\n"
             . "Якщо потрібно м'яко уточнити модель або колір, повертай action=ask_clarifying.\n"
             . "Якщо клієнт питає про колір, якого немає у поточній моделі, не відправляй фото чи колаж. Поверни action=text і коротко скажи, що такого кольору немає, після чого переліч доступні кольори цієї моделі.\n"
+            . "Для action=text, action=ask_clarifying та action=checkout_request поле reply обов'язково має бути непорожнім. На питання про ціну, розміри, наявність, матеріал, доставку чи оформлення не можна повертати порожній reply.\n"
+            . "action=none дозволений тільки для технічних або дубльованих повідомлень. На нормальне повідомлення клієнта не повертай action=none з порожнім reply.\n"
             . "На етапі interest не вимагай розмір, якщо клієнт просить фото, кольори, модель, усі варіанти або просто цікавиться товаром. У таких запитах спочатку покажи фото/варіанти/кольори і лише потім, за потреби, м'яко уточнюй колір або модель.\n"
             . "Не проси розмір, доки клієнт сам не питає про наявність конкретного розміру, підбір або не переходить до замовлення.\n"
             . "Не став жодних додаткових питань, якщо користувач просить просто показати фото, модель, кольори або асортимент.\n"
@@ -570,6 +570,47 @@ class ChatAiOrchestratorService
         ];
 
         return 'Контекст діалогу: ' . json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    /**
+     * @param  array<int, array{role:string,content:string}>  $messages
+     * @param  array{prompt_tokens:?int,completion_tokens:?int,total_tokens:?int}  $usage
+     * @return array{0:string,1:array{prompt_tokens:?int,completion_tokens:?int,total_tokens:?int},2:array<string,mixed>,3:array<string,mixed>,4:string,5:string,6:array<int,array<string,mixed>>}
+     */
+    private function prepareStructuredResponse(
+        ChatAiAgent $agent,
+        array $messages,
+        string $rawOutput,
+        array $usage,
+        ChatAiConversationState $state,
+        string $stageBefore,
+        string $inputText
+    ): array {
+        $attempt = 0;
+
+        while (true) {
+            $normalized = $this->normalizeModelPayload($this->decodeModelJson($rawOutput));
+            $slotPatch = $this->buildSlotPatch($state, $normalized, $inputText);
+            $nextStage = $this->resolveNextStage($stageBefore, $normalized['stage'], $slotPatch, (string) ($normalized['action'] ?? 'text'));
+            $reply = $this->buildSafeReply($normalized['reply'], $nextStage, $slotPatch);
+            $mediaAttachments = $this->resolveAiMediaAttachments($inputText, $normalized, $state, $slotPatch);
+            $primaryMediaAttachment = $mediaAttachments[0] ?? null;
+
+            if ($primaryMediaAttachment !== null) {
+                if ($this->shouldSuppressTextForMediaAttachment($inputText, $normalized, $primaryMediaAttachment)) {
+                    $reply = '';
+                } else {
+                    $reply = $this->sanitizeReplyForMediaAttachment($reply, $primaryMediaAttachment);
+                }
+            }
+
+            if (!$this->shouldRetryForEmptyReply($normalized, $reply, $mediaAttachments, $attempt)) {
+                return [$rawOutput, $usage, $normalized, $slotPatch, $nextStage, $reply, $mediaAttachments];
+            }
+
+            [$rawOutput, $usage] = $this->repairEmptyReplyResponse($agent, $messages, $rawOutput, $inputText);
+            $attempt++;
+        }
     }
 
     /**
@@ -903,6 +944,82 @@ class ChatAiOrchestratorService
         ];
     }
 
+    /**
+     * @param  array<int, array{role:string,content:string}>  $messages
+     * @return array{0:string,1:array{prompt_tokens:?int,completion_tokens:?int,total_tokens:?int}}
+     */
+    private function repairEmptyReplyResponse(
+        ChatAiAgent $agent,
+        array $messages,
+        string $raw,
+        string $inputText
+    ): array {
+        $baseUrl = rtrim((string) config('services.openai.base_url', 'https://api.openai.com/v1'), '/');
+        $timeout = max(5, (int) config('services.openai.timeout', 30));
+        $apiKey = (string) config('services.openai.api_key');
+
+        $retryMessages = $messages;
+        $retryMessages[] = [
+            'role' => 'system',
+            'content' => implode("\n", [
+                'Попередня спроба повернула порожню або занадто агресивно санітизовану відповідь.',
+                'Згенеруй відповідь заново у валідному JSON.',
+                'Якщо клієнт не просить медіа, не повертай порожній reply.',
+                'Для звичайних питань про ціну, розмір, наявність, характеристики, доставку або оформлення використовуй action=text і непорожній reply.',
+                'Для медіа-дій reply може бути порожнім або дуже коротким.',
+                'Не повертай action=none на нормальне повідомлення клієнта: ' . $inputText,
+            ]),
+        ];
+        $retryMessages[] = [
+            'role' => 'assistant',
+            'content' => 'Попередня сира відповідь, яку треба виправити: ' . Str::limit($raw, 1200),
+        ];
+
+        $payload = [
+            'model' => (string) ($agent->model ?: config('services.openai.model', 'gpt-4.1-mini')),
+            'messages' => $retryMessages,
+            'temperature' => 0,
+            'max_tokens' => max(700, $this->resolveStructuredMaxTokens($agent)),
+            'response_format' => ['type' => 'json_object'],
+        ];
+
+        $response = $this->performOpenAiRequest($baseUrl, $apiKey, $timeout, $payload);
+        if ($response->failed()) {
+            $errorBody = (string) $response->body();
+            $supportsFallback = str_contains(mb_strtolower($errorBody), 'response_format')
+                || str_contains(mb_strtolower($errorBody), 'json_object');
+
+            if ($supportsFallback) {
+                unset($payload['response_format']);
+                $response = $this->performOpenAiRequest($baseUrl, $apiKey, $timeout, $payload);
+            }
+        }
+
+        if ($response->failed()) {
+            throw new \RuntimeException(
+                'Не вдалося перегенерувати непорожню JSON-відповідь. OpenAI HTTP '
+                . $response->status() . ': ' . Str::limit((string) $response->body(), 500)
+            );
+        }
+
+        $json = $response->json();
+        $content = data_get($json, 'choices.0.message.content');
+        $retriedRaw = $this->normalizeOpenAiContent($content);
+
+        if (!$this->isValidModelJson($retriedRaw)) {
+            throw new \RuntimeException('Повторна генерація після порожнього reply повернула невалідний JSON.');
+        }
+
+        return [
+            $retriedRaw,
+            [
+                'prompt_tokens' => $this->nullableInt(data_get($json, 'usage.prompt_tokens')),
+                'completion_tokens' => $this->nullableInt(data_get($json, 'usage.completion_tokens')),
+                'total_tokens' => $this->nullableInt(data_get($json, 'usage.total_tokens')),
+            ],
+        ];
+    }
+
     private function isValidModelJson(string $raw): bool
     {
         try {
@@ -943,6 +1060,21 @@ class ChatAiOrchestratorService
         $trimmed = str_replace(["\xEF\xBB\xBF", '“', '”', '’'], ['', '"', '"', "'"], $trimmed);
 
         return trim($trimmed);
+    }
+
+    /**
+     * @param  array<string,mixed>  $normalized
+     * @param  array<int,array<string,mixed>>  $mediaAttachments
+     */
+    private function shouldRetryForEmptyReply(array $normalized, string $reply, array $mediaAttachments, int $attempt): bool
+    {
+        if ($attempt > 0 || $reply !== '' || $mediaAttachments !== []) {
+            return false;
+        }
+
+        $action = (string) ($normalized['action'] ?? 'text');
+
+        return in_array($action, ['text', 'ask_clarifying', 'checkout_request', 'none'], true);
     }
 
     private function resolveStructuredMaxTokens(ChatAiAgent $agent): int
