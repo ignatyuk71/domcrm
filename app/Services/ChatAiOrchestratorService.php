@@ -515,6 +515,7 @@ class ChatAiOrchestratorService
             . "Якщо клієнт просить показати всі кольори, моделі, варіанти або асортимент, повертай action=send_collage.\n"
             . "Якщо потрібно лише відповісти текстом, повертай action=text.\n"
             . "Якщо потрібно м'яко уточнити модель або колір, повертай action=ask_clarifying.\n"
+            . "Не повертай медіа-дію, якщо в тебе немає конкретної моделі, товару або доступного attachment для виконання. У такому випадку відповідай текстом і коротко уточнюй модель або запит клієнта.\n"
             . "Якщо клієнт питає про колір, якого немає у поточній моделі, не відправляй фото чи колаж. Поверни action=text і коротко скажи, що такого кольору немає, після чого переліч доступні кольори цієї моделі.\n"
             . "Для action=text, action=ask_clarifying та action=checkout_request поле reply обов'язково має бути непорожнім. На питання про ціну, розміри, наявність, матеріал, доставку чи оформлення не можна повертати порожній reply.\n"
             . "action=none дозволений тільки для технічних або дубльованих повідомлень. На нормальне повідомлення клієнта не повертай action=none з порожнім reply.\n"
@@ -1072,9 +1073,7 @@ class ChatAiOrchestratorService
             return false;
         }
 
-        $action = (string) ($normalized['action'] ?? 'text');
-
-        return in_array($action, ['text', 'ask_clarifying', 'checkout_request', 'none'], true);
+        return true;
     }
 
     private function resolveStructuredMaxTokens(ChatAiAgent $agent): int
