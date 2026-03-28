@@ -51,7 +51,7 @@ class ChatAiOrchestratorService
             return;
         }
 
-        $delaySeconds = $this->resolveReplyDelaySeconds();
+        $delaySeconds = $this->resolveDebounceSeconds();
         if ($delaySeconds > 0) {
             usleep($delaySeconds * 1_000_000);
         }
@@ -64,7 +64,8 @@ class ChatAiOrchestratorService
             return;
         }
 
-        if (!$this->shouldProcessBufferedInbound($message)) {
+        // Debounce на рівні діалогу: обробляємо лише останнє вхідне повідомлення.
+        if (!$this->isLatestInboundMessage($message->conversation_id, $message->id, ['webhook'])) {
             return;
         }
 
@@ -3097,11 +3098,6 @@ JSON;
         return (bool) $this->settings()['allow_assigned_conversations'];
     }
 
-    private function resolveReplyDelaySeconds(): int
-    {
-        return (int) $this->settings()['reply_delay_seconds'];
-    }
-
     private function resolveDebounceSeconds(): int
     {
         $seconds = (int) $this->settings()['reply_delay_seconds'];
@@ -3136,41 +3132,6 @@ JSON;
                     });
             })
             ->exists();
-    }
-
-    private function shouldProcessBufferedInbound(ChatMessage $message): bool
-    {
-        if (!$this->isLatestInboundMessage($message->conversation_id, $message->id, ['webhook'])) {
-            return false;
-        }
-
-        $sentAt = $message->sent_at ?? $message->created_at;
-        if (!$sentAt) {
-            return true;
-        }
-
-        $debounceSeconds = $this->resolveDebounceSeconds();
-        // Обчислюємо "вік" повідомлення коректно: минуле повідомлення має давати додатній elapsed.
-        $elapsed = $sentAt->diffInSeconds(now(), false);
-        if ($elapsed < 0) {
-            $elapsed = 0;
-        }
-        if ($elapsed >= $debounceSeconds) {
-            return true;
-        }
-
-        $remaining = max(1, $debounceSeconds - $elapsed);
-        $this->scheduleBufferedRetry($message->id, $remaining);
-
-        return false;
-    }
-
-    private function scheduleBufferedRetry(int $messageId, int $delaySeconds): void
-    {
-        dispatch(function () use ($messageId, $delaySeconds): void {
-            usleep($delaySeconds * 1_000_000);
-            app(self::class)->handleBufferedInboundMessageById($messageId);
-        })->afterResponse();
     }
 
     /**
