@@ -11,6 +11,7 @@ use App\Models\ChatStage;
 use App\Models\Customer;
 use App\Models\MetaConnection;
 use Carbon\Carbon;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -225,10 +226,66 @@ class ChatService
         $conversation->customer_id = $customer?->id ?: $contact->customer_id;
         $conversation->stage_id = $conversation->stage_id ?: $defaultStageId;
         $conversation->status = $conversation->status ?: 'open';
-        $conversation->external_thread_id = $externalThreadId ?: $conversation->external_thread_id;
-        $conversation->save();
+        $resolvedThreadId = $this->resolveAvailableExternalThreadId(
+            (int) $contact->meta_connection_id,
+            $externalThreadId,
+            $conversation->exists ? (int) $conversation->id : null
+        );
+        $conversation->external_thread_id = $resolvedThreadId ?: $conversation->external_thread_id;
+
+        try {
+            $conversation->save();
+        } catch (QueryException $e) {
+            // Не валимо webhook, якщо thread_id уже зайнятий іншим діалогом.
+            if ($this->isThreadUniqueConstraintViolation($e)) {
+                $conversation->external_thread_id = null;
+                $conversation->save();
+
+                Log::warning('Chat conversation thread id conflict resolved by fallback', [
+                    'contact_id' => $contact->id,
+                    'meta_connection_id' => $contact->meta_connection_id,
+                    'requested_thread_id' => $externalThreadId,
+                ]);
+            } else {
+                throw $e;
+            }
+        }
 
         return $conversation;
+    }
+
+    private function resolveAvailableExternalThreadId(
+        int $metaConnectionId,
+        ?string $externalThreadId,
+        ?int $currentConversationId = null
+    ): ?string {
+        $threadId = trim((string) $externalThreadId);
+        if ($threadId === '') {
+            return null;
+        }
+
+        $existingConversationId = ChatConversation::query()
+            ->where('meta_connection_id', $metaConnectionId)
+            ->where('external_thread_id', $threadId)
+            ->value('id');
+
+        if (!$existingConversationId) {
+            return $threadId;
+        }
+
+        if ($currentConversationId !== null && (int) $existingConversationId === $currentConversationId) {
+            return $threadId;
+        }
+
+        return null;
+    }
+
+    private function isThreadUniqueConstraintViolation(QueryException $e): bool
+    {
+        $message = mb_strtolower((string) $e->getMessage());
+
+        return str_contains($message, 'chat_conversations_thread_unique')
+            || str_contains($message, 'duplicate entry');
     }
 
     public function storeMessage(
