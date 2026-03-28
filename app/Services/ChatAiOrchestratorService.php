@@ -1656,11 +1656,6 @@ JSON;
         array $slotPatch
     ): array {
         $action = (string) ($normalized['action'] ?? 'text');
-        if ($this->shouldForceCollageFromInput($inputText, $normalized, $state, $slotPatch)) {
-            $action = 'send_collage';
-        }
-        $normalized['action'] = $action;
-
         if (!$this->actionRequiresMedia($action)) {
             return [];
         }
@@ -1729,44 +1724,6 @@ JSON;
         $singleAttachment = $this->resolveAiMediaAttachment($inputText, $normalized, $state, $slotPatch);
 
         return $singleAttachment !== null ? [$singleAttachment] : [];
-    }
-
-    private function shouldForceCollageFromInput(
-        string $inputText,
-        array $normalized,
-        ChatAiConversationState $state,
-        array $slotPatch
-    ): bool {
-        $action = (string) ($normalized['action'] ?? 'text');
-        if (in_array($action, ['send_collage', 'send_product_gallery', 'send_product_photo'], true)) {
-            return false;
-        }
-
-        if (in_array($state->stage, [self::STAGE_CHECKOUT_READY, self::STAGE_CHECKOUT], true)) {
-            return false;
-        }
-
-        $text = mb_strtolower(trim($inputText));
-        if ($text === '') {
-            return false;
-        }
-
-        if (
-            preg_match('/\b(оформ|замовл|доставка|передоплат|телефон|відділен|поштомат|адрес)\b/ui', $text) === 1
-        ) {
-            return false;
-        }
-
-        $isBroadCatalogRequest = preg_match(
-            '/\b(ціна|цена|скільки|які|який|покаж|показати|фото|асортимент|ассортимент|наявн|налич)\b/ui',
-            $text
-        ) === 1;
-
-        if (!$isBroadCatalogRequest) {
-            return false;
-        }
-
-        return true;
     }
 
     private function prependGreetingIfNeeded(string $reply, int $conversationId): string
