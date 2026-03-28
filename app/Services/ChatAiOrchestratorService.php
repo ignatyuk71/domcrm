@@ -667,18 +667,9 @@ JSON;
             $normalized = $this->normalizeModelPayload($this->decodeModelJson($rawOutput));
             $slotPatch = $this->buildSlotPatch($state, $normalized, $inputText);
             $nextStage = $this->resolveNextStage($stageBefore, $normalized['stage'], $slotPatch, (string) ($normalized['action'] ?? 'text'));
-            $reply = $this->buildSafeReply($normalized['reply'], $nextStage, $slotPatch);
-            $reply = $this->compactReplyForPropertyQuestion($reply, $inputText, $normalized);
-            $reply = $this->enforceCheckoutReplyConsistency($reply, $normalized, $slotPatch);
+            // Passthrough режим: віддаємо текст відповіді рівно так, як повернула модель.
+            $reply = (string) ($normalized['reply'] ?? '');
             $mediaAttachments = $this->resolveAiMediaAttachments($inputText, $normalized, $state, $slotPatch);
-            $primaryMediaAttachment = $mediaAttachments[0] ?? null;
-
-            if ($primaryMediaAttachment !== null) {
-                $reply = $this->sanitizeReplyForMediaAttachment($reply, $primaryMediaAttachment);
-                if ($reply === '') {
-                    $reply = $this->buildMediaFallbackReply($normalized, $primaryMediaAttachment);
-                }
-            }
 
             if (!$this->shouldRetryForEmptyReply($normalized, $reply, $mediaAttachments, $attempt)) {
                 return [$rawOutput, $usage, $normalized, $slotPatch, $nextStage, $reply, $mediaAttachments];
