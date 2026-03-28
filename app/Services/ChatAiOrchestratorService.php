@@ -235,6 +235,7 @@ class ChatAiOrchestratorService
                 $stageBefore,
                 $inputText
             );
+            $reply = $this->prependGreetingIfNeeded($reply, $conversation->id);
 
             if ($reply === '' && $mediaAttachments === []) {
                 throw new \RuntimeException('Chat AI: порожня відповідь моделі після санітизації.');
@@ -1655,6 +1656,11 @@ JSON;
         array $slotPatch
     ): array {
         $action = (string) ($normalized['action'] ?? 'text');
+        if ($this->shouldForceCollageFromInput($inputText, $normalized, $state, $slotPatch)) {
+            $action = 'send_collage';
+        }
+        $normalized['action'] = $action;
+
         if (!$this->actionRequiresMedia($action)) {
             return [];
         }
@@ -1723,6 +1729,83 @@ JSON;
         $singleAttachment = $this->resolveAiMediaAttachment($inputText, $normalized, $state, $slotPatch);
 
         return $singleAttachment !== null ? [$singleAttachment] : [];
+    }
+
+    private function shouldForceCollageFromInput(
+        string $inputText,
+        array $normalized,
+        ChatAiConversationState $state,
+        array $slotPatch
+    ): bool {
+        $action = (string) ($normalized['action'] ?? 'text');
+        if (in_array($action, ['send_collage', 'send_product_gallery', 'send_product_photo'], true)) {
+            return false;
+        }
+
+        if (in_array($state->stage, [self::STAGE_CHECKOUT_READY, self::STAGE_CHECKOUT], true)) {
+            return false;
+        }
+
+        $text = mb_strtolower(trim($inputText));
+        if ($text === '') {
+            return false;
+        }
+
+        if (
+            preg_match('/\b(оформ|замовл|доставка|передоплат|телефон|відділен|поштомат|адрес)\b/ui', $text) === 1
+        ) {
+            return false;
+        }
+
+        $isBroadCatalogRequest = preg_match(
+            '/\b(ціна|цена|скільки|які|який|покаж|показати|фото|асортимент|ассортимент|наявн|налич)\b/ui',
+            $text
+        ) === 1;
+
+        if (!$isBroadCatalogRequest) {
+            return false;
+        }
+
+        $selectedProductId = $this->nullableInt($slotPatch['selected_product_id'] ?? null)
+            ?: $state->selected_product_id
+            ?: $this->nullableInt($normalized['selected_product_id'] ?? null);
+        $selectedModelPhrase = $this->cleanNullableString($normalized['model_phrase'] ?? null)
+            ?: $this->cleanNullableString($slotPatch['selected_model_phrase'] ?? null)
+            ?: $this->cleanNullableString($state->slots_json['selected_model_phrase'] ?? null);
+
+        if ($selectedProductId !== null) {
+            return false;
+        }
+
+        return $selectedModelPhrase === null || preg_match('/\b(домашн|вуличн)\b/ui', $text) === 1;
+    }
+
+    private function prependGreetingIfNeeded(string $reply, int $conversationId): string
+    {
+        $cleanReply = trim($reply);
+        if ($cleanReply === '') {
+            return $cleanReply;
+        }
+
+        $alreadyHasSystemOutbound = ChatMessage::query()
+            ->where('conversation_id', $conversationId)
+            ->where('direction', 'outbound')
+            ->where('source', 'system')
+            ->exists();
+
+        if ($alreadyHasSystemOutbound) {
+            return $cleanReply;
+        }
+
+        if (
+            mb_stripos($cleanReply, 'віта') !== false
+            || mb_stripos($cleanReply, 'менеджер') !== false
+        ) {
+            return $cleanReply;
+        }
+
+        return "Вітаю! Я AI-асистент, допоможу з вибором і замовленням. Якщо потрібен менеджер — напишіть \"менеджер\".\n\n"
+            . $cleanReply;
     }
 
     /**
