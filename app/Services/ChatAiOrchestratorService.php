@@ -1768,12 +1768,28 @@ JSON;
         $attachments = [];
         $seenUrls = [];
 
-        $productId = $this->nullableInt($slotPatch['selected_product_id'] ?? null) ?: $state->selected_product_id;
-        $variantId = $this->nullableInt($slotPatch['selected_variant_id'] ?? null) ?: $state->selected_variant_id;
-        $colorId = $this->nullableInt($slotPatch['selected_color_id'] ?? null) ?: $state->selected_color_id;
-        $modelPhrase = $this->cleanNullableString($normalized['model_phrase'] ?? null)
-            ?: $this->cleanNullableString($slotPatch['selected_model_phrase'] ?? null)
-            ?: $this->cleanNullableString($state->slots_json['selected_model_phrase'] ?? null);
+        $isBroadCollageIntent = (string) ($normalized['action'] ?? '') === 'send_collage'
+            && $this->cleanNullableString($normalized['model_phrase'] ?? null) === null
+            && $this->nullableInt($normalized['selected_product_id'] ?? null) === null
+            && $this->nullableInt($normalized['selected_variant_id'] ?? null) === null
+            && empty($normalized['gallery_items'] ?? []);
+
+        $productId = $isBroadCollageIntent
+            ? null
+            : ($this->nullableInt($slotPatch['selected_product_id'] ?? null) ?: $state->selected_product_id);
+        $variantId = $isBroadCollageIntent
+            ? null
+            : ($this->nullableInt($slotPatch['selected_variant_id'] ?? null) ?: $state->selected_variant_id);
+        $colorId = $isBroadCollageIntent
+            ? null
+            : ($this->nullableInt($slotPatch['selected_color_id'] ?? null) ?: $state->selected_color_id);
+        $modelPhrase = $isBroadCollageIntent
+            ? null
+            : (
+                $this->cleanNullableString($normalized['model_phrase'] ?? null)
+                ?: $this->cleanNullableString($slotPatch['selected_model_phrase'] ?? null)
+                ?: $this->cleanNullableString($state->slots_json['selected_model_phrase'] ?? null)
+            );
 
         $mapped = null;
         if ($modelPhrase !== null) {
