@@ -64,7 +64,7 @@ class ChatAiOrchestratorService
             return;
         }
 
-        if (!$this->isLatestInboundMessage($message->conversation_id, $message->id, ['webhook'])) {
+        if (!$this->shouldProcessBufferedInbound($message)) {
             return;
         }
 
@@ -3046,6 +3046,13 @@ JSON;
         return (int) $this->settings()['reply_delay_seconds'];
     }
 
+    private function resolveDebounceSeconds(): int
+    {
+        $seconds = (int) $this->settings()['reply_delay_seconds'];
+
+        return min(25, max(8, $seconds));
+    }
+
     private function isLatestInboundMessage(int $conversationId, int $messageId, array $sources = ['webhook']): bool
     {
         $latestInboundId = ChatMessage::query()
@@ -3073,6 +3080,37 @@ JSON;
                     });
             })
             ->exists();
+    }
+
+    private function shouldProcessBufferedInbound(ChatMessage $message): bool
+    {
+        if (!$this->isLatestInboundMessage($message->conversation_id, $message->id, ['webhook'])) {
+            return false;
+        }
+
+        $sentAt = $message->sent_at ?? $message->created_at;
+        if (!$sentAt) {
+            return true;
+        }
+
+        $debounceSeconds = $this->resolveDebounceSeconds();
+        $elapsed = now()->diffInSeconds($sentAt, false);
+        if ($elapsed >= $debounceSeconds) {
+            return true;
+        }
+
+        $remaining = max(1, $debounceSeconds - $elapsed);
+        $this->scheduleBufferedRetry($message->id, $remaining);
+
+        return false;
+    }
+
+    private function scheduleBufferedRetry(int $messageId, int $delaySeconds): void
+    {
+        dispatch(function () use ($messageId, $delaySeconds): void {
+            usleep($delaySeconds * 1_000_000);
+            app(self::class)->handleBufferedInboundMessageById($messageId);
+        })->afterResponse();
     }
 
     /**
