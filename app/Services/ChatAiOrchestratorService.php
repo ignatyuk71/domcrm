@@ -749,6 +749,11 @@ JSON;
         $json = $response->json();
         $content = data_get($json, 'choices.0.message.content');
         $raw = $this->normalizeOpenAiContent($content);
+        $initialUsage = [
+            'prompt_tokens' => $this->nullableInt(data_get($json, 'usage.prompt_tokens')),
+            'completion_tokens' => $this->nullableInt(data_get($json, 'usage.completion_tokens')),
+            'total_tokens' => $this->nullableInt(data_get($json, 'usage.total_tokens')),
+        ];
         $repairUsage = [
             'prompt_tokens' => 0,
             'completion_tokens' => 0,
@@ -756,7 +761,32 @@ JSON;
         ];
 
         if (trim($raw) === '') {
-            throw new \RuntimeException('OpenAI повернув порожній content.');
+            [$raw, $fallbackUsage] = $this->retryWithFallbackModelOnEmptyContent(
+                $baseUrl,
+                $apiKey,
+                $timeout,
+                $agent,
+                $payload
+            );
+
+            if (trim($raw) === '') {
+                throw new \RuntimeException('OpenAI повернув порожній content.');
+            }
+
+            $initialUsage = [
+                'prompt_tokens' => $this->sumNullableInts(
+                    $initialUsage['prompt_tokens'],
+                    $this->nullableInt($fallbackUsage['prompt_tokens'] ?? null)
+                ),
+                'completion_tokens' => $this->sumNullableInts(
+                    $initialUsage['completion_tokens'],
+                    $this->nullableInt($fallbackUsage['completion_tokens'] ?? null)
+                ),
+                'total_tokens' => $this->sumNullableInts(
+                    $initialUsage['total_tokens'],
+                    $this->nullableInt($fallbackUsage['total_tokens'] ?? null)
+                ),
+            ];
         }
 
         if (!$this->isValidModelJson($raw)) {
@@ -780,19 +810,75 @@ JSON;
             $raw,
             [
                 'prompt_tokens' => $this->sumNullableInts(
-                    $this->nullableInt(data_get($json, 'usage.prompt_tokens')),
+                    $initialUsage['prompt_tokens'],
                     $this->nullableInt($repairUsage['prompt_tokens'] ?? null)
                 ),
                 'completion_tokens' => $this->sumNullableInts(
-                    $this->nullableInt(data_get($json, 'usage.completion_tokens')),
+                    $initialUsage['completion_tokens'],
                     $this->nullableInt($repairUsage['completion_tokens'] ?? null)
                 ),
                 'total_tokens' => $this->sumNullableInts(
-                    $this->nullableInt(data_get($json, 'usage.total_tokens')),
+                    $initialUsage['total_tokens'],
                     $this->nullableInt($repairUsage['total_tokens'] ?? null)
                 ),
             ],
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $originalPayload
+     * @return array{0:string,1:array{prompt_tokens:?int,completion_tokens:?int,total_tokens:?int}}
+     */
+    private function retryWithFallbackModelOnEmptyContent(
+        string $baseUrl,
+        string $apiKey,
+        int $timeout,
+        ChatAiAgent $agent,
+        array $originalPayload
+    ): array {
+        $primaryModel = $this->resolveAgentModel($agent);
+        $fallbackModel = $this->resolveFallbackModel($primaryModel);
+        if ($fallbackModel === null) {
+            return ['', ['prompt_tokens' => null, 'completion_tokens' => null, 'total_tokens' => null]];
+        }
+
+        $fallbackPayload = $originalPayload;
+        $fallbackPayload['model'] = $fallbackModel;
+
+        unset($fallbackPayload['max_tokens'], $fallbackPayload['max_completion_tokens']);
+        $fallbackPayload = array_merge(
+            $fallbackPayload,
+            $this->buildTokensPayload($fallbackModel, $this->resolveStructuredMaxTokens($agent))
+        );
+
+        $fallbackResponse = $this->performOpenAiRequestWithFallbacks($baseUrl, $apiKey, $timeout, $fallbackPayload);
+        if ($fallbackResponse->failed()) {
+            return ['', ['prompt_tokens' => null, 'completion_tokens' => null, 'total_tokens' => null]];
+        }
+
+        $fallbackJson = $fallbackResponse->json();
+        $fallbackContent = data_get($fallbackJson, 'choices.0.message.content');
+
+        return [
+            $this->normalizeOpenAiContent($fallbackContent),
+            [
+                'prompt_tokens' => $this->nullableInt(data_get($fallbackJson, 'usage.prompt_tokens')),
+                'completion_tokens' => $this->nullableInt(data_get($fallbackJson, 'usage.completion_tokens')),
+                'total_tokens' => $this->nullableInt(data_get($fallbackJson, 'usage.total_tokens')),
+            ],
+        ];
+    }
+
+    private function resolveFallbackModel(string $primaryModel): ?string
+    {
+        $configured = trim((string) config('services.openai.empty_content_fallback_model', 'gpt-4.1-mini'));
+        if ($configured === '') {
+            return null;
+        }
+
+        return mb_strtolower($configured) === mb_strtolower($primaryModel)
+            ? null
+            : $configured;
     }
 
     private function performOpenAiRequest(
