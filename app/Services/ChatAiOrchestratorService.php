@@ -3094,7 +3094,11 @@ JSON;
         }
 
         $debounceSeconds = $this->resolveDebounceSeconds();
-        $elapsed = now()->diffInSeconds($sentAt, false);
+        // Обчислюємо "вік" повідомлення коректно: минуле повідомлення має давати додатній elapsed.
+        $elapsed = $sentAt->diffInSeconds(now(), false);
+        if ($elapsed < 0) {
+            $elapsed = 0;
+        }
         if ($elapsed >= $debounceSeconds) {
             return true;
         }
