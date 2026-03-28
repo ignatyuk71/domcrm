@@ -2171,6 +2171,7 @@ JSON;
         $cleanReply = preg_replace('/\s{2,}/u', ' ', $cleanReply) ?? $cleanReply;
         $cleanReply = preg_replace('/\s+([,.;:!?])/u', '$1', $cleanReply) ?? $cleanReply;
         $cleanReply = $this->stripInternalIdentifiersFromReply($cleanReply);
+        $cleanReply = preg_replace('/:\s*$/u', '.', $cleanReply) ?? $cleanReply;
 
         return trim($cleanReply);
     }
@@ -2210,6 +2211,8 @@ JSON;
             $cleanReply = preg_replace($pattern, '', $cleanReply) ?? $cleanReply;
         }
 
+        $cleanReply = preg_replace('/\(\s*[,;:]\s*/u', '(', $cleanReply) ?? $cleanReply;
+        $cleanReply = preg_replace('/\s*[,;:]\s*\)/u', ')', $cleanReply) ?? $cleanReply;
         $cleanReply = preg_replace('/\s{2,}/u', ' ', $cleanReply) ?? $cleanReply;
         $cleanReply = preg_replace('/,\s*,+/u', ', ', $cleanReply) ?? $cleanReply;
         $cleanReply = preg_replace('/\(\s*\)/u', '', $cleanReply) ?? $cleanReply;
