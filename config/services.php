@@ -82,7 +82,7 @@ return [
     'openai' => [
         'api_key' => env('OPENAI_API_KEY'),
         'base_url' => env('OPENAI_BASE_URL', 'https://api.openai.com/v1'),
-        'model' => env('OPENAI_MODEL', 'gpt-4.1-mini'),
+        'model' => env('OPENAI_MODEL', 'gpt-5-mini'),
         'timeout' => (int) env('OPENAI_TIMEOUT', 30),
         'store' => env('OPENAI_STORE', false),
     ],

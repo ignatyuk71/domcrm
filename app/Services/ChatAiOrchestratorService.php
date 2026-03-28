@@ -215,7 +215,7 @@ class ChatAiOrchestratorService
             'stage_snapshot' => $state->stage,
             'status' => 'running',
             'provider' => $agent->provider ?: 'openai',
-            'model' => $agent->model ?: (string) config('services.openai.model', 'gpt-4.1-mini'),
+            'model' => $this->resolveAgentModel($agent),
             'input_messages' => count($messages),
             'input_chars' => $inputChars,
             'started_at' => $startedAt,
@@ -728,31 +728,20 @@ JSON;
         $baseUrl = rtrim((string) config('services.openai.base_url', 'https://api.openai.com/v1'), '/');
         $timeout = max(5, (int) config('services.openai.timeout', 30));
         $apiKey = (string) config('services.openai.api_key');
+        $model = $this->resolveAgentModel($agent);
 
-        $payload = [
-            'model' => (string) ($agent->model ?: config('services.openai.model', 'gpt-4.1-mini')),
+        $payload = array_merge([
+            'model' => $model,
             'messages' => $messages,
             'temperature' => (float) ($agent->temperature ?? 0.3),
-            'max_tokens' => $this->resolveStructuredMaxTokens($agent),
             'response_format' => ['type' => 'json_object'],
-        ];
+        ], $this->buildTokensPayload($model, $this->resolveStructuredMaxTokens($agent)));
 
         if ((bool) config('services.openai.store', false)) {
             $payload['store'] = true;
         }
 
-        $response = $this->performOpenAiRequest($baseUrl, $apiKey, $timeout, $payload);
-
-        if ($response->failed()) {
-            $errorBody = (string) $response->body();
-            $supportsFallback = str_contains(mb_strtolower($errorBody), 'response_format')
-                || str_contains(mb_strtolower($errorBody), 'json_object');
-
-            if ($supportsFallback) {
-                unset($payload['response_format']);
-                $response = $this->performOpenAiRequest($baseUrl, $apiKey, $timeout, $payload);
-            }
-        }
+        $response = $this->performOpenAiRequestWithFallbacks($baseUrl, $apiKey, $timeout, $payload);
 
         if ($response->failed()) {
             throw new \RuntimeException(
@@ -821,6 +810,103 @@ JSON;
             ->post($baseUrl . '/chat/completions', $payload);
     }
 
+    private function performOpenAiRequestWithFallbacks(
+        string $baseUrl,
+        string $apiKey,
+        int $timeout,
+        array $payload
+    ): \Illuminate\Http\Client\Response {
+        $attempt = 0;
+
+        while (true) {
+            $response = $this->performOpenAiRequest($baseUrl, $apiKey, $timeout, $payload);
+            if ($response->successful() || $attempt >= 3) {
+                return $response;
+            }
+
+            $attempt++;
+            $errorBody = mb_strtolower((string) $response->body());
+            $fallbackApplied = false;
+
+            if (
+                isset($payload['response_format'])
+                && (
+                    str_contains($errorBody, 'response_format')
+                    || str_contains($errorBody, 'json_object')
+                )
+            ) {
+                unset($payload['response_format']);
+                $fallbackApplied = true;
+            }
+
+            if (
+                !$fallbackApplied
+                && isset($payload['temperature'])
+                && str_contains($errorBody, 'temperature')
+                && str_contains($errorBody, 'supported')
+            ) {
+                unset($payload['temperature']);
+                $fallbackApplied = true;
+            }
+
+            if (
+                !$fallbackApplied
+                && isset($payload['max_tokens'])
+                && str_contains($errorBody, 'max_tokens')
+                && str_contains($errorBody, 'max_completion_tokens')
+            ) {
+                $payload['max_completion_tokens'] = $payload['max_tokens'];
+                unset($payload['max_tokens']);
+                $fallbackApplied = true;
+            }
+
+            if (
+                !$fallbackApplied
+                && isset($payload['max_completion_tokens'])
+                && str_contains($errorBody, 'max_completion_tokens')
+                && (
+                    str_contains($errorBody, 'unknown parameter')
+                    || str_contains($errorBody, 'unsupported')
+                )
+            ) {
+                $payload['max_tokens'] = $payload['max_completion_tokens'];
+                unset($payload['max_completion_tokens']);
+                $fallbackApplied = true;
+            }
+
+            if (!$fallbackApplied) {
+                return $response;
+            }
+        }
+    }
+
+    private function resolveAgentModel(ChatAiAgent $agent): string
+    {
+        return (string) ($agent->model ?: config('services.openai.model', 'gpt-5-mini'));
+    }
+
+    /**
+     * @return array{max_tokens?:int,max_completion_tokens?:int}
+     */
+    private function buildTokensPayload(string $model, int $maxTokens): array
+    {
+        $normalizedMaxTokens = max(1, $maxTokens);
+
+        if ($this->modelRequiresMaxCompletionTokens($model)) {
+            return ['max_completion_tokens' => $normalizedMaxTokens];
+        }
+
+        return ['max_tokens' => $normalizedMaxTokens];
+    }
+
+    private function modelRequiresMaxCompletionTokens(string $model): bool
+    {
+        $normalizedModel = mb_strtolower(trim($model));
+
+        return str_starts_with($normalizedModel, 'gpt-5')
+            || preg_match('/^o\d/', $normalizedModel) === 1;
+    }
+
     private function normalizeOpenAiContent(mixed $content): string
     {
         if (is_string($content)) {
@@ -879,8 +965,9 @@ JSON;
         ChatAiAgent $agent,
         string $raw
     ): array {
-        $payload = [
-            'model' => (string) ($agent->model ?: config('services.openai.model', 'gpt-4.1-mini')),
+        $model = $this->resolveAgentModel($agent);
+        $payload = array_merge([
+            'model' => $model,
             'messages' => [
                 [
                     'role' => 'system',
@@ -900,21 +987,10 @@ JSON;
                 ],
             ],
             'temperature' => 0,
-            'max_tokens' => max(500, $this->resolveStructuredMaxTokens($agent)),
             'response_format' => ['type' => 'json_object'],
-        ];
+        ], $this->buildTokensPayload($model, max(500, $this->resolveStructuredMaxTokens($agent))));
 
-        $response = $this->performOpenAiRequest($baseUrl, $apiKey, $timeout, $payload);
-        if ($response->failed()) {
-            $errorBody = (string) $response->body();
-            $supportsFallback = str_contains(mb_strtolower($errorBody), 'response_format')
-                || str_contains(mb_strtolower($errorBody), 'json_object');
-
-            if ($supportsFallback) {
-                unset($payload['response_format']);
-                $response = $this->performOpenAiRequest($baseUrl, $apiKey, $timeout, $payload);
-            }
-        }
+        $response = $this->performOpenAiRequestWithFallbacks($baseUrl, $apiKey, $timeout, $payload);
 
         if ($response->failed()) {
             throw new \RuntimeException(
@@ -970,25 +1046,15 @@ JSON;
             'content' => 'Невдала попередня сира відповідь: ' . Str::limit($raw, 1200),
         ];
 
-        $payload = [
-            'model' => (string) ($agent->model ?: config('services.openai.model', 'gpt-4.1-mini')),
+        $model = $this->resolveAgentModel($agent);
+        $payload = array_merge([
+            'model' => $model,
             'messages' => $retryMessages,
             'temperature' => 0,
-            'max_tokens' => max(700, $this->resolveStructuredMaxTokens($agent)),
             'response_format' => ['type' => 'json_object'],
-        ];
+        ], $this->buildTokensPayload($model, max(700, $this->resolveStructuredMaxTokens($agent))));
 
-        $response = $this->performOpenAiRequest($baseUrl, $apiKey, $timeout, $payload);
-        if ($response->failed()) {
-            $errorBody = (string) $response->body();
-            $supportsFallback = str_contains(mb_strtolower($errorBody), 'response_format')
-                || str_contains(mb_strtolower($errorBody), 'json_object');
-
-            if ($supportsFallback) {
-                unset($payload['response_format']);
-                $response = $this->performOpenAiRequest($baseUrl, $apiKey, $timeout, $payload);
-            }
-        }
+        $response = $this->performOpenAiRequestWithFallbacks($baseUrl, $apiKey, $timeout, $payload);
 
         if ($response->failed()) {
             throw new \RuntimeException(
@@ -1046,25 +1112,15 @@ JSON;
             'content' => 'Попередня сира відповідь, яку треба виправити: ' . Str::limit($raw, 1200),
         ];
 
-        $payload = [
-            'model' => (string) ($agent->model ?: config('services.openai.model', 'gpt-4.1-mini')),
+        $model = $this->resolveAgentModel($agent);
+        $payload = array_merge([
+            'model' => $model,
             'messages' => $retryMessages,
             'temperature' => 0,
-            'max_tokens' => max(700, $this->resolveStructuredMaxTokens($agent)),
             'response_format' => ['type' => 'json_object'],
-        ];
+        ], $this->buildTokensPayload($model, max(700, $this->resolveStructuredMaxTokens($agent))));
 
-        $response = $this->performOpenAiRequest($baseUrl, $apiKey, $timeout, $payload);
-        if ($response->failed()) {
-            $errorBody = (string) $response->body();
-            $supportsFallback = str_contains(mb_strtolower($errorBody), 'response_format')
-                || str_contains(mb_strtolower($errorBody), 'json_object');
-
-            if ($supportsFallback) {
-                unset($payload['response_format']);
-                $response = $this->performOpenAiRequest($baseUrl, $apiKey, $timeout, $payload);
-            }
-        }
+        $response = $this->performOpenAiRequestWithFallbacks($baseUrl, $apiKey, $timeout, $payload);
 
         if ($response->failed()) {
             throw new \RuntimeException(

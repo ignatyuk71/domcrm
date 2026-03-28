@@ -28,7 +28,7 @@ class ChatAiBootstrapSeeder extends Seeder
                 'name' => 'Sales Assistant v1',
                 'is_active' => true,
                 'provider' => 'openai',
-                'model' => (string) config('services.openai.model', 'gpt-4.1-mini'),
+                'model' => (string) config('services.openai.model', 'gpt-5-mini'),
                 'temperature' => 0.30,
                 'max_output_tokens' => 300,
                 'config_json' => json_encode([
@@ -155,4 +155,3 @@ PROMPT,
         $this->command?->info('AI bootstrap seed виконано: агент і промпти створені/оновлені.');
     }
 }
-
