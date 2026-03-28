@@ -588,7 +588,8 @@ JSON;
             . "7. Якщо клієнт уже вибрав одну або кілька позицій, але ще не завершив підбір, не поспішай з оформленням. Спочатку допоможи дозібрати всі товари.\n"
             . "8. Перед checkout_request, якщо позиції вже зібрані, не повторюй довгий опис уже вибраного товару без потреби. Пиши коротко і природно: 'Бажаєте ще щось додати чи вже оформляємо замовлення?'.\n"
             . "9. Якщо клієнт уже надав частину або всі дані доставки, але потім просить дозамовити ще одну пару, повернися до selection, збережи delivery_fields і допоможи додати нову позицію.\n"
-            . "10. Одне уточнююче питання за раз.\n\n"
+            . "10. Одне уточнююче питання за раз.\n"
+            . "11. На короткі питання про характеристики (матеріал, мех/хутро, підошва, якість) відповідай одразу по суті і не повторюй повну комбінацію 'модель, колір, розмір' у кожній репліці. Повну комбінацію згадуй тільки коли уточнюєш або підтверджуєш вибір.\n\n"
             . "Обмеження:\n"
             . "1. Не запитуй дані доставки (ПІБ, телефон, місто, відділення або поштомат), доки stage не дійшов до checkout_ready.\n"
             . "2. Не проси розмір, якщо клієнт просто хоче подивитися фото, кольори, модель, усі варіанти або асортимент.\n"
@@ -666,6 +667,7 @@ JSON;
             $slotPatch = $this->buildSlotPatch($state, $normalized, $inputText);
             $nextStage = $this->resolveNextStage($stageBefore, $normalized['stage'], $slotPatch, (string) ($normalized['action'] ?? 'text'));
             $reply = $this->buildSafeReply($normalized['reply'], $nextStage, $slotPatch);
+            $reply = $this->compactReplyForPropertyQuestion($reply, $inputText, $normalized);
             $mediaAttachments = $this->resolveAiMediaAttachments($inputText, $normalized, $state, $slotPatch);
             $primaryMediaAttachment = $mediaAttachments[0] ?? null;
 
@@ -2225,6 +2227,50 @@ JSON;
     {
         return preg_match(
             '/\b(ім[\'’]я|прізвище|телефон|номер телефону|місто|адрес|відділен|поштомат|нова пошта)\b/ui',
+            mb_strtolower($text)
+        ) === 1;
+    }
+
+    /**
+     * Прибирає зайве повторення повної комбінації товару на старті відповіді
+     * для коротких запитів про властивості (матеріал, хутро, підошва тощо).
+     *
+     * @param  array<string, mixed>  $normalized
+     */
+    private function compactReplyForPropertyQuestion(string $reply, string $inputText, array $normalized): string
+    {
+        if ($reply === '') {
+            return '';
+        }
+
+        $action = (string) ($normalized['action'] ?? 'text');
+        if (!in_array($action, ['text', 'ask_clarifying'], true)) {
+            return $reply;
+        }
+
+        if (!$this->isProductPropertyQuestion($inputText)) {
+            return $reply;
+        }
+
+        $patterns = [
+            '/^\s*[^.!?\n]{0,180}\b\d{2}\s*\/\s*\d{2}\b\s*[—-]\s*/u',
+            '/^\s*[^.!?\n]{30,180}\s*[—-]\s*/u',
+        ];
+
+        foreach ($patterns as $pattern) {
+            $candidate = preg_replace($pattern, '', $reply, 1);
+            if (is_string($candidate) && trim($candidate) !== '') {
+                return trim($candidate);
+            }
+        }
+
+        return $reply;
+    }
+
+    private function isProductPropertyQuestion(string $text): bool
+    {
+        return preg_match(
+            "/\b(мех|хутр|еко[- ]?хутр|натурал|матеріал|склад|підошв|якість|гумов|резин|м'яка|м'які)\b/ui",
             mb_strtolower($text)
         ) === 1;
     }
