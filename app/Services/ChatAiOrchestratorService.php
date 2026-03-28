@@ -595,11 +595,12 @@ JSON;
             . "3. Не вважай код з колажу розміром. Код колажу — це ідентифікатор позиції в межах моделі.\n"
             . "4. Якщо у current_input_map є item_code, трактуй поточне повідомлення як вибір позиції по коду колажу. У такому випадку не інтерпретуй це число як розмір або сантиметри.\n"
             . "5. Заповнюй missing_slots і переходь до checkout_request тільки тоді, коли підбір уже завершений: усі потрібні позиції визначені, для кожної позиції відомі модель, колір і розмір, а клієнт явно підтвердив, що більше нічого не додає і можна оформляти замовлення. Сам намір купити не є достатньою підставою для переходу до оформлення. На етапах interest та selection для звичайної консультації missing_slots має бути порожнім масивом.\n"
-            . "6. Для action=text, action=ask_clarifying та action=checkout_request поле reply обов'язково має бути непорожнім. На питання про ціну, розміри, наявність, матеріал, доставку, оплату чи оформлення не можна повертати порожній reply.\n"
+            . "6. Для всіх action, окрім action=none, поле reply обов'язково має бути непорожнім. Для медіа-дій (send_product_photo, send_product_gallery, send_collage) reply має бути коротким супровідним текстом в 1 речення.\n"
             . "7. action=none дозволений тільки для технічних або дубльованих повідомлень. На нормальне повідомлення клієнта не повертай action=none з порожнім reply.\n"
-            . "8. Не вставляй у reply сирі URL фото, відео або колажів. Якщо потрібне фото чи колаж, просто напиши коротко без посилання або залиш reply порожнім, а CRM відправить медіа окремо.\n"
+            . "8. Не вставляй у reply сирі URL фото, відео або колажів. Якщо потрібне фото чи колаж, просто напиши коротко без посилання.\n"
             . "9. Не повертай медіа-дію, якщо в тебе немає конкретної моделі, товару або доступного attachment для виконання. У такому випадку відповідай текстом і коротко уточнюй модель або запит клієнта.\n"
-            . "10. Для action=send_product_gallery не надсилай колаж, якщо клієнт просить лише кілька конкретних кольорів. У gallery_items повинні бути тільки реально доступні позиції.\n\n"
+            . "10. Для action=send_product_gallery не надсилай колаж, якщо клієнт просить лише кілька конкретних кольорів. У gallery_items повинні бути тільки реально доступні позиції.\n"
+            . "11. У reply заборонено показувати внутрішні ідентифікатори CRM: product_id, variant_id, color_id, media_id та будь-які службові ID.\n\n"
             . "policy_json=" . $policyJson;
 
         if ($knowledgeBlock !== '') {
@@ -669,10 +670,9 @@ JSON;
             $primaryMediaAttachment = $mediaAttachments[0] ?? null;
 
             if ($primaryMediaAttachment !== null) {
-                if ($this->shouldSuppressTextForMediaAttachment($inputText, $normalized, $primaryMediaAttachment)) {
-                    $reply = '';
-                } else {
-                    $reply = $this->sanitizeReplyForMediaAttachment($reply, $primaryMediaAttachment);
+                $reply = $this->sanitizeReplyForMediaAttachment($reply, $primaryMediaAttachment);
+                if ($reply === '') {
+                    $reply = $this->buildMediaFallbackReply($normalized, $primaryMediaAttachment);
                 }
             }
 
@@ -980,6 +980,7 @@ JSON;
                         'gallery_items має бути масивом обʼєктів з ключами product_id, variant_id, color_id, color.',
                         'cart_items має бути масивом обʼєктів.',
                         'delivery_fields має бути обʼєктом з ключами name, phone, city, warehouse.',
+                        'У полі reply не виводь внутрішні ідентифікатори CRM (product_id, variant_id, color_id, media_id та подібні).',
                     ]),
                 ],
                 [
@@ -1626,6 +1627,8 @@ JSON;
     private function buildSafeReply(string $reply, string $stage, array $slotPatch): string
     {
         $cleanReply = trim((string) preg_replace('/\s+/u', ' ', strip_tags($reply)));
+        $cleanReply = $this->stripInternalIdentifiersFromReply($cleanReply);
+        $cleanReply = trim((string) preg_replace('/\s+/u', ' ', $cleanReply));
         $cleanReply = Str::limit($cleanReply, 1200, '...');
 
         if ($cleanReply === '') {
@@ -2167,24 +2170,52 @@ JSON;
         $cleanReply = preg_replace('/:\s*(?=[,.!?]|$)/u', '', $cleanReply) ?? $cleanReply;
         $cleanReply = preg_replace('/\s{2,}/u', ' ', $cleanReply) ?? $cleanReply;
         $cleanReply = preg_replace('/\s+([,.;:!?])/u', '$1', $cleanReply) ?? $cleanReply;
+        $cleanReply = $this->stripInternalIdentifiersFromReply($cleanReply);
 
         return trim($cleanReply);
     }
 
     /**
-     * @param  array<string, mixed>  $normalized
      * @param  array<string, mixed>  $attachment
      */
-    private function shouldSuppressTextForMediaAttachment(string $inputText, array $normalized, array $attachment): bool
+    private function buildMediaFallbackReply(array $normalized, array $attachment): string
     {
-        return $this->actionRequiresMedia((string) ($normalized['action'] ?? 'text'))
-            && in_array((string) ($attachment['source'] ?? ''), [
-            'product_media_variant',
-            'product_media_color',
-            'product_media_primary',
-            'main_photo',
-            'collage',
-        ], true);
+        $action = (string) ($normalized['action'] ?? 'text');
+        $source = (string) ($attachment['source'] ?? '');
+
+        if ($action === 'send_collage' || $source === 'collage') {
+            return 'Надсилаю колаж з доступними варіантами.';
+        }
+
+        if ($action === 'send_product_gallery') {
+            return 'Надсилаю фото доступних варіантів.';
+        }
+
+        return 'Надсилаю фото товару.';
+    }
+
+    private function stripInternalIdentifiersFromReply(string $reply): string
+    {
+        $cleanReply = $reply;
+
+        $patterns = [
+            '/\b(?:product|variant|color)[ _-]?id\s*[:=#№]?\s*\d+\b/iu',
+            '/\b(?:товар|варіант|колір)\s*id\s*[:=#№]?\s*\d+\b/iu',
+            '/\bid\s*[:=#№]\s*\d{3,8}\b/iu',
+            '/\(\s*\d{3,8}\s*\)/u',
+            '/\[\s*\d{3,8}\s*\]/u',
+        ];
+
+        foreach ($patterns as $pattern) {
+            $cleanReply = preg_replace($pattern, '', $cleanReply) ?? $cleanReply;
+        }
+
+        $cleanReply = preg_replace('/\s{2,}/u', ' ', $cleanReply) ?? $cleanReply;
+        $cleanReply = preg_replace('/,\s*,+/u', ', ', $cleanReply) ?? $cleanReply;
+        $cleanReply = preg_replace('/\(\s*\)/u', '', $cleanReply) ?? $cleanReply;
+        $cleanReply = preg_replace('/\s+([,.;:!?])/u', '$1', $cleanReply) ?? $cleanReply;
+
+        return trim($cleanReply, " \t\n\r\0\x0B,;");
     }
 
     private function containsDeliveryRequest(string $text): bool
