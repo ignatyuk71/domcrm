@@ -1766,18 +1766,7 @@ JSON;
             return false;
         }
 
-        $selectedProductId = $this->nullableInt($slotPatch['selected_product_id'] ?? null)
-            ?: $state->selected_product_id
-            ?: $this->nullableInt($normalized['selected_product_id'] ?? null);
-        $selectedModelPhrase = $this->cleanNullableString($normalized['model_phrase'] ?? null)
-            ?: $this->cleanNullableString($slotPatch['selected_model_phrase'] ?? null)
-            ?: $this->cleanNullableString($state->slots_json['selected_model_phrase'] ?? null);
-
-        if ($selectedProductId !== null) {
-            return false;
-        }
-
-        return $selectedModelPhrase === null || preg_match('/\b(домашн|вуличн)\b/ui', $text) === 1;
+        return true;
     }
 
     private function prependGreetingIfNeeded(string $reply, int $conversationId): string
