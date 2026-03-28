@@ -601,7 +601,8 @@ JSON;
             . "8. Не вставляй у reply сирі URL фото, відео або колажів. Якщо потрібне фото чи колаж, просто напиши коротко без посилання.\n"
             . "9. Не повертай медіа-дію, якщо в тебе немає конкретної моделі, товару або доступного attachment для виконання. У такому випадку відповідай текстом і коротко уточнюй модель або запит клієнта.\n"
             . "10. Для action=send_product_gallery не надсилай колаж, якщо клієнт просить лише кілька конкретних кольорів. У gallery_items повинні бути тільки реально доступні позиції.\n"
-            . "11. У reply заборонено показувати внутрішні ідентифікатори CRM: product_id, variant_id, color_id, media_id та будь-які службові ID.\n\n"
+            . "11. У reply заборонено показувати внутрішні ідентифікатори CRM: product_id, variant_id, color_id, media_id та будь-які службові ID.\n"
+            . "12. Для action=checkout_request: якщо бракує хоча б одного поля доставки (ПІБ, телефон, місто, відділення/поштомат), не пиши підтвердження \"замовлення прийнято\". Спочатку збери всі відсутні поля.\n\n"
             . "policy_json=" . $policyJson;
 
         if ($knowledgeBlock !== '') {
@@ -668,6 +669,7 @@ JSON;
             $nextStage = $this->resolveNextStage($stageBefore, $normalized['stage'], $slotPatch, (string) ($normalized['action'] ?? 'text'));
             $reply = $this->buildSafeReply($normalized['reply'], $nextStage, $slotPatch);
             $reply = $this->compactReplyForPropertyQuestion($reply, $inputText, $normalized);
+            $reply = $this->enforceCheckoutReplyConsistency($reply, $normalized, $slotPatch);
             $mediaAttachments = $this->resolveAiMediaAttachments($inputText, $normalized, $state, $slotPatch);
             $primaryMediaAttachment = $mediaAttachments[0] ?? null;
 
@@ -2273,6 +2275,87 @@ JSON;
             "/\b(мех|хутр|еко[- ]?хутр|натурал|матеріал|склад|підошв|якість|гумов|резин|м'яка|м'які)\b/ui",
             mb_strtolower($text)
         ) === 1;
+    }
+
+    /**
+     * Захищає checkout-відповідь від передчасного підтвердження замовлення.
+     *
+     * @param  array<string, mixed>  $normalized
+     * @param  array<string, mixed>  $slotPatch
+     */
+    private function enforceCheckoutReplyConsistency(string $reply, array $normalized, array $slotPatch): string
+    {
+        $action = (string) ($normalized['action'] ?? 'text');
+        if ($action !== 'checkout_request') {
+            return $reply;
+        }
+
+        $missingSlotsRaw = is_array($slotPatch['missing_slots_json'] ?? null)
+            ? $slotPatch['missing_slots_json']
+            : [];
+        $missingSlots = array_values(array_filter(array_map(
+            fn ($slot) => $this->cleanNullableString(is_scalar($slot) ? (string) $slot : null),
+            $missingSlotsRaw
+        )));
+        $missingDelivery = array_values(array_intersect(['name', 'phone', 'city', 'warehouse'], $missingSlots));
+
+        if ($missingDelivery !== []) {
+            return $this->buildDeliveryRequestReply($missingDelivery);
+        }
+
+        $confirmation = $this->extractCheckoutConfirmationPart($reply);
+        if ($confirmation !== '') {
+            return $confirmation;
+        }
+
+        return 'Дякуємо, замовлення прийнято в обробку. Якщо буде потрібно, менеджер зв’яжеться з вами для уточнення деталей.';
+    }
+
+    /**
+     * @param  array<int, string>  $missingDelivery
+     */
+    private function buildDeliveryRequestReply(array $missingDelivery): string
+    {
+        $labels = [
+            'name' => 'ПІБ отримувача',
+            'phone' => 'Номер телефону',
+            'city' => 'Місто або населений пункт',
+            'warehouse' => 'Номер відділення або поштомату Нової пошти',
+        ];
+
+        $items = [];
+        foreach ($missingDelivery as $field) {
+            if (isset($labels[$field])) {
+                $items[] = '- ' . $labels[$field];
+            }
+        }
+
+        if ($items === []) {
+            return 'Для оформлення замовлення, будь ласка, надайте: ПІБ отримувача, номер телефону, місто та відділення або поштомат Нової пошти.';
+        }
+
+        if (count($items) === 1) {
+            return 'Для оформлення замовлення, будь ласка, надайте: ' . ltrim($items[0], '- ') . '.';
+        }
+
+        return "Для оформлення замовлення, будь ласка, надайте:\n" . implode("\n", $items);
+    }
+
+    private function extractCheckoutConfirmationPart(string $reply): string
+    {
+        $clean = trim((string) preg_replace('/\s+/u', ' ', $reply));
+        if ($clean === '') {
+            return '';
+        }
+
+        if (preg_match('/підтвердження оформлення\s*[:\-]/ui', $clean, $matches, PREG_OFFSET_CAPTURE) === 1) {
+            $start = (int) ($matches[0][1] ?? 0);
+            // preg_match повертає позицію у байтах, тому тут потрібен substr, а не mb_substr.
+            $clean = trim((string) substr($clean, $start));
+            $clean = preg_replace('/^підтвердження оформлення\s*[:\-]\s*/ui', '', $clean) ?? $clean;
+        }
+
+        return trim($clean);
     }
 
     private function normalizeSize(?string $value): ?string
