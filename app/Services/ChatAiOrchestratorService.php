@@ -1791,6 +1791,37 @@ JSON;
                 ?: $this->cleanNullableString($state->slots_json['selected_model_phrase'] ?? null)
             );
 
+        // Для broad send_collage (без конкретної моделі) відправляємо всі доступні підбірки моделей.
+        if ($isBroadCollageIntent) {
+            foreach ($this->chatAiKnowledgeService->productCatalogContext(20, 1) as $catalogModel) {
+                foreach (($catalogModel['collage_urls'] ?? []) as $catalogCollageUrl) {
+                    foreach ($this->explodeMediaUrls((string) $catalogCollageUrl) as $collageUrl) {
+                        if ($collageUrl === '' || isset($seenUrls[$collageUrl])) {
+                            continue;
+                        }
+
+                        $attachment = $this->buildMediaAttachmentPayload(
+                            $collageUrl,
+                            'image',
+                            'collage',
+                            ['product_id' => null, 'variant_id' => null, 'color_id' => null]
+                        );
+
+                        if ($attachment === null) {
+                            continue;
+                        }
+
+                        $seenUrls[$collageUrl] = true;
+                        $attachments[] = $attachment;
+                    }
+                }
+            }
+
+            if ($attachments !== []) {
+                return $attachments;
+            }
+        }
+
         $mapped = null;
         if ($modelPhrase !== null) {
             $mapped = $this->chatAiKnowledgeService->resolveModelMapByPhrase($modelPhrase);
