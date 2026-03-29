@@ -193,12 +193,7 @@
         <div class="packing-modal">
           <div class="modal-header">
             <div>
-              <div class="modal-title-row">
-                <div class="modal-title">{{ modalTitle }}</div>
-                <span class="modal-status-pill" :class="{ packed: selectedIsPacked, preview: !selectedIsPacked }">
-                  {{ selectedIsPacked ? 'Запаковане' : 'До пакування' }}
-                </span>
-              </div>
+              <div class="modal-title">{{ modalTitle }}</div>
               <div class="modal-subtitle">
                 №{{ selectedOrderNumber }}
                 <span v-if="selectedOrderMoment">• {{ selectedOrderMoment }}</span>
@@ -1009,34 +1004,6 @@ onUnmounted(() => {
 }
 .modal-title { font-size: 1.1rem; font-weight: 800; color: #0f172a; }
 .modal-subtitle { font-size: 0.85rem; color: #64748b; margin-top: 0.15rem; }
-.modal-title-row {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  flex-wrap: wrap;
-}
-.modal-status-pill {
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  padding: 0.2rem 0.55rem;
-  border-radius: 999px;
-  font-size: 0.72rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  border: 1px solid transparent;
-}
-.modal-status-pill.preview {
-  background: #fff7ed;
-  border-color: #fdba74;
-  color: #9a3412;
-}
-.modal-status-pill.packed {
-  background: #ecfdf5;
-  border-color: #86efac;
-  color: #166534;
-}
 .modal-close {
   border: none;
   background: #fff;
@@ -1336,7 +1303,6 @@ onUnmounted(() => {
   .search-wrapper, .actions-group, .settings-group { width: 100%; max-width: none; }
   .settings-group { min-width: 0; }
   .btn-main-action { flex: 1; justify-content: center; }
-  .modal-title-row { align-items: flex-start; }
   .details-main { padding: 0.8rem; }
   .details-side { padding: 0.8rem; }
   .side-metrics { grid-template-columns: 1fr; }
