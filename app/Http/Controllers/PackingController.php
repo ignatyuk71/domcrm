@@ -24,11 +24,41 @@ class PackingController extends Controller
      */
     public function show(Order $order)
     {
-        if ($order->packing_status !== 'packed') {
-            PackingSession::firstOrCreate(
-                ['order_id' => $order->id, 'finished_at' => null],
-                ['packer_id' => Auth::id(), 'started_at' => now()]
-            );
+        // Якщо замовлення в роботі у іншого - перенаправляємо назад
+        if ($order->packing_status === 'processing' && $order->packer_id !== Auth::id()) {
+            return redirect()->route('packing.list')->with('error', 'Це замовлення вже зайняте.');
+        }
+
+        $userId = Auth::id();
+
+        // Логіка блокування замовлення (Locking)
+        if ($order->packing_status !== 'packed' && ($order->packing_status !== 'processing' || !$order->packer_id)) {
+            DB::transaction(function () use ($order, $userId) {
+                // Блокуємо рядок в БД, щоб уникнути гонки даних
+                $locked = Order::whereKey($order->id)->lockForUpdate()->first();
+                if (!$locked) {
+                    return;
+                }
+                // Подвійна перевірка
+                if ($locked->packing_status === 'processing' && $locked->packer_id && $locked->packer_id !== $userId) {
+                    return;
+                }
+
+                // Призначаємо пакувальника
+                $locked->update([
+                    'packer_id' => $userId,
+                    'packing_status' => 'processing',
+                ]);
+
+                // Створюємо сесію, якщо немає
+                if (!$locked->activePackingSession()->exists()) {
+                    PackingSession::create([
+                        'order_id' => $locked->id,
+                        'packer_id' => $userId,
+                        'started_at' => now(),
+                    ]);
+                }
+            });
         }
 
         // Завантажуємо дані для фронтенду (товари, фото, доставка)
@@ -42,9 +72,12 @@ class PackingController extends Controller
      */
     public function list(PackingService $packing): JsonResponse
     {
+        $packing->releaseStaleOrders();
+
         // Беремо статуси черги через сервіс (code -> id, з fallback).
         $queueStatusIds = $packing->queueStatusIds();
 
+        $userId = Auth::id();
         $orders = Order::query()
             ->when($queueStatusIds, fn ($q) => $q->whereIn('status_id', $queueStatusIds), fn ($q) => $q->whereRaw('1 = 0'))
             ->where(function ($q) {
@@ -63,6 +96,10 @@ class PackingController extends Controller
             ])
             ->get();
 
+        $orders->each(function ($order) use ($packing, $userId) {
+            $order->setAttribute('can_release', $packing->canRelease($order, $userId));
+        });
+
         return response()->json($orders);
     }
 
@@ -71,6 +108,8 @@ class PackingController extends Controller
      */
     public function history(PackingService $packing): JsonResponse
     {
+        $packing->releaseStaleOrders();
+
         // Статуси, які вже поїхали (щоб не показувати їх у списку)
         $shippedStatusIds = $packing->shippedStatusIds();
 
@@ -82,6 +121,7 @@ class PackingController extends Controller
             ->whereDate('finished_at', now()) // Тільки за сьогодні
             ->groupBy('order_id');
 
+        $userId = Auth::id();
         $history = Order::query()
             ->where('packing_status', 'packed') // Тільки запаковані
             ->when($shippedStatusIds, function ($q) use ($shippedStatusIds) {
@@ -105,22 +145,43 @@ class PackingController extends Controller
                 'packing_sessions.packed_at',
             ]);
 
+        $history->each(function ($order) use ($packing, $userId) {
+            $order->setAttribute('can_release', $packing->canRelease($order, $userId));
+        });
+
         return response()->json($history);
     }
 
     /**
      * API: Почати пакування (натискання кнопки "Пакувати").
      */
-    public function start(Order $order): JsonResponse
+    public function start(Order $order, PackingService $packing): JsonResponse
     {
         $userId = Auth::id();
 
-        PackingSession::firstOrCreate(
-            ['order_id' => $order->id, 'finished_at' => null],
-            ['packer_id' => $userId, 'started_at' => now()]
-        );
+        $packing->releaseIfStale($order);
 
-        return response()->json(['success' => true, 'message' => 'Пакування розпочато']);
+        return DB::transaction(function () use ($order, $userId) {
+            $locked = Order::whereKey($order->id)->lockForUpdate()->first();
+
+            if (!$locked) return response()->json(['error' => 'Замовлення не знайдено'], 404);
+
+            if ($locked->packing_status === 'processing' && $locked->packer_id !== $userId) {
+                return response()->json(['error' => 'Замовлення вже пакує інший працівник'], 423);
+            }
+
+            $locked->update([
+                'packer_id' => $userId,
+                'packing_status' => 'processing',
+            ]);
+
+            PackingSession::firstOrCreate(
+                ['order_id' => $locked->id, 'finished_at' => null],
+                ['packer_id' => $userId, 'started_at' => now()]
+            );
+
+            return response()->json(['success' => true, 'message' => 'Пакування розпочато']);
+        });
     }
 
     /**
@@ -134,13 +195,13 @@ class PackingController extends Controller
             $locked = Order::whereKey($order->id)->lockForUpdate()->first();
 
             if (!$locked) return response()->json(['error' => 'Замовлення не знайдено'], 404);
+            if ($locked->packer_id !== $userId) return response()->json(['error' => 'Немає доступу'], 403);
 
             $packing->closeSession($locked, $userId, 'finished');
 
             // Оновлюємо статус на "Запаковано" (визначається через PackingService)
             $packedStatusId = $packing->packedStatusId();
             $updates = [
-                'packer_id' => $userId,
                 'packing_status' => 'packed',
                 'status_id' => $packedStatusId,
             ];
