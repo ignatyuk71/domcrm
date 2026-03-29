@@ -207,17 +207,6 @@
           <div class="modal-body">
             <div class="details-layout">
               <aside class="details-side">
-                <div class="side-metrics">
-                  <div class="side-metric side-metric-accent">
-                    <span class="metric-label">До пакування</span>
-                    <span class="metric-value">{{ selectedTotalQty }} {{ declension(selectedTotalQty, ['пара', 'пари', 'пар']) }}</span>
-                  </div>
-                  <div class="side-metric">
-                    <span class="metric-label">Позицій</span>
-                    <span class="metric-value">{{ selectedItemsCount }}</span>
-                  </div>
-                </div>
-
                 <div class="side-details">
                   <div class="side-detail-row">
                     <span>Одержувач</span>
@@ -349,8 +338,6 @@ const selectedOrderMoment = computed(() => {
   return raw ? formatDateTime(raw) : '—';
 });
 const modalTitle = computed(() => selectedIsPacked.value ? 'Запаковане замовлення' : 'Товари до пакування');
-const selectedTotalQty = computed(() => selectedItems.value.reduce((sum, item) => sum + itemQty(item), 0));
-const selectedItemsCount = computed(() => selectedItems.value.length);
 const selectedCustomer = computed(() => selectedOrder.value?.customer || {});
 const selectedPackerName = computed(() => selectedOrder.value?.packer?.name || '—');
 const selectedRecipient = computed(() => {
@@ -1014,37 +1001,6 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 0.9rem;
 }
-.side-metrics {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.6rem;
-}
-.side-metric {
-  border-radius: 14px;
-  border: 1px solid #e2e8f0;
-  background: #fff;
-  padding: 0.65rem 0.75rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-}
-.side-metric-accent {
-  border-color: #fdba74;
-  background: #fff7ed;
-}
-.metric-label {
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #64748b;
-  font-weight: 700;
-}
-.metric-value {
-  font-size: 1rem;
-  font-weight: 900;
-  color: #0f172a;
-  line-height: 1.15;
-}
 .side-details {
   border: 1px solid #e2e8f0;
   border-radius: 14px;
@@ -1248,7 +1204,6 @@ onUnmounted(() => {
   .btn-main-action { flex: 1; justify-content: center; }
   .details-main { padding: 0.8rem; }
   .details-side { padding: 0.8rem; }
-  .side-metrics { grid-template-columns: 1fr; }
   .product-card {
     grid-template-columns: 1fr;
     gap: 0.55rem;
