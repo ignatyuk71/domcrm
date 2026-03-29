@@ -207,21 +207,6 @@
           <div class="modal-body">
             <div class="details-layout">
               <aside class="details-side">
-                <div class="side-photo">
-                  <div class="side-block-title">Фото товару</div>
-                  <div class="side-photo-frame">
-                    <img
-                      v-if="selectedPrimaryImage"
-                      :src="selectedPrimaryImage"
-                      alt="Фото товару"
-                    />
-                    <div v-else class="side-photo-empty">
-                      <i class="bi bi-image"></i>
-                      <span>Фото відсутнє</span>
-                    </div>
-                  </div>
-                </div>
-
                 <div class="side-metrics">
                   <div class="side-metric side-metric-accent">
                     <span class="metric-label">До пакування</span>
@@ -366,10 +351,6 @@ const selectedOrderMoment = computed(() => {
 const modalTitle = computed(() => selectedIsPacked.value ? 'Запаковане замовлення' : 'Товари до пакування');
 const selectedTotalQty = computed(() => selectedItems.value.reduce((sum, item) => sum + itemQty(item), 0));
 const selectedItemsCount = computed(() => selectedItems.value.length);
-const selectedPrimaryImage = computed(() => {
-  const firstItem = selectedItems.value[0];
-  return firstItem ? itemImage(firstItem) : '';
-});
 const selectedCustomer = computed(() => selectedOrder.value?.customer || {});
 const selectedPackerName = computed(() => selectedOrder.value?.packer?.name || '—');
 const selectedRecipient = computed(() => {
@@ -1033,40 +1014,6 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 0.9rem;
 }
-.side-block-title {
-  font-size: 0.74rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-weight: 800;
-  color: #92400e;
-  margin-bottom: 0.5rem;
-}
-.side-photo-frame {
-  border-radius: 16px;
-  border: 1px solid #fed7aa;
-  background: #fff;
-  min-height: 235px;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.side-photo-frame img {
-  width: 100%;
-  height: 235px;
-  object-fit: cover;
-}
-.side-photo-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: #94a3b8;
-  gap: 0.35rem;
-}
-.side-photo-empty i {
-  font-size: 1.6rem;
-}
 .side-metrics {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1263,10 +1210,6 @@ onUnmounted(() => {
   }
   .details-main {
     order: 1;
-  }
-  .side-photo-frame,
-  .side-photo-frame img {
-    height: 220px;
   }
 }
 @media (max-width: 900px) {
