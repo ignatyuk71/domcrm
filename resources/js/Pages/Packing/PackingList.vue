@@ -71,33 +71,13 @@
             v-for="(order, index) in filteredOrders"
             :key="order.id"
             class="order-row-modern"
-            :class="{
-              'is-priority': order.is_priority && isPending(order),
-              'is-processing': isProcessing(order),
-              'is-packed': isPacked(order),
-              'is-skipped': isSkipped(order)
-            }"
           >
-            <!-- Червона смужка для пріоритетних -->
-            <div v-if="order.is_priority && !isPacked(order)" class="priority-strip"></div>
-
             <div class="order-main-content">
               
               <!-- ID та Місто -->
               <div class="order-identity">
                 <div class="d-flex align-items-center gap-2 mb-1 identity-top">
                   <span class="order-id">#{{ order.order_number }}</span>
-                  
-                  <span v-if="isProcessing(order)" class="badge-status processing">
-                    <i class="bi bi-lightning-fill"></i> У роботі
-                  </span>
-                  <span v-else-if="isSkipped(order)" class="badge-status skipped">
-                    <i class="bi bi-pause-circle"></i> Відкладено
-                  </span>
-                  <span v-else-if="isPacked(order)" class="badge-status packed">
-                    <i class="bi bi-check-lg"></i> Запаковано
-                  </span>
-                  <span v-else class="badge-status pending">Черга</span>
                 </div>
                 <div class="order-sub">
                    <i class="bi bi-geo-alt-fill"></i>
@@ -128,18 +108,9 @@
 
               <!-- Час / Статус -->
               <div class="order-timing">
-                <div class="timing-label">Статус</div>
+                <div class="timing-label">Оновлено</div>
                 <div class="timing-val">
-                  <span v-if="isPacked(order)" class="text-success">
-                    <i class="bi bi-clock-history"></i> {{ formatTime(order.packed_at) }}
-                  </span>
-                  <span v-else-if="isProcessing(order)" class="text-processing">
-                    Пакується
-                    <span v-if="order.packer?.name">• {{ order.packer.name }}</span>
-                    <span v-if="order.active_packing_session?.started_at">• {{ formatTime(order.active_packing_session.started_at) }}</span>
-                  </span>
-                  <span v-else-if="isSkipped(order)" class="text-skipped">Відкладено до готовності</span>
-                  <span v-else class="text-waiting">{{ formatAge(order.created_at) }} очікує</span>
+                  <span class="text-waiting">{{ formatAge(order.updated_at || order.created_at) }}</span>
                 </div>
               </div>
 
@@ -152,14 +123,6 @@
                 >
                   <i class="bi bi-info-circle me-1"></i> Деталі
                 </button>
-                <div v-else-if="isProcessing(order)" class="processing-actions">
-                  <button class="btn-action-primary continue" @click="startPacking(order.id)">
-                    Продовжити <i class="bi bi-arrow-right"></i>
-                  </button>
-                  <button v-if="order.can_release" class="btn-action-link" @click.stop="releasePacking(order)">
-                    <i class="bi bi-unlock me-1"></i> Забрати
-                  </button>
-                </div>
                 <button v-else class="btn-action-primary" @click="startPacking(order.id)">
                   Пакувати
                 </button>
@@ -287,13 +250,9 @@ let refreshInterval = null;
 
 // --- Helpers ---
 // Логіка статусів будується на packing_status, щоб не залежати від ID довідника.
-const isPending = (o) => o.packing_status === 'pending' || !o.packing_status;
-const isProcessing = (o) => o.packing_status === 'processing';
+const isPending = (o) => o.packing_status === 'pending' || o.packing_status === 'processing' || !o.packing_status;
 const isSkipped = (o) => o.packing_status === 'skipped';
 const isPacked = (o) => o.packing_status === 'packed' || !!o.packed_at;
-
-// Шукаємо замовлення, яке я вже почав, але не закінчив
-const myActiveOrder = computed(() => orders.value.find(o => isProcessing(o)));
 
 const pendingOrdersCount = computed(() => orders.value.filter(o => isPending(o)).length);
 const urgentCount = computed(() => orders.value.filter(o => o.is_priority && isPending(o)).length);
@@ -342,13 +301,12 @@ const filteredOrders = computed(() => {
 
   // Сортування
   return result.sort((a, b) => {
-    // 1. Статус (В роботі -> Черга -> Запаковані)
+    // 1. Статус (Черга -> Відкладені -> Запаковані)
     const getStatusWeight = (o) => {
-      if (isProcessing(o)) return 1;
-      if (isPending(o)) return 2;
-      if (isSkipped(o)) return 3;
-      if (isPacked(o)) return 4;
-      return 5;
+      if (isPending(o)) return 1;
+      if (isSkipped(o)) return 2;
+      if (isPacked(o)) return 3;
+      return 4;
     };
     const wA = getStatusWeight(a);
     const wB = getStatusWeight(b);
@@ -442,23 +400,8 @@ const startPacking = async (id) => {
 };
 
 const startPackingFirst = () => {
-  const next = myActiveOrder.value || filteredOrders.value.find(o => isPending(o));
+  const next = filteredOrders.value.find(o => isPending(o));
   if (next) startPacking(next.id);
-};
-
-const releasePacking = async (order) => {
-  if (!order?.id) return;
-  const confirmed = confirm('Зняти пакувальника і повернути замовлення в чергу?');
-  if (!confirmed) return;
-
-  try {
-    const { data } = await axios.post(`/packing/${order.id}/release`);
-    if (data?.success) {
-      refreshData();
-    }
-  } catch (err) {
-    alert(err.response?.data?.error || 'Помилка розблокування');
-  }
 };
 
 const openDetails = (order) => {
@@ -670,22 +613,6 @@ onUnmounted(() => {
 .pulse-icon { animation: pulse 2s infinite; }
 @keyframes pulse { 0% { transform: scale(1) rotate(-15deg); } 50% { transform: scale(1.1) rotate(-15deg); } 100% { transform: scale(1) rotate(-15deg); } }
 
-.order-row-modern.is-skipped {
-  border-style: dashed;
-  border-color: #f59e0b;
-  background: linear-gradient(135deg, #fffaf0 0%, #ffffff 100%);
-}
-
-.badge-status.skipped {
-  background: #fff3cd;
-  color: #9a6700;
-}
-
-.text-skipped {
-  color: #b45309;
-  font-weight: 600;
-}
-
 /* --- Control Panel --- */
 .control-panel {
   background: #fff; padding: 1rem 1.5rem; border-radius: 16px;
@@ -740,9 +667,6 @@ onUnmounted(() => {
   transition: 0.25s; box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
 .order-row-modern:hover { transform: translateY(-2px); box-shadow: 0 10px 25px -5px rgba(0,0,0,0.06); border-color: #cbd5e1; }
-.order-row-modern.is-packed { background: #f0fdf4; border-color: #86efac; opacity: 0.95; }
-.order-row-modern.is-processing { border: 2px solid #f59e0b; background: #fff; box-shadow: 0 4px 20px rgba(245, 158, 11, 0.15); z-index: 10; }
-.priority-strip { position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: #ef4444; z-index: 10; }
 
 .order-main-content {
   display: grid; grid-template-columns: minmax(420px, 1.8fr) minmax(96px, 120px) minmax(140px, auto) 170px;
@@ -784,14 +708,6 @@ onUnmounted(() => {
   width: fit-content;
   justify-self: start;
 }
-.badge-status {
-  font-size: 0.7rem; font-weight: 800; padding: 0.35rem 0.65rem;
-  border-radius: 8px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 5px; margin-left: auto;
-}
-.badge-status.processing { background: #fffbeb; color: #b45309; border: 1px solid #fcd34d; }
-.badge-status.packed { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
-.badge-status.pending { background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; }
-
 .order-items-preview { display: flex; flex-direction: column; justify-content: center; }
 .thumb-stack { display: flex; align-items: center; height: 50px; }
 .avatar {
@@ -811,16 +727,13 @@ onUnmounted(() => {
 
 .timing-label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: #94a3b8; margin-bottom: 2px; }
 .timing-val { font-weight: 600; font-size: 0.95rem; }
-.text-processing { color: #d97706; font-weight: 700; }
 .text-waiting { color: #64748b; }
-.text-success { color: #059669; }
 
 .btn-action-primary {
   background: #1e293b; color: #fff; border: none; padding: 0.75rem 1rem;
   border-radius: 12px; font-weight: 700; font-size: 0.95rem; transition: 0.2s; width: 100%; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.1);
 }
 .btn-action-primary:hover { background: #0f172a; transform: translateY(-1px); box-shadow: 0 5px 12px rgba(0,0,0,0.15); }
-.btn-action-primary.continue { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
 .btn-action-secondary {
   background: #fff;
   color: #0f172a;
@@ -836,20 +749,6 @@ onUnmounted(() => {
 }
 .btn-action-secondary:hover { background: #f8fafc; border-color: #94a3b8; }
 .stamp-done { color: #10b981; font-size: 2.5rem; text-align: center; opacity: 0.5; }
-.processing-actions { display: flex; flex-direction: column; gap: 0.4rem; }
-.btn-action-link {
-  border: none;
-  background: transparent;
-  color: #b45309;
-  font-weight: 700;
-  font-size: 0.85rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-.btn-action-link:hover { color: #92400e; text-decoration: underline; }
-
 .spin { animation: rotation 1s infinite linear; }
 @keyframes rotation { from {transform: rotate(0deg);} to {transform: rotate(359deg);} }
 .empty-state-modern { text-align: center; padding: 4rem 0; color: #94a3b8; }
@@ -1010,10 +909,8 @@ onUnmounted(() => {
   .order-main-content { grid-template-columns: 1fr; text-align: center; padding: 1rem; }
   .order-identity { justify-content: center; flex-direction: column; align-items: center; }
   .identity-top { width: 100%; justify-content: space-between; }
-  .badge-status { position: relative; margin: 0; }
   .order-items-preview, .thumb-stack { align-items: center; justify-content: center; }
   .order-actions { grid-column: 1; grid-row: auto; }
-  .priority-strip { width: 100%; height: 4px; bottom: auto; top: 0; left: 0; }
   .control-panel { flex-direction: column; align-items: stretch; }
   .control-left { flex-direction: column; align-items: stretch; gap: 1rem; }
   .search-wrapper, .actions-group { width: 100%; max-width: none; }
