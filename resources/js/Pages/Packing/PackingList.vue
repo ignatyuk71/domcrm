@@ -143,9 +143,14 @@
                 >
                   <i class="bi bi-info-circle me-1"></i> Деталі
                 </button>
-                <button v-else class="btn-action-primary" @click="startPacking(order.id)">
-                  Пакувати
-                </button>
+                <div v-else class="queue-actions">
+                  <button class="btn-action-primary" @click="startPacking(order.id)">
+                    Пакувати
+                  </button>
+                  <button class="btn-action-secondary" @click.stop="openDetails(order)">
+                    <i class="bi bi-eye me-1"></i> Переглянути
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -165,7 +170,7 @@
         <div class="packing-modal">
           <div class="modal-header">
             <div>
-              <div class="modal-title">Запаковане замовлення</div>
+              <div class="modal-title">{{ modalTitle }}</div>
               <div class="modal-subtitle">
                 №{{ selectedOrderNumber }}
                 <span v-if="selectedPackedAt">• {{ formatDateTime(selectedPackedAt) }}</span>
@@ -180,13 +185,13 @@
             <div class="modal-grid">
               <div class="modal-section">
                 <div class="section-title">Доставка</div>
-                <div class="detail-row">
+                <div class="detail-row" v-if="selectedIsPacked">
                   <span class="detail-label">Пакувальник</span>
                   <span class="detail-value">{{ selectedPackerName }}</span>
                 </div>
                 <div class="detail-row">
-                  <span class="detail-label">Час пакування</span>
-                  <span class="detail-value">{{ selectedPackedAt ? formatDateTime(selectedPackedAt) : '—' }}</span>
+                  <span class="detail-label">{{ selectedIsPacked ? 'Час пакування' : 'Створено' }}</span>
+                  <span class="detail-value">{{ selectedOrderMoment }}</span>
                 </div>
                 <div class="detail-row">
                   <span class="detail-label">ТТН</span>
@@ -238,6 +243,7 @@
           <div class="modal-actions">
             <button class="btn-modal-secondary" @click="closeDetails">Закрити</button>
             <button
+              v-if="selectedIsPacked"
               class="btn-modal-primary"
               :disabled="!canPrintSelected || printingSelected"
               @click="printSelectedTtn"
@@ -284,6 +290,15 @@ const selectedItems = computed(() => Array.isArray(selectedOrder.value?.items) ?
 const selectedDelivery = computed(() => selectedOrder.value?.delivery || {});
 const selectedOrderNumber = computed(() => selectedOrder.value?.order_number || selectedOrder.value?.id || '—');
 const selectedPackedAt = computed(() => selectedOrder.value?.packed_at || selectedOrder.value?.updated_at || null);
+const selectedIsPacked = computed(() => isPacked(selectedOrder.value || {}));
+const selectedOrderMoment = computed(() => {
+  const raw = selectedIsPacked.value
+    ? selectedPackedAt.value
+    : (selectedOrder.value?.created_at || selectedOrder.value?.updated_at || null);
+
+  return raw ? formatDateTime(raw) : '—';
+});
+const modalTitle = computed(() => selectedIsPacked.value ? 'Запаковане замовлення' : 'Товари до пакування');
 const selectedCustomer = computed(() => selectedOrder.value?.customer || {});
 const selectedPackerName = computed(() => selectedOrder.value?.packer?.name || '—');
 const selectedDeliveryService = computed(() => (
@@ -799,6 +814,11 @@ onUnmounted(() => {
   box-shadow: 0 2px 5px rgba(0,0,0,0.08);
 }
 .btn-action-secondary:hover { background: #f8fafc; border-color: #94a3b8; }
+.queue-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
 .stamp-done { color: #10b981; font-size: 2.5rem; text-align: center; opacity: 0.5; }
 .spin { animation: rotation 1s infinite linear; }
 @keyframes rotation { from {transform: rotate(0deg);} to {transform: rotate(359deg);} }
