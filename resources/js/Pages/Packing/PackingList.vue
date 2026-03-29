@@ -223,7 +223,7 @@
                 <div class="section-title">{{ selectedIsPacked ? 'Товари' : 'Що пакувати' }}</div>
                 <div v-if="!selectedIsPacked" class="preview-order-meta">
                   <span class="preview-chip preview-chip-accent">
-                    До пакування: {{ selectedTotalQty }} {{ declension(selectedTotalQty, ['одиниця', 'одиниці', 'одиниць']) }}
+                    До пакування: {{ selectedTotalQty }} {{ declension(selectedTotalQty, ['пара', 'пари', 'пар']) }}
                   </span>
                   <span class="preview-chip">{{ selectedRecipient }}</span>
                   <span class="preview-chip">{{ selectedDelivery.city_name || 'Місто не вказано' }}</span>
@@ -241,7 +241,9 @@
                         <span>SKU: {{ itemSku(item) }}</span>
                       </div>
                     </div>
-                    <div class="modal-item-qty">x{{ itemQty(item) }}</div>
+                    <div class="modal-item-qty">
+                      {{ selectedIsPacked ? `x${itemQty(item)}` : itemQtyPairs(item) }}
+                    </div>
                   </div>
                   <div v-if="!selectedItems.length" class="modal-empty">Товари відсутні</div>
                 </div>
@@ -599,6 +601,10 @@ const itemSize = (item) => item?.size || item?.variant?.size || '—';
 const itemSku = (item) => item?.sku || item?.variant?.sku || item?.product?.sku || '—';
 const itemType = (item) => item?.variant?.title || item?.product?.category?.name || item?.product?.type || item?.type || '—';
 const itemQty = (item) => Number(item?.qty || 1);
+const itemQtyPairs = (item) => {
+  const qty = itemQty(item);
+  return `${qty} ${declension(qty, ['пара', 'пари', 'пар'])}`;
+};
 const itemImage = (item) => normalizeImageUrl(
   item?.product?.main_photo_url ||
   item?.product?.main_photo_path ||
@@ -974,6 +980,10 @@ onUnmounted(() => {
   background: #fff7ed;
   border-color: #fdba74;
   color: #9a3412;
+  font-size: 0.95rem;
+  font-weight: 800;
+  min-height: 36px;
+  padding: 0.45rem 0.8rem;
 }
 .preview-mode .modal-section-wide {
   background: linear-gradient(180deg, #fffbeb 0%, #ffffff 42%);
@@ -997,12 +1007,14 @@ onUnmounted(() => {
   font-size: 0.8rem;
 }
 .preview-item .modal-item-qty {
-  min-width: 42px;
+  min-width: 92px;
   text-align: center;
   border-radius: 999px;
-  padding: 0.4rem 0.55rem;
+  padding: 0.48rem 0.8rem;
   background: #fff7ed;
   color: #9a3412;
+  font-size: 1rem;
+  font-weight: 900;
 }
 
 .modal-actions {
