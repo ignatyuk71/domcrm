@@ -31,23 +31,46 @@
 
       <!-- Панель керування (Пошук + Оновлення) -->
       <div class="control-panel mb-4">
-        <div class="d-flex align-items-center gap-3 flex-wrap control-left">
-          
+        <div class="control-left">
+          <div class="control-copy">
+            <div class="control-title">Пошук та навігація по черзі</div>
+            <div class="control-hint">Введіть номер замовлення, місто або відділення</div>
+          </div>
+
+          <div class="control-fields">
           <div class="search-wrapper">
-            <i class="bi bi-search"></i>
-            <input 
-              v-model="searchQuery" 
-              type="text" 
-              placeholder="Номер замовлення або місто..."
-            />
+            <label class="field-label" for="packing-search">Пошук</label>
+            <div class="search-input-wrap">
+              <i class="bi bi-search"></i>
+              <input
+                id="packing-search"
+                v-model="searchQuery"
+                type="text"
+                placeholder="Номер замовлення або місто..."
+              />
+              <button
+                v-if="searchQuery"
+                type="button"
+                class="search-clear"
+                title="Очистити пошук"
+                @click="clearSearch"
+              >
+                <i class="bi bi-x-lg"></i>
+              </button>
+            </div>
           </div>
 
           <div class="settings-group">
-             <label class="auto-refresh-switch" title="Автоматично оновлювати список кожні 30 сек">
-               <input type="checkbox" v-model="autoRefreshEnabled">
-               <span class="switch-slider"></span>
-               <span class="switch-label">Авто-оновлення</span>
-             </label>
+            <span class="field-label">Оновлення</span>
+            <label class="auto-refresh-switch" title="Автоматично оновлювати список кожні 30 сек">
+              <input type="checkbox" v-model="autoRefreshEnabled">
+              <span class="switch-slider"></span>
+              <span class="switch-label">Авто-оновлення</span>
+            </label>
+            <span class="switch-state" :class="{ active: autoRefreshEnabled }">
+              {{ autoRefreshEnabled ? 'Увімкнено (кожні 30 сек)' : 'Вимкнено' }}
+            </span>
+          </div>
           </div>
         </div>
 
@@ -170,7 +193,12 @@
         <div class="packing-modal">
           <div class="modal-header">
             <div>
-              <div class="modal-title">{{ modalTitle }}</div>
+              <div class="modal-title-row">
+                <div class="modal-title">{{ modalTitle }}</div>
+                <span class="modal-status-pill" :class="{ packed: selectedIsPacked, preview: !selectedIsPacked }">
+                  {{ selectedIsPacked ? 'Запаковане' : 'До пакування' }}
+                </span>
+              </div>
               <div class="modal-subtitle">
                 №{{ selectedOrderNumber }}
                 <span v-if="selectedOrderMoment">• {{ selectedOrderMoment }}</span>
@@ -223,11 +251,21 @@
                 <div class="section-title">{{ selectedIsPacked ? 'Товари' : 'Що пакувати' }}</div>
                 <div v-if="!selectedIsPacked" class="preview-order-meta">
                   <span class="preview-chip preview-chip-accent">
-                    До пакування: {{ selectedTotalQty }} {{ declension(selectedTotalQty, ['пара', 'пари', 'пар']) }}
+                    <i class="bi bi-box-seam"></i>
+                    <span>До пакування: {{ selectedTotalQty }} {{ declension(selectedTotalQty, ['пара', 'пари', 'пар']) }}</span>
                   </span>
-                  <span class="preview-chip">{{ selectedRecipient }}</span>
-                  <span class="preview-chip">{{ selectedDelivery.city_name || 'Місто не вказано' }}</span>
-                  <span class="preview-chip">{{ selectedDelivery.warehouse_name || 'Відділення не вказано' }}</span>
+                  <span class="preview-chip">
+                    <i class="bi bi-person"></i>
+                    <span>Одержувач: {{ selectedRecipient }}</span>
+                  </span>
+                  <span class="preview-chip">
+                    <i class="bi bi-geo-alt"></i>
+                    <span>Місто: {{ selectedDelivery.city_name || 'не вказано' }}</span>
+                  </span>
+                  <span class="preview-chip">
+                    <i class="bi bi-shop"></i>
+                    <span>Відділення: {{ selectedDelivery.warehouse_name || 'не вказано' }}</span>
+                  </span>
                 </div>
                 <div class="modal-items">
                   <div v-for="(item, idx) in selectedItems" :key="idx" class="modal-item" :class="{ 'preview-item': !selectedIsPacked }">
@@ -435,6 +473,9 @@ const fetchAll = async () => {
 };
 
 const refreshData = () => fetchAll();
+const clearSearch = () => {
+  searchQuery.value = '';
+};
 
 const startPacking = async (id) => {
   try {
@@ -691,19 +732,83 @@ onUnmounted(() => {
   background: #fff; padding: 1rem 1.5rem; border-radius: 16px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
   border: 1px solid #e2e8f0;
-  display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;
+  display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 1rem;
 }
-.control-left { flex-grow: 1; }
-.search-wrapper { position: relative; flex-grow: 1; max-width: 350px; }
-.search-wrapper i { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: #94a3b8; }
+.control-left {
+  flex-grow: 1;
+  min-width: 320px;
+}
+.control-copy {
+  margin-bottom: 0.65rem;
+}
+.control-title {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+.control-hint {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin-top: 0.15rem;
+}
+.control-fields {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+}
+.field-label {
+  display: inline-block;
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+  margin-bottom: 0.35rem;
+}
+.search-wrapper {
+  flex-grow: 1;
+  max-width: 380px;
+}
+.search-input-wrap {
+  position: relative;
+}
+.search-input-wrap i {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #94a3b8;
+}
 .search-wrapper input {
   width: 100%; border: 1px solid #94a3b8; padding: 0.7rem 1rem 0.7rem 2.8rem;
   border-radius: 12px; font-size: 0.95rem; outline: none; transition: 0.2s; background: #f8fafc;
 }
 .search-wrapper input:focus { border-color: #3b82f6; background: #fff; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+.search-clear {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.search-clear:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
 
 /* Settings Switch */
-.settings-group { margin-left: 1rem; }
+.settings-group {
+  min-width: 210px;
+}
 .auto-refresh-switch { display: flex; align-items: center; cursor: pointer; gap: 8px; font-size: 0.85rem; color: #475569; font-weight: 600; }
 .auto-refresh-switch input { display: none; }
 .switch-slider {
@@ -715,6 +820,16 @@ onUnmounted(() => {
 }
 .auto-refresh-switch input:checked + .switch-slider { background: #3b82f6; }
 .auto-refresh-switch input:checked + .switch-slider::before { transform: translateX(16px); }
+.switch-state {
+  display: inline-block;
+  margin-top: 0.25rem;
+  font-size: 0.78rem;
+  color: #64748b;
+}
+.switch-state.active {
+  color: #0f766e;
+  font-weight: 700;
+}
 
 /* Actions */
 .actions-group { display: flex; align-items: center; gap: 0.75rem; }
@@ -878,6 +993,34 @@ onUnmounted(() => {
 }
 .modal-title { font-size: 1.1rem; font-weight: 800; color: #0f172a; }
 .modal-subtitle { font-size: 0.85rem; color: #64748b; margin-top: 0.15rem; }
+.modal-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.modal-status-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border: 1px solid transparent;
+}
+.modal-status-pill.preview {
+  background: #fff7ed;
+  border-color: #fdba74;
+  color: #9a3412;
+}
+.modal-status-pill.packed {
+  background: #ecfdf5;
+  border-color: #86efac;
+  color: #166534;
+}
 .modal-close {
   border: none;
   background: #fff;
@@ -967,6 +1110,7 @@ onUnmounted(() => {
 .preview-chip {
   display: inline-flex;
   align-items: center;
+  gap: 0.4rem;
   min-height: 30px;
   padding: 0.35rem 0.65rem;
   border-radius: 999px;
@@ -975,6 +1119,10 @@ onUnmounted(() => {
   color: #475569;
   font-size: 0.8rem;
   font-weight: 700;
+}
+.preview-chip i {
+  font-size: 0.88rem;
+  opacity: 0.8;
 }
 .preview-chip-accent {
   background: #fff7ed;
@@ -1078,9 +1226,11 @@ onUnmounted(() => {
   .order-actions { grid-column: 1; grid-row: auto; }
   .priority-strip { width: 100%; height: 4px; bottom: auto; top: 0; left: 0; }
   .control-panel { flex-direction: column; align-items: stretch; }
-  .control-left { flex-direction: column; align-items: stretch; gap: 1rem; }
-  .search-wrapper, .actions-group { width: 100%; max-width: none; }
-  .settings-group { margin: 0; justify-content: space-between; }
+  .control-fields { flex-direction: column; align-items: stretch; gap: 0.7rem; }
+  .search-wrapper, .actions-group, .settings-group { width: 100%; max-width: none; }
+  .settings-group { min-width: 0; }
   .btn-main-action { flex: 1; justify-content: center; }
+  .modal-title-row { align-items: flex-start; }
+  .preview-chip { width: 100%; }
 }
 </style>
