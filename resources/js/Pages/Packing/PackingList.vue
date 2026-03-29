@@ -210,82 +210,103 @@
           </div>
 
           <div class="modal-body">
-            <div class="modal-grid" :class="{ 'preview-mode': !selectedIsPacked }">
-              <div class="modal-section" v-if="selectedIsPacked">
-                <div class="section-title">Доставка</div>
-                <div class="detail-row" v-if="selectedIsPacked">
-                  <span class="detail-label">Пакувальник</span>
-                  <span class="detail-value">{{ selectedPackerName }}</span>
+            <div class="details-layout">
+              <aside class="details-side">
+                <div class="side-photo">
+                  <div class="side-block-title">Фото товару</div>
+                  <div class="side-photo-frame">
+                    <img
+                      v-if="selectedPrimaryImage"
+                      :src="selectedPrimaryImage"
+                      alt="Фото товару"
+                    />
+                    <div v-else class="side-photo-empty">
+                      <i class="bi bi-image"></i>
+                      <span>Фото відсутнє</span>
+                    </div>
+                  </div>
                 </div>
-                <div class="detail-row">
-                  <span class="detail-label">{{ selectedIsPacked ? 'Час пакування' : 'Створено' }}</span>
-                  <span class="detail-value">{{ selectedOrderMoment }}</span>
-                </div>
-                <div class="detail-row">
-                  <span class="detail-label">ТТН</span>
-                  <span class="detail-value">{{ selectedDelivery.ttn || '—' }}</span>
-                </div>
-                <div class="detail-row">
-                  <span class="detail-label">Служба</span>
-                  <span class="detail-value">{{ selectedDeliveryService }}</span>
-                </div>
-                <div class="detail-row">
-                  <span class="detail-label">Одержувач</span>
-                  <span class="detail-value">{{ selectedRecipient }}</span>
-                </div>
-                <div class="detail-row">
-                  <span class="detail-label">Телефон</span>
-                  <span class="detail-value">{{ selectedRecipientPhone }}</span>
-                </div>
-                <div class="detail-row">
-                  <span class="detail-label">Місто</span>
-                  <span class="detail-value">{{ selectedDelivery.city_name || '—' }}</span>
-                </div>
-                <div class="detail-row">
-                  <span class="detail-label">Відділення</span>
-                  <span class="detail-value">{{ selectedDelivery.warehouse_name || '—' }}</span>
-                </div>
-              </div>
 
-              <div class="modal-section" :class="{ 'modal-section-wide': !selectedIsPacked }">
-                <div class="section-title">{{ selectedIsPacked ? 'Товари' : 'Що пакувати' }}</div>
-                <div v-if="!selectedIsPacked" class="preview-order-meta">
-                  <span class="preview-chip preview-chip-accent">
-                    <i class="bi bi-box-seam"></i>
-                    <span>До пакування: {{ selectedTotalQty }} {{ declension(selectedTotalQty, ['пара', 'пари', 'пар']) }}</span>
-                  </span>
-                  <span class="preview-chip">
-                    <i class="bi bi-person"></i>
-                    <span>Одержувач: {{ selectedRecipient }}</span>
-                  </span>
-                  <span class="preview-chip">
-                    <i class="bi bi-geo-alt"></i>
-                    <span>Місто: {{ selectedDelivery.city_name || 'не вказано' }}</span>
-                  </span>
-                  <span class="preview-chip">
-                    <i class="bi bi-shop"></i>
-                    <span>Відділення: {{ selectedDelivery.warehouse_name || 'не вказано' }}</span>
-                  </span>
+                <div class="side-metrics">
+                  <div class="side-metric side-metric-accent">
+                    <span class="metric-label">До пакування</span>
+                    <span class="metric-value">{{ selectedTotalQty }} {{ declension(selectedTotalQty, ['пара', 'пари', 'пар']) }}</span>
+                  </div>
+                  <div class="side-metric">
+                    <span class="metric-label">Позицій</span>
+                    <span class="metric-value">{{ selectedItemsCount }}</span>
+                  </div>
                 </div>
-                <div class="modal-items">
-                  <div v-for="(item, idx) in selectedItems" :key="idx" class="modal-item" :class="{ 'preview-item': !selectedIsPacked }">
-                    <div class="modal-item-thumb" :style="itemThumbStyle(item)"></div>
-                    <div class="modal-item-info">
-                      <div class="modal-item-title">{{ itemTitle(item) }}</div>
-                      <div class="modal-item-meta">
+
+                <div class="side-details">
+                  <div class="side-detail-row">
+                    <span>Одержувач</span>
+                    <strong>{{ selectedRecipient }}</strong>
+                  </div>
+                  <div class="side-detail-row">
+                    <span>Телефон</span>
+                    <strong>{{ selectedRecipientPhone }}</strong>
+                  </div>
+                  <div class="side-detail-row">
+                    <span>Місто</span>
+                    <strong>{{ selectedDelivery.city_name || '—' }}</strong>
+                  </div>
+                  <div class="side-detail-row">
+                    <span>Відділення</span>
+                    <strong>{{ selectedDelivery.warehouse_name || '—' }}</strong>
+                  </div>
+                  <div class="side-detail-row" v-if="selectedIsPacked">
+                    <span>Пакувальник</span>
+                    <strong>{{ selectedPackerName }}</strong>
+                  </div>
+                  <div class="side-detail-row" v-if="selectedIsPacked">
+                    <span>ТТН</span>
+                    <strong>{{ selectedDelivery.ttn || '—' }}</strong>
+                  </div>
+                </div>
+              </aside>
+
+              <section class="details-main">
+                <div class="details-main-head">
+                  <div class="details-main-title">{{ selectedIsPacked ? 'Склад замовлення' : 'Що пакувати' }}</div>
+                  <div class="details-main-subtitle">Перевір фото, колір, розмір і кількість кожної пари</div>
+                </div>
+
+                <div class="product-list">
+                  <article
+                    v-for="(item, idx) in selectedItems"
+                    :key="idx"
+                    class="product-card"
+                  >
+                    <div class="product-photo">
+                      <img
+                        v-if="itemImage(item)"
+                        :src="itemImage(item)"
+                        :alt="itemTitle(item)"
+                        loading="lazy"
+                      />
+                      <div v-else class="product-photo-empty">
+                        <i class="bi bi-image"></i>
+                      </div>
+                    </div>
+
+                    <div class="product-content">
+                      <div class="product-title">{{ itemTitle(item) }}</div>
+                      <div class="product-specs">
                         <span v-if="itemType(item) !== '—'">Тип: {{ itemType(item) }}</span>
                         <span>Колір: {{ itemColor(item) }}</span>
                         <span>Розмір: {{ itemSize(item) }}</span>
                         <span>SKU: {{ itemSku(item) }}</span>
                       </div>
                     </div>
-                    <div class="modal-item-qty">
-                      {{ selectedIsPacked ? `x${itemQty(item)}` : itemQtyPairs(item) }}
+
+                    <div class="product-qty">
+                      {{ itemQtyPairs(item) }}
                     </div>
-                  </div>
+                  </article>
                   <div v-if="!selectedItems.length" class="modal-empty">Товари відсутні</div>
                 </div>
-              </div>
+              </section>
             </div>
           </div>
 
@@ -349,14 +370,13 @@ const selectedOrderMoment = computed(() => {
 });
 const modalTitle = computed(() => selectedIsPacked.value ? 'Запаковане замовлення' : 'Товари до пакування');
 const selectedTotalQty = computed(() => selectedItems.value.reduce((sum, item) => sum + itemQty(item), 0));
+const selectedItemsCount = computed(() => selectedItems.value.length);
+const selectedPrimaryImage = computed(() => {
+  const firstItem = selectedItems.value[0];
+  return firstItem ? itemImage(firstItem) : '';
+});
 const selectedCustomer = computed(() => selectedOrder.value?.customer || {});
 const selectedPackerName = computed(() => selectedOrder.value?.packer?.name || '—');
-const selectedDeliveryService = computed(() => (
-  selectedDelivery.value?.carrier ||
-  selectedDelivery.value?.delivery_type ||
-  selectedDelivery.value?.service_type ||
-  '—'
-));
 const selectedRecipient = computed(() => {
   const deliveryName = selectedDelivery.value?.recipient_name;
   const customerName = [selectedCustomer.value?.first_name, selectedCustomer.value?.last_name]
@@ -654,10 +674,6 @@ const itemImage = (item) => normalizeImageUrl(
   item?.photo ||
   ''
 );
-const itemThumbStyle = (item) => {
-  const src = itemImage(item);
-  return src ? { backgroundImage: `url(${src})` } : {};
-};
 
 onMounted(() => {
   fetchAll();
@@ -975,7 +991,7 @@ onUnmounted(() => {
 }
 
 .packing-modal {
-  width: min(980px, 100%);
+  width: min(1180px, 100%);
   background: #fff;
   border-radius: 20px;
   box-shadow: 0 25px 60px rgba(15, 23, 42, 0.2);
@@ -1035,134 +1051,209 @@ onUnmounted(() => {
 }
 .modal-close:hover { background: #f1f5f9; }
 
-.modal-body { padding: 1.5rem; }
-.modal-grid {
+.modal-body { padding: 1.25rem; }
+.details-layout {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) minmax(320px, 1.6fr);
-  gap: 1.5rem;
-}
-.modal-grid.preview-mode {
-  grid-template-columns: 1fr;
-}
-.modal-section {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 16px;
-  padding: 1rem;
-}
-.modal-section-wide {
-  width: 100%;
-}
-.section-title {
-  font-size: 0.85rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #64748b;
-  font-weight: 700;
-  margin-bottom: 0.75rem;
-}
-.detail-row {
-  display: flex;
-  justify-content: space-between;
+  grid-template-columns: minmax(300px, 340px) minmax(0, 1fr);
   gap: 1rem;
-  padding: 0.35rem 0;
-  border-bottom: 1px dashed #e2e8f0;
 }
-.detail-row:last-child { border-bottom: none; }
-.detail-label { color: #64748b; font-weight: 600; font-size: 0.85rem; }
-.detail-value { color: #0f172a; font-weight: 700; text-align: right; }
-
-.modal-items { display: flex; flex-direction: column; gap: 0.75rem; }
-.modal-item {
+.details-side {
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 1rem;
+  background: linear-gradient(180deg, #fffbeb 0%, #ffffff 58%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+.side-block-title {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 800;
+  color: #92400e;
+  margin-bottom: 0.5rem;
+}
+.side-photo-frame {
+  border-radius: 16px;
+  border: 1px solid #fed7aa;
+  background: #fff;
+  min-height: 235px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.side-photo-frame img {
+  width: 100%;
+  height: 235px;
+  object-fit: cover;
+}
+.side-photo-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  gap: 0.35rem;
+}
+.side-photo-empty i {
+  font-size: 1.6rem;
+}
+.side-metrics {
   display: grid;
-  grid-template-columns: 56px 1fr auto;
-  gap: 0.75rem;
-  align-items: center;
-  padding: 0.6rem;
-  border-radius: 12px;
-  background: #f8fafc;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+.side-metric {
+  border-radius: 14px;
   border: 1px solid #e2e8f0;
+  background: #fff;
+  padding: 0.65rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
 }
-.modal-item-thumb {
-  width: 56px;
-  height: 56px;
-  border-radius: 12px;
-  background: #e2e8f0;
-  background-size: cover;
-  background-position: center;
+.side-metric-accent {
+  border-color: #fdba74;
+  background: #fff7ed;
 }
-.modal-item-title { font-weight: 700; color: #0f172a; }
-.modal-item-meta {
-  font-size: 0.82rem;
+.metric-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
   color: #64748b;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 0.8rem;
-}
-.modal-item-qty { font-weight: 800; color: #0f172a; }
-.modal-empty { color: #94a3b8; font-size: 0.9rem; text-align: center; padding: 0.5rem 0; }
-.preview-order-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 0.85rem;
-}
-.preview-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  min-height: 30px;
-  padding: 0.35rem 0.65rem;
-  border-radius: 999px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  color: #475569;
-  font-size: 0.8rem;
   font-weight: 700;
 }
-.preview-chip i {
-  font-size: 0.88rem;
-  opacity: 0.8;
-}
-.preview-chip-accent {
-  background: #fff7ed;
-  border-color: #fdba74;
-  color: #9a3412;
-  font-size: 0.95rem;
-  font-weight: 800;
-  min-height: 36px;
-  padding: 0.45rem 0.8rem;
-}
-.preview-mode .modal-section-wide {
-  background: linear-gradient(180deg, #fffbeb 0%, #ffffff 42%);
-  border-color: #fdba74;
-}
-.preview-item {
-  grid-template-columns: 68px 1fr auto;
-  background: #ffffff;
-  border-color: #fdba74;
-  box-shadow: 0 4px 14px -10px rgba(217, 119, 6, 0.45);
-}
-.preview-item .modal-item-thumb {
-  width: 68px;
-  height: 68px;
-}
-.preview-item .modal-item-title {
-  font-size: 0.98rem;
-}
-.preview-item .modal-item-meta {
-  color: #475569;
-  font-size: 0.8rem;
-}
-.preview-item .modal-item-qty {
-  min-width: 92px;
-  text-align: center;
-  border-radius: 999px;
-  padding: 0.48rem 0.8rem;
-  background: #fff7ed;
-  color: #9a3412;
+.metric-value {
   font-size: 1rem;
   font-weight: 900;
+  color: #0f172a;
+  line-height: 1.15;
+}
+.side-details {
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #fff;
+  padding: 0.7rem 0.8rem;
+}
+.side-detail-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px dashed #e2e8f0;
+}
+.side-detail-row:last-child {
+  border-bottom: none;
+}
+.side-detail-row span {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #94a3b8;
+  font-weight: 700;
+}
+.side-detail-row strong {
+  font-size: 0.92rem;
+  color: #0f172a;
+  word-break: break-word;
+}
+.details-main {
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #fff;
+  padding: 1rem;
+}
+.details-main-head {
+  margin-bottom: 0.9rem;
+}
+.details-main-title {
+  font-size: 1rem;
+  font-weight: 900;
+  color: #0f172a;
+}
+.details-main-subtitle {
+  font-size: 0.82rem;
+  color: #64748b;
+  margin-top: 0.15rem;
+}
+.product-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 60vh;
+  overflow: auto;
+  padding-right: 0.2rem;
+}
+.product-card {
+  display: grid;
+  grid-template-columns: 116px 1fr auto;
+  gap: 0.8rem;
+  align-items: center;
+  border: 1px solid #f59e0b;
+  border-radius: 16px;
+  background: #fffdfa;
+  padding: 0.7rem;
+}
+.product-photo {
+  width: 116px;
+  height: 116px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #e2e8f0;
+  border: 1px solid #cbd5e1;
+}
+.product-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.product-photo-empty {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  font-size: 1.5rem;
+}
+.product-title {
+  font-size: 1.1rem;
+  font-weight: 900;
+  color: #0f172a;
+  line-height: 1.2;
+}
+.product-specs {
+  margin-top: 0.35rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.6rem;
+  font-size: 0.86rem;
+  color: #475569;
+}
+.product-specs span {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  padding: 0.23rem 0.55rem;
+}
+.product-qty {
+  min-width: 106px;
+  text-align: center;
+  border-radius: 999px;
+  padding: 0.58rem 0.8rem;
+  background: #f59e0b;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 900;
+  box-shadow: 0 8px 16px -10px rgba(217, 119, 6, 0.65);
+}
+.modal-empty {
+  color: #94a3b8;
+  font-size: 0.94rem;
+  text-align: center;
+  padding: 1rem 0;
 }
 
 .modal-actions {
@@ -1196,17 +1287,32 @@ onUnmounted(() => {
   cursor: not-allowed;
 }
 
+@media (max-width: 1080px) {
+  .details-layout {
+    grid-template-columns: 1fr;
+  }
+  .details-side {
+    order: 2;
+  }
+  .details-main {
+    order: 1;
+  }
+  .side-photo-frame,
+  .side-photo-frame img {
+    height: 220px;
+  }
+}
 @media (max-width: 900px) {
-  .modal-grid { grid-template-columns: 1fr; }
-  .preview-item {
-    grid-template-columns: 56px 1fr;
+  .product-card {
+    grid-template-columns: 96px 1fr;
     grid-template-rows: auto auto;
+    align-items: start;
   }
-  .preview-item .modal-item-thumb {
-    width: 56px;
-    height: 56px;
+  .product-photo {
+    width: 96px;
+    height: 96px;
   }
-  .preview-item .modal-item-qty {
+  .product-qty {
     grid-column: 1 / -1;
     justify-self: start;
   }
@@ -1231,6 +1337,24 @@ onUnmounted(() => {
   .settings-group { min-width: 0; }
   .btn-main-action { flex: 1; justify-content: center; }
   .modal-title-row { align-items: flex-start; }
-  .preview-chip { width: 100%; }
+  .details-main { padding: 0.8rem; }
+  .details-side { padding: 0.8rem; }
+  .side-metrics { grid-template-columns: 1fr; }
+  .product-card {
+    grid-template-columns: 1fr;
+    gap: 0.55rem;
+  }
+  .product-photo {
+    width: 100%;
+    max-width: 180px;
+    height: 180px;
+  }
+  .product-qty {
+    width: 100%;
+    justify-self: stretch;
+  }
+  .modal-actions {
+    padding: 0.9rem 1rem 1.1rem;
+  }
 }
 </style>
