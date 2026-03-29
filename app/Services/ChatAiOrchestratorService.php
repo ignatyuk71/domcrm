@@ -1814,30 +1814,8 @@ JSON;
 
     private function prependGreetingIfNeeded(string $reply, int $conversationId): string
     {
-        $cleanReply = trim($reply);
-        if ($cleanReply === '') {
-            return $cleanReply;
-        }
-
-        $alreadyHasSystemOutbound = ChatMessage::query()
-            ->where('conversation_id', $conversationId)
-            ->where('direction', 'outbound')
-            ->where('source', 'system')
-            ->exists();
-
-        if ($alreadyHasSystemOutbound) {
-            return $cleanReply;
-        }
-
-        if (
-            mb_stripos($cleanReply, 'віта') !== false
-            || mb_stripos($cleanReply, 'менеджер') !== false
-        ) {
-            return $cleanReply;
-        }
-
-        return "Доброго дня 👋\nЯ ваш АІ-помічник, допоможу підібрати розмір, модель та відповім на всі питання 😊\n\nЯкщо захочете поспілкуватися з менеджером — просто напишіть \"менеджер\"\n\n"
-            . $cleanReply;
+        // Вітальне повідомлення тимчасово вимкнене за запитом бізнесу.
+        return trim($reply);
     }
 
     /**
