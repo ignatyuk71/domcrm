@@ -378,27 +378,12 @@
         <div class="nav-divider">Склад</div>
 
         @php
-            $queueStatusCodes = config('packing.status_codes.queue', []);
-            if (!is_array($queueStatusCodes)) {
-                $queueStatusCodes = [$queueStatusCodes];
-            }
+            $packingService = app(\App\Services\PackingService::class);
+            $packingService->releaseStaleOrders();
+            $queueStatusIds = $packingService->queueStatusIds();
 
-            $queueStatusIds = \App\Models\Status::query()
-                ->where('type', 'order')
-                ->whereIn('code', array_filter(array_map('strval', $queueStatusCodes)))
-                ->pluck('id')
-                ->map(fn ($id) => (int) $id)
-                ->all();
-
-            if (empty($queueStatusIds)) {
-                $fallbackQueueIds = config('packing.status_ids.queue', [4]);
-                if (!is_array($fallbackQueueIds)) {
-                    $fallbackQueueIds = [$fallbackQueueIds];
-                }
-                $queueStatusIds = array_values(array_filter(array_map('intval', $fallbackQueueIds), fn ($id) => $id > 0));
-            }
-
-            $packingCount = \App\Models\Order::whereIn('status_id', $queueStatusIds)
+            $packingCount = \App\Models\Order::query()
+                ->when($queueStatusIds, fn ($query) => $query->whereIn('status_id', $queueStatusIds), fn ($query) => $query->whereRaw('1 = 0'))
                 ->where(function ($query) {
                     $query->whereNull('packing_status')
                         ->orWhereIn('packing_status', ['pending', 'processing', 'skipped']);
