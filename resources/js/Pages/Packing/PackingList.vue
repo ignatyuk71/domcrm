@@ -15,7 +15,7 @@
         <div class="stat-card-modern primary">
           <div class="stat-info">
             <div class="stat-label">Залишилось у черзі</div>
-            <div class="stat-value">{{ pendingOrdersCount }}</div>
+            <div class="stat-value">{{ queueOrdersCount }}</div>
           </div>
           <div class="stat-bg-icon"><i class="bi bi-list-task"></i></div>
         </div>
@@ -323,6 +323,7 @@ const isPacked = (o) => o.packing_status === 'packed' || !!o.packed_at;
 // Шукаємо замовлення, яке я вже почав, але не закінчив
 const myActiveOrder = computed(() => orders.value.find(o => isProcessing(o)));
 
+const queueOrdersCount = computed(() => orders.value.filter(o => !isPacked(o)).length);
 const pendingOrdersCount = computed(() => orders.value.filter(o => isPending(o)).length);
 const urgentCount = computed(() => orders.value.filter(o => o.is_priority && isPending(o)).length);
 const selectedItems = computed(() => Array.isArray(selectedOrder.value?.items) ? selectedOrder.value.items : []);
