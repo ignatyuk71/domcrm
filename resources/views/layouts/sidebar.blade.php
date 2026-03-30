@@ -401,7 +401,7 @@
             $packingCount = \App\Models\Order::whereIn('status_id', $queueStatusIds)
                 ->where(function ($query) {
                     $query->whereNull('packing_status')
-                        ->orWhere('packing_status', 'pending');
+                        ->orWhereIn('packing_status', ['pending', 'processing', 'skipped']);
                 })
                 ->count();
         @endphp
