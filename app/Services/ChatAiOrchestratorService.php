@@ -1409,8 +1409,75 @@ JSON;
         return array_values($unique);
     }
 
+    /**
+     * Для send_product_photo перший gallery item є найточнішим вибором поточного ходу AI.
+     *
+     * @param  array<string, mixed>  $normalized
+     * @return array{product_id:int,variant_id:?int,color_id:?int}|null
+     */
+    private function resolvePrimaryGallerySelection(array $normalized, ?string $modelPhrase = null): ?array
+    {
+        foreach (($normalized['gallery_items'] ?? []) as $galleryItem) {
+            if (!is_array($galleryItem)) {
+                continue;
+            }
+
+            $productId = $this->nullableInt($galleryItem['product_id'] ?? null);
+            $variantId = $this->nullableInt($galleryItem['variant_id'] ?? null);
+            $colorId = $this->nullableInt($galleryItem['color_id'] ?? null);
+            $color = $this->cleanNullableString($galleryItem['color'] ?? null);
+
+            if ($variantId) {
+                $variant = ProductVariant::query()
+                    ->select(['id', 'product_id'])
+                    ->find($variantId);
+
+                if ($variant) {
+                    $variantId = $variant->id;
+                    $productId = $variant->product_id ?: $productId;
+                } else {
+                    $variantId = null;
+                }
+            }
+
+            if ($productId === null && $modelPhrase !== null) {
+                $resolved = $this->chatAiKnowledgeService->resolveProductForModelColor(
+                    $modelPhrase,
+                    $colorId,
+                    $color
+                );
+
+                if ($resolved !== null) {
+                    $productId = $this->nullableInt($resolved['product_id'] ?? null);
+                    $variantId = $variantId ?: $this->nullableInt($resolved['variant_id'] ?? null);
+                    $colorId = $colorId ?: $this->nullableInt($resolved['color_id'] ?? null);
+                }
+            }
+
+            if ($productId !== null && $colorId === null) {
+                $productColorId = Product::query()
+                    ->whereKey($productId)
+                    ->value('color_id');
+                if ($productColorId) {
+                    $colorId = (int) $productColorId;
+                }
+            }
+
+            if ($productId !== null) {
+                return [
+                    'product_id' => $productId,
+                    'variant_id' => $variantId,
+                    'color_id' => $colorId,
+                ];
+            }
+        }
+
+        return null;
+    }
+
     private function buildSlotPatch(ChatAiConversationState $state, array $normalized, string $inputText): array
     {
+        $action = (string) ($normalized['action'] ?? 'text');
         $slots = is_array($state->slots_json) ? $state->slots_json : [];
         $delivery = is_array($slots['delivery'] ?? null) ? $slots['delivery'] : [];
         $cartItems = $this->normalizeCartItems($slots['cart_items'] ?? []);
@@ -1487,6 +1554,19 @@ JSON;
                     $selectedSize = (string) $variant->size;
                 }
             }
+        }
+
+        $primaryGallerySelection = $action === 'send_product_photo'
+            ? $this->resolvePrimaryGallerySelection($normalized, $selectedModelPhrase)
+            : null;
+        if (
+            $primaryGallerySelection !== null
+            && $candidateProductId === null
+            && $candidateVariantId === null
+        ) {
+            $selectedProductId = $this->nullableInt($primaryGallerySelection['product_id'] ?? null) ?: $selectedProductId;
+            $selectedVariantId = $this->nullableInt($primaryGallerySelection['variant_id'] ?? null) ?: $selectedVariantId;
+            $selectedColorId = $this->nullableInt($primaryGallerySelection['color_id'] ?? null) ?: $selectedColorId;
         }
 
         $productChanged = $selectedProductId !== null
@@ -1999,12 +2079,30 @@ JSON;
         }
 
         $preferCollage = $this->actionPrefersCollage($action);
-        $productId = $this->nullableInt($slotPatch['selected_product_id'] ?? null) ?: $state->selected_product_id;
-        $variantId = $this->nullableInt($slotPatch['selected_variant_id'] ?? null) ?: $state->selected_variant_id;
-        $colorId = $this->nullableInt($slotPatch['selected_color_id'] ?? null) ?: $state->selected_color_id;
         $modelPhrase = $this->cleanNullableString($normalized['model_phrase'] ?? null)
             ?: $this->cleanNullableString($slotPatch['selected_model_phrase'] ?? null)
             ?: $this->cleanNullableString($state->slots_json['selected_model_phrase'] ?? null);
+        $stateModelPhrase = $this->cleanNullableString($state->slots_json['selected_model_phrase'] ?? null);
+        $primaryGallerySelection = $action === 'send_product_photo'
+            ? $this->resolvePrimaryGallerySelection($normalized, $modelPhrase)
+            : null;
+        $currentModelKey = $this->normalizePhraseKey($modelPhrase);
+        $stateModelKey = $this->normalizePhraseKey($stateModelPhrase);
+        $allowStateFallback = $primaryGallerySelection === null
+            && (
+                $currentModelKey === null
+                || ($stateModelKey !== null && $currentModelKey === $stateModelKey)
+            );
+
+        $productId = $this->nullableInt($slotPatch['selected_product_id'] ?? null)
+            ?: $this->nullableInt($primaryGallerySelection['product_id'] ?? null)
+            ?: ($allowStateFallback ? $state->selected_product_id : null);
+        $variantId = $this->nullableInt($slotPatch['selected_variant_id'] ?? null)
+            ?: $this->nullableInt($primaryGallerySelection['variant_id'] ?? null)
+            ?: ($allowStateFallback ? $state->selected_variant_id : null);
+        $colorId = $this->nullableInt($slotPatch['selected_color_id'] ?? null)
+            ?: $this->nullableInt($primaryGallerySelection['color_id'] ?? null)
+            ?: ($allowStateFallback ? $state->selected_color_id : null);
 
         $mapped = null;
         if ($modelPhrase !== null) {
@@ -2079,6 +2177,13 @@ JSON;
         }
 
         return null;
+    }
+
+    private function normalizePhraseKey(?string $value): ?string
+    {
+        $clean = $this->cleanNullableString($value);
+
+        return $clean !== null ? mb_strtolower($clean) : null;
     }
 
     private function actionRequiresMedia(string $action): bool
