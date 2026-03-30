@@ -578,7 +578,12 @@ JSON;
             . "7. Якщо клієнт питає про колір, якого немає у поточній моделі, поверни action=text, коротко скажи, що такого кольору немає, і переліч доступні кольори цієї моделі.\n"
             . "8. Якщо клієнт після показу моделей пише короткі фрази на зразок 'це всі?', 'є ще?', 'і все?', трактуй це як уточнення про асортимент, а не як завершення діалогу.\n"
             . "9. Якщо клієнт пише 'хочу замовити', 'беру' або схожий намір купити, це ще не означає перехід до checkout_request. Спочатку потрібно завершити підбір усіх позицій, кольорів і розмірів.\n"
-            . "10. Переходь до checkout_request тільки якщо всі потрібні позиції вже визначені, для кожної позиції відомі модель, колір і розмір, а клієнт явно підтвердив, що більше нічого не додає і можна оформляти замовлення.\n\n"
+            . "10. Переходь до checkout_request тільки якщо всі потрібні позиції вже визначені, для кожної позиції відомі модель, колір і розмір, а клієнт явно підтвердив, що більше нічого не додає і можна оформляти замовлення.\n"
+            . "11. Якщо клієнт просить пораду за сценарієм використання, наприклад 'м'які і щоб можна було на вулицю', це правило має вищий пріоритет за send_collage: використовуй action=text, коротко порадь найкращу модель і не повторюй send_collage, якщо асортимент уже був показаний.\n"
+            . "12. Якщо клієнт прямо просить показати конкретну модель, колір або розмір, наприклад 'покажіть вуличні чорні', 'скинь фото домашніх чорних на 39', пріоритет має action=send_product_photo. Не замінюй такий запит простою текстовою відповіддю.\n"
+            . "13. Якщо після попереднього уточнення клієнт дає новий явний запит на іншу модель, інший колір або інше фото, наприклад 'і ще покажіть домашні чорні на 39', трактуй це як новий show-request. Не додавай у кошик попередній товар автоматично і не повертайся до старого незавершеного підтвердження.\n"
+            . "14. Якщо модель, колір і розмір уже зрозумілі або їх можна однозначно вивести з поточного контексту, а клієнт пише 'додавайте', 'беру', 'ще одну пару', це означає підтвердження позиції. Не надсилай фото повторно і не став те саме питання вдруге: додай позицію в cart_items або уточни тільки відсутнє поле.\n"
+            . "15. Якщо current_cart уже містить готові позиції і клієнт явно пише 'все', 'більше нічого не треба', 'оформляємо', пріоритет має action=checkout_request, а не повторне уточнення.\n\n"
             . "Правила поведінки:\n"
             . "1. Дозволено кілька позицій у одному замовленні. Якщо клієнт просить 2 або більше товари, додай їх у cart_items.\n"
             . "2. Заборонено змушувати клієнта обрати лише одну позицію, якщо він явно хоче кілька.\n"
@@ -590,7 +595,15 @@ JSON;
             . "8. Перед checkout_request, якщо позиції вже зібрані, не повторюй довгий опис уже вибраного товару без потреби. Пиши коротко і природно: 'Бажаєте ще щось додати чи вже оформляємо замовлення?'.\n"
             . "9. Якщо клієнт уже надав частину або всі дані доставки, але потім просить дозамовити ще одну пару, повернися до selection, збережи delivery_fields і допоможи додати нову позицію.\n"
             . "10. Одне уточнююче питання за раз.\n"
-            . "11. На короткі питання про характеристики (матеріал, мех/хутро, підошва, якість) відповідай одразу по суті і не повторюй повну комбінацію 'модель, колір, розмір' у кожній репліці. Повну комбінацію згадуй тільки коли уточнюєш або підтверджуєш вибір.\n\n"
+            . "11. На короткі питання про характеристики (матеріал, мех/хутро, підошва, якість) відповідай одразу по суті і не повторюй повну комбінацію 'модель, колір, розмір' у кожній репліці. Повну комбінацію згадуй тільки коли уточнюєш або підтверджуєш вибір.\n"
+            . "12. Якщо в попередньому ході вже був send_collage або send_product_photo, не повторюй той самий медіа-формат без нової користі. Наступна відповідь має рухати діалог вперед: порада, точніше фото, додавання в кошик або оформлення.\n"
+            . "13. Якщо клієнт явно підтвердив дію словами 'добре, додавайте', 'так, додавайте', 'беру', 'все, оформляємо', не став повторне питання з тим самим змістом.\n\n"
+            . "Приклади пріоритетних рішень:\n"
+            . "- 'Мені треба щоб були м'які і щоб можна було вийти на вулицю. Що краще порадите?' -> action=text, коротка порада, без повторного send_collage.\n"
+            . "- 'Тоді покажіть вуличні чорні' -> action=send_product_photo.\n"
+            . "- 'І ще покажіть домашні чорні на 39' -> action=send_product_photo для домашньої моделі; не додавай попередній товар у кошик автоматично.\n"
+            . "- 'Добре, додавайте одну пару чорних' за вже зрозумілих моделі, кольору та розміру -> додай позицію в cart_items і коротко підтвердь, без повторного фото.\n"
+            . "- 'Все, більше нічого не треба, оформляємо' за вже готового current_cart -> action=checkout_request.\n\n"
             . "Обмеження:\n"
             . "1. Не запитуй дані доставки (ПІБ, телефон, місто, відділення або поштомат), доки stage не дійшов до checkout_ready.\n"
             . "2. Не проси розмір, якщо клієнт просто хоче подивитися фото, кольори, модель, усі варіанти або асортимент.\n"
@@ -668,8 +681,9 @@ JSON;
             $normalized = $this->normalizeModelPayload($this->decodeModelJson($rawOutput));
             $slotPatch = $this->buildSlotPatch($state, $normalized, $inputText);
             $nextStage = $this->resolveNextStage($stageBefore, $normalized['stage'], $slotPatch, (string) ($normalized['action'] ?? 'text'));
-            // Passthrough режим: віддаємо текст відповіді рівно так, як повернула модель.
             $reply = (string) ($normalized['reply'] ?? '');
+            $reply = $this->enforceCheckoutReplyConsistency($reply, $normalized, $slotPatch);
+            $reply = $this->buildSafeReply($reply, $nextStage, $slotPatch);
             $mediaAttachments = $this->resolveAiMediaAttachments($inputText, $normalized, $state, $slotPatch);
 
             if (!$this->shouldRetryForEmptyReply($normalized, $reply, $mediaAttachments, $attempt)) {
@@ -1482,9 +1496,13 @@ JSON;
         $delivery = is_array($slots['delivery'] ?? null) ? $slots['delivery'] : [];
         $cartItems = $this->normalizeCartItems($slots['cart_items'] ?? []);
         $incomingDelivery = $normalized['delivery_fields'] ?? [];
+        $parsedDelivery = $this->shouldInferDeliveryFields($inputText, $state, $normalized)
+            ? $this->inferDeliveryFieldsFromInput($inputText, $delivery)
+            : [];
 
         foreach (['name', 'phone', 'city', 'warehouse'] as $field) {
-            $value = $this->cleanNullableString($incomingDelivery[$field] ?? null);
+            $value = $this->cleanNullableString($incomingDelivery[$field] ?? null)
+                ?: $this->cleanNullableString($parsedDelivery[$field] ?? null);
             if ($value !== null) {
                 $delivery[$field] = $value;
             }
@@ -1712,9 +1730,8 @@ JSON;
             || in_array($state->stage, [self::STAGE_CHECKOUT_READY, self::STAGE_CHECKOUT], true)
         ) && $hasCompleteSelection;
 
-        $missingSlots = $shouldTrackMissingSlots ? $normalized['missing_slots'] : [];
-        if ($shouldTrackMissingSlots && $missingSlots === []) {
-            $missingSlots = $this->calculateMissingSlots([
+        $missingSlots = $shouldTrackMissingSlots
+            ? $this->calculateMissingSlots([
                 'selected_product_id' => $selectedProductId,
                 'selected_variant_id' => $selectedVariantId,
                 'selected_size' => $selectedSize,
@@ -1722,8 +1739,8 @@ JSON;
                 'delivery' => $delivery,
                 'cart_items' => $cartItems,
                 'include_delivery' => $shouldTrackMissingSlots,
-            ]);
-        }
+            ])
+            : [];
 
         return [
             'slots_json' => $slots,
@@ -2463,10 +2480,26 @@ JSON;
 
     private function containsDeliveryRequest(string $text): bool
     {
-        return preg_match(
-            '/\b(ім[\'’]я|прізвище|телефон|номер телефону|місто|адрес|відділен|поштомат|нова пошта)\b/ui',
-            mb_strtolower($text)
-        ) === 1;
+        $normalized = mb_strtolower($text);
+        foreach ([
+            'піб',
+            'ім\'я',
+            'ім’я',
+            'прізвище',
+            'телефон',
+            'номер телефону',
+            'місто',
+            'адрес',
+            'відділен',
+            'поштомат',
+            'нова пошта',
+        ] as $needle) {
+            if (mb_stripos($normalized, $needle) !== false) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -2584,6 +2617,10 @@ JSON;
             return '';
         }
 
+        if ($this->containsDeliveryRequest($clean)) {
+            return '';
+        }
+
         if (preg_match('/підтвердження оформлення\s*[:\-]/ui', $clean, $matches, PREG_OFFSET_CAPTURE) === 1) {
             $start = (int) ($matches[0][1] ?? 0);
             // preg_match повертає позицію у байтах, тому тут потрібен substr, а не mb_substr.
@@ -2622,6 +2659,166 @@ JSON;
                 $size = preg_replace('/\s*\/\s*/u', '/', (string) ($matches[1] ?? '')) ?? '';
                 return $this->normalizeSize($size);
             }
+        }
+
+        return null;
+    }
+
+    /**
+     * Код лише підхоплює службові поля доставки, якщо модель їх не витягнула.
+     *
+     * @param  array<string, mixed>  $normalized
+     */
+    private function shouldInferDeliveryFields(string $inputText, ChatAiConversationState $state, array $normalized): bool
+    {
+        $normalizedText = mb_strtolower(trim($inputText));
+        if ($normalizedText === '') {
+            return false;
+        }
+
+        if (
+            in_array($state->stage, [self::STAGE_CHECKOUT_READY, self::STAGE_CHECKOUT], true)
+            || (string) ($normalized['action'] ?? 'text') === 'checkout_request'
+        ) {
+            return true;
+        }
+
+        return $this->looksLikeDeliveryPayload($normalizedText);
+    }
+
+    private function looksLikeDeliveryPayload(string $normalizedText): bool
+    {
+        if ($normalizedText === '') {
+            return false;
+        }
+
+        if (preg_match('/\b(відділен|відд\.?|від\.?|поштомат|нова пошта)\b/ui', $normalizedText) === 1) {
+            return true;
+        }
+
+        if (preg_match('/(?:\+?38)?\D*0\d{2}\D*\d{3}\D*\d{2}\D*\d{2}/u', $normalizedText) === 1) {
+            return true;
+        }
+
+        return substr_count($normalizedText, ',') >= 2;
+    }
+
+    /**
+     * @param  array<string, string|null>  $currentDelivery
+     * @return array{name:?string,phone:?string,city:?string,warehouse:?string}
+     */
+    private function inferDeliveryFieldsFromInput(string $inputText, array $currentDelivery = []): array
+    {
+        $result = [
+            'name' => null,
+            'phone' => null,
+            'city' => null,
+            'warehouse' => null,
+        ];
+
+        $phone = $this->extractPhoneFromText($inputText);
+        if ($phone !== null) {
+            $result['phone'] = $phone;
+        }
+
+        $warehouse = $this->extractWarehouseFromText($inputText);
+        if ($warehouse !== null) {
+            $result['warehouse'] = $warehouse;
+        }
+
+        $segments = preg_split('/[\n,;]+/u', $inputText) ?: [];
+        $segments = array_values(array_filter(array_map(
+            fn (string $segment): string => trim($segment),
+            $segments
+        )));
+
+        if ($segments === []) {
+            return $result;
+        }
+
+        $nameCandidate = null;
+        $cityCandidate = null;
+
+        foreach ($segments as $segment) {
+            if ($segment === '') {
+                continue;
+            }
+
+            if ($phone !== null && str_contains($segment, $phone)) {
+                continue;
+            }
+
+            if ($warehouse !== null && mb_stripos($segment, (string) preg_replace('/\s+/u', ' ', $warehouse)) !== false) {
+                continue;
+            }
+
+            if (preg_match('/\d/u', $segment) === 1) {
+                continue;
+            }
+
+            $wordCount = count(array_values(array_filter(preg_split('/\s+/u', $segment) ?: [])));
+
+            if ($nameCandidate === null && $wordCount >= 2 && $wordCount <= 4) {
+                $nameCandidate = $segment;
+                continue;
+            }
+
+            if ($cityCandidate === null && $wordCount >= 1 && $wordCount <= 4) {
+                $cityCandidate = $segment;
+            }
+        }
+
+        if ($this->cleanNullableString($currentDelivery['name'] ?? null) === null && $nameCandidate !== null) {
+            $result['name'] = $nameCandidate;
+        }
+
+        if ($this->cleanNullableString($currentDelivery['city'] ?? null) === null) {
+            if ($cityCandidate !== null && $cityCandidate !== $nameCandidate) {
+                $result['city'] = $cityCandidate;
+            } elseif ($nameCandidate === null && isset($segments[0]) && preg_match('/\d/u', $segments[0]) !== 1) {
+                $result['city'] = $segments[0];
+            }
+        }
+
+        return $result;
+    }
+
+    private function extractPhoneFromText(string $inputText): ?string
+    {
+        if (
+            preg_match('/((?:\+?38)?\s*\(?0\d{2}\)?(?:[\s-]*\d){7})/u', $inputText, $matches) !== 1
+            && preg_match('/((?:\+?38)?\D*0\d{2}\D*\d{3}\D*\d{2}\D*\d{2})/u', $inputText, $matches) !== 1
+        ) {
+            return null;
+        }
+
+        $digits = preg_replace('/\D+/u', '', (string) ($matches[1] ?? '')) ?? '';
+        if ($digits === '') {
+            return null;
+        }
+
+        if (str_starts_with($digits, '38') && mb_strlen($digits) === 12) {
+            return '+' . $digits;
+        }
+
+        if (mb_strlen($digits) === 10 && str_starts_with($digits, '0')) {
+            return $digits;
+        }
+
+        return null;
+    }
+
+    private function extractWarehouseFromText(string $inputText): ?string
+    {
+        if (preg_match('/\b(поштомат)\s*№?\s*(\d{1,6})\b/ui', $inputText, $matches) === 1) {
+            return 'Поштомат ' . trim((string) ($matches[2] ?? ''));
+        }
+
+        if (
+            preg_match('/\b(відділення|відд\.?|від\.?)\s*№?\s*(\d{1,4})\b/ui', $inputText, $matches) === 1
+            || preg_match('/\bнова пошта\s*№?\s*(\d{1,4})\b/ui', $inputText, $matches) === 1
+        ) {
+            return 'Відділення ' . trim((string) ($matches[2] ?? $matches[1] ?? ''));
         }
 
         return null;
