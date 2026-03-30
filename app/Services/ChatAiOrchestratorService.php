@@ -568,6 +568,14 @@ JSON;
             . "- ask_clarifying: поставити одне коротке уточнення, якщо без нього неможливо відповісти точно.\n"
             . "- checkout_request: попросити дані для оформлення замовлення тільки після завершеного підбору і явного підтвердження клієнта, що можна оформляти.\n"
             . "- none: тільки для технічних або дубльованих повідомлень.\n\n"
+            . "Правила форматування reply:\n"
+            . "1. Не зливай усю відповідь в один абзац. Кожен смисловий блок пиши з нового рядка.\n"
+            . "2. Між окремими блоками став один порожній рядок.\n"
+            . "3. Якщо перелічуєш моделі, ціни, розміри, кольори або поля оформлення, кожен короткий елемент або кожен короткий блок пиши з нового рядка.\n"
+            . "4. Для action=text і action=ask_clarifying, якщо у відповіді більше однієї думки, використовуй 2-6 коротких рядків замість одного довгого речення.\n"
+            . "5. Для action=send_product_photo, action=send_product_gallery і action=send_collage reply може бути коротким, але дозволено 1-4 короткі рядки. Не зливай кілька окремих думок в один довгий рядок.\n"
+            . "6. Для action=checkout_request кожне поле доставки пиши з нового рядка.\n"
+            . "7. Для відповідей про ціну, наявність і розмірну сітку використовуй блочний формат: назва/ціна окремим рядком, далі порожній рядок, далі розміри або кольори окремими рядками, далі порожній рядок і одне питання в кінці.\n\n"
             . "Пріоритети прийняття рішення:\n"
             . "1. Якщо клієнт питає про ціну, вартість або скільки коштує товар, пріоритет має action=text. Навіть якщо в повідомленні є колір, модель або код товару, спочатку відповідай ціною. Фото можна запропонувати додатково, але не замість ціни.\n"
             . "2. Якщо клієнт питає про наявність, розміри, розмірну сітку, матеріал, підошву, догляд, доставку або оплату, пріоритет має action=text.\n"
@@ -610,7 +618,7 @@ JSON;
             . "3. Не вважай код з колажу розміром. Код колажу — це ідентифікатор позиції в межах моделі.\n"
             . "4. Якщо у current_input_map є item_code, трактуй поточне повідомлення як вибір позиції по коду колажу. У такому випадку не інтерпретуй це число як розмір або сантиметри.\n"
             . "5. Заповнюй missing_slots і переходь до checkout_request тільки тоді, коли підбір уже завершений: усі потрібні позиції визначені, для кожної позиції відомі модель, колір і розмір, а клієнт явно підтвердив, що більше нічого не додає і можна оформляти замовлення. Сам намір купити не є достатньою підставою для переходу до оформлення. На етапах interest та selection для звичайної консультації missing_slots має бути порожнім масивом.\n"
-            . "6. Для всіх action, окрім action=none, поле reply обов'язково має бути непорожнім. Для медіа-дій (send_product_photo, send_product_gallery, send_collage) reply має бути коротким супровідним текстом в 1 речення.\n"
+            . "6. Для всіх action, окрім action=none, поле reply обов'язково має бути непорожнім. Для медіа-дій (send_product_photo, send_product_gallery, send_collage) reply має бути коротким супровідним текстом у 1-4 коротких рядках, а не суцільним абзацом.\n"
             . "7. action=none дозволений тільки для технічних або дубльованих повідомлень. На нормальне повідомлення клієнта не повертай action=none з порожнім reply.\n"
             . "8. Не вставляй у reply сирі URL фото, відео або колажів. Якщо потрібне фото чи колаж, просто напиши коротко без посилання.\n"
             . "9. Не повертай медіа-дію, якщо в тебе немає конкретної моделі, товару або доступного attachment для виконання. У такому випадку відповідай текстом і коротко уточнюй модель або запит клієнта.\n"
@@ -1805,9 +1813,9 @@ JSON;
 
     private function buildSafeReply(string $reply, string $stage, array $slotPatch): string
     {
-        $cleanReply = trim((string) preg_replace('/\s+/u', ' ', strip_tags($reply)));
+        $cleanReply = strip_tags(str_replace(["\r\n", "\r"], "\n", $reply));
         $cleanReply = $this->stripInternalIdentifiersFromReply($cleanReply);
-        $cleanReply = trim((string) preg_replace('/\s+/u', ' ', $cleanReply));
+        $cleanReply = $this->normalizeReplyFormatting($cleanReply);
         $cleanReply = Str::limit($cleanReply, 1200, '...');
 
         if ($cleanReply === '') {
@@ -1822,6 +1830,34 @@ JSON;
         }
 
         return $cleanReply;
+    }
+
+    private function normalizeReplyFormatting(string $reply): string
+    {
+        $normalized = str_replace(["\r\n", "\r"], "\n", $reply);
+        $lines = explode("\n", $normalized);
+        $formattedLines = [];
+        $previousBlank = true;
+
+        foreach ($lines as $line) {
+            $cleanLine = trim((string) preg_replace('/[ \t]+/u', ' ', $line));
+            $cleanLine = preg_replace('/[ \t]+([,.;:!?])/u', '$1', $cleanLine) ?? $cleanLine;
+
+            if ($cleanLine === '') {
+                if (!$previousBlank && $formattedLines !== []) {
+                    $formattedLines[] = '';
+                }
+
+                $previousBlank = true;
+
+                continue;
+            }
+
+            $formattedLines[] = $cleanLine;
+            $previousBlank = false;
+        }
+
+        return trim(implode("\n", $formattedLines));
     }
 
     /**
@@ -2425,8 +2461,8 @@ JSON;
 
         $cleanReply = preg_replace('/\(\s*\)/u', '', $cleanReply) ?? $cleanReply;
         $cleanReply = preg_replace('/:\s*(?=[,.!?]|$)/u', '', $cleanReply) ?? $cleanReply;
-        $cleanReply = preg_replace('/\s{2,}/u', ' ', $cleanReply) ?? $cleanReply;
-        $cleanReply = preg_replace('/\s+([,.;:!?])/u', '$1', $cleanReply) ?? $cleanReply;
+        $cleanReply = preg_replace('/[ \t]{2,}/u', ' ', $cleanReply) ?? $cleanReply;
+        $cleanReply = preg_replace('/[ \t]+([,.;:!?])/u', '$1', $cleanReply) ?? $cleanReply;
         $cleanReply = $this->stripInternalIdentifiersFromReply($cleanReply);
         $cleanReply = preg_replace('/:\s*$/u', '.', $cleanReply) ?? $cleanReply;
 
@@ -2470,10 +2506,10 @@ JSON;
 
         $cleanReply = preg_replace('/\(\s*[,;:]\s*/u', '(', $cleanReply) ?? $cleanReply;
         $cleanReply = preg_replace('/\s*[,;:]\s*\)/u', ')', $cleanReply) ?? $cleanReply;
-        $cleanReply = preg_replace('/\s{2,}/u', ' ', $cleanReply) ?? $cleanReply;
+        $cleanReply = preg_replace('/[ \t]{2,}/u', ' ', $cleanReply) ?? $cleanReply;
         $cleanReply = preg_replace('/,\s*,+/u', ', ', $cleanReply) ?? $cleanReply;
         $cleanReply = preg_replace('/\(\s*\)/u', '', $cleanReply) ?? $cleanReply;
-        $cleanReply = preg_replace('/\s+([,.;:!?])/u', '$1', $cleanReply) ?? $cleanReply;
+        $cleanReply = preg_replace('/[ \t]+([,.;:!?])/u', '$1', $cleanReply) ?? $cleanReply;
 
         return trim($cleanReply, " \t\n\r\0\x0B,;");
     }
