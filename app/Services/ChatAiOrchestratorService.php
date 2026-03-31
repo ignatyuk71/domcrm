@@ -200,8 +200,7 @@ class ChatAiOrchestratorService
             $state,
             $conversation,
             $platform,
-            $inputText,
-            $inboundMessage->id
+            $inputText
         );
         $inputChars = $this->countInputChars($messages);
         $startedAtTs = microtime(true);
@@ -465,7 +464,7 @@ class ChatAiOrchestratorService
     }
 
     /**
-     * @return array<int, array{role:string,content:string|array<int,array<string,mixed>>}>
+     * @return array<int, array{role:string,content:string}>
      */
     private function buildModelMessages(
         \Illuminate\Support\Collection $history,
@@ -473,8 +472,7 @@ class ChatAiOrchestratorService
         ChatAiConversationState $state,
         ChatConversation $conversation,
         string $platform,
-        string $inputText,
-        int $currentInboundMessageId
+        string $inputText
     ): array {
         $messages = [];
 
@@ -490,7 +488,7 @@ class ChatAiOrchestratorService
 
         foreach ($history as $message) {
             /** @var ChatMessage $message */
-            $content = $this->formatHistoryMessage($message, $message->id === $currentInboundMessageId);
+            $content = $this->formatHistoryMessage($message);
             if ($content === '') {
                 continue;
             }
@@ -626,11 +624,7 @@ JSON;
             . "9. Не повертай медіа-дію, якщо в тебе немає конкретної моделі, товару або доступного attachment для виконання. У такому випадку відповідай текстом і коротко уточнюй модель або запит клієнта.\n"
             . "10. Для action=send_product_gallery не надсилай колаж, якщо клієнт просить лише кілька конкретних кольорів. У gallery_items повинні бути тільки реально доступні позиції.\n"
             . "11. У reply заборонено показувати внутрішні ідентифікатори CRM: product_id, variant_id, color_id, media_id та будь-які службові ID.\n"
-            . "12. Для action=checkout_request: якщо бракує хоча б одного поля доставки (ПІБ, телефон, місто, відділення/поштомат), не пиши підтвердження \"замовлення прийнято\". Спочатку збери всі відсутні поля.\n"
-            . "13. Якщо в поточному вхідному повідомленні є фото клієнта, аналізуй фото як додатковий сигнал до тексту. Твоя задача — визначити, чи є в каталозі такий самий або найближчий схожий товар.\n"
-            . "14. Для фото клієнта не вигадуй точний match, якщо впевненість низька. У такому випадку прямо пиши, що це схожий варіант, і пропонуй показати доступні моделі.\n"
-            . "15. Не визначай розмір по фото. Розмір потрібно уточнювати окремо текстом.\n"
-            . "16. Фото клієнта саме по собі не є підставою для автоматичного додавання в кошик або переходу до оформлення. Спочатку потрібно узгодити модель, колір і розмір.\n\n"
+            . "12. Для action=checkout_request: якщо бракує хоча б одного поля доставки (ПІБ, телефон, місто, відділення/поштомат), не пиши підтвердження \"замовлення прийнято\". Спочатку збери всі відсутні поля.\n\n"
             . "policy_json=" . $policyJson;
 
         if ($knowledgeBlock !== '') {
@@ -676,7 +670,7 @@ JSON;
     }
 
     /**
-     * @param  array<int, array{role:string,content:string|array<int,array<string,mixed>>}>  $messages
+     * @param  array<int, array{role:string,content:string}>  $messages
      * @param  array{prompt_tokens:?int,completion_tokens:?int,total_tokens:?int}  $usage
      * @return array{0:string,1:array{prompt_tokens:?int,completion_tokens:?int,total_tokens:?int},2:array<string,mixed>,3:array<string,mixed>,4:string,5:string,6:array<int,array<string,mixed>>}
      */
@@ -727,17 +721,9 @@ JSON;
         return $this->chatAiKnowledgeService->resolveMappedProduct($inputText, $selectedModelPhrase);
     }
 
-    private function formatHistoryMessage(ChatMessage $message, bool $includeVisionForCurrentInbound = false): string|array
+    private function formatHistoryMessage(ChatMessage $message): string
     {
         $text = trim((string) $message->text);
-        $imageUrls = $includeVisionForCurrentInbound
-            ? $this->resolveInboundImageUrls($message)
-            : [];
-
-        if ($imageUrls !== []) {
-            return $this->buildVisionMessageContent($text, $imageUrls);
-        }
-
         if ($text !== '') {
             return Str::limit($text, 1200);
         }
@@ -751,61 +737,6 @@ JSON;
             'file' => '[надіслано файл]',
             default => '[службове повідомлення]',
         };
-    }
-
-    /**
-     * @param  array<int, string>  $imageUrls
-     * @return array<int, array<string, mixed>>
-     */
-    private function buildVisionMessageContent(string $text, array $imageUrls): array
-    {
-        $content = [];
-        $text = Str::limit($text, 1200);
-
-        $content[] = [
-            'type' => 'text',
-            'text' => $text !== '' ? $text : 'Клієнт надіслав фото товару без тексту.',
-        ];
-
-        foreach ($imageUrls as $imageUrl) {
-            $content[] = [
-                'type' => 'image_url',
-                'image_url' => [
-                    'url' => $imageUrl,
-                ],
-            ];
-        }
-
-        return $content;
-    }
-
-    /**
-     * @return array<int, string>
-     */
-    private function resolveInboundImageUrls(ChatMessage $message): array
-    {
-        if ($message->direction !== 'inbound') {
-            return [];
-        }
-
-        if (!$message->relationLoaded('attachments')) {
-            $message->load('attachments');
-        }
-
-        return $message->attachments
-            ->filter(function ($attachment): bool {
-                return $attachment->attachment_type === 'image'
-                    && is_string($attachment->public_url)
-                    && (
-                        str_starts_with($attachment->public_url, 'https://')
-                        || str_starts_with($attachment->public_url, 'http://')
-                    );
-            })
-            ->pluck('public_url')
-            ->filter(fn ($url) => is_string($url) && trim($url) !== '')
-            ->take(3)
-            ->values()
-            ->all();
     }
 
     /**
@@ -1257,7 +1188,7 @@ JSON;
     }
 
     /**
-     * @param  array<int, array{role:string,content:string|array<int,array<string,mixed>>}>  $messages
+     * @param  array<int, array{role:string,content:string}>  $messages
      * @return array{0:string,1:array{prompt_tokens:?int,completion_tokens:?int,total_tokens:?int}}
      */
     private function repairEmptyReplyResponse(
@@ -3678,7 +3609,6 @@ JSON;
 
         return ChatMessage::query()
             ->where('conversation_id', $conversationId)
-            ->with('attachments')
             ->orderByDesc('id')
             ->limit($limit)
             ->get()
@@ -3782,33 +3712,7 @@ JSON;
     {
         $sum = 0;
         foreach ($messages as $message) {
-            $sum += $this->countMessageContentChars($message['content'] ?? '');
-        }
-
-        return $sum;
-    }
-
-    private function countMessageContentChars(mixed $content): int
-    {
-        if (is_string($content)) {
-            return mb_strlen($content);
-        }
-
-        if (!is_array($content)) {
-            return 0;
-        }
-
-        $sum = 0;
-        foreach ($content as $item) {
-            if (!is_array($item)) {
-                continue;
-            }
-
-            $sum += mb_strlen((string) ($item['text'] ?? ''));
-
-            if (isset($item['image_url']['url']) && is_string($item['image_url']['url'])) {
-                $sum += mb_strlen($item['image_url']['url']);
-            }
+            $sum += mb_strlen((string) ($message['content'] ?? ''));
         }
 
         return $sum;
