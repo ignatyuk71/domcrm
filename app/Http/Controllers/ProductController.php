@@ -5,9 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\Category;
 use App\Models\Color;
 use App\Models\Product;
+use App\Models\ProductVariant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\DB;
 
 class ProductController extends Controller
 {
@@ -110,6 +112,77 @@ class ProductController extends Controller
         return response()->json(['data' => $product]);
     }
 
+    public function updateVariant(Request $request, ProductVariant $variant)
+    {
+        $data = $request->validate([
+            'stock_qty' => ['required', 'integer', 'min:0'],
+            'is_active' => ['required', 'boolean'],
+        ]);
+
+        DB::transaction(function () use ($variant, $data) {
+            $variant->update([
+                'stock_qty' => (int) $data['stock_qty'],
+                'is_active' => (bool) $data['is_active'],
+            ]);
+
+            $this->recalculateProductStock($variant->product);
+        });
+
+        $variant->refresh();
+        $product = $variant->product()->first(['id', 'stock_qty', 'min_stock']);
+
+        return response()->json([
+            'message' => 'Наявність варіанту оновлено.',
+            'data' => [
+                'variant' => $variant,
+                'product' => $product,
+            ],
+        ]);
+    }
+
+    public function updateInline(Request $request, Product $product)
+    {
+        $data = $request->validate([
+            'sale_price' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'stock_qty' => ['sometimes', 'integer', 'min:0'],
+        ]);
+
+        $payload = [];
+
+        if ($request->exists('sale_price')) {
+            $payload['sale_price'] = $data['sale_price'] ?? null;
+        }
+
+        if ($request->exists('stock_qty')) {
+            if ($product->variants()->exists()) {
+                return response()->json([
+                    'message' => 'Запас для товару з варіантами змінюється через список варіантів.',
+                ], 422);
+            }
+
+            $payload['stock_qty'] = (int) ($data['stock_qty'] ?? 0);
+        }
+
+        if ($payload === []) {
+            return response()->json([
+                'message' => 'Немає даних для оновлення.',
+            ], 422);
+        }
+
+        $product->update($payload);
+
+        return response()->json([
+            'message' => 'Товар оновлено.',
+            'data' => [
+                'product' => $product->fresh([
+                    'category:id,name',
+                    'color:id,name,hex_code',
+                    'variants:id,product_id,size,sku,stock_qty,is_active',
+                ]),
+            ],
+        ]);
+    }
+
     public function destroy(Product $product, Request $request)
     {
         $photoPath = $product->main_photo_path;
@@ -191,8 +264,17 @@ class ProductController extends Controller
         $product->variants()->delete();
         if ($clean->isNotEmpty()) {
             $product->variants()->createMany($clean->all());
-            $product->update(['stock_qty' => $clean->sum('stock_qty')]);
+            $this->recalculateProductStock($product);
         }
+    }
+
+    private function recalculateProductStock(Product $product): void
+    {
+        $stockQty = (int) $product->variants()
+            ->where('is_active', true)
+            ->sum('stock_qty');
+
+        $product->update(['stock_qty' => $stockQty]);
     }
 
     private function storeMainPhoto(Request $request): string

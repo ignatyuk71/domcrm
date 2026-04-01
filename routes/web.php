@@ -283,6 +283,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/colors', 'colors')->name('colors');
         Route::get('/create', 'create')->name('create');
         Route::post('/', 'store')->name('store');
+        Route::patch('/variants/{variant}', 'updateVariant')->name('variants.update');
+        Route::patch('/{product}/inline', 'updateInline')->name('inline.update');
         Route::get('/{product}/edit', 'edit')->name('edit');
         Route::put('/{product}', 'update')->name('update');
         Route::delete('/{product}', 'destroy')->name('destroy');
