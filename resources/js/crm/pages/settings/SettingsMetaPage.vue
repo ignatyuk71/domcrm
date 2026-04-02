@@ -71,12 +71,32 @@
               <strong>{{ connection.has_page_token ? 'Збережено' : 'Відсутній' }}</strong>
             </div>
             <div class="info-row">
+              <span class="label">Webhook</span>
+              <strong>{{ connection.webhook_subscribed ? 'Підписано' : 'Не підписано' }}</strong>
+            </div>
+            <div class="info-row">
               <span class="label">Підключено</span>
               <strong>{{ formatDate(connection.connected_at) }}</strong>
             </div>
             <div class="info-row">
+              <span class="label">Останній sync</span>
+              <strong>{{ formatDate(connection.last_sync_at) }}</strong>
+            </div>
+            <div class="info-row">
+              <span class="label">Останній webhook</span>
+              <strong>{{ formatWebhook(connection.last_webhook_at, connection.last_webhook_platform) }}</strong>
+            </div>
+            <div class="info-row">
               <span class="label">Видані дозволи</span>
               <strong>{{ formatScopes(connection.granted_scopes) }}</strong>
+            </div>
+            <div class="info-row">
+              <span class="label">Відсутні дозволи</span>
+              <strong>{{ formatScopes(connection.missing_scopes) }}</strong>
+            </div>
+            <div class="info-row">
+              <span class="label">Webhook fields</span>
+              <strong>{{ formatScopes(connection.webhook_fields) }}</strong>
             </div>
           </div>
 
@@ -222,6 +242,15 @@ function formatScopes(scopes) {
   }
 
   return scopes.join(', ');
+}
+
+function formatWebhook(date, platform) {
+  const formattedDate = formatDate(date);
+  if (formattedDate === '—') {
+    return '—';
+  }
+
+  return platform ? `${formattedDate} · ${platform}` : formattedDate;
 }
 
 async function saveSettings() {

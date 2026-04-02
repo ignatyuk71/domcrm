@@ -29,6 +29,7 @@ return new class extends Migration
         $hasSentAt = Schema::hasColumn('facebook_messages', 'sent_at');
         $timeColumn = $hasSentAt ? 'COALESCE(fm.sent_at, fm.created_at)' : 'fm.created_at';
         $latestTime = $hasSentAt ? 'MAX(COALESCE(sent_at, created_at))' : 'MAX(created_at)';
+        $currentTimestamp = DB::getDriverName() === 'sqlite' ? 'CURRENT_TIMESTAMP' : 'NOW()';
 
         DB::statement(
             "INSERT INTO conversations (customer_id, platform, last_message_text, last_message_at, unread_count, status, created_at, updated_at)
@@ -38,8 +39,8 @@ return new class extends Migration
                     {$timeColumn},
                     0,
                     'open',
-                    NOW(),
-                    NOW()
+                    {$currentTimestamp},
+                    {$currentTimestamp}
              FROM facebook_messages fm
              INNER JOIN (
                 SELECT customer_id, platform, {$latestTime} AS last_time

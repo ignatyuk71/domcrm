@@ -42,3 +42,9 @@ Schedule::command('meta:sync-recent-conversations --platform=messenger --limit=2
     ->withoutOverlapping()
     ->onOneServer()
     ->description('Fallback sync недавніх Messenger-діалогів з Meta, якщо webhook пропустив повідомлення');
+
+Schedule::command('meta:sync-recent-conversations --platform=instagram --limit=25 --messages=20')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->description('Fallback sync недавніх Instagram-діалогів з Meta, якщо webhook пропустив повідомлення');

@@ -212,20 +212,28 @@ class ChatService
     public function getOrCreateConversation(
         ChatContact $contact,
         ?Customer $customer = null,
-        ?string $externalThreadId = null
+        ?string $externalThreadId = null,
+        string $threadKind = ChatConversation::THREAD_KIND_DIRECT
     ): ChatConversation {
+        $threadKind = $this->normalizeThreadKind($threadKind);
         $defaultStageId = ChatStage::query()
             ->where('is_default', true)
             ->value('id');
 
-        $conversation = ChatConversation::query()->firstOrNew([
+        $conversation = $this->findConversationForThread(
+            $contact,
+            $threadKind,
+            $externalThreadId
+        ) ?? new ChatConversation([
             'contact_id' => $contact->id,
+            'thread_kind' => $threadKind,
         ]);
 
         $conversation->meta_connection_id = $contact->meta_connection_id;
         $conversation->customer_id = $customer?->id ?: $contact->customer_id;
         $conversation->stage_id = $conversation->stage_id ?: $defaultStageId;
         $conversation->status = $conversation->status ?: 'open';
+        $conversation->thread_kind = $threadKind;
         $resolvedThreadId = $this->resolveAvailableExternalThreadId(
             (int) $contact->meta_connection_id,
             $externalThreadId,
@@ -252,6 +260,47 @@ class ChatService
         }
 
         return $conversation;
+    }
+
+    private function findConversationForThread(
+        ChatContact $contact,
+        string $threadKind,
+        ?string $externalThreadId = null
+    ): ?ChatConversation {
+        $threadId = trim((string) $externalThreadId);
+
+        if ($threadId !== '') {
+            $existingByThread = ChatConversation::query()
+                ->where('meta_connection_id', $contact->meta_connection_id)
+                ->where('external_thread_id', $threadId)
+                ->first();
+
+            if ($existingByThread) {
+                return $existingByThread;
+            }
+        }
+
+        $query = ChatConversation::query()
+            ->where('contact_id', $contact->id)
+            ->where('thread_kind', $threadKind);
+
+        if ($threadKind === ChatConversation::THREAD_KIND_COMMENT && $threadId !== '') {
+            return $query
+                ->where('external_thread_id', $threadId)
+                ->first();
+        }
+
+        return $query
+            ->orderByDesc('last_message_at')
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    private function normalizeThreadKind(?string $threadKind): string
+    {
+        return trim((string) $threadKind) === ChatConversation::THREAD_KIND_COMMENT
+            ? ChatConversation::THREAD_KIND_COMMENT
+            : ChatConversation::THREAD_KIND_DIRECT;
     }
 
     private function resolveAvailableExternalThreadId(
@@ -378,17 +427,39 @@ class ChatService
             ]);
     }
 
-    public function resolveConversationByCustomer(int $customerId, ?string $platform = null): ?ChatConversation
+    public function resolveConversationByCustomer(
+        int $customerId,
+        ?string $platform = null,
+        ?string $threadKind = ChatConversation::THREAD_KIND_DIRECT
+    ): ?ChatConversation
     {
         return ChatConversation::query()
             ->with(['contact', 'customer', 'stage', 'assignedUser', 'lastMessage', 'lastMessage.attachments'])
             ->where('customer_id', $customerId)
             ->where('status', '!=', 'archived')
+            ->when($threadKind, fn ($query) => $query->where('thread_kind', $this->normalizeThreadKind($threadKind)))
             ->when($platform, fn ($query) => $query->whereHas(
                 'contact',
                 fn ($contactQuery) => $contactQuery->where('platform', $platform)
             ))
             ->orderByDesc('last_message_at')
+            ->first();
+    }
+
+    public function resolveConversationById(int $conversationId): ?ChatConversation
+    {
+        return ChatConversation::query()
+            ->with(['contact', 'customer', 'stage', 'assignedUser', 'lastMessage', 'lastMessage.attachments'])
+            ->find($conversationId);
+    }
+
+    public function resolveDirectConversationForContact(ChatContact $contact): ?ChatConversation
+    {
+        return ChatConversation::query()
+            ->where('contact_id', $contact->id)
+            ->where('thread_kind', ChatConversation::THREAD_KIND_DIRECT)
+            ->orderByDesc('last_message_at')
+            ->orderByDesc('id')
             ->first();
     }
 
@@ -934,6 +1005,9 @@ class ChatService
         $meta = $conversation->meta ?: [];
         $meta['origin_context'] = $originContext;
         $conversation->meta = $meta;
+        if (($originContext['kind'] ?? null) === ChatConversation::THREAD_KIND_COMMENT) {
+            $conversation->thread_kind = ChatConversation::THREAD_KIND_COMMENT;
+        }
         $conversation->save();
     }
 

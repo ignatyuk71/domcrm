@@ -70,7 +70,7 @@ return [
         'graph_version' => env('META_GRAPH_VERSION', 'v24.0'),
         'scopes' => array_filter(array_map('trim', explode(',', (string) env(
             'META_SCOPES',
-            'pages_show_list,pages_messaging,pages_manage_metadata,pages_read_engagement,instagram_business_basic,instagram_business_manage_messages,business_management'
+            'pages_show_list,pages_messaging,pages_manage_metadata,pages_read_engagement,instagram_basic,instagram_manage_messages,instagram_manage_comments,business_management'
         )))),
     ],
 

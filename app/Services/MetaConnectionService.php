@@ -353,10 +353,11 @@ class MetaConnectionService
             'messaging_postbacks',
             'messaging_optins',
             'feed',
+            'comments',
         ];
     }
 
-    private function requiredScopes(): array
+    public function requiredScopes(): array
     {
         return array_values(array_filter([
             'pages_show_list',
@@ -365,6 +366,7 @@ class MetaConnectionService
             'pages_read_engagement',
             'instagram_basic',
             'instagram_manage_messages',
+            'instagram_manage_comments',
         ]));
     }
 

@@ -136,7 +136,7 @@ export function matchConversationByTab(chat, tab) {
   }
 
   if (tab === 'messenger' || tab === 'instagram') {
-    return chat?.platform === tab;
+    return chat?.platform === tab && !isCommentThread(chat);
   }
 
   const commentThread = isCommentThread(chat);

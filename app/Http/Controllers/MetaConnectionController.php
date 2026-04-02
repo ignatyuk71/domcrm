@@ -16,6 +16,9 @@ class MetaConnectionController extends Controller
     public function index(Request $request)
     {
         $connection = $this->metaConnectionService->current();
+        $requiredScopes = $this->metaConnectionService->requiredScopes();
+        $grantedScopes = $connection?->granted_scopes ?? [];
+        $missingScopes = array_values(array_diff($requiredScopes, $grantedScopes));
 
         if ($request->expectsJson()) {
             return response()->json([
@@ -31,8 +34,14 @@ class MetaConnectionController extends Controller
                     'verify_token' => $connection->verify_token,
                     'webhook_secret' => $connection->webhook_secret,
                     'webhook_subscribed' => $connection->webhook_subscribed,
+                    'webhook_fields' => $connection->webhook_fields ?? [],
                     'connected_at' => optional($connection->connected_at)?->toIso8601String(),
+                    'last_sync_at' => optional($connection->last_sync_at)?->toIso8601String(),
+                    'last_webhook_at' => optional($connection->last_webhook_at)?->toIso8601String(),
+                    'last_webhook_platform' => $connection->last_webhook_platform,
                     'granted_scopes' => $connection->granted_scopes ?? [],
+                    'required_scopes' => $requiredScopes,
+                    'missing_scopes' => $missingScopes,
                     'last_error' => $connection->last_error,
                     'has_page_token' => filled($connection->access_token),
                 ] : null,

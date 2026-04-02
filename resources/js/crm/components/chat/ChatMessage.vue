@@ -223,7 +223,7 @@ const statusIcon = computed(() => {
   align-items: flex-start;
   gap: 4px;
   max-width: 80%;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
   animation: fadeIn 0.3s ease;
 }
 
@@ -245,20 +245,23 @@ const statusIcon = computed(() => {
 }
 
 .chat-message-bubble {
-  background: #f1f5f9; /* Світло-сірий для вхідних */
-  border-radius: 16px;
-  padding: 10px 14px;
+  background: #ffffff;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 14px;
+  padding: 10px 12px;
   color: #1e293b;
-  border-bottom-left-radius: 4px;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  border-bottom-left-radius: 6px;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.04);
   position: relative;
 }
 
 .chat-message.mine .chat-message-bubble {
-  background: #3b82f6; /* Синій для моїх */
+  background: #2563eb;
+  border-color: transparent;
   color: #fff;
-  border-bottom-left-radius: 16px;
-  border-bottom-right-radius: 4px;
+  border-bottom-left-radius: 14px;
+  border-bottom-right-radius: 6px;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.14);
 }
 
 .chat-message-bubble.is-media-only {
@@ -281,12 +284,12 @@ const statusIcon = computed(() => {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 8px;
-  padding: 10px 12px;
+  margin-bottom: 6px;
+  padding: 10px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.92);
+  background: #f8fafc;
   color: #0f172a;
-  border: 1px solid rgba(148, 163, 184, 0.28);
+  border: 1px solid rgba(148, 163, 184, 0.2);
 }
 
 .origin-message-thumb {
@@ -296,7 +299,7 @@ const statusIcon = computed(() => {
   overflow: hidden;
   flex-shrink: 0;
   background: #e2e8f0;
-  border: 1px solid rgba(148, 163, 184, 0.28);
+  border: 1px solid rgba(148, 163, 184, 0.2);
 }
 
 .origin-message-thumb img {
@@ -365,10 +368,10 @@ const statusIcon = computed(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 32px;
+  min-height: 34px;
   padding: 0 10px;
   border-radius: 10px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.18);
   background: #ffffff;
   color: #0f172a;
   text-decoration: none;
@@ -401,12 +404,12 @@ const statusIcon = computed(() => {
 .reply-wrapper {
   display: flex;
   flex-direction: row;
-  gap: 10px;
-  padding: 6px 8px;
-  border-left: 3px solid rgba(0, 0, 0, 0.2);
-  background: rgba(0, 0, 0, 0.05);
-  border-radius: 6px;
-  margin-bottom: 8px;
+  gap: 8px;
+  padding: 7px 9px;
+  border-left: 3px solid rgba(15, 23, 42, 0.18);
+  background: rgba(15, 23, 42, 0.05);
+  border-radius: 10px;
+  margin-bottom: 6px;
   overflow: hidden;
   max-width: 100%;
 }
@@ -424,7 +427,7 @@ const statusIcon = computed(() => {
   flex-shrink: 0;
   width: 100px;
   height: 120px;
-  border-radius: 4px;
+  border-radius: 8px;
   overflow: hidden;
   background: rgba(0, 0, 0, 0.1);
 }
@@ -438,7 +441,7 @@ const statusIcon = computed(() => {
 .reply-video-placeholder {
   width: 36px;
   height: 36px;
-  border-radius: 4px;
+  border-radius: 8px;
   background: rgba(0, 0, 0, 0.1);
   display: flex;
   align-items: center;
@@ -476,26 +479,26 @@ const statusIcon = computed(() => {
 .message-text {
   white-space: pre-wrap;
   word-wrap: break-word;
-  line-height: 1.5;
-  font-size: 0.95rem;
+  line-height: 1.45;
+  font-size: 0.92rem;
 }
 
 /* Вкладення */
 .message-attachments {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 6px;
+  margin-bottom: 6px;
 }
 
 /* Картинки */
 .attachment-img-wrapper {
   position: relative;
-  border-radius: 14px;
+  border-radius: 12px;
   overflow: hidden;
   background: #f8fafc;
-  border: 1px solid #dbe4ee;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
 }
 
 .chat-message.mine .attachment-img-wrapper {
@@ -530,10 +533,10 @@ const statusIcon = computed(() => {
 .attachment-img-wrapper img {
   display: block;
   max-width: 100%;
-  max-height: 350px; /* Обмеження висоти, щоб не рвало чат */
+  max-height: 350px;
   object-fit: cover;
-  border-radius: 13px;
-  cursor: pointer; /* Курсор при наведенні */
+  border-radius: 11px;
+  cursor: pointer;
   transition: opacity 0.2s;
 }
 
@@ -555,8 +558,8 @@ const statusIcon = computed(() => {
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
-  background: rgba(0,0,0,0.06);
-  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.06);
+  border-radius: 10px;
   text-decoration: none;
   color: #334155;
   font-size: 0.9rem;
@@ -579,11 +582,12 @@ const statusIcon = computed(() => {
 
 /* Час */
 .chat-message-time {
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   color: #94a3b8;
-  padding: 0 4px;
+  padding: 0 8px;
   display: flex;
   align-items: center;
+  font-weight: 700;
 }
 
 .status-icon {

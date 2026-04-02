@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class ChatContact extends Model
@@ -38,8 +39,15 @@ class ChatContact extends Model
         return $this->belongsTo(Customer::class);
     }
 
+    public function conversations(): HasMany
+    {
+        return $this->hasMany(ChatConversation::class, 'contact_id');
+    }
+
     public function conversation(): HasOne
     {
-        return $this->hasOne(ChatConversation::class, 'contact_id');
+        return $this->hasOne(ChatConversation::class, 'contact_id')
+            ->where('thread_kind', ChatConversation::THREAD_KIND_DIRECT)
+            ->latestOfMany('last_message_at');
     }
 }

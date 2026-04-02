@@ -32,6 +32,8 @@ class MetaConnection extends Model
         'connected_at',
         'last_token_refresh_at',
         'last_sync_at',
+        'last_webhook_at',
+        'last_webhook_platform',
         'last_error',
         'profile_payload',
         'connected_by',
@@ -46,6 +48,7 @@ class MetaConnection extends Model
         'connected_at' => 'datetime',
         'last_token_refresh_at' => 'datetime',
         'last_sync_at' => 'datetime',
+        'last_webhook_at' => 'datetime',
         'token_expires_at' => 'datetime',
         'user_token_expires_at' => 'datetime',
     ];

@@ -20,12 +20,19 @@
 
     <template #sidebar>
       <div class="chat-sidebar-shell">
+        <div class="chat-sidebar-head">
+          <div>
+            <h1>Чати</h1>
+            <p>Всі звернення з Messenger, Instagram Direct і коментарів в одному просторі.</p>
+          </div>
+        </div>
+
         <div class="chat-sidebar-search">
           <i class="bi bi-search"></i>
           <input
             v-model="searchQuery"
             type="text"
-            placeholder="Пошук"
+            placeholder="Клієнт, @username, фраза..."
           >
         </div>
 
@@ -276,89 +283,157 @@ onUnmounted(stopPolling);
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  background: #fff;
+  background: transparent;
+}
+
+.chat-sidebar-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px 4px;
+}
+
+.chat-sidebar-head h1 {
+  margin: 3px 0 4px;
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  color: #0f172a;
+}
+
+.chat-sidebar-head p {
+  margin: 0;
+  max-width: 220px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: #64748b;
 }
 
 .chat-sidebar-search {
   position: relative;
-  padding: 14px 12px 8px;
+  padding: 8px 14px 8px;
 }
 
 .chat-sidebar-search i {
   position: absolute;
   top: 50%;
-  left: 24px;
+  left: 26px;
   transform: translateY(-50%);
-  color: #6b7280;
-  font-size: 13px;
+  color: #94a3b8;
+  font-size: 14px;
 }
 
 .chat-sidebar-search input {
   width: 100%;
-  height: 40px;
+  height: 38px;
   padding: 0 12px 0 34px;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  background: #fff;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 4px;
+  background: #f8fafc;
   color: #0f172a;
-  font-size: 14px;
+  font-size: 13px;
   outline: none;
-  transition: border-color 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.chat-sidebar-search input:focus {
+  border-color: rgba(37, 99, 235, 0.26);
+  background: #ffffff;
 }
 
 .inbox-tabs {
   display: flex;
   align-items: center;
-  gap: 0;
-  padding: 0 16px;
+  gap: 6px;
+  padding: 8px;
   overflow-x: auto;
-  border-bottom: 1px solid #e5e7eb;
+  background: transparent;
+  scrollbar-width: none;
+}
+
+.inbox-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .inbox-tab {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  height: 52px;
-  padding: 0 18px;
-  border: none;
-  background: transparent;
-  color: #1f2937;
-  font-size: 14px;
-  font-weight: 400;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: #ffffff;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
   white-space: nowrap;
-  border-radius: 8px 8px 0 0;
-  margin-top: 6px;
-  margin-right: 4px;
+  border-radius: 4px;
+  box-shadow: none;
+  transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
+}
+
+.inbox-tab:hover {
+  color: #0f172a;
+  border-color: rgba(37, 99, 235, 0.16);
+  background: #f8fbff;
 }
 
 .inbox-tab.is-active {
-  color: #1877f2;
-  background: #e7f3ff;
+  color: #ffffff;
+  background: #2563eb;
+  border-color: transparent;
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.12);
 }
 
 .tab-count {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
   border-radius: 999px;
-  background: #e5e7eb;
-  color: #1f2937;
-  font-size: 11px;
+  background: rgba(148, 163, 184, 0.18);
+  color: #0f172a;
+  font-size: 10px;
   font-weight: 700;
 }
 
 .tab-count.is-unread {
-  background: #fee2e2;
+  background: rgba(254, 226, 226, 0.92);
   color: #b42318;
+}
+
+.inbox-tab.is-active .tab-count {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
 }
 
 @media (max-width: 768px) {
   .inbox-tabs {
-    padding: 10px 12px;
+    padding: 6px 6px 4px;
+    gap: 6px;
+  }
+
+  .chat-sidebar-head {
+    padding: 10px 10px 4px;
+  }
+
+  .chat-sidebar-head h1 {
+    font-size: 18px;
+  }
+
+  .chat-sidebar-head p {
+    font-size: 12px;
+  }
+
+  .chat-sidebar-search {
+    padding: 6px 10px 8px;
+  }
+
+  .chat-sidebar-search i {
+    left: 20px;
   }
 }
 </style>

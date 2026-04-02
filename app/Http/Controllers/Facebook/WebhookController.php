@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Facebook;
 
 use App\Http\Controllers\Controller;
 use App\Models\ChatContact;
+use App\Models\ChatConversation;
 use App\Models\ChatMessage;
 use App\Models\MetaConnection;
 use App\Services\ChatService;
@@ -55,6 +56,7 @@ class WebhookController extends Controller
 
         try {
             $platform = ($request->input('object') ?? '') === 'instagram' ? 'instagram' : 'messenger';
+            $this->touchWebhookHeartbeat($platform);
             $this->logRawWebhookPayload($request, $platform);
 
             foreach ($request->input('entry', []) as $entry) {
@@ -118,16 +120,18 @@ class WebhookController extends Controller
 
     private function logRawWebhookPayload(Request $request, string $platform): void
     {
-        if ($platform !== 'messenger') {
-            return;
-        }
-
         $entries = $request->input('entry', []);
         $changeFields = [];
         $changeItems = [];
         $messagingEvents = 0;
+        $entryIds = [];
 
         foreach ($entries as $entry) {
+            $entryId = trim((string) ($entry['id'] ?? ''));
+            if ($entryId !== '' && !in_array($entryId, $entryIds, true)) {
+                $entryIds[] = $entryId;
+            }
+
             $messagingEvents += is_array($entry['messaging'] ?? null) ? count($entry['messaging']) : 0;
 
             foreach ($entry['changes'] ?? [] as $change) {
@@ -143,8 +147,10 @@ class WebhookController extends Controller
             }
         }
 
-        Log::info('Messenger webhook raw payload', [
+        Log::info('Meta webhook raw payload', [
+            'platform' => $platform,
             'object' => $request->input('object'),
+            'entry_ids' => $entryIds,
             'entry_count' => is_array($entries) ? count($entries) : 0,
             'messaging_events' => $messagingEvents,
             'change_fields' => $changeFields,
@@ -216,7 +222,12 @@ class WebhookController extends Controller
         );
 
         $externalThreadId = $this->resolveChangeThreadId($entry, $value);
-        $conversation = $chatService->getOrCreateConversation($contact, $customer, $externalThreadId);
+        $conversation = $chatService->getOrCreateConversation(
+            $contact,
+            $customer,
+            $externalThreadId,
+            ChatConversation::THREAD_KIND_COMMENT
+        );
 
         $externalParentMessageId = $this->resolveChangeParentExternalMessageId($field, $value);
         $parentMessageId = $chatService->resolveMessageByExternalId($externalParentMessageId)?->id;
@@ -356,8 +367,13 @@ class WebhookController extends Controller
             ]);
         }
 
-        $conversation = $chatService->getOrCreateConversation($contact, $customer);
-        $recentLocal = $isEcho ? $this->findRecentLocalOutbound($conversation->id, (string) ($message['text'] ?? '')) : null;
+        $text = trim((string) ($message['text'] ?? ''));
+        $originContext = $chatService->extractOriginContext($text, $platform);
+        $threadKind = $originContext
+            ? ChatConversation::THREAD_KIND_COMMENT
+            : ChatConversation::THREAD_KIND_DIRECT;
+        $conversation = $chatService->getOrCreateConversation($contact, $customer, null, $threadKind);
+        $recentLocal = $isEcho ? $this->findRecentLocalOutbound($conversation->id, $text) : null;
         $processedAttachments = [];
 
         foreach (($message['attachments'] ?? []) as $attachment) {
@@ -391,7 +407,6 @@ class WebhookController extends Controller
 
         $externalParentId = $message['reply_to']['mid'] ?? null;
         $parentMessageId = $chatService->resolveMessageByExternalId($externalParentId)?->id;
-        $text = trim((string) ($message['text'] ?? ''));
 
         $storedMessage = $chatService->storeMessage($conversation, [
             'parent_message_id' => $parentMessageId,
@@ -405,7 +420,6 @@ class WebhookController extends Controller
             'sent_at' => $this->resolveEventTimestamp($event),
         ], $processedAttachments);
 
-        $originContext = $chatService->extractOriginContext($text, $platform);
         if ($originContext) {
             $originContext = $chatService->ensureOriginPreview($originContext);
             $chatService->syncMessageOrigin($storedMessage, $originContext);
@@ -547,14 +561,19 @@ class WebhookController extends Controller
             ->where('external_user_id', $externalUserId)
             ->first();
 
-        if (!$contact?->conversation) {
+        if (!$contact) {
+            return;
+        }
+
+        $conversationIds = $contact->conversations()->pluck('id');
+        if ($conversationIds->isEmpty()) {
             return;
         }
 
         $readAt = Carbon::createFromTimestampMs($watermark)->timezone(config('app.timezone'));
 
         ChatMessage::query()
-            ->where('conversation_id', $contact->conversation->id)
+            ->whereIn('conversation_id', $conversationIds)
             ->where('direction', 'outbound')
             ->where(function ($query) {
                 $query->whereNull('read_at')
@@ -569,6 +588,19 @@ class WebhookController extends Controller
                 'read_at' => $readAt,
                 'delivered_at' => $readAt,
             ]);
+    }
+
+    private function touchWebhookHeartbeat(string $platform): void
+    {
+        $connection = MetaConnection::current();
+        if (!$connection) {
+            return;
+        }
+
+        $connection->forceFill([
+            'last_webhook_at' => now(),
+            'last_webhook_platform' => $platform,
+        ])->save();
     }
 
     private function processDeliveryReceipt(array $event): void

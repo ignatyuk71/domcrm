@@ -42,6 +42,7 @@
               class="tool-btn"
               :class="{ active: showGallery }"
               title="Галерея"
+              aria-label="Відкрити галерею товарів"
               @click="showGallery = !showGallery"
             >
               <i class="bi bi-handbag"></i>
@@ -52,6 +53,7 @@
             type="button"
             class="tool-btn"
             :class="{ active: selectedFiles.length }"
+            aria-label="Прикріпити файл"
             @click="triggerFileInput"
             title="Прикріпити файл"
           >
@@ -78,6 +80,7 @@
               class="tool-btn"
               :class="{ active: showTemplates }"
               title="Шаблони відповідей"
+              aria-label="Відкрити шаблони відповідей"
               @click="showTemplates = !showTemplates"
             >
               <i class="bi bi-chat-square-dots"></i>
@@ -90,6 +93,7 @@
           class="action-btn"
           :disabled="disabled"
           :title="hasContent ? 'Надіслати' : 'Надіслати лайк'"
+          :aria-label="hasContent ? 'Надіслати повідомлення' : 'Надіслати лайк'"
           @click="handleSendClick"
         >
           <i v-if="hasContent" class="bi bi-send-fill send-icon"></i>
@@ -98,9 +102,8 @@
       </div>
     </form>
 
-    <div class="input-footer">
-      <span v-if="fileError" class="error-text">{{ fileError }}</span>
-      <span v-else class="hint-text mobile-hide">Enter — надіслати, Shift+Enter — новий рядок</span>
+    <div v-if="fileError" class="input-footer">
+      <span class="error-text">{{ fileError }}</span>
     </div>
 
   </div>
@@ -276,25 +279,27 @@ onMounted(() => {
 
 <style scoped>
 .chat-input-wrapper {
-  padding: 8px 20px;
-  background: #ffffff;
-  border-top: 1px solid #e5e7eb;
+  padding: 14px 18px 16px;
+  background: rgba(255, 255, 255, 0.78);
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
 }
 
 .chat-input-bar-container {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  min-height: 56px;
-  background: #ffffff;
-  border: 1px solid #d0d7de;
-  border-radius: 10px;
-  padding: 8px 14px 6px;
-  transition: border-color 0.2s;
+  gap: 8px;
+  min-height: 108px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 20px;
+  padding: 10px 14px 10px;
+  box-shadow: 0 16px 30px rgba(15, 23, 42, 0.06);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
 .chat-input-bar-container:focus-within {
-  border-color: #3b82f6;
+  border-color: rgba(37, 99, 235, 0.28);
+  box-shadow: 0 20px 40px rgba(37, 99, 235, 0.1);
 }
 
 .chat-input-bar-container.has-error {
@@ -302,7 +307,14 @@ onMounted(() => {
 }
 
 /* Рядок: Текст + Відправити */
+.chat-input-main-row {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: flex-start;
+}
+
 .input-area {
+  flex: 1 1 auto;
   min-height: 22px;
 }
 
@@ -313,25 +325,35 @@ onMounted(() => {
   resize: none;
   background: transparent;
   font-size: 15px;
-  color: #32465a;
-  line-height: 1.25;
-  max-height: 72px;
-  min-height: 22px;
+  color: #0f172a;
+  line-height: 1.5;
+  max-height: 112px;
+  min-height: 24px;
   padding: 0;
   margin: 0;
+}
+
+.chat-textarea::placeholder {
+  color: #94a3b8;
 }
 
 .chat-actions-row {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 10px;
+  margin-top: auto;
 }
 
 .chat-tools {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding: 4px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 16px;
+  background: rgba(248, 250, 252, 0.8);
 }
 
 .relative-container {
@@ -340,35 +362,57 @@ onMounted(() => {
 }
 
 .tool-btn {
-  background: none;
-  border: none;
-  padding: 0;
-  color: #4b5563;
-  font-size: 1.2rem;
+  width: 38px;
+  height: 38px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: #475569;
+  font-size: 1rem;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
 }
 
-.tool-btn:hover, .tool-btn.active {
-  color: #1877f2;
+.tool-btn:hover,
+.tool-btn.active {
+  color: #1d4ed8;
+  border-color: rgba(37, 99, 235, 0.12);
+  background: rgba(255, 255, 255, 0.96);
+  transform: none;
 }
 
-/* Кнопка відправки */
 .action-btn {
-  background: none;
-  border: none;
-  padding: 0;
+  width: 40px;
+  height: 40px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 10px 20px rgba(37, 99, 235, 0.22);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
 }
 
-.send-icon, .like-icon {
-  font-size: 1.3rem;
-  color: #1877f2;
+.action-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 20px 34px rgba(37, 99, 235, 0.28);
+}
+
+.send-icon,
+.like-icon {
+  font-size: 1rem;
+  color: #ffffff;
+}
+
+.tool-btn i,
+.action-btn i {
+  display: block;
+  line-height: 1;
 }
 
 .action-btn:disabled {
@@ -378,11 +422,11 @@ onMounted(() => {
 
 @media (max-width: 768px) {
   .chat-input-wrapper {
-    padding: 8px 10px;
+    padding: 10px 12px 14px;
   }
   
   .chat-textarea {
-    font-size: 16px; /* Щоб iPhone не збільшував сторінку при фокусі */
+    font-size: 16px;
   }
 
   .mobile-hide {
@@ -390,26 +434,26 @@ onMounted(() => {
   }
 
   .chat-input-bar-container {
-    min-height: 54px;
+    min-height: 92px;
+    border-radius: 18px;
   }
 
   .chat-actions-row {
-    justify-content: space-between;
+    justify-content: flex-end;
   }
 
   .chat-tools {
-    gap: 18px;
+    gap: 4px;
   }
 }
 
-/* СТИЛІ ПРЕВ'Ю ТА ФУТЕРА */
-.file-preview-area { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
-.file-badge { display: flex; align-items: center; background: #f1f5f9; border-radius: 8px; padding: 4px; border: 1px solid #e2e8f0; }
-.file-thumb { width: 60px; height: 60px; border-radius: 4px; object-fit: cover; }
-.file-icon { font-size: 1.2rem; color: #64748b; margin: 0 4px; }
-.remove-btn { background: none; border: none; color: #94a3b8; cursor: pointer; margin-left: 4px; font-size: 1.1rem; }
-.input-footer { display: flex; justify-content: flex-end; margin-top: 3px; padding: 0 8px; }
-.hint-text { font-size: 0.66rem; color: #cbd5e1; }
+.file-preview-area { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+.file-badge { display: flex; align-items: center; background: rgba(248, 250, 252, 0.96); border-radius: 14px; padding: 6px; border: 1px solid rgba(148, 163, 184, 0.18); box-shadow: 0 12px 20px rgba(15, 23, 42, 0.05); }
+.file-thumb { width: 64px; height: 64px; border-radius: 10px; object-fit: cover; }
+.file-icon { font-size: 1.2rem; color: #64748b; margin: 0 8px; }
+.remove-btn { background: none; border: none; color: #94a3b8; cursor: pointer; margin-left: 6px; font-size: 1rem; width: 28px; height: 28px; border-radius: 10px; }
+.remove-btn:hover { background: rgba(148, 163, 184, 0.12); color: #334155; }
+.input-footer { display: flex; justify-content: flex-end; margin-top: 6px; padding: 0 8px; }
 .error-text { font-size: 0.75rem; color: #ef4444; }
 
 .custom-scrollbar::-webkit-scrollbar { width: 4px; }

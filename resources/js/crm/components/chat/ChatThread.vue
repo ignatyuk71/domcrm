@@ -6,6 +6,7 @@
           type="button"
           class="thread-mobile-btn"
           title="Список чатів"
+          aria-label="Відкрити список чатів"
           @click="$emit('open-list')"
         >
           <i class="bi bi-list"></i>
@@ -26,25 +27,11 @@
             <h2>{{ activeChat?.customer_name || 'Чат' }}</h2>
           </div>
 
-          <div v-if="metaSubtitle" class="subtitle-row">
+          <div class="subtitle-row">
             <span class="platform-pill">
               <i class="bi" :class="platformIcon"></i>
               {{ platformLabel }}
             </span>
-            <span v-if="originBadgeLabel" class="source-pill" :class="originBadgeClass">
-              <i v-if="originBadgeIcon" class="bi" :class="originBadgeIcon"></i>
-              {{ originBadgeLabel }}
-            </span>
-            <span class="meta-subtitle-text">{{ metaSubtitle }}</span>
-            <a
-              v-if="originContext?.url"
-              :href="originContext.url"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="source-link-inline"
-            >
-              Джерело
-            </a>
           </div>
         </div>
       </div>
@@ -62,47 +49,52 @@
             </option>
           </select>
         </label>
+        <div class="thread-action-cluster" role="group" aria-label="Дії з діалогом">
+          <button
+            type="button"
+            class="thread-action-btn profile-open-btn"
+            title="Профіль клієнта"
+            aria-label="Відкрити профіль клієнта"
+            @click="$emit('open-profile')"
+          >
+            <i class="bi bi-person-lines-fill"></i>
+          </button>
 
-        <button
-          type="button"
-          class="thread-action-btn profile-open-btn"
-          title="Профіль клієнта"
-          @click="$emit('open-profile')"
-        >
-          <i class="bi bi-person-lines-fill"></i>
-        </button>
+          <button
+            type="button"
+            class="thread-action-btn thread-clear-btn"
+            :disabled="isClearingHistory || loading || !activeChat?.conversation_id"
+            title="Очистити історію в CRM та скинути AI-стан діалогу"
+            aria-label="Очистити історію чату"
+            @click="$emit('clear-history')"
+          >
+            <i class="bi bi-eraser"></i>
+          </button>
 
-        <button
-          type="button"
-          class="thread-action-btn thread-clear-btn"
-          :disabled="isClearingHistory || loading || !activeChat?.conversation_id"
-          title="Очистити історію в CRM та скинути AI-стан діалогу"
-          @click="$emit('clear-history')"
-        >
-          <i class="bi bi-eraser"></i>
-        </button>
+          <button
+            type="button"
+            class="thread-action-btn"
+            :disabled="isArchiving"
+            title="Прибрати з інбоксу"
+            aria-label="Прибрати чат з інбоксу"
+            @click="$emit('delete-conversation')"
+          >
+            <i class="bi bi-trash"></i>
+          </button>
 
-        <button
-          type="button"
-          class="thread-action-btn"
-          :disabled="isArchiving"
-          title="Прибрати з інбоксу"
-          @click="$emit('delete-conversation')"
-        >
-          <i class="bi bi-trash"></i>
-        </button>
-
-        <button
-          type="button"
-          class="thread-action-btn"
-          :class="{ 'is-syncing': isSyncing }"
-          :disabled="isSyncing || loading"
-          title="Оновити історію переписки"
-          @click="$emit('force-sync')"
-        >
-          <span v-if="isSyncing" class="thread-btn-spinner" aria-hidden="true"></span>
-          <i v-else class="bi bi-arrow-repeat"></i>
-        </button>
+          <button
+            type="button"
+            class="thread-action-btn"
+            :class="{ 'is-syncing': isSyncing }"
+            :disabled="isSyncing || loading"
+            title="Оновити історію переписки"
+            aria-label="Оновити історію переписки"
+            @click="$emit('force-sync')"
+          >
+            <span v-if="isSyncing" class="thread-btn-spinner" aria-hidden="true"></span>
+            <i v-else class="bi bi-arrow-repeat"></i>
+          </button>
+        </div>
       </div>
     </header>
 
@@ -218,9 +210,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import ChatInput from './ChatInput.vue';
 import ChatMessage from './ChatMessage.vue';
 import {
-  resolveOriginBadgeClass,
   resolveOriginContext,
-  resolveOriginMeta,
   resolveOriginSummaryLine,
   resolveOriginTitle as resolveOriginThreadTitle,
   resolvePlatformMeta,
@@ -275,32 +265,7 @@ const platformMeta = computed(() => resolvePlatformMeta(props.activeChat?.platfo
 const platformLabel = computed(() => platformMeta.value.label);
 const platformIcon = computed(() => platformMeta.value.icon);
 const originContext = computed(() => resolveOriginContext(props.activeChat));
-const originMeta = computed(() => resolveOriginMeta(originContext.value));
 const originSummaryLine = computed(() => resolveOriginSummaryLine(originContext.value, props.activeChat?.platform));
-const metaSubtitle = computed(() => {
-  const username = String(props.activeChat?.external_username || '').trim();
-  const sourceDisplay = String(originContext.value?.source_display || '').trim();
-  const parts = [];
-
-  if (username) {
-    parts.push(`@${username.replace(/^@/, '')}`);
-  }
-
-  if (sourceDisplay) {
-    parts.push(sourceDisplay);
-  } else if (!originContext.value) {
-    parts.push(props.activeChat?.platform === 'instagram'
-      ? 'Instagram Direct'
-      : 'Messenger чат');
-  } else if (!username) {
-    parts.push(originSummaryLine.value);
-  } else {
-    parts.push('Лід із коментарів');
-  }
-
-  return parts.join(' • ');
-});
-
 const originTitle = computed(() => resolveOriginThreadTitle(originContext.value));
 const originSourceTitle = computed(() => originContext.value?.source_title || 'Джерело');
 const originSourceDisplay = computed(() => originContext.value?.source_display || '');
@@ -309,9 +274,6 @@ const originPreviewImage = computed(() => originContext.value?.preview_image_url
 const originPreviewTitle = computed(() => originContext.value?.preview_title || '');
 const originPreviewDescription = computed(() => originContext.value?.preview_description || '');
 const hasOriginPreview = computed(() => Boolean(originEmbedUrl.value || originPreviewImage.value));
-const originBadgeLabel = computed(() => originMeta.value.label || '');
-const originBadgeIcon = computed(() => originMeta.value.icon || '');
-const originBadgeClass = computed(() => resolveOriginBadgeClass(originContext.value, 'source'));
 
 const groupedMessages = computed(() => {
   const groups = [];
@@ -433,25 +395,25 @@ watch(
   flex-direction: column;
   min-height: 0;
   height: 100%;
-  background: #fff;
+  background: transparent;
 }
 
 .chat-thread-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 18px 20px;
-  border-bottom: 1px solid #e5e7eb;
-  background: #fff;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 14px;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  background: #ffffff;
 }
 
 .thread-context-stack {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 10px 18px 0;
-  background: #ffffff;
+  padding: 10px 16px 0;
+  background: transparent;
 }
 
 .thread-origin-card,
@@ -462,7 +424,7 @@ watch(
   gap: 12px;
   padding: 10px 12px;
   border-radius: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid rgba(148, 163, 184, 0.2);
   background: #f8fafc;
 }
 
@@ -490,11 +452,11 @@ watch(
 
 .origin-preview-media {
   width: 100%;
-  max-width: 360px;
-  border-radius: 16px;
+  max-width: 380px;
+  border-radius: 12px;
   overflow: hidden;
   background: #e2e8f0;
-  border: 1px solid #dbe4ee;
+  border: 1px solid rgba(148, 163, 184, 0.2);
 }
 
 .origin-preview-media img {
@@ -523,7 +485,7 @@ watch(
 }
 
 .origin-copy strong {
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.3;
   color: #0f172a;
 }
@@ -554,10 +516,10 @@ watch(
 
 .origin-embed-frame {
   width: 100%;
-  max-width: 360px;
-  border-radius: 16px;
+  max-width: 380px;
+  border-radius: 12px;
   overflow: hidden;
-  border: 1px solid #dbe4ee;
+  border: 1px solid rgba(148, 163, 184, 0.2);
   background: #ffffff;
 }
 
@@ -576,11 +538,11 @@ watch(
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 34px;
+  min-height: 38px;
   padding: 0 12px;
   border-radius: 10px;
   background: #ffffff;
-  border: 1px solid #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.18);
   color: #0f172a;
   text-decoration: none;
   font-size: 12px;
@@ -588,7 +550,7 @@ watch(
 }
 
 .origin-toggle-btn {
-  border: 1px solid #bfdbfe;
+  border: 1px solid rgba(37, 99, 235, 0.18);
   color: #1d4ed8;
 }
 
@@ -624,23 +586,23 @@ watch(
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
 }
 
 .thread-mobile-btn {
   display: none;
-  width: 40px;
-  height: 40px;
-  border: 1px solid #d1d5db;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
   border-radius: 10px;
-  background: #fff;
+  background: #ffffff;
   color: #0f172a;
 }
 
 .thread-avatar {
   width: 56px;
   height: 56px;
-  border-radius: 50%;
+  border-radius: 14px;
   overflow: hidden;
   flex-shrink: 0;
   background: linear-gradient(135deg, #e2e8f0, #cbd5e1);
@@ -677,14 +639,15 @@ watch(
   margin: 0;
   font-size: 18px;
   line-height: 1.1;
-  font-weight: 600;
+  font-weight: 800;
+  letter-spacing: -0.03em;
   color: #0f172a;
 }
 
 .subtitle-row {
   color: #64748b;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .platform-pill {
@@ -692,11 +655,11 @@ watch(
   align-items: center;
   justify-content: center;
   gap: 6px;
-  height: 24px;
-  padding: 0 8px;
+  min-height: 24px;
+  padding: 0 9px;
   border-radius: 999px;
-  background: #eef2ff;
-  color: #3b82f6;
+  background: #eff6ff;
+  color: #1d4ed8;
   font-size: 12px;
   font-weight: 700;
 }
@@ -710,8 +673,8 @@ watch(
   align-items: center;
   justify-content: center;
   gap: 6px;
-  height: 24px;
-  padding: 0 8px;
+  min-height: 24px;
+  padding: 0 9px;
   border-radius: 999px;
   font-size: 12px;
   font-weight: 700;
@@ -755,7 +718,7 @@ watch(
 .source-link-inline {
   color: #2563eb;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   text-decoration: none;
 }
 
@@ -763,19 +726,22 @@ watch(
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-end;
+  align-self: center;
+  min-width: 0;
 }
 
 .stage-picker {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 10px;
-  height: 34px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  background: #fff;
+  padding: 0 12px;
+  min-height: 40px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: none;
 }
 
 .stage-picker span {
@@ -785,44 +751,59 @@ watch(
 }
 
 .stage-picker select {
-  min-width: 156px;
+  min-width: 168px;
   border: none;
   background: transparent;
   color: #0f172a;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   outline: none;
 }
 
-.thread-action-btn {
-  width: 44px;
-  height: 44px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  background: #fff;
-  color: #4b5563;
-  transition: background 0.18s ease, border-color 0.18s ease;
+.thread-action-cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 5px;
+  overflow: hidden;
+  background: #ffffff;
 }
 
-.profile-open-btn {
-  width: 44px;
-  height: 44px;
+.thread-action-btn {
+  width: 42px;
+  height: 40px;
+  border: none;
+  border-right: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 0;
+  background: transparent;
+  color: #475569;
+  box-shadow: none;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+.thread-action-cluster .thread-action-btn:last-child {
+  border-right: none;
 }
 
 .thread-clear-btn {
   color: #b45309;
-  border-color: #f3d5a6;
-  background: #fffaf0;
 }
 
 .thread-action-btn:hover {
-  background: #f9fafb;
-  border-color: #9ca3af;
+  background: #f8fafc;
+  color: #0f172a;
 }
 
 .thread-action-btn.thread-clear-btn:hover {
-  border-color: #d97706;
   background: #fff7e8;
+}
+
+.thread-action-btn i,
+.thread-action-btn .thread-btn-spinner {
+  display: block;
+  line-height: 1;
+  margin: 0 auto;
 }
 
 .thread-btn-spinner,
@@ -851,8 +832,8 @@ watch(
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 14px 20px 24px;
-  background: #fff;
+  padding: 14px 16px 18px;
+  background: linear-gradient(180deg, #ffffff, #fbfdff);
 }
 
 .message-group {
@@ -867,13 +848,14 @@ watch(
 }
 
 .date-separator span {
-  padding: 6px 12px;
+  padding: 5px 10px;
   border-radius: 999px;
-  background: #f3f4f6;
-  border: 1px solid #e5e7eb;
+  background: #f8fafc;
+  border: 1px solid rgba(148, 163, 184, 0.18);
   color: #64748b;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
+  box-shadow: none;
 }
 
 .chat-state-block {
@@ -889,8 +871,8 @@ watch(
 }
 
 .chat-state-block.is-empty i {
-  font-size: 38px;
-  color: #94a3b8;
+  font-size: 42px;
+  color: #60a5fa;
 }
 
 .chat-state-block strong {
@@ -924,7 +906,7 @@ watch(
   .chat-thread-header {
     padding: 16px;
     align-items: flex-start;
-    flex-direction: column;
+    grid-template-columns: 1fr;
   }
 
   .thread-mobile-btn {
@@ -939,6 +921,7 @@ watch(
   }
 
   .thread-actions {
+    flex-wrap: wrap;
     justify-content: space-between;
   }
 
@@ -967,13 +950,21 @@ watch(
     justify-content: space-between;
   }
 
+  .thread-action-cluster {
+    width: 100%;
+  }
+
+  .thread-action-cluster .thread-action-btn {
+    flex: 1 1 0;
+  }
+
   .stage-picker select {
     min-width: 0;
     width: 100%;
   }
 
   .chat-thread-body {
-    padding: 18px 14px;
+    padding: 14px 12px 16px;
   }
 }
 </style>

@@ -87,8 +87,82 @@ class FacebookWebhookControllerTest extends TestCase
         $conversation = ChatConversation::query()->with('contact')->first();
         $this->assertNotNull($conversation);
         $this->assertSame('messenger', $conversation->contact->platform);
+        $this->assertSame('comment', $conversation->thread_kind);
         $this->assertSame('Ирина Шестакова', $conversation->contact->display_name);
         $this->assertSame($message->id, $conversation->last_message_id);
+
+        $connection = MetaConnection::query()->first();
+        $this->assertSame('messenger', $connection?->last_webhook_platform);
+        $this->assertNotNull($connection?->last_webhook_at);
+    }
+
+    public function test_instagram_direct_message_creates_direct_conversation(): void
+    {
+        MetaConnection::query()->create([
+            'provider' => 'meta',
+            'name' => 'Dream v doma',
+            'facebook_page_id' => '103823131052820',
+            'access_token' => 'page-token',
+            'verify_token' => 'verify-token',
+            'webhook_secret' => 'webhook-secret',
+            'is_active' => true,
+        ]);
+
+        $metaService = Mockery::mock(MetaService::class);
+        $metaService->shouldReceive('getContactProfile')
+            ->times(3)
+            ->with('ig-user-100', 'instagram')
+            ->andReturn([
+                'name' => 'test instagram',
+                'username' => 'test.instagram',
+            ]);
+        $metaService->shouldReceive('updateCustomerProfile')
+            ->once()
+            ->with(Mockery::type(\App\Models\Customer::class), 'instagram');
+        $this->app->instance(MetaService::class, $metaService);
+
+        $payload = [
+            'object' => 'instagram',
+            'entry' => [[
+                'id' => '17841425541648437',
+                'messaging' => [[
+                    'sender' => ['id' => 'ig-user-100'],
+                    'recipient' => ['id' => '17841425541648437'],
+                    'timestamp' => 1775120000000,
+                    'message' => [
+                        'mid' => 'ig-mid-100',
+                        'text' => 'Привіт, цікавить модель',
+                    ],
+                ]],
+            ]],
+        ];
+
+        $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $signature = 'sha256=' . hash_hmac('sha256', $json, 'webhook-secret');
+
+        $response = $this->call(
+            'POST',
+            '/api/fb-webhook',
+            [],
+            [],
+            [],
+            [
+                'CONTENT_TYPE' => 'application/json',
+                'HTTP_X_HUB_SIGNATURE_256' => $signature,
+            ],
+            $json
+        );
+
+        $response->assertOk();
+
+        $conversation = ChatConversation::query()->with('contact')->first();
+        $this->assertNotNull($conversation);
+        $this->assertSame('instagram', $conversation->contact->platform);
+        $this->assertSame('direct', $conversation->thread_kind);
+
+        $connection = MetaConnection::query()->first();
+        $this->assertSame('instagram', $connection?->last_webhook_platform);
+        $this->assertNotNull($connection?->last_webhook_at);
     }
 
     protected function setUp(): void
@@ -121,6 +195,9 @@ class FacebookWebhookControllerTest extends TestCase
             $table->boolean('webhook_subscribed')->default(false);
             $table->json('webhook_fields')->nullable();
             $table->boolean('is_active')->default(true);
+            $table->timestamp('last_sync_at')->nullable();
+            $table->timestamp('last_webhook_at')->nullable();
+            $table->string('last_webhook_platform', 32)->nullable();
             $table->text('last_error')->nullable();
             $table->timestamps();
             });
@@ -183,6 +260,7 @@ class FacebookWebhookControllerTest extends TestCase
             $table->unsignedBigInteger('stage_id');
             $table->unsignedBigInteger('assigned_user_id')->nullable();
             $table->string('status', 32)->default('open');
+            $table->string('thread_kind', 32)->default('direct');
             $table->string('external_thread_id', 191)->nullable();
             $table->unsignedBigInteger('last_message_id')->nullable();
             $table->text('last_message_preview')->nullable();

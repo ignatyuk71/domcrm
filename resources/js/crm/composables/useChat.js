@@ -2,12 +2,12 @@ import { computed, ref } from 'vue';
 import {
   archiveConversation as apiArchiveConversation,
   clearConversationHistory as apiClearConversationHistory,
-  fetchNewMessages,
-  forceSync as apiForceSync,
+  fetchConversationUpdates,
+  forceConversationSync as apiForceConversationSync,
   getConversations,
+  getConversationMessages,
   getConversationByCustomer,
-  getMessages,
-  markRead as apiMarkRead,
+  markConversationRead as apiMarkConversationRead,
   sendMessage as apiSendMessage,
   updateConversationStage as apiUpdateConversationStage,
 } from '@/crm/services/chatApi';
@@ -174,10 +174,10 @@ export function useChat() {
     isLoading.value = true;
 
     try {
-      const { data } = await getMessages(chat.customer_id, chat.platform);
+      const { data } = await getConversationMessages(chat.conversation_id);
       messages.value = normalizeCollection(data);
 
-      apiMarkRead(chat.customer_id, chat.platform).catch(() => {});
+      apiMarkConversationRead(chat.conversation_id).catch(() => {});
 
       patchConversation(chat.conversation_id, (item) => ({
         ...item,
@@ -272,7 +272,12 @@ export function useChat() {
 
       if (hasFiles) {
         const formData = new FormData();
-        formData.append('customer_id', payload.customer_id);
+        if (payload.customer_id) {
+          formData.append('customer_id', payload.customer_id);
+        }
+        if (payload.conversation_id) {
+          formData.append('conversation_id', payload.conversation_id);
+        }
         formData.append('platform', payload.platform);
         if (payload.text) {
           formData.append('text', payload.text);
@@ -365,7 +370,7 @@ export function useChat() {
   }
 
   async function forceSync(chat = activeChat.value) {
-    if (!chat?.customer_id) {
+    if (!chat?.conversation_id) {
       return;
     }
 
@@ -373,8 +378,8 @@ export function useChat() {
     syncNotice.value = null;
 
     try {
-      const { data: syncData } = await apiForceSync(chat.customer_id, chat.platform);
-      const { data } = await getMessages(chat.customer_id, chat.platform);
+      const { data: syncData } = await apiForceConversationSync(chat.conversation_id);
+      const { data } = await getConversationMessages(chat.conversation_id);
       messages.value = normalizeCollection(data);
       await fetchConversations(1);
       syncNotice.value = {
@@ -405,7 +410,7 @@ export function useChat() {
     stopPolling();
 
     const poll = async () => {
-      if (!chat?.customer_id || activeConversationId.value !== chat.conversation_id) {
+      if (!chat?.conversation_id || activeConversationId.value !== chat.conversation_id) {
         return;
       }
 
@@ -416,7 +421,7 @@ export function useChat() {
       const sinceId = lastRealMessage ? lastRealMessage.id : 0;
 
       try {
-        const data = await fetchNewMessages(chat.customer_id, sinceId, chat.platform);
+        const data = await fetchConversationUpdates(chat.conversation_id, sinceId);
         const incoming = data?.messages || [];
 
         incoming.forEach((message) => {

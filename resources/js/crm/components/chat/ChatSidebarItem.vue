@@ -149,43 +149,43 @@ watch(
 .chat-item {
   width: 100%;
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr);
-  gap: 12px;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 10px;
   padding: 10px 12px;
   border: none;
-  border-radius: 0;
-  background: #fff;
+  border-radius: 4px;
+  background: transparent;
   text-align: left;
-  border-bottom: 1px solid #e5e7eb;
+  margin: 0 6px 2px;
   transition: background 0.18s ease, box-shadow 0.18s ease;
 }
 
 .chat-item:hover {
-  background: #f7f8fa;
+  background: #f8fafc;
 }
 
 .chat-item.is-active {
-  background: #f3f4f6;
-  box-shadow: inset 3px 0 0 #1877f2;
+  background: #ffffff;
+  box-shadow: inset 3px 0 0 #2563eb, 0 0 0 1px rgba(37, 99, 235, 0.08);
 }
 
 .avatar-shell {
   position: relative;
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
 }
 
 .avatar-img,
 .avatar-fallback {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
   object-fit: cover;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #fff;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 800;
 }
 
@@ -199,16 +199,17 @@ watch(
 
 .platform-badge {
   position: absolute;
-  right: -2px;
-  bottom: -2px;
+  right: -3px;
+  bottom: -3px;
   width: 18px;
   height: 18px;
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 2px solid #fff;
+  border: 2px solid rgba(255, 255, 255, 0.95);
   color: #fff;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.12);
 }
 
 .platform-badge.is-messenger {
@@ -220,7 +221,7 @@ watch(
 }
 
 .platform-badge i {
-  font-size: 9px;
+  font-size: 8px;
 }
 
 .content-shell {
@@ -233,24 +234,24 @@ watch(
 .content-top,
 .content-bottom {
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
 }
 
 .preview-stack {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
 .content-top h4 {
   margin: 0;
   color: #0f172a;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.15;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -258,18 +259,18 @@ watch(
 }
 
 .time-label {
-  color: #637381;
-  font-size: 12px;
-  font-weight: 500;
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 700;
   flex-shrink: 0;
 }
 
 .preview-text {
   margin: 0;
   min-width: 0;
-  color: #5c6b7a;
-  font-size: 12px;
-  line-height: 1.25;
+  color: #475569;
+  font-size: 11px;
+  line-height: 1.3;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -281,23 +282,23 @@ watch(
   align-items: center;
   gap: 4px;
   justify-content: center;
-  min-height: 18px;
-  padding: 0 6px;
+  min-height: 20px;
+  padding: 0 7px;
   border-radius: 999px;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
   line-height: 1;
 }
 
 .origin-chip i {
-  font-size: 10px;
+  font-size: 9px;
 }
 
 .origin-row {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
 }
 
 .origin-meta {
@@ -340,17 +341,18 @@ watch(
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
+  align-self: center;
 }
 
 .stage-chip {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 20px;
-  padding: 0 7px;
+  min-height: 20px;
+  padding: 0 8px;
   border-radius: 999px;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 9px;
+  font-weight: 800;
   white-space: nowrap;
 }
 
@@ -380,17 +382,25 @@ watch(
 }
 
 .unread-pill {
-  min-width: 22px;
-  height: 22px;
+  min-width: 20px;
+  height: 20px;
   padding: 0 6px;
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: #0f172a;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
   color: #f8fafc;
   font-size: 10px;
   font-weight: 800;
   flex-shrink: 0;
+  box-shadow: none;
+}
+
+@media (max-width: 768px) {
+  .chat-item {
+    margin: 0 4px 2px;
+    padding: 9px 10px;
+  }
 }
 </style>

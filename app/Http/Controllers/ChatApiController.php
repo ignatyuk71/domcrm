@@ -286,13 +286,22 @@ class ChatApiController extends Controller
     public function showByCustomer(Request $request, int $customerId): JsonResponse
     {
         $platform = $request->query('platform');
-        $conversation = $this->chatService->resolveConversationByCustomer($customerId, $platform);
+        $conversation = $this->chatService->resolveConversationByCustomer(
+            $customerId,
+            $platform,
+            ChatConversation::THREAD_KIND_DIRECT
+        );
 
         if (!$conversation) {
             return response()->json(['error' => 'Conversation not found'], 404);
         }
 
         return response()->json(['data' => $this->formatConversation($conversation)]);
+    }
+
+    public function messagesByConversation(ChatConversation $conversation, MetaService $metaService): JsonResponse
+    {
+        return $this->buildMessagesResponse($conversation, $metaService);
     }
 
     public function messages(Request $request, int $id, MetaService $metaService): JsonResponse
@@ -309,7 +318,17 @@ class ChatApiController extends Controller
             return response()->json(['data' => []]);
         }
 
+        return $this->buildMessagesResponse($conversation, $metaService, $id);
+    }
+
+    private function buildMessagesResponse(
+        ChatConversation $conversation,
+        MetaService $metaService,
+        ?int $customerIdForLog = null
+    ): JsonResponse {
         try {
+            $conversation->loadMissing(['contact', 'customer', 'stage', 'lastMessage.attachments']);
+
             $hasMessages = ChatMessage::query()
                 ->where('conversation_id', $conversation->id)
                 ->exists();
@@ -318,12 +337,20 @@ class ChatApiController extends Controller
             $skipAutoSync = is_string($historyClearedAt) && trim($historyClearedAt) !== '';
 
             // Після ручного очищення історії не підтягуємо Meta-архів автоматично.
-            if (!$hasMessages && !$skipAutoSync) {
-                $metaService->syncHistory($customer, $conversation->contact->platform);
+            if (
+                !$hasMessages
+                && !$skipAutoSync
+                && $conversation->customer
+                && $conversation->thread_kind !== ChatConversation::THREAD_KIND_COMMENT
+            ) {
+                $metaService->syncHistory($conversation->customer, $conversation->contact?->platform);
                 $conversation = $conversation->fresh(['contact', 'customer', 'stage', 'lastMessage.attachments']);
             }
 
-            if (!data_get($conversation->meta, 'origin_context')) {
+            if (
+                $conversation->thread_kind === ChatConversation::THREAD_KIND_COMMENT
+                && !data_get($conversation->meta, 'origin_context')
+            ) {
                 $originCandidate = ChatMessage::query()
                     ->where('conversation_id', $conversation->id)
                     ->whereNotNull('text')
@@ -366,7 +393,7 @@ class ChatApiController extends Controller
             return response()->json(['data' => $messages]);
         } catch (\Throwable $e) {
             Log::error('Chat messages query failed', [
-                'customer_id' => $id,
+                'customer_id' => $customerIdForLog ?: $conversation->customer_id,
                 'conversation_id' => $conversation->id,
                 'error' => $e->getMessage(),
             ]);
@@ -378,7 +405,8 @@ class ChatApiController extends Controller
     public function send(Request $request, MetaService $metaService): JsonResponse
     {
         $validated = $request->validate([
-            'customer_id' => 'required|integer|exists:customers,id',
+            'conversation_id' => 'nullable|integer|exists:chat_conversations,id|required_without:customer_id',
+            'customer_id' => 'nullable|integer|exists:customers,id|required_without:conversation_id',
             'text' => 'nullable|string',
             'files' => 'nullable|array',
             'files.*' => 'file|mimes:jpg,jpeg,png,webp,gif,heic,heif,pdf,mp4,mov,webm,mp3,wav|max:10240',
@@ -407,20 +435,37 @@ class ChatApiController extends Controller
             return response()->json(['error' => 'Повідомлення порожнє'], 422);
         }
 
-        $customer = Customer::find($validated['customer_id']);
-        if (!$customer) {
-            return response()->json(['error' => 'Customer not found'], 404);
-        }
+        $conversation = !empty($validated['conversation_id'])
+            ? $this->chatService->resolveConversationById((int) $validated['conversation_id'])
+            : null;
+        $customer = $conversation?->customer;
 
-        $platform = ($validated['platform'] ?? null)
-            ?: ($customer->instagram_user_id ? 'instagram' : 'messenger');
-        $conversation = $this->ensureConversationForCustomer($customer, $platform, $metaService);
+        if (!$conversation && !empty($validated['customer_id'])) {
+            $customer = Customer::find($validated['customer_id']);
+            if (!$customer) {
+                return response()->json(['error' => 'Customer not found'], 404);
+            }
+
+            $platform = ($validated['platform'] ?? null)
+                ?: ($customer->instagram_user_id ? 'instagram' : 'messenger');
+            $conversation = $this->ensureConversationForCustomer($customer, $platform, $metaService);
+        }
 
         if (!$conversation) {
             return response()->json(['error' => 'Не вдалося знайти або створити діалог.'], 422);
         }
 
+        $customer = $customer ?: $conversation->customer;
+        if (!$customer) {
+            return response()->json(['error' => 'У діалогу не знайдено прив’язаного клієнта.'], 422);
+        }
+
         $contact = $conversation->contact;
+        if (!$contact) {
+            return response()->json(['error' => 'У діалогу не знайдено контакт Meta.'], 422);
+        }
+
+        $platform = $contact->platform;
         $attachments = $this->collectOutgoingAttachments($request, $validated['remote_urls'] ?? []);
         $createdMessages = [];
         $sentAt = Carbon::now(config('app.timezone', 'Europe/Kyiv'));
@@ -500,9 +545,21 @@ class ChatApiController extends Controller
     public function markRead(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'customer_id' => 'required|integer|exists:customers,id',
+            'conversation_id' => 'nullable|integer|exists:chat_conversations,id|required_without:customer_id',
+            'customer_id' => 'nullable|integer|exists:customers,id|required_without:conversation_id',
             'platform' => 'nullable|string|in:messenger,instagram',
         ]);
+
+        if (!empty($validated['conversation_id'])) {
+            $conversation = $this->chatService->resolveConversationById((int) $validated['conversation_id']);
+            if (!$conversation) {
+                return response()->json(['error' => 'Conversation not found'], 404);
+            }
+
+            $this->chatService->markConversationRead($conversation);
+
+            return response()->json(['success' => true]);
+        }
 
         $conversations = ChatConversation::query()
             ->with('contact')
@@ -523,11 +580,26 @@ class ChatApiController extends Controller
         return response()->json(['success' => true]);
     }
 
+    public function markConversationRead(ChatConversation $conversation): JsonResponse
+    {
+        $this->chatService->markConversationRead($conversation);
+
+        return response()->json(['success' => true]);
+    }
+
+    public function updatesByConversation(Request $request, ChatConversation $conversation): JsonResponse
+    {
+        return $this->buildConversationUpdatesResponse($request, $conversation);
+    }
+
     public function updates(Request $request, int $id): JsonResponse
     {
-        $sinceId = (int) $request->query('since_id');
         $platform = $request->query('platform');
-        $conversation = $this->chatService->resolveConversationByCustomer($id, $platform);
+        $conversation = $this->chatService->resolveConversationByCustomer(
+            $id,
+            $platform,
+            ChatConversation::THREAD_KIND_DIRECT
+        );
 
         if (!$conversation) {
             return response()->json([
@@ -536,6 +608,16 @@ class ChatApiController extends Controller
                 'has_updates' => false,
             ]);
         }
+
+        return $this->buildConversationUpdatesResponse($request, $conversation, $id);
+    }
+
+    private function buildConversationUpdatesResponse(
+        Request $request,
+        ChatConversation $conversation,
+        ?int $customerIdForLog = null
+    ): JsonResponse {
+        $sinceId = (int) $request->query('since_id');
 
         try {
             $baseQuery = ChatMessage::query()
@@ -553,7 +635,7 @@ class ChatApiController extends Controller
             return response()->json([
                 'messages' => $normalized,
                 'thread' => $lastMessage ? [
-                    'id' => (int) $id,
+                    'id' => (int) $conversation->id,
                     'last_message_text' => $conversation->last_message_preview,
                     'last_message_at' => optional($conversation->last_message_at)->toDateTimeString(),
                 ] : null,
@@ -562,13 +644,18 @@ class ChatApiController extends Controller
             ]);
         } catch (\Throwable $e) {
             Log::error('Chat updates failed', [
-                'customer_id' => $id,
+                'customer_id' => $customerIdForLog ?: $conversation->customer_id,
                 'conversation_id' => $conversation->id,
                 'error' => $e->getMessage(),
             ]);
 
             return response()->json(['error' => 'Error'], 500);
         }
+    }
+
+    public function syncConversation(ChatConversation $conversation, MetaService $metaService): JsonResponse
+    {
+        return $this->performConversationSync($conversation, $metaService);
     }
 
     public function sync(Request $request, int $id, MetaService $metaService): JsonResponse
@@ -579,15 +666,45 @@ class ChatApiController extends Controller
         }
 
         $platform = $request->query('platform')
-            ?: $this->chatService->resolveConversationByCustomer($id)?->contact?->platform
+            ?: $this->chatService->resolveConversationByCustomer($id, null, ChatConversation::THREAD_KIND_DIRECT)?->contact?->platform
             ?: ($customer->instagram_user_id ? 'instagram' : 'messenger');
 
+        $conversation = $this->chatService->resolveConversationByCustomer(
+            $id,
+            $platform,
+            ChatConversation::THREAD_KIND_DIRECT
+        );
+        if (!$conversation) {
+            $conversation = $this->ensureConversationForCustomer($customer, $platform, $metaService);
+        }
+
+        if (!$conversation) {
+            return response()->json(['success' => false], 404);
+        }
+
+        return $this->performConversationSync($conversation, $metaService, $id);
+    }
+
+    private function performConversationSync(
+        ChatConversation $conversation,
+        MetaService $metaService,
+        ?int $customerIdForLog = null
+    ): JsonResponse {
+        if (!$conversation->customer || !$conversation->contact) {
+            return response()->json(['success' => false, 'error' => 'Conversation is incomplete'], 422);
+        }
+
+        $platform = $conversation->contact->platform;
+
         try {
-            $count = $metaService->syncHistory($customer, $platform);
+            $count = $conversation->thread_kind === ChatConversation::THREAD_KIND_COMMENT
+                ? 0
+                : $metaService->syncHistory($conversation->customer, $platform);
         } catch (\Throwable $e) {
             Log::error('Chat force sync failed', [
-                'customer_id' => $id,
+                'customer_id' => $customerIdForLog ?: $conversation->customer_id,
                 'platform' => $platform,
+                'conversation_id' => $conversation->id,
                 'error' => $e->getMessage(),
             ]);
 
@@ -606,6 +723,11 @@ class ChatApiController extends Controller
         return response()->json(['count' => $count]);
     }
 
+    public function refreshConversationProfile(ChatConversation $conversation, MetaService $metaService): JsonResponse
+    {
+        return $this->performConversationProfileRefresh($conversation, $metaService);
+    }
+
     public function refreshProfile(Request $request, int $id, MetaService $metaService): JsonResponse
     {
         $customer = Customer::find($id);
@@ -614,7 +736,11 @@ class ChatApiController extends Controller
         }
 
         $platform = $request->query('platform');
-        $conversation = $this->chatService->resolveConversationByCustomer($id, $platform);
+        $conversation = $this->chatService->resolveConversationByCustomer(
+            $id,
+            $platform,
+            ChatConversation::THREAD_KIND_DIRECT
+        );
         if (!$conversation) {
             $conversation = $this->ensureConversationForCustomer($customer, $platform, $metaService);
         }
@@ -623,6 +749,13 @@ class ChatApiController extends Controller
             return response()->json(['error' => 'Conversation not found'], 404);
         }
 
+        return $this->performConversationProfileRefresh($conversation, $metaService);
+    }
+
+    private function performConversationProfileRefresh(
+        ChatConversation $conversation,
+        MetaService $metaService
+    ): JsonResponse {
         $conversation = $this->chatService->hydrateConversationProfile($conversation, $metaService, true);
         $conversation = $conversation->fresh([
             'contact',
@@ -664,7 +797,8 @@ class ChatApiController extends Controller
         if ($originContext && data_get($conversation->meta, 'origin_context') !== $originContext) {
             $this->chatService->syncConversationOrigin($conversation, $originContext);
         }
-        $originType = $originContext['object_type'] ?? ($originContext ? 'comment' : 'direct');
+        $threadKind = $conversation->thread_kind ?: ($originContext ? ($originContext['kind'] ?? 'direct') : 'direct');
+        $originType = $originContext['object_type'] ?? ($threadKind === ChatConversation::THREAD_KIND_COMMENT ? 'comment' : 'direct');
         $originPlatform = $originContext['platform'] ?? $contact?->platform;
         $stageCode = $conversation->stage?->code;
         if ($stageCode === 'no_stage') {
@@ -765,7 +899,7 @@ class ChatApiController extends Controller
             'platform' => $contact?->platform,
             'status' => $conversation->status,
             'stage' => $stageCode,
-            'thread_kind' => $originContext ? ($originContext['kind'] ?? 'direct') : 'direct',
+            'thread_kind' => $threadKind,
             'origin_type' => $originType,
             'origin_platform' => $originPlatform,
             'origin_context' => $originContext,
@@ -1276,7 +1410,12 @@ class ChatApiController extends Controller
             $contact = $this->chatService->syncContactProfile($contact, $metaService, $customer);
         }
 
-        return $this->chatService->getOrCreateConversation($contact, $customer);
+        return $this->chatService->getOrCreateConversation(
+            $contact,
+            $customer,
+            null,
+            ChatConversation::THREAD_KIND_DIRECT
+        );
     }
 
     private function collectOutgoingAttachments(Request $request, array $remoteUrls): array

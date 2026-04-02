@@ -25,8 +25,8 @@ defineEmits(['open-list']);
   align-items: center;
   justify-content: center;
   height: 100%;
-  background-color: #f8fafc; /* Світлий фон як у всій CRM */
-  padding: 20px;
+  background: linear-gradient(180deg, #ffffff, #fbfdff);
+  padding: 22px;
   text-align: center;
 }
 
@@ -38,19 +38,18 @@ defineEmits(['open-list']);
 }
 
 .chat-empty-icon {
-  width: 80px;
-  height: 80px;
-  background: white;
-  border-radius: 24px;
+  width: 68px;
+  height: 68px;
+  background: #f8fafc;
+  border-radius: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 2.5rem;
-  color: #3b82f6;
-  margin-bottom: 24px;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
-  /* Легкий ефект світіння */
-  border: 1px solid #e2e8f0;
+  color: #2563eb;
+  margin-bottom: 18px;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
+  border: 1px solid rgba(148, 163, 184, 0.18);
 }
 
 .chat-empty-title {
@@ -69,13 +68,14 @@ defineEmits(['open-list']);
 .chat-empty-button {
   display: none;
   margin-top: 16px;
-  background: #3b82f6;
+  background: #2563eb;
   color: #fff;
   border: none;
   border-radius: 10px;
   padding: 10px 16px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
+  box-shadow: 0 10px 20px rgba(37, 99, 235, 0.16);
 }
 
 @media (max-width: 768px) {

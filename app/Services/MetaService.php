@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\ChatConversation;
 use App\Models\ChatMessage;
 use App\Models\Customer;
 use App\Models\MetaConnection;
@@ -67,7 +68,7 @@ class MetaService
             $payload['message'] = ['text' => $text];
         }
 
-        $response = Http::withToken($settings->access_token)
+        $response = $this->graphClient((string) $settings->access_token)
             ->post($this->graphUrl('/me/messages'), $payload);
 
         if ($response->failed()) {
@@ -268,6 +269,8 @@ class MetaService
             50
         );
 
+        $this->touchSyncHeartbeat($settings);
+
         return (int) ($result['added'] ?? 0);
     }
 
@@ -279,73 +282,99 @@ class MetaService
         $settings = $this->getSettings();
         $chatService = app(ChatService::class);
 
-        try {
-            $response = Http::withToken($settings->access_token)->get($this->graphUrl('/me/conversations'), [
-                'platform' => $platform,
-                'fields' => 'participants{id,name},updated_time',
-                'limit' => $limit,
-            ]);
-        } catch (\Throwable $e) {
-            Log::error('Meta API recent conversations sync connection failed', [
-                'platform' => $platform,
-                'error' => $e->getMessage(),
-            ]);
-
-            return 0;
-        }
-
-        if ($response->failed()) {
-            Log::error('Meta API recent conversations sync failed', $response->json());
-
-            return 0;
-        }
-
         $addedCount = 0;
-        foreach (($response->json()['data'] ?? []) as $thread) {
-            $threadId = (string) ($thread['id'] ?? '');
-            if ($threadId === '') {
-                continue;
-            }
+        $processedThreads = 0;
+        $nextUrl = $this->graphUrl('/me/conversations');
+        $params = [
+            'platform' => $platform,
+            'fields' => 'participants{id,name},updated_time',
+            'limit' => min($limit, 50),
+        ];
 
-            $participant = $this->resolveExternalParticipant($thread, $settings, $platform);
-            $externalUserId = (string) ($participant['id'] ?? '');
-            if ($externalUserId === '') {
-                continue;
-            }
-
-            $profile = array_filter([
-                'id' => $externalUserId,
-                'name' => trim((string) ($participant['name'] ?? '')),
-            ], static fn ($value) => $value !== null && $value !== '');
-
-            $customer = $chatService->resolveCustomer($platform, $externalUserId, $profile);
-            $contact = $chatService->findOrCreateContact($settings, $platform, $externalUserId, $customer, $profile);
-            $conversation = $chatService->getOrCreateConversation($contact, $customer, $threadId);
-
+        while ($nextUrl !== null && $processedThreads < $limit) {
             try {
-                $result = $this->ingestThreadMessages(
-                    $conversation,
-                    $externalUserId,
-                    $platform,
-                    (string) $settings->access_token,
-                    $messagesLimit
-                );
-
-                $addedCount += (int) ($result['added'] ?? 0);
-
-                $latestRecoveredInboundMessageId = (int) ($result['latest_inbound_message_id'] ?? 0);
-                if ($latestRecoveredInboundMessageId > 0 && $this->shouldTriggerRecoveredInboundAi($latestRecoveredInboundMessageId)) {
-                    $this->triggerRecoveredInboundAi($latestRecoveredInboundMessageId);
-                }
+                $response = $this->graphClient((string) $settings->access_token)
+                    ->get($nextUrl, $params);
             } catch (\Throwable $e) {
-                Log::warning('Meta recent conversation sync skipped thread after error', [
+                Log::error('Meta API recent conversations sync connection failed', [
                     'platform' => $platform,
-                    'thread_id' => $threadId,
-                    'external_user_id' => $externalUserId,
                     'error' => $e->getMessage(),
                 ]);
+
+                return 0;
             }
+
+            if ($response->failed()) {
+                Log::error('Meta API recent conversations sync failed', [
+                    'platform' => $platform,
+                    'response' => $response->json(),
+                ]);
+
+                return 0;
+            }
+
+            foreach (($response->json()['data'] ?? []) as $thread) {
+                if ($processedThreads >= $limit) {
+                    break;
+                }
+
+                $threadId = (string) ($thread['id'] ?? '');
+                if ($threadId === '') {
+                    continue;
+                }
+
+                $participant = $this->resolveExternalParticipant($thread, $settings, $platform);
+                $externalUserId = (string) ($participant['id'] ?? '');
+                if ($externalUserId === '') {
+                    continue;
+                }
+
+                $profile = array_filter([
+                    'id' => $externalUserId,
+                    'name' => trim((string) ($participant['name'] ?? '')),
+                ], static fn ($value) => $value !== null && $value !== '');
+
+                $customer = $chatService->resolveCustomer($platform, $externalUserId, $profile);
+                $contact = $chatService->findOrCreateContact($settings, $platform, $externalUserId, $customer, $profile);
+                $conversation = $chatService->getOrCreateConversation(
+                    $contact,
+                    $customer,
+                    $threadId,
+                    ChatConversation::THREAD_KIND_DIRECT
+                );
+
+                try {
+                    $result = $this->ingestThreadMessages(
+                        $conversation,
+                        $externalUserId,
+                        $platform,
+                        (string) $settings->access_token,
+                        $messagesLimit
+                    );
+
+                    $addedCount += (int) ($result['added'] ?? 0);
+
+                    $latestRecoveredInboundMessageId = (int) ($result['latest_inbound_message_id'] ?? 0);
+                    if ($latestRecoveredInboundMessageId > 0 && $this->shouldTriggerRecoveredInboundAi($latestRecoveredInboundMessageId)) {
+                        $this->triggerRecoveredInboundAi($latestRecoveredInboundMessageId);
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('Meta recent conversation sync skipped thread after error', [
+                        'platform' => $platform,
+                        'thread_id' => $threadId,
+                        'external_user_id' => $externalUserId,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+
+                $processedThreads++;
+            }
+
+            $nextUrl = data_get($response->json(), 'paging.next');
+            $params = [];
         }
+
+        $this->touchSyncHeartbeat($settings);
 
         return $addedCount;
     }
@@ -598,23 +627,39 @@ class MetaService
 
     private function findThreadId(string $accessToken, string $recipientId, string $platform): ?string
     {
-        $response = Http::withToken($accessToken)->get($this->graphUrl('/me/conversations'), [
+        $nextUrl = $this->graphUrl('/me/conversations');
+        $params = [
             'platform' => $platform,
-            'fields' => 'participants,updated_time',
+            'fields' => 'participants{id,name},updated_time',
             'limit' => 50,
-        ]);
+        ];
+        $page = 0;
 
-        if ($response->failed()) {
-            return null;
-        }
+        while ($nextUrl !== null && $page < 10) {
+            $response = $this->graphClient($accessToken)->get($nextUrl, $params);
 
-        foreach (($response->json()['data'] ?? []) as $conversation) {
-            $participants = $conversation['participants']['data'] ?? [];
-            foreach ($participants as $participant) {
-                if ((string) ($participant['id'] ?? '') === (string) $recipientId) {
-                    return $conversation['id'] ?? null;
+            if ($response->failed()) {
+                Log::warning('Meta thread lookup failed', [
+                    'platform' => $platform,
+                    'recipient_id' => $recipientId,
+                    'response' => $response->json(),
+                ]);
+
+                return null;
+            }
+
+            foreach (($response->json()['data'] ?? []) as $conversation) {
+                $participants = $conversation['participants']['data'] ?? [];
+                foreach ($participants as $participant) {
+                    if ((string) ($participant['id'] ?? '') === (string) $recipientId) {
+                        return $conversation['id'] ?? null;
+                    }
                 }
             }
+
+            $nextUrl = data_get($response->json(), 'paging.next');
+            $params = [];
+            $page++;
         }
 
         return null;
@@ -668,7 +713,7 @@ class MetaService
         }
 
         try {
-            $response = Http::withToken($accessToken)->get($this->graphUrl("/{$threadId}/messages"), [
+            $response = $this->graphClient($accessToken)->get($this->graphUrl("/{$threadId}/messages"), [
                 'fields' => 'message,created_time,from,attachments,reply_to,id',
                 'limit' => $limit,
             ]);
@@ -808,7 +853,7 @@ class MetaService
             return [];
         }
 
-        $response = Http::withToken($settings->access_token)
+        $response = $this->graphClient((string) $settings->access_token)
             ->get($this->graphUrl("/{$threadId}"), ['fields' => 'participants{id,name,email,profile_pic,picture.type(large)}']);
 
         if ($response->failed()) {
@@ -856,7 +901,7 @@ class MetaService
         }
 
         $profile = [];
-        $response = Http::withToken($accessToken)
+        $response = $this->graphClient($accessToken)
             ->get($this->graphUrl("/{$externalUserId}"), ['fields' => $this->profileFields($platform)]);
 
         if ($response->successful() && is_array($response->json())) {
@@ -887,7 +932,7 @@ class MetaService
         }
 
         try {
-            $response = Http::withToken($accessToken)
+            $response = $this->graphClient($accessToken)
                 ->get($this->graphUrl("/{$externalUserId}/picture"), [
                     'type' => 'large',
                     'redirect' => 'false',
@@ -974,6 +1019,20 @@ class MetaService
     private function graphUrl(string $path): string
     {
         return 'https://graph.facebook.com/' . config('services.meta.graph_version', 'v19.0') . $path;
+    }
+
+    private function graphClient(string $accessToken)
+    {
+        return Http::withToken($accessToken)
+            ->timeout(15)
+            ->retry(2, 250);
+    }
+
+    private function touchSyncHeartbeat(MetaConnection $connection): void
+    {
+        $connection->forceFill([
+            'last_sync_at' => now(),
+        ])->save();
     }
 
     private function cacheProfileAvatar(Customer $customer, string $remoteUrl): ?string

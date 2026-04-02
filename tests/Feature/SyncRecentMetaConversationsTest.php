@@ -63,6 +63,7 @@ class SyncRecentMetaConversationsTest extends TestCase
         $conversation = ChatConversation::query()->first();
         $this->assertNotNull($conversation);
         $this->assertSame('thread-100', $conversation->external_thread_id);
+        $this->assertSame('direct', $conversation->thread_kind);
 
         $message = ChatMessage::query()->first();
         $this->assertNotNull($message);
@@ -70,6 +71,9 @@ class SyncRecentMetaConversationsTest extends TestCase
         $this->assertSame('inbound', $message->direction);
         $this->assertSame('Можна замовити тапулі)', $message->text);
         $this->assertSame('sync', $message->source);
+
+        $connection = MetaConnection::query()->first();
+        $this->assertNotNull($connection?->last_sync_at);
     }
 
     public function test_sync_recent_conversations_triggers_ai_for_fresh_recovered_inbound_message(): void
@@ -194,6 +198,9 @@ class SyncRecentMetaConversationsTest extends TestCase
                 $table->boolean('webhook_subscribed')->default(false);
                 $table->json('webhook_fields')->nullable();
                 $table->boolean('is_active')->default(true);
+                $table->timestamp('last_sync_at')->nullable();
+                $table->timestamp('last_webhook_at')->nullable();
+                $table->string('last_webhook_platform', 32)->nullable();
                 $table->text('last_error')->nullable();
                 $table->timestamps();
             });
@@ -256,6 +263,7 @@ class SyncRecentMetaConversationsTest extends TestCase
                 $table->unsignedBigInteger('stage_id');
                 $table->unsignedBigInteger('assigned_user_id')->nullable();
                 $table->string('status', 32)->default('open');
+                $table->string('thread_kind', 32)->default('direct');
                 $table->string('external_thread_id', 191)->nullable();
                 $table->unsignedBigInteger('last_message_id')->nullable();
                 $table->text('last_message_preview')->nullable();

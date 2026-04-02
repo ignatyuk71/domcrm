@@ -44,6 +44,10 @@ export function getMessages(customerId, platform = null) {
   });
 }
 
+export function getConversationMessages(conversationId) {
+  return axios.get(`/api/chat/conversations/${conversationId}/messages`);
+}
+
 export function sendMessage(payload) {
   if (payload instanceof FormData) {
     return axios.post('/api/chat/send', payload, {
@@ -60,16 +64,28 @@ export function markRead(customerId, platform = null) {
   });
 }
 
+export function markConversationRead(conversationId) {
+  return axios.post(`/api/chat/conversations/${conversationId}/mark-read`);
+}
+
 export function forceSync(customerId, platform = null) {
   return axios.post(`/api/chat/${customerId}/sync`, {}, {
     params: platform ? { platform } : {},
   });
 }
 
+export function forceConversationSync(conversationId) {
+  return axios.post(`/api/chat/conversations/${conversationId}/sync`);
+}
+
 export function refreshCustomerProfile(customerId, platform = null) {
   return axios.post(`/api/chat/customers/${customerId}/refresh-profile`, {}, {
     params: platform ? { platform } : {},
   });
+}
+
+export function refreshConversationProfile(conversationId) {
+  return axios.post(`/api/chat/conversations/${conversationId}/refresh-profile`);
 }
 
 export function fetchNewMessages(threadId, sinceId, platform = null) {
@@ -79,6 +95,14 @@ export function fetchNewMessages(threadId, sinceId, platform = null) {
         since_id: sinceId,
         ...(platform ? { platform } : {}),
       },
+    })
+    .then((res) => res.data);
+}
+
+export function fetchConversationUpdates(conversationId, sinceId) {
+  return axios
+    .get(`/api/chat/conversations/${conversationId}/messages/updates`, {
+      params: { since_id: sinceId },
     })
     .then((res) => res.data);
 }

@@ -9,6 +9,10 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class ChatConversation extends Model
 {
+    public const THREAD_KIND_DIRECT = 'direct';
+
+    public const THREAD_KIND_COMMENT = 'comment';
+
     protected $fillable = [
         'meta_connection_id',
         'contact_id',
@@ -16,6 +20,7 @@ class ChatConversation extends Model
         'stage_id',
         'assigned_user_id',
         'status',
+        'thread_kind',
         'external_thread_id',
         'last_message_id',
         'last_message_preview',
@@ -77,5 +82,10 @@ class ChatConversation extends Model
     public function aiState(): HasOne
     {
         return $this->hasOne(ChatAiConversationState::class, 'conversation_id');
+    }
+
+    public function isCommentThread(): bool
+    {
+        return $this->thread_kind === self::THREAD_KIND_COMMENT;
     }
 }

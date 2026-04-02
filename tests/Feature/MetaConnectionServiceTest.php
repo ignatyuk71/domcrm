@@ -35,13 +35,13 @@ class MetaConnectionServiceTest extends TestCase
 
         $this->assertTrue($fresh->webhook_subscribed);
         $this->assertSame(
-            ['messages', 'message_deliveries', 'message_reads', 'messaging_postbacks', 'messaging_optins', 'feed'],
+            ['messages', 'message_deliveries', 'message_reads', 'messaging_postbacks', 'messaging_optins', 'feed', 'comments'],
             $fresh->webhook_fields
         );
 
         Http::assertSent(function ($request) {
             return str_contains((string) $request->url(), '/103823131052820/subscribed_apps')
-                && $request['subscribed_fields'] === 'messages,message_deliveries,message_reads,messaging_postbacks,messaging_optins,feed';
+                && $request['subscribed_fields'] === 'messages,message_deliveries,message_reads,messaging_postbacks,messaging_optins,feed,comments';
         });
     }
 

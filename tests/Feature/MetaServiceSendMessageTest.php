@@ -96,6 +96,9 @@ class MetaServiceSendMessageTest extends TestCase
                 $table->boolean('webhook_subscribed')->default(false);
                 $table->json('webhook_fields')->nullable();
                 $table->boolean('is_active')->default(true);
+                $table->timestamp('last_sync_at')->nullable();
+                $table->timestamp('last_webhook_at')->nullable();
+                $table->string('last_webhook_platform', 32)->nullable();
                 $table->text('last_error')->nullable();
                 $table->timestamps();
             });

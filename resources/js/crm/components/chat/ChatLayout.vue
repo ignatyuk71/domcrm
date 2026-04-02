@@ -28,32 +28,28 @@ defineProps({
 
 <style scoped>
 .chat-wrapper {
-  --chat-shell: #eef2f6;
-  min-height: calc(100vh - 96px);
-  padding: 8px 14px 14px;
-  background: var(--chat-shell);
-  font-family: "Segoe UI", sans-serif;
+  min-height: calc(100vh - 112px);
+  padding: 2px 0 0;
+  background: transparent;
 }
 
 .chat-topbar {
-  margin-bottom: 0;
-  border-radius: 8px 8px 0 0;
-  border: 1px solid #e5e7eb;
-  border-bottom: none;
-  background: #fff;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(226, 232, 240, 0.92);
+  background: #ffffff;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
   overflow: hidden;
 }
 
 .chat-container {
-  height: calc(100vh - 126px);
+  height: calc(100vh - 182px);
   display: grid;
-  grid-template-columns: 290px minmax(0, 1fr) 360px;
-  gap: 0;
-  border-radius: 0 0 8px 8px;
-  overflow: hidden;
-  border: 1px solid #e5e7eb;
-  border-top: none;
-  background: #fff;
+  grid-template-columns: 340px minmax(0, 1fr) 390px;
+  gap: 8px;
+  border-radius: 16px;
+  overflow: visible;
+  background: transparent;
 }
 
 .chat-sidebar,
@@ -61,17 +57,20 @@ defineProps({
 .chat-profile {
   min-height: 0;
   overflow: hidden;
-  background: #fff;
-  border-right: 1px solid #e5e7eb;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 5px;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
 }
 
 .chat-profile {
-  border-right: none;
+  background: #ffffff;
 }
 
 @media (max-width: 1320px) {
   .chat-container {
-    grid-template-columns: 290px minmax(0, 1fr);
+    height: calc(100vh - 182px);
+    grid-template-columns: 320px minmax(0, 1fr);
   }
 
   .chat-profile {
@@ -84,23 +83,24 @@ defineProps({
     min-height: 100vh;
     height: 100vh;
     padding: 0;
-    background: #fff;
+    background: transparent;
   }
 
   .chat-container {
-    height: 100vh;
+    height: calc(100vh - 72px);
     display: block;
     border-radius: 0;
-    border: none;
   }
 
   .chat-sidebar,
   .chat-thread,
   .chat-profile {
     width: 100%;
-    height: 100vh;
-    border-radius: 0;
-    border: none;
+    height: calc(100vh - 72px);
+    border-radius: 8px 8px 0 0;
+    border-inline: none;
+    border-bottom: none;
+    box-shadow: none;
   }
 
   .chat-wrapper[data-view="list"] .chat-thread,
@@ -116,6 +116,12 @@ defineProps({
   .chat-wrapper[data-view="profile"] .chat-sidebar,
   .chat-wrapper[data-view="profile"] .chat-thread {
     display: none;
+  }
+
+  .chat-topbar {
+    margin-bottom: 8px;
+    border-radius: 8px;
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
   }
 }
 </style>

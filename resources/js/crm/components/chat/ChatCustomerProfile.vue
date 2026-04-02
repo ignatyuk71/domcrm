@@ -1114,9 +1114,9 @@ const handleOrderClose = () => {
 </script>
 
 <style scoped>
-.right-sidebar { width: 100%; height: 100%; background: #ffffff; border-left: 1px solid #e5e7eb; display: flex; flex-direction: column; position: relative; overflow: hidden; font-family: 'Segoe UI', sans-serif; color: #334155; }
+.right-sidebar { width: 100%; height: 100%; background: transparent; display: flex; flex-direction: column; position: relative; overflow: hidden; font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif; color: #334155; }
 .right-sidebar.is-order-mode { background: #ffffff; }
-.profile-content { flex: 1; min-height: 0; overflow-y: auto; padding: 0 0 20px; scroll-behavior: smooth; overscroll-behavior: contain; }
+.profile-content { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 0 16px; scroll-behavior: smooth; overscroll-behavior: contain; }
 .custom-scrollbar::-webkit-scrollbar { width: 6px; } .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; } .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 
 .toast-notification {
@@ -1193,7 +1193,7 @@ const handleOrderClose = () => {
 }
 
 /* ... (Інші стилі залишаються без змін) ... */
-.header-section { display: flex; align-items: center; gap: 12px; padding: 16px; }
+.header-section { display: flex; align-items: center; gap: 12px; padding: 14px 16px 12px; }
 .avatar-wrap { position: relative; width: 56px; height: 56px; flex-shrink: 0; }
 .avatar-img, .avatar-placeholder { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; background: #f1f5f9; }
 .avatar-placeholder { display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 700; color: #94a3b8; }
@@ -1217,11 +1217,11 @@ const handleOrderClose = () => {
 .modern-input { border: none; border-bottom: 1.5px solid #e2e8f0; font-size: 13px; font-weight: 600; outline: none; transition: 0.3s; padding: 2px 0; }
 .modern-input:focus { border-color: #6366f1; }
 .btn-confirm-tick { background: #6366f1; color: white; border: none; width: 26px; height: 26px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-.id-badge { font-size: 11px; color: #a0aec0; margin-top: 4px; display: inline-block; background: #f7fafc; padding: 2px 6px; border-radius: 4px; }
+.id-badge { font-size: 11px; color: #64748b; margin-top: 6px; display: inline-block; background: rgba(148, 163, 184, 0.12); padding: 4px 8px; border-radius: 999px; font-weight: 700; }
 .divider { border: 0; border-top: 1px solid #e5e7eb; margin: 0; }
-.fields-section { display: flex; flex-direction: column; gap: 10px; padding: 12px; }
+.fields-section { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px 16px; }
 .contacts-deck { display: grid; gap: 8px; }
-.contact-card { border: 1px solid #e2e8f0; border-radius: 10px; background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%); padding: 8px 10px; transition: border-color 0.2s ease, box-shadow 0.2s ease; }
+.contact-card { border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff; padding: 8px 10px; transition: border-color 0.2s ease, box-shadow 0.2s ease; }
 .contact-card.is-active { border-color: #93c5fd; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12); }
 .contact-card.is-invalid { border-color: #fca5a5; }
 .contact-card--stack { padding: 6px 8px; }
@@ -1238,17 +1238,17 @@ const handleOrderClose = () => {
 .contact-clear-btn:hover { background: #e2e8f0; color: #475569; }
 .contact-clear-btn i { font-size: 9px; }
 .contact-error { display: block; margin-top: 2px; color: #dc2626; font-size: 9px; line-height: 1.2; }
-.action-row { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.action-row { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
 .history-container { margin-top: 14px; }
 .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding: 0 4px; }
-.section-title { font-size: 12px; font-weight: 800; text-transform: uppercase; color: #94a3b8; letter-spacing: 0.05em; }
+.section-title { font-size: 12px; font-weight: 800; text-transform: uppercase; color: #64748b; letter-spacing: 0.08em; }
 .counter-badge { background: #f1f5f9; color: #475569; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
 .counter-badge.is-on { background: #dcfce7; color: #15803d; }
 .counter-badge.is-off { background: #fee2e2; color: #b91c1c; }
 .counter-badge--success { background: #dcfce7; color: #15803d; }
 .counter-badge--neutral { background: #e2e8f0; color: #475569; }
 .ai-container { margin-top: 16px; }
-.ai-card { border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; background: #fff; }
+.ai-card { border: 1px solid rgba(148, 163, 184, 0.16); border-radius: 12px; overflow: hidden; background: rgba(255, 255, 255, 0.96); box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04); }
 .ai-header {
   width: 100%;
   border: none;
@@ -1266,7 +1266,7 @@ const handleOrderClose = () => {
 .ai-subtitle { font-size: 11px; color: #64748b; margin-top: 2px; }
 .ai-body-wrap { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
 .ai-card.is-open .ai-body-wrap { max-height: 6000px; border-top: 1px solid #f1f5f9; }
-.ai-body { padding: 12px; display: flex; flex-direction: column; gap: 12px; background: #f8fafc; }
+.ai-body { padding: 10px; display: flex; flex-direction: column; gap: 10px; background: #f8fafc; }
 .ai-switch-row {
   display: flex;
   justify-content: space-between;
@@ -1274,7 +1274,7 @@ const handleOrderClose = () => {
   align-items: center;
   background: #fff;
   border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  border-radius: 8px;
   padding: 10px;
 }
 .ai-switch-title { font-size: 13px; font-weight: 700; color: #0f172a; }
@@ -1304,7 +1304,7 @@ const handleOrderClose = () => {
 .ai-pipeline-card {
   background: #fff;
   border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  border-radius: 8px;
   padding: 10px;
   display: flex;
   flex-direction: column;
@@ -1495,12 +1495,12 @@ const handleOrderClose = () => {
   font-size: 11px;
   color: #64748b;
 }
-.empty-history { text-align: center; padding: 24px; border: 1px dashed #e2e8f0; border-radius: 12px; color: #94a3b8; }
+.empty-history { text-align: center; padding: 20px; border: 1px dashed rgba(148, 163, 184, 0.24); border-radius: 12px; color: #94a3b8; background: rgba(248, 250, 252, 0.72); }
 .empty-icon { font-size: 24px; margin-bottom: 8px; opacity: 0.5; }
 .orders-list { display: flex; flex-direction: column; gap: 12px; }
-.order-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; transition: all 0.2s ease; }
-.order-card.is-active { border-color: #cbd5e1; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
-.order-header { width: 100%; display: flex; justify-content: space-between; align-items: flex-start; padding: 12px; background: white; border: none; cursor: pointer; text-align: left; }
+.order-card { background: rgba(255, 255, 255, 0.96); border: 1px solid rgba(148, 163, 184, 0.16); border-radius: 12px; overflow: hidden; transition: all 0.2s ease; box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04); }
+.order-card.is-active { border-color: rgba(37, 99, 235, 0.18); box-shadow: 0 12px 24px rgba(15, 23, 42, 0.06); }
+.order-header { width: 100%; display: flex; justify-content: space-between; align-items: flex-start; padding: 12px; background: transparent; border: none; cursor: pointer; text-align: left; }
 .header-left { display: flex; flex-direction: column; gap: 6px; }
 .order-id-row { display: flex; align-items: center; gap: 8px; }
 .id-text { font-size: 14px; font-weight: 700; color: #0f172a; }
@@ -1512,9 +1512,9 @@ const handleOrderClose = () => {
 .price-tag small { font-size: 11px; font-weight: 600; color: #64748b; }
 .toggle-btn { color: #cbd5e1; transition: transform 0.3s ease; font-size: 12px; }
 .order-card.is-active .toggle-btn { transform: rotate(180deg); color: #64748b; }
-.order-body-wrapper { max-height: 0; overflow: hidden; transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1); background: #f8fafc; }
-.order-card.is-active .order-body-wrapper { max-height: 500px; border-top: 1px solid #f1f5f9; }
-.order-body { padding: 12px; display: flex; flex-direction: column; gap: 16px; }
+.order-body-wrapper { max-height: 0; overflow: hidden; transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1); background: rgba(248, 250, 252, 0.7); }
+.order-card.is-active .order-body-wrapper { max-height: 500px; border-top: 1px solid rgba(148, 163, 184, 0.12); }
+.order-body { padding: 10px; display: flex; flex-direction: column; gap: 12px; }
 .info-block { display: flex; flex-direction: column; gap: 6px; }
 .block-label { font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; display: flex; align-items: center; gap: 6px; }
 .block-content { font-size: 13px; color: #334155; background: white; padding: 8px; border-radius: 8px; border: 1px solid #f1f5f9; }
@@ -1535,26 +1535,27 @@ const handleOrderClose = () => {
 .loader-mini { width: 14px; height: 14px; border: 2px solid #cbd5e1; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; }
 
 .profile-mobile-header { display: none; margin-bottom: 12px; }
-.profile-back-btn { display: inline-flex; align-items: center; gap: 8px; border: 1px solid #e2e8f0; background: #f8fafc; color: #334155; border-radius: 10px; height: 40px; padding: 0 12px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.profile-back-btn { display: inline-flex; align-items: center; gap: 8px; border: 1px solid rgba(148, 163, 184, 0.18); background: rgba(255, 255, 255, 0.88); color: #334155; border-radius: 10px; height: 40px; padding: 0 12px; font-size: 14px; font-weight: 700; cursor: pointer; box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04); }
 
 .btn-save-modern {
-  background: #1877f2; 
+  background: #2563eb;
   color: white;
   border: none;
-  border-radius: 7px;
-  height: 40px;
+  border-radius: 10px;
+  height: 44px;
   display: flex; 
   align-items: center;
   justify-content: center;
   gap: 8px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   width: 100%;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
+  box-shadow: 0 10px 20px rgba(37, 99, 235, 0.16);
 }
 .btn-save-modern:hover:not(:disabled) {
-  background: #1664d9; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(24, 119, 242, 0.22);
+  background: #1d4ed8; box-shadow: 0 12px 24px rgba(37, 99, 235, 0.2);
 }
 .btn-save-modern:disabled { 
   background: #e2e8f0; 
@@ -1565,24 +1566,25 @@ const handleOrderClose = () => {
 
 /* ОНОВЛЕНО: Блокування і збільшення кнопки "Створити замовлення" */
 .btn-create-order {
-  background: #fff;
-  border: 1px solid #d1d5db;
-  border-radius: 7px;
-  height: 40px;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 10px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   color: #1f2937;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   width: 100%;
   transition: 0.2s;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
 }
 .btn-create-order:hover:not(:disabled) {
-  background: #f9fafb;
-  border-color: #9ca3af;
+  background: rgba(255, 255, 255, 1);
+  border-color: rgba(37, 99, 235, 0.18);
 }
 .btn-create-order:disabled {
   background: #f8fafc;
@@ -1594,7 +1596,7 @@ const handleOrderClose = () => {
 
 @media (max-width: 768px) {
   .profile-content {
-    padding: 14px 16px 24px;
+    padding: 12px 14px 20px;
   }
 
   .profile-mobile-header {

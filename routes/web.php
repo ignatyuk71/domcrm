@@ -175,12 +175,22 @@ Route::middleware('auth')->group(function () {
     Route::get('/api/chat/funnel', [ChatApiController::class, 'funnel'])->name('chat.funnel.data');
     Route::get('/api/chat/conversations/by-customer/{customerId}', [ChatApiController::class, 'showByCustomer'])
         ->name('chat.conversation.byCustomer');
+    Route::get('/api/chat/conversations/{conversation}/messages', [ChatApiController::class, 'messagesByConversation'])
+        ->name('chat.conversation.messages');
+    Route::get('/api/chat/conversations/{conversation}/messages/updates', [ChatApiController::class, 'updatesByConversation'])
+        ->name('chat.conversation.messages.updates');
     Route::get('/api/chat/{id}/messages', [ChatApiController::class, 'messages'])->name('chat.messages.api');
     Route::get('/api/chat/threads/{id}/messages/updates', [ChatApiController::class, 'updates'])
         ->name('chat.messages.updates');
     Route::post('/api/chat/send', [ChatApiController::class, 'send'])->name('chat.send');
+    Route::post('/api/chat/conversations/{conversation}/mark-read', [ChatApiController::class, 'markConversationRead'])
+        ->name('chat.conversation.markRead');
     Route::post('/api/chat/mark-read', [ChatApiController::class, 'markRead'])->name('chat.markRead');
+    Route::post('/api/chat/conversations/{conversation}/sync', [ChatApiController::class, 'syncConversation'])
+        ->name('chat.conversation.sync');
     Route::post('/api/chat/{id}/sync', [ChatApiController::class, 'sync'])->name('chat.sync');
+    Route::post('/api/chat/conversations/{conversation}/refresh-profile', [ChatApiController::class, 'refreshConversationProfile'])
+        ->name('chat.conversation.refreshProfile');
     Route::post('/api/chat/customers/{id}/refresh-profile', [ChatApiController::class, 'refreshProfile'])
         ->name('chat.refreshProfile');
     Route::get('/api/chat/tags', [ChatApiController::class, 'listConversationTags'])->name('chat.tags');

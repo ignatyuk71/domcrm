@@ -9,12 +9,28 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // MySQL не дозволяє UNIQUE для TEXT без довжини, тому використовуємо префікс.
-        DB::statement('CREATE UNIQUE INDEX facebook_messages_mid_unique ON facebook_messages (`mid`(191))');
+        $driver = DB::getDriverName();
+
+        if (in_array($driver, ['mysql', 'mariadb'], true)) {
+            // MySQL не дозволяє UNIQUE для TEXT без довжини, тому використовуємо префікс.
+            DB::statement('CREATE UNIQUE INDEX facebook_messages_mid_unique ON facebook_messages (`mid`(191))');
+
+            return;
+        }
+
+        DB::statement('CREATE UNIQUE INDEX facebook_messages_mid_unique ON facebook_messages (mid)');
     }
 
     public function down(): void
     {
-        DB::statement('DROP INDEX facebook_messages_mid_unique ON facebook_messages');
+        $driver = DB::getDriverName();
+
+        if (in_array($driver, ['mysql', 'mariadb'], true)) {
+            DB::statement('DROP INDEX facebook_messages_mid_unique ON facebook_messages');
+
+            return;
+        }
+
+        DB::statement('DROP INDEX facebook_messages_mid_unique');
     }
 };

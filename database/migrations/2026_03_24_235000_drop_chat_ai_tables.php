@@ -9,7 +9,25 @@ return new class extends Migration
     public function up(): void
     {
         if (Schema::hasTable('chat_conversations')) {
-            DB::statement("UPDATE chat_conversations SET meta = JSON_REMOVE(meta, '$.ai') WHERE meta IS NOT NULL");
+            DB::table('chat_conversations')
+                ->select(['id', 'meta'])
+                ->orderBy('id')
+                ->chunkById(200, function ($rows): void {
+                    foreach ($rows as $row) {
+                        $meta = json_decode((string) ($row->meta ?? 'null'), true);
+                        if (!is_array($meta) || !array_key_exists('ai', $meta)) {
+                            continue;
+                        }
+
+                        unset($meta['ai']);
+
+                        DB::table('chat_conversations')
+                            ->where('id', $row->id)
+                            ->update([
+                                'meta' => $meta === [] ? null : json_encode($meta, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                            ]);
+                    }
+                });
         }
 
         Schema::disableForeignKeyConstraints();
