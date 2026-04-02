@@ -58,7 +58,7 @@ class DebugMetaProfile extends Command
         if ($connection) {
             $graphVer = config('services.meta.graph_version', 'v24.0');
             $fields = $platform === 'instagram'
-                ? 'name,username,profile_pic,picture.type(large)'
+                ? 'name,username,profile_pic'
                 : 'first_name,last_name,name,profile_pic,picture.type(large)';
             $url = "https://graph.facebook.com/{$graphVer}/{$userId}";
 

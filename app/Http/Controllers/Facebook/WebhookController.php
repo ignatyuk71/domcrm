@@ -327,13 +327,49 @@ class WebhookController extends Controller
         }
 
         $connection = $chatService->getCurrentConnection();
-        $profile = $metaService->getContactProfile((string) $externalUserId, $platform);
+        $profile = [];
+
+        try {
+            $profile = $metaService->getContactProfile((string) $externalUserId, $platform);
+        } catch (\Throwable $e) {
+            Log::warning('Meta profile fetch failed for messaging webhook, using fallback profile', [
+                'platform' => $platform,
+                'external_user_id' => (string) $externalUserId,
+                'external_message_id' => $externalMessageId,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
         $customer = $chatService->resolveCustomer($platform, (string) $externalUserId, $profile);
 
         if (!$isEcho) {
-            $metaService->updateCustomerProfile($customer, $platform);
-            $customer->refresh();
-            $profile = $metaService->getContactProfile((string) $externalUserId, $platform);
+            try {
+                $metaService->updateCustomerProfile($customer, $platform);
+                $customer->refresh();
+            } catch (\Throwable $e) {
+                Log::warning('Meta customer profile update failed during messaging webhook', [
+                    'platform' => $platform,
+                    'external_user_id' => (string) $externalUserId,
+                    'customer_id' => $customer->id,
+                    'external_message_id' => $externalMessageId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+
+            try {
+                $refreshedProfile = $metaService->getContactProfile((string) $externalUserId, $platform);
+                if ($refreshedProfile !== []) {
+                    $profile = $refreshedProfile;
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Meta profile refetch failed during messaging webhook', [
+                    'platform' => $platform,
+                    'external_user_id' => (string) $externalUserId,
+                    'customer_id' => $customer->id,
+                    'external_message_id' => $externalMessageId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
 
         $contact = $chatService->findOrCreateContact(

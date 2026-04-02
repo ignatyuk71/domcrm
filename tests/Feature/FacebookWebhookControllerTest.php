@@ -165,6 +165,74 @@ class FacebookWebhookControllerTest extends TestCase
         $this->assertNotNull($connection?->last_webhook_at);
     }
 
+    public function test_instagram_direct_message_is_saved_even_if_profile_fetch_fails(): void
+    {
+        MetaConnection::query()->create([
+            'provider' => 'meta',
+            'name' => 'Dream v doma',
+            'facebook_page_id' => '103823131052820',
+            'access_token' => 'page-token',
+            'verify_token' => 'verify-token',
+            'webhook_secret' => 'webhook-secret',
+            'is_active' => true,
+        ]);
+
+        $metaService = Mockery::mock(MetaService::class);
+        $metaService->shouldReceive('getContactProfile')
+            ->times(3)
+            ->with('ig-user-200', 'instagram')
+            ->andThrow(new \RuntimeException('Instagram profile fetch failed'));
+        $metaService->shouldReceive('updateCustomerProfile')
+            ->once()
+            ->with(Mockery::type(\App\Models\Customer::class), 'instagram')
+            ->andThrow(new \RuntimeException('Instagram customer update failed'));
+        $this->app->instance(MetaService::class, $metaService);
+
+        $payload = [
+            'object' => 'instagram',
+            'entry' => [[
+                'id' => '17841425541648437',
+                'messaging' => [[
+                    'sender' => ['id' => 'ig-user-200'],
+                    'recipient' => ['id' => '17841425541648437'],
+                    'timestamp' => 1775121000000,
+                    'message' => [
+                        'mid' => 'ig-mid-200',
+                        'text' => 'Привіт, це fallback test',
+                    ],
+                ]],
+            ]],
+        ];
+
+        $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $signature = 'sha256=' . hash_hmac('sha256', $json, 'webhook-secret');
+
+        $response = $this->call(
+            'POST',
+            '/api/fb-webhook',
+            [],
+            [],
+            [],
+            [
+                'CONTENT_TYPE' => 'application/json',
+                'HTTP_X_HUB_SIGNATURE_256' => $signature,
+            ],
+            $json
+        );
+
+        $response->assertOk();
+
+        $message = ChatMessage::query()->where('external_message_id', 'ig-mid-200')->first();
+        $this->assertNotNull($message);
+        $this->assertSame('Привіт, це fallback test', $message->text);
+        $this->assertSame('inbound', $message->direction);
+
+        $conversation = ChatConversation::query()->with('contact')->first();
+        $this->assertNotNull($conversation);
+        $this->assertSame('instagram', $conversation->contact->platform);
+        $this->assertSame('direct', $conversation->thread_kind);
+    }
+
     protected function setUp(): void
     {
         parent::setUp();

@@ -921,7 +921,7 @@ class MetaService
     private function profileFields(string $platform): string
     {
         return $platform === 'instagram'
-            ? 'name,username,profile_pic,picture.type(large)'
+            ? 'name,username,profile_pic'
             : 'first_name,last_name,name,profile_pic,picture.type(large)';
     }
 
