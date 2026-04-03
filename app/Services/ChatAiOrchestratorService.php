@@ -235,6 +235,35 @@ class ChatAiOrchestratorService
                 $stageBefore,
                 $inputText
             );
+
+            // Якщо поки AI думав прийшло нове inbound, старий run вже не має нічого відправляти.
+            if ($this->shouldSkipStaleReply($conversation->id, $inboundMessage->id, $latestInboundSources)) {
+                $latencyMs = (int) round((microtime(true) - $startedAtTs) * 1000);
+                $run->update([
+                    'status' => 'skipped',
+                    'output_text' => $rawOutput,
+                    'output_chars' => mb_strlen($reply),
+                    'prompt_tokens' => $usage['prompt_tokens'],
+                    'completion_tokens' => $usage['completion_tokens'],
+                    'total_tokens' => $usage['total_tokens'],
+                    'latency_ms' => $latencyMs,
+                    'meta_json' => [
+                        'stage_before' => $stageBefore,
+                        'stage_after' => $stageBefore,
+                        'missing_slots' => $slotPatch['missing_slots_json'],
+                        'skipped_reason' => 'stale_run_newer_inbound_exists',
+                    ],
+                    'finished_at' => now(),
+                ]);
+
+                $this->logEvent($conversation->id, $state->id, $run->id, 'reply_skipped', $stageBefore, $stageBefore, [
+                    'reason' => 'stale_run_newer_inbound_exists',
+                    'message_id' => $inboundMessage->id,
+                ]);
+
+                return;
+            }
+
             $reply = $this->prependGreetingIfNeeded($reply, $conversation->id);
 
             if ($reply === '' && $mediaAttachments === []) {
@@ -3815,6 +3844,11 @@ JSON;
                     });
             })
             ->exists();
+    }
+
+    private function shouldSkipStaleReply(int $conversationId, int $messageId, array $sources = ['webhook']): bool
+    {
+        return !$this->isLatestInboundMessage($conversationId, $messageId, $sources);
     }
 
     /**
