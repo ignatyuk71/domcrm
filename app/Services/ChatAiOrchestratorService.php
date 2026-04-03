@@ -1544,7 +1544,7 @@ JSON;
                 continue;
             }
 
-            $attachmentMeta = data_get($attachment, 'attachment_meta', []);
+            $attachmentMeta = data_get($attachment, 'stored_attachment.meta', []);
             $attachmentProductId = $this->nullableInt(data_get($attachmentMeta, 'product_id'));
             $attachmentVariantId = $this->nullableInt(data_get($attachmentMeta, 'variant_id'));
             $attachmentColorId = $this->nullableInt(data_get($attachmentMeta, 'color_id'));
@@ -1959,11 +1959,12 @@ JSON;
             $galleryModelPhrase = $this->cleanNullableString($normalized['model_phrase'] ?? null)
                 ?: $this->cleanNullableString($slotPatch['selected_model_phrase'] ?? null)
                 ?: $this->cleanNullableString($state->slots_json['selected_model_phrase'] ?? null);
+            $galleryItems = $normalized['gallery_items'] ?? [];
             $galleryAttachments = $this->resolveAttachmentsFromGalleryItems(
-                $normalized['gallery_items'] ?? [],
+                $galleryItems,
                 $galleryModelPhrase
             );
-            if ($galleryAttachments !== []) {
+            if ($galleryAttachments !== [] || !empty($galleryItems)) {
                 return $galleryAttachments;
             }
 
@@ -1977,12 +1978,13 @@ JSON;
             $galleryModelPhrase = $this->cleanNullableString($normalized['model_phrase'] ?? null)
                 ?: $this->cleanNullableString($slotPatch['selected_model_phrase'] ?? null)
                 ?: $this->cleanNullableString($state->slots_json['selected_model_phrase'] ?? null);
+            $galleryItems = $normalized['gallery_items'] ?? [];
             $attachments = $this->resolveAttachmentsFromGalleryItems(
-                $normalized['gallery_items'] ?? [],
+                $galleryItems,
                 $galleryModelPhrase
             );
 
-            if ($attachments !== []) {
+            if ($attachments !== [] || !empty($galleryItems)) {
                 return $attachments;
             }
         }
