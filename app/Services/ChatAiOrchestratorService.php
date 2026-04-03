@@ -564,7 +564,7 @@ JSON;
             . "- text: звичайна текстова відповідь.\n"
             . "- send_product_photo: показати одне конкретне фото товару або кольору.\n"
             . "- send_product_gallery: показати кілька конкретних фото товарів або кольорів.\n"
-            . "- send_collage: показати всі моделі, всі кольори, усі варіанти або каталог асортименту.\n"
+            . "- send_collage: показати загальний каталог моделей або загальні колажі моделей без прив'язки до одного конкретного кольору чи товару.\n"
             . "- ask_clarifying: поставити одне коротке уточнення, якщо без нього неможливо відповісти точно.\n"
             . "- checkout_request: попросити дані для оформлення замовлення тільки після завершеного підбору і явного підтвердження клієнта, що можна оформляти.\n"
             . "- none: тільки для технічних або дубльованих повідомлень.\n\n"
@@ -579,19 +579,22 @@ JSON;
             . "Пріоритети прийняття рішення:\n"
             . "1. Якщо клієнт питає про ціну, вартість або скільки коштує товар, пріоритет має action=text. Навіть якщо в повідомленні є колір, модель або код товару, спочатку відповідай ціною. Фото можна запропонувати додатково, але не замість ціни.\n"
             . "2. Якщо клієнт питає про наявність, розміри, розмірну сітку, матеріал, підошву, догляд, доставку або оплату, пріоритет має action=text.\n"
-            . "3. Якщо клієнт просить показати фото одного конкретного кольору або одного товару, використовуй action=send_product_photo.\n"
-            . "4. Якщо клієнт просить показати кілька конкретних кольорів або кілька конкретних товарів, використовуй action=send_product_gallery і заповнюй gallery_items тільки реально потрібними позиціями.\n"
-            . "5. Якщо клієнт просить показати всі моделі, всі кольори, усі варіанти або весь асортимент, використовуй action=send_collage.\n"
-            . "6. Якщо модель ще не визначена і запит загальний, наприклад клієнт пише 'ціна', 'які є', 'хочу замовити', 'розміри', 'покажіть', 'які кольори', send_collage означає каталог моделей. У такому випадку коротко покажи асортимент моделей і допоможи клієнту вибрати модель, колір або код з колажу.\n"
-            . "7. Якщо клієнт питає про колір, якого немає у поточній моделі, поверни action=text, коротко скажи, що такого кольору немає, і переліч доступні кольори цієї моделі.\n"
-            . "8. Якщо клієнт після показу моделей пише короткі фрази на зразок 'це всі?', 'є ще?', 'і все?', трактуй це як уточнення про асортимент, а не як завершення діалогу.\n"
-            . "9. Якщо клієнт пише 'хочу замовити', 'беру' або схожий намір купити, це ще не означає перехід до checkout_request. Спочатку потрібно завершити підбір усіх позицій, кольорів і розмірів.\n"
-            . "10. Переходь до checkout_request тільки якщо всі потрібні позиції вже визначені, для кожної позиції відомі модель, колір і розмір, а клієнт явно підтвердив, що більше нічого не додає і можна оформляти замовлення.\n"
-            . "11. Якщо клієнт просить пораду за сценарієм використання, наприклад 'м'які і щоб можна було на вулицю', це правило має вищий пріоритет за send_collage: використовуй action=text, коротко порадь найкращу модель і не повторюй send_collage, якщо асортимент уже був показаний.\n"
-            . "12. Якщо клієнт прямо просить показати конкретну модель, колір або розмір, наприклад 'покажіть вуличні чорні', 'скинь фото домашніх чорних на 39', пріоритет має action=send_product_photo. Не замінюй такий запит простою текстовою відповіддю.\n"
-            . "13. Якщо після попереднього уточнення клієнт дає новий явний запит на іншу модель, інший колір або інше фото, наприклад 'і ще покажіть домашні чорні на 39', трактуй це як новий show-request. Не додавай у кошик попередній товар автоматично і не повертайся до старого незавершеного підтвердження.\n"
-            . "14. Якщо модель, колір і розмір уже зрозумілі або їх можна однозначно вивести з поточного контексту, а клієнт пише 'додавайте', 'беру', 'ще одну пару', це означає підтвердження позиції. Не надсилай фото повторно і не став те саме питання вдруге: додай позицію в cart_items або уточни тільки відсутнє поле.\n"
-            . "15. Якщо current_cart уже містить готові позиції і клієнт явно пише 'все', 'більше нічого не треба', 'оформляємо', пріоритет має action=checkout_request, а не повторне уточнення.\n\n"
+            . "3. Якщо клієнт уже уточнив конкретний тип, модель або колір товару, це більше не загальний запит по асортименту. Після такого уточнення не використовуй action=send_collage.\n"
+            . "4. Якщо клієнт просить показати одне конкретне фото одного кольору або одного товару, використовуй action=send_product_photo.\n"
+            . "5. Якщо клієнт просить показати кілька конкретних варіантів уже уточненого запиту, використовуй action=send_product_gallery і заповнюй gallery_items тільки реально потрібними позиціями.\n"
+            . "6. Якщо клієнт просить показати всі моделі, всі кольори, усі варіанти або весь асортимент без уточнених параметрів, використовуй action=send_collage.\n"
+            . "7. Якщо модель ще не визначена і запит загальний, наприклад клієнт пише 'ціна', 'які є', 'хочу замовити', 'розміри', 'покажіть', 'які кольори', send_collage означає каталог моделей. У такому випадку коротко покажи асортимент моделей і допоможи клієнту вибрати модель, колір або код з колажу.\n"
+            . "8. Короткі follow-up повідомлення на кшталт 'можна фото', 'покажіть', 'скиньте', 'а які саме' потрібно трактувати в межах останнього уточненого вибору клієнта. Якщо в попередньому повідомленні вже вказані тип, модель або колір, не повертайся до action=send_collage.\n"
+            . "9. Якщо клієнт питає про колір, якого немає у поточній моделі, поверни action=text, коротко скажи, що такого кольору немає, і переліч доступні кольори цієї моделі.\n"
+            . "10. Якщо клієнт після показу моделей пише короткі фрази на зразок 'це всі?', 'є ще?', 'і все?', трактуй це як уточнення про асортимент, а не як завершення діалогу.\n"
+            . "11. Якщо клієнт пише 'хочу замовити', 'беру' або схожий намір купити, це ще не означає перехід до checkout_request. Спочатку потрібно завершити підбір усіх позицій, кольорів і розмірів.\n"
+            . "12. Переходь до checkout_request тільки якщо всі потрібні позиції вже визначені, для кожної позиції відомі модель, колір і розмір, а клієнт явно підтвердив, що більше нічого не додає і можна оформляти замовлення.\n"
+            . "13. Якщо клієнт просить пораду за сценарієм використання, наприклад 'м'які і щоб можна було на вулицю', це правило має вищий пріоритет за send_collage: використовуй action=text, коротко порадь найкращу модель і не повторюй send_collage, якщо асортимент уже був показаний.\n"
+            . "14. Якщо клієнт прямо просить показати конкретну модель, колір або розмір, наприклад 'покажіть вуличні чорні', 'скинь фото домашніх чорних на 39', пріоритет має action=send_product_photo. Не замінюй такий запит простою текстовою відповіддю.\n"
+            . "15. Якщо після попереднього уточнення клієнт дає новий явний запит на іншу модель, інший колір або інше фото, наприклад 'і ще покажіть домашні чорні на 39', трактуй це як новий show-request. Не додавай у кошик попередній товар автоматично і не повертайся до старого незавершеного підтвердження.\n"
+            . "16. Якщо модель, колір і розмір уже зрозумілі або їх можна однозначно вивести з поточного контексту, а клієнт пише 'додавайте', 'беру', 'ще одну пару', це означає підтвердження позиції. Не надсилай фото повторно і не став те саме питання вдруге: додай позицію в cart_items або уточни тільки відсутнє поле.\n"
+            . "17. Якщо current_cart уже містить готові позиції і клієнт явно пише 'все', 'більше нічого не треба', 'оформляємо', пріоритет має action=checkout_request, а не повторне уточнення.\n"
+            . "18. Для action=send_collage не заповнюй gallery_items конкретними товарами. Якщо тобі потрібно показати конкретні товари або конкретні кольори, використовуй action=send_product_gallery.\n\n"
             . "Правила поведінки:\n"
             . "1. Дозволено кілька позицій у одному замовленні. Якщо клієнт просить 2 або більше товари, додай їх у cart_items.\n"
             . "2. Заборонено змушувати клієнта обрати лише одну позицію, якщо він явно хоче кілька.\n"
@@ -609,6 +612,8 @@ JSON;
             . "Приклади пріоритетних рішень:\n"
             . "- 'Мені треба щоб були м'які і щоб можна було вийти на вулицю. Що краще порадите?' -> action=text, коротка порада, без повторного send_collage.\n"
             . "- 'Тоді покажіть вуличні чорні' -> action=send_product_photo.\n"
+            . "- 'Які є червоні?' -> action=send_product_gallery, тільки для червоних варіантів.\n"
+            . "- 'Можна фото?' після попереднього уточнення кольору або моделі -> action=send_product_photo або action=send_product_gallery по останньому уточненому запиту, але не send_collage.\n"
             . "- 'І ще покажіть домашні чорні на 39' -> action=send_product_photo для домашньої моделі; не додавай попередній товар у кошик автоматично.\n"
             . "- 'Добре, додавайте одну пару чорних' за вже зрозумілих моделі, кольору та розміру -> додай позицію в cart_items і коротко підтвердь, без повторного фото.\n"
             . "- 'Все, більше нічого не треба, оформляємо' за вже готового current_cart -> action=checkout_request.\n\n"
@@ -1497,6 +1502,77 @@ JSON;
         return null;
     }
 
+    /**
+     * @param  array<int, mixed>  $galleryItems
+     * @return array<int, array<string, mixed>>
+     */
+    private function resolveAttachmentsFromGalleryItems(array $galleryItems, ?string $modelPhrase = null): array
+    {
+        $attachments = [];
+        $seenUrls = [];
+
+        foreach ($galleryItems as $galleryItem) {
+            if (!is_array($galleryItem)) {
+                continue;
+            }
+
+            $galleryProductId = $this->nullableInt($galleryItem['product_id'] ?? null);
+            $galleryVariantId = $this->nullableInt($galleryItem['variant_id'] ?? null);
+            $galleryColorId = $this->nullableInt($galleryItem['color_id'] ?? null);
+            $galleryColor = $this->cleanNullableString($galleryItem['color'] ?? null);
+
+            if ($galleryProductId === null && $modelPhrase !== null) {
+                $resolvedGalleryItem = $this->chatAiKnowledgeService->resolveProductForModelColor(
+                    $modelPhrase,
+                    $galleryColorId,
+                    $galleryColor
+                );
+                if ($resolvedGalleryItem !== null) {
+                    $galleryProductId = $this->nullableInt($resolvedGalleryItem['product_id'] ?? null);
+                    $galleryVariantId = $galleryVariantId ?: $this->nullableInt($resolvedGalleryItem['variant_id'] ?? null);
+                    $galleryColorId = $galleryColorId ?: $this->nullableInt($resolvedGalleryItem['color_id'] ?? null);
+                }
+            }
+
+            $attachment = $this->resolveProductMediaAttachmentBySelection(
+                $galleryProductId,
+                $galleryVariantId,
+                $galleryColorId
+            );
+
+            if ($attachment === null) {
+                continue;
+            }
+
+            $attachmentMeta = data_get($attachment, 'attachment_meta', []);
+            $attachmentProductId = $this->nullableInt(data_get($attachmentMeta, 'product_id'));
+            $attachmentVariantId = $this->nullableInt(data_get($attachmentMeta, 'variant_id'));
+            $attachmentColorId = $this->nullableInt(data_get($attachmentMeta, 'color_id'));
+
+            if ($galleryProductId !== null && $attachmentProductId !== $galleryProductId) {
+                continue;
+            }
+
+            if ($galleryVariantId !== null && $attachmentVariantId !== $galleryVariantId) {
+                continue;
+            }
+
+            if ($galleryColorId !== null && $attachmentColorId !== $galleryColorId) {
+                continue;
+            }
+
+            $url = (string) data_get($attachment, 'stored_attachment.url', '');
+            if ($url === '' || isset($seenUrls[$url])) {
+                continue;
+            }
+
+            $seenUrls[$url] = true;
+            $attachments[] = $attachment;
+        }
+
+        return $attachments;
+    }
+
     private function buildSlotPatch(ChatAiConversationState $state, array $normalized, string $inputText): array
     {
         $action = (string) ($normalized['action'] ?? 'text');
@@ -1880,6 +1956,17 @@ JSON;
         }
 
         if ($action === 'send_collage') {
+            $galleryModelPhrase = $this->cleanNullableString($normalized['model_phrase'] ?? null)
+                ?: $this->cleanNullableString($slotPatch['selected_model_phrase'] ?? null)
+                ?: $this->cleanNullableString($state->slots_json['selected_model_phrase'] ?? null);
+            $galleryAttachments = $this->resolveAttachmentsFromGalleryItems(
+                $normalized['gallery_items'] ?? [],
+                $galleryModelPhrase
+            );
+            if ($galleryAttachments !== []) {
+                return $galleryAttachments;
+            }
+
             $collageAttachments = $this->resolveCollageMediaAttachments($inputText, $normalized, $state, $slotPatch);
             if ($collageAttachments !== []) {
                 return $collageAttachments;
@@ -1887,53 +1974,13 @@ JSON;
         }
 
         if ($action === 'send_product_gallery') {
-            $attachments = [];
-            $seenUrls = [];
             $galleryModelPhrase = $this->cleanNullableString($normalized['model_phrase'] ?? null)
                 ?: $this->cleanNullableString($slotPatch['selected_model_phrase'] ?? null)
                 ?: $this->cleanNullableString($state->slots_json['selected_model_phrase'] ?? null);
-
-            foreach (($normalized['gallery_items'] ?? []) as $galleryItem) {
-                if (!is_array($galleryItem)) {
-                    continue;
-                }
-
-                $galleryProductId = $this->nullableInt($galleryItem['product_id'] ?? null);
-                $galleryVariantId = $this->nullableInt($galleryItem['variant_id'] ?? null);
-                $galleryColorId = $this->nullableInt($galleryItem['color_id'] ?? null);
-                $galleryColor = $this->cleanNullableString($galleryItem['color'] ?? null);
-
-                if ($galleryProductId === null && $galleryModelPhrase !== null) {
-                    $resolvedGalleryItem = $this->chatAiKnowledgeService->resolveProductForModelColor(
-                        $galleryModelPhrase,
-                        $galleryColorId,
-                        $galleryColor
-                    );
-                    if ($resolvedGalleryItem !== null) {
-                        $galleryProductId = $this->nullableInt($resolvedGalleryItem['product_id'] ?? null);
-                        $galleryVariantId = $galleryVariantId ?: $this->nullableInt($resolvedGalleryItem['variant_id'] ?? null);
-                        $galleryColorId = $galleryColorId ?: $this->nullableInt($resolvedGalleryItem['color_id'] ?? null);
-                    }
-                }
-
-                $attachment = $this->resolveProductMediaAttachmentBySelection(
-                    $galleryProductId,
-                    $galleryVariantId,
-                    $galleryColorId
-                );
-
-                if ($attachment === null) {
-                    continue;
-                }
-
-                $url = (string) data_get($attachment, 'stored_attachment.url', '');
-                if ($url === '' || isset($seenUrls[$url])) {
-                    continue;
-                }
-
-                $seenUrls[$url] = true;
-                $attachments[] = $attachment;
-            }
+            $attachments = $this->resolveAttachmentsFromGalleryItems(
+                $normalized['gallery_items'] ?? [],
+                $galleryModelPhrase
+            );
 
             if ($attachments !== []) {
                 return $attachments;
