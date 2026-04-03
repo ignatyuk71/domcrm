@@ -353,7 +353,6 @@ class MetaConnectionService
             'messaging_postbacks',
             'messaging_optins',
             'feed',
-            'comments',
         ];
     }
 
