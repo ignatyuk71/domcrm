@@ -200,6 +200,18 @@ const prepayAmount = computed(() =>
   form.payment.method === 'prepay' ? Number(form.payment.prepay_amount || 0) : 0
 );
 
+function resolveOrderSourceCode(source) {
+  if (typeof source === 'string' && source.trim() !== '') {
+    return source;
+  }
+
+  if (source && typeof source === 'object') {
+    return source.code || source.name || 'site';
+  }
+
+  return 'site';
+}
+
 // --- MAIN LOGIC ---
 
 async function submit() {
@@ -253,7 +265,7 @@ async function loadOrder() {
     // Мета
     Object.assign(form.meta, {
       currency: order.currency || 'UAH',
-      source: order.source || 'site',
+      source: resolveOrderSourceCode(order.source),
       status: order.status || 'new',
       payment_status: order.payment_status || 'unpaid',
     });

@@ -182,8 +182,47 @@ const payments = [
 ];
 
 // --- Helpers ---
-const getSourceLabel = (val) => sources.value.find(s => s.value === val)?.label || val;
-const getSourceIcon = (val) => sources.value.find(s => s.value === val)?.icon || 'bi-share';
+const resolveSourceCode = (val) => {
+  if (typeof val === 'string' && val.trim() !== '') {
+    return val;
+  }
+
+  if (val && typeof val === 'object') {
+    return val.code || val.name || '';
+  }
+
+  return '';
+};
+
+const getSourceLabel = (val) => {
+  const sourceCode = resolveSourceCode(val);
+  const matchedSource = sources.value.find((source) => source.value === sourceCode);
+
+  if (matchedSource) {
+    return matchedSource.label;
+  }
+
+  if (val && typeof val === 'object') {
+    return val.name || val.code || 'site';
+  }
+
+  return sourceCode || 'site';
+};
+
+const getSourceIcon = (val) => {
+  const sourceCode = resolveSourceCode(val);
+  const matchedSource = sources.value.find((source) => source.value === sourceCode);
+
+  if (matchedSource?.icon) {
+    return matchedSource.icon;
+  }
+
+  if (val && typeof val === 'object' && val.icon) {
+    return val.icon.startsWith('bi ') ? val.icon : `bi ${val.icon}`;
+  }
+
+  return 'bi-share';
+};
 
 const getStatusName = (val) => statuses.value.find(s => s.code === val)?.name || '...';
 const getStatusIcon = (val) => statuses.value.find(s => s.code === val)?.icon || 'bi-circle';
