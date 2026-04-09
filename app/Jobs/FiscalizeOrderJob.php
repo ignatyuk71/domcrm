@@ -156,8 +156,7 @@ class FiscalizeOrderJob implements ShouldQueue, ShouldBeUnique
             $variant = $item->variant;
             $baseTitle = $product?->title ?? 'Товар';
             $size = trim((string) ($variant?->size ?? ''));
-            $color = trim((string) ($product?->color?->name ?? ''));
-            $sku = trim((string) ($variant?->sku ?? $product?->sku ?? ''));
+            $code = trim((string) ($variant?->sku ?? $product?->sku ?? ''));
 
             if ($size !== '') {
                 $sizeSuffix = " ({$size})";
@@ -167,13 +166,11 @@ class FiscalizeOrderJob implements ShouldQueue, ShouldBeUnique
             }
 
             $parts = [trim($baseTitle)];
-            if ($color !== '') $parts[] = $color;
             if ($size !== '') $parts[] = $size;
-            if ($sku !== '') $parts[] = $sku;
             $name = implode(' - ', array_filter($parts, static fn ($part) => $part !== ''));
 
             $goods[] = [
-                'code' => $sku !== '' ? $sku : ('item-' . $item->id),
+                'code' => $code !== '' ? $code : ('item-' . $item->id),
                 'name' => $name,
                 'price' => (int) round($unitPrice * 100), // Ціна за ОДИНИЦЮ в копійках
                 'qty' => (int) ($qty * 1000),             // Кількість * 1000
