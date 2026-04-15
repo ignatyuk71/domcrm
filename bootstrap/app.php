@@ -19,6 +19,10 @@ return Application::configure(basePath: dirname(__DIR__))
         \App\Console\Commands\SyncRecentMetaConversations::class,
     ])
     ->withMiddleware(function (Middleware $middleware) {
+        $middleware->alias([
+            'role' => \App\Http\Middleware\EnsureUserRole::class,
+        ]);
+
         // Вимикаємо перевірку CSRF для маршрутів генерації ТТН
         $middleware->validateCsrfTokens(except: [
             'orders/*/generate-ttn',

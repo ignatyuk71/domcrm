@@ -359,84 +359,111 @@
         </div>
     </div>
 
+    @php
+        $currentUser = auth()->user();
+        $isOwner = $currentUser?->isOwner() ?? false;
+        $isOperator = $currentUser?->hasAnyRole([\App\Models\User::ROLE_OPERATOR]) ?? false;
+        $isPacker = $currentUser?->hasAnyRole([\App\Models\User::ROLE_PACKER]) ?? false;
+        $canSeeOperations = $isOwner || $isOperator;
+        $canSeePacking = $isOwner || $isOperator || $isPacker;
+        $canSeeCommunication = $isOwner || $isOperator;
+        $canSeeContent = $isOwner || $isOperator;
+    @endphp
+
     <nav class="sidebar-nav">
         <a href="{{ route('dashboard') }}" class="sidebar-link {{ request()->is('dashboard') ? 'active' : '' }}">
             <span class="icon-frame"><i class="bi bi-grid-1x2-fill"></i></span>
             <span class="item-text">Дашборд</span>
         </a>
 
-        <a href="{{ url('/orders') }}" class="sidebar-link {{ request()->is('orders*') ? 'active' : '' }}">
-            <span class="icon-frame"><i class="bi bi-basket2-fill"></i></span>
-            <span class="item-text">Замовлення</span>
-        </a>
+        @if($canSeeOperations)
+            <a href="{{ url('/orders') }}" class="sidebar-link {{ request()->is('orders*') ? 'active' : '' }}">
+                <span class="icon-frame"><i class="bi bi-basket2-fill"></i></span>
+                <span class="item-text">Замовлення</span>
+            </a>
 
-        <a href="{{ url('/orders/create') }}" class="sidebar-link">
-            <span class="icon-frame"><i class="bi bi-plus-circle-fill"></i></span>
-            <span class="item-text">Створити Замовлення</span>
-        </a>
+            <a href="{{ url('/orders/create') }}" class="sidebar-link">
+                <span class="icon-frame"><i class="bi bi-plus-circle-fill"></i></span>
+                <span class="item-text">Створити Замовлення</span>
+            </a>
+        @endif
 
-        <div class="nav-divider">Склад</div>
+        @if($canSeePacking || $canSeeOperations)
+            <div class="nav-divider">Склад</div>
+        @endif
 
         @php
-            $packingService = app(\App\Services\PackingService::class);
-            $packingService->releaseStaleOrders();
-            $queueStatusIds = $packingService->queueStatusIds();
+            $packingCount = 0;
 
-            $packingCount = \App\Models\Order::query()
-                ->when($queueStatusIds, fn ($query) => $query->whereIn('status_id', $queueStatusIds), fn ($query) => $query->whereRaw('1 = 0'))
-                ->where(function ($query) {
-                    $query->whereNull('packing_status')
-                        ->orWhereIn('packing_status', ['pending', 'processing', 'skipped']);
-                })
-                ->count();
+            if ($canSeePacking) {
+                $packingService = app(\App\Services\PackingService::class);
+                $packingService->releaseStaleOrders();
+                $queueStatusIds = $packingService->queueStatusIds();
+
+                $packingCount = \App\Models\Order::query()
+                    ->when($queueStatusIds, fn ($query) => $query->whereIn('status_id', $queueStatusIds), fn ($query) => $query->whereRaw('1 = 0'))
+                    ->where(function ($query) {
+                        $query->whereNull('packing_status')
+                            ->orWhereIn('packing_status', ['pending', 'processing', 'skipped']);
+                    })
+                    ->count();
+            }
         @endphp
 
-        <a href="{{ route('packing.list') }}" class="sidebar-link {{ request()->is('packing*') ? 'active' : '' }}">
-            <span class="icon-frame"><i class="bi bi-box-seam-fill"></i></span>
-            <span class="item-text">Пакування</span>
-            
-            @if($packingCount > 0)
-                <span class="badge rounded-pill ms-auto me-2 shadow-sm" style="background: var(--accent-color); font-size: 0.75rem; padding: 5px 10px;">{{ $packingCount }}</span>
-            @endif
-        </a>
+        @if($canSeePacking)
+            <a href="{{ route('packing.list') }}" class="sidebar-link {{ request()->is('packing*') ? 'active' : '' }}">
+                <span class="icon-frame"><i class="bi bi-box-seam-fill"></i></span>
+                <span class="item-text">Пакування</span>
 
-        <a href="{{ url('/products') }}" class="sidebar-link {{ request()->is('products*') ? 'active' : '' }}">
-            <span class="icon-frame"><i class="bi bi-archive-fill"></i></span>
-            <span class="item-text">Товари</span>
-        </a>
+                @if($packingCount > 0)
+                    <span class="badge rounded-pill ms-auto me-2 shadow-sm" style="background: var(--accent-color); font-size: 0.75rem; padding: 5px 10px;">{{ $packingCount }}</span>
+                @endif
+            </a>
+        @endif
 
-        <div class="nav-divider">Комунікація</div>
+        @if($canSeeOperations)
+            <a href="{{ url('/products') }}" class="sidebar-link {{ request()->is('products*') ? 'active' : '' }}">
+                <span class="icon-frame"><i class="bi bi-archive-fill"></i></span>
+                <span class="item-text">Товари</span>
+            </a>
+        @endif
 
-        <a href="{{ url('/customers') }}" class="sidebar-link {{ request()->is('customers*') ? 'active' : '' }}">
-            <span class="icon-frame"><i class="bi bi-people-fill"></i></span>
-            <span class="item-text">Клієнти</span>
-        </a>
+        @if($canSeeCommunication)
+            <div class="nav-divider">Комунікація</div>
 
-        <a href="{{ url('/messenger') }}" class="sidebar-link {{ request()->is('messenger*') ? 'active' : '' }}">
-            <span class="icon-frame position-relative">
-                <i class="bi bi-chat-dots-fill"></i>
-                <span id="chat-unread-dot" class="chat-badge-collapsed d-none"></span>
-            </span>
-            <span class="item-text">Месенджер</span>
-            <span id="chat-unread-badge" class="badge bg-danger rounded-pill ms-auto me-2 chat-badge-expanded d-none" style="font-size: 0.7rem; box-shadow: 0 0 10px rgba(220,38,38,0.5);"></span>
-        </a>
+            <a href="{{ url('/customers') }}" class="sidebar-link {{ request()->is('customers*') ? 'active' : '' }}">
+                <span class="icon-frame"><i class="bi bi-people-fill"></i></span>
+                <span class="item-text">Клієнти</span>
+            </a>
 
-        <a href="{{ url('/messenger/funnel') }}" class="sidebar-link {{ request()->is('messenger/funnel') ? 'active' : '' }}">
-            <span class="icon-frame"><i class="bi bi-kanban-fill"></i></span>
-            <span class="item-text">Воронка продажів</span>
-        </a>
+            <a href="{{ url('/messenger') }}" class="sidebar-link {{ request()->is('messenger*') ? 'active' : '' }}">
+                <span class="icon-frame position-relative">
+                    <i class="bi bi-chat-dots-fill"></i>
+                    <span id="chat-unread-dot" class="chat-badge-collapsed d-none"></span>
+                </span>
+                <span class="item-text">Месенджер</span>
+                <span id="chat-unread-badge" class="badge bg-danger rounded-pill ms-auto me-2 chat-badge-expanded d-none" style="font-size: 0.7rem; box-shadow: 0 0 10px rgba(220,38,38,0.5);"></span>
+            </a>
 
-        <div class="nav-divider">Контент</div>
+            <a href="{{ url('/messenger/funnel') }}" class="sidebar-link {{ request()->is('messenger/funnel') ? 'active' : '' }}">
+                <span class="icon-frame"><i class="bi bi-kanban-fill"></i></span>
+                <span class="item-text">Воронка продажів</span>
+            </a>
+        @endif
 
-        <a href="{{ route('gallery.index') }}" class="sidebar-link {{ request()->is('gallery*') ? 'active' : '' }}">
-            <span class="icon-frame"><i class="bi bi-images"></i></span>
-            <span class="item-text">Галерея</span>
-        </a>
+        @if($canSeeContent)
+            <div class="nav-divider">Контент</div>
 
-        <a href="{{ route('templates.index') }}" class="sidebar-link {{ request()->is('templates*') ? 'active' : '' }}">
-            <span class="icon-frame"><i class="bi bi-journal-text"></i></span>
-            <span class="item-text">Шаблони</span>
-        </a>
+            <a href="{{ route('gallery.index') }}" class="sidebar-link {{ request()->is('gallery*') ? 'active' : '' }}">
+                <span class="icon-frame"><i class="bi bi-images"></i></span>
+                <span class="item-text">Галерея</span>
+            </a>
+
+            <a href="{{ route('templates.index') }}" class="sidebar-link {{ request()->is('templates*') ? 'active' : '' }}">
+                <span class="icon-frame"><i class="bi bi-journal-text"></i></span>
+                <span class="item-text">Шаблони</span>
+            </a>
+        @endif
     </nav>
 
     <div class="sidebar-footer mt-auto" id="settings-footer">
@@ -452,45 +479,52 @@
                 <span class="icon-frame"><i class="bi bi-person-circle"></i></span>
                 <span class="item-text-sub">Профіль</span>
             </a>
-            <a href="{{ route('finance.index') }}" class="sidebar-link-sub {{ request()->is('finance*') ? 'active' : '' }}">
-                <span class="icon-frame"><i class="bi bi-wallet2"></i></span>
-                <span class="item-text-sub">Фінанси</span>
-            </a>
 
-            <div class="submenu-divider"></div>
+            @if($isOwner)
+                <a href="{{ route('settings.team.index') }}" class="sidebar-link-sub {{ request()->is('settings/team*') ? 'active' : '' }}">
+                    <span class="icon-frame"><i class="bi bi-people"></i></span>
+                    <span class="item-text-sub">Команда</span>
+                </a>
+                <a href="{{ route('finance.index') }}" class="sidebar-link-sub {{ request()->is('finance*') ? 'active' : '' }}">
+                    <span class="icon-frame"><i class="bi bi-wallet2"></i></span>
+                    <span class="item-text-sub">Фінанси</span>
+                </a>
 
-             <a href="{{ route('settings.meta.index') }}" class="sidebar-link-sub {{ request()->is('settings/meta*') ? 'active' : '' }}">
-                <span class="icon-frame"><i class="bi bi-share-fill"></i></span>
-                <span class="item-text-sub">Соц. мережі</span>
-            </a>
-            <a href="{{ route('settings.ai.index') }}" class="sidebar-link-sub {{ request()->is('settings/ai') ? 'active' : '' }}">
-                <span class="icon-frame"><i class="bi bi-robot"></i></span>
-                <span class="item-text-sub">AI Асистент</span>
-            </a>
-            <a href="{{ route('settings.ai.base.index') }}" class="sidebar-link-sub {{ request()->is('settings/ai/base*') ? 'active' : '' }}">
-                <span class="icon-frame"><i class="bi bi-database"></i></span>
-                <span class="item-text-sub">AI База</span>
-            </a>
-             <a href="{{ route('settings.novaPoshta.index') }}" class="sidebar-link-sub {{ request()->is('settings/nova-poshta') ? 'active' : '' }}">
-                <span class="icon-frame"><i class="bi bi-box-seam"></i></span>
-                <span class="item-text-sub">Нова Пошта</span>
-            </a>
-            <a href="{{ route('settings.categories.index') }}" class="sidebar-link-sub {{ request()->is('settings/categories') ? 'active' : '' }}">
-                <span class="icon-frame"><i class="bi bi-tags"></i></span>
-                <span class="item-text-sub">Категорії</span>
-            </a>
-            <a href="{{ route('settings.colors.index') }}" class="sidebar-link-sub {{ request()->is('settings/colors') ? 'active' : '' }}">
-                <span class="icon-frame"><i class="bi bi-palette2"></i></span>
-                <span class="item-text-sub">Кольори</span>
-            </a>
-            <a href="{{ route('settings.tags.index') }}" class="sidebar-link-sub {{ request()->is('settings/tags') ? 'active' : '' }}">
-                <span class="icon-frame"><i class="bi bi-bookmark-star"></i></span>
-                <span class="item-text-sub">Теги</span>
-            </a>
-            <a href="{{ route('settings.statuses.index') }}" class="sidebar-link-sub {{ request()->is('settings/statuses') ? 'active' : '' }}">
-                <span class="icon-frame"><i class="bi bi-list-check"></i></span>
-                <span class="item-text-sub">Статуси</span>
-            </a>
+                <div class="submenu-divider"></div>
+
+                <a href="{{ route('settings.meta.index') }}" class="sidebar-link-sub {{ request()->is('settings/meta*') ? 'active' : '' }}">
+                    <span class="icon-frame"><i class="bi bi-share-fill"></i></span>
+                    <span class="item-text-sub">Соц. мережі</span>
+                </a>
+                <a href="{{ route('settings.ai.index') }}" class="sidebar-link-sub {{ request()->is('settings/ai') ? 'active' : '' }}">
+                    <span class="icon-frame"><i class="bi bi-robot"></i></span>
+                    <span class="item-text-sub">AI Асистент</span>
+                </a>
+                <a href="{{ route('settings.ai.base.index') }}" class="sidebar-link-sub {{ request()->is('settings/ai/base*') ? 'active' : '' }}">
+                    <span class="icon-frame"><i class="bi bi-database"></i></span>
+                    <span class="item-text-sub">AI База</span>
+                </a>
+                <a href="{{ route('settings.novaPoshta.index') }}" class="sidebar-link-sub {{ request()->is('settings/nova-poshta') ? 'active' : '' }}">
+                    <span class="icon-frame"><i class="bi bi-box-seam"></i></span>
+                    <span class="item-text-sub">Нова Пошта</span>
+                </a>
+                <a href="{{ route('settings.categories.index') }}" class="sidebar-link-sub {{ request()->is('settings/categories') ? 'active' : '' }}">
+                    <span class="icon-frame"><i class="bi bi-tags"></i></span>
+                    <span class="item-text-sub">Категорії</span>
+                </a>
+                <a href="{{ route('settings.colors.index') }}" class="sidebar-link-sub {{ request()->is('settings/colors') ? 'active' : '' }}">
+                    <span class="icon-frame"><i class="bi bi-palette2"></i></span>
+                    <span class="item-text-sub">Кольори</span>
+                </a>
+                <a href="{{ route('settings.tags.index') }}" class="sidebar-link-sub {{ request()->is('settings/tags') ? 'active' : '' }}">
+                    <span class="icon-frame"><i class="bi bi-bookmark-star"></i></span>
+                    <span class="item-text-sub">Теги</span>
+                </a>
+                <a href="{{ route('settings.statuses.index') }}" class="sidebar-link-sub {{ request()->is('settings/statuses') ? 'active' : '' }}">
+                    <span class="icon-frame"><i class="bi bi-list-check"></i></span>
+                    <span class="item-text-sub">Статуси</span>
+                </a>
+            @endif
         </div>
     </div>
 </aside>

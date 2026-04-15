@@ -9,6 +9,10 @@ use Illuminate\Notifications\Notifiable;
 
 class User extends Authenticatable
 {
+    public const ROLE_OWNER = 'owner';
+    public const ROLE_OPERATOR = 'operator';
+    public const ROLE_PACKER = 'packer';
+
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, Notifiable;
 
@@ -21,6 +25,8 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'role',
+        'is_active',
     ];
 
     /**
@@ -43,6 +49,38 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'is_active' => 'boolean',
         ];
+    }
+
+    public static function roleOptions(): array
+    {
+        return [
+            self::ROLE_OWNER => 'Власник',
+            self::ROLE_OPERATOR => 'Оператор',
+            self::ROLE_PACKER => 'Пакувальник',
+        ];
+    }
+
+    public function roleKey(): string
+    {
+        return $this->role ?: self::ROLE_OWNER;
+    }
+
+    public function isActive(): bool
+    {
+        $value = $this->getAttribute('is_active');
+
+        return $value === null ? true : (bool) $value;
+    }
+
+    public function isOwner(): bool
+    {
+        return $this->roleKey() === self::ROLE_OWNER;
+    }
+
+    public function hasAnyRole(array $roles): bool
+    {
+        return in_array($this->roleKey(), $roles, true);
     }
 }

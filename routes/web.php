@@ -21,6 +21,7 @@ use App\Http\Controllers\ChatAiBaseController;
 use App\Http\Controllers\MetaConnectionController;
 use App\Http\Controllers\SavedFileController;
 use App\Http\Controllers\NovaPoshtaSettingsController;
+use App\Http\Controllers\TeamController;
 use App\Models\MessageTemplate;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -123,7 +124,7 @@ Route::get('/dashboard', function () {
         'chartLabels' => $chartLabels,
         'chartValues' => $chartValues,
     ]);
-})->middleware(['auth', 'verified'])->name('dashboard');
+})->middleware(['auth', 'verified', 'role:owner,operator,packer'])->name('dashboard');
 
 /*
 |--------------------------------------------------------------------------
@@ -133,7 +134,7 @@ Route::get('/dashboard', function () {
 Route::middleware('auth')->group(function () {
 
     // --- ЗАМОВЛЕННЯ (Orders) ---
-    Route::controller(OrderController::class)->group(function () {
+    Route::middleware('role:owner,operator')->controller(OrderController::class)->group(function () {
         Route::get('/orders', 'index')->name('orders.index');
         Route::get('/orders/list', 'list')->name('orders.list');
         
@@ -164,75 +165,81 @@ Route::middleware('auth')->group(function () {
     });
 
     // --- КЛІЄНТИ (Customers) ---
-    Route::get('/customers', [CustomerController::class, 'index'])->name('customers.index');
-    Route::get('/customers/{customer}', [CustomerController::class, 'show'])->name('customers.show');
-    Route::put('/api/customers/{customer}', [CustomerController::class, 'update'])->name('customers.update');
+    Route::middleware('role:owner,operator')->group(function () {
+        Route::get('/customers', [CustomerController::class, 'index'])->name('customers.index');
+        Route::get('/customers/{customer}', [CustomerController::class, 'show'])->name('customers.show');
+        Route::put('/api/customers/{customer}', [CustomerController::class, 'update'])->name('customers.update');
+    });
 
-    // --- ЧАТ ---
-    Route::get('/messenger', [ChatController::class, 'index'])->name('chat.index');
-    Route::get('/messenger/funnel', [ChatController::class, 'funnel'])->name('chat.funnel');
-    Route::get('/api/chat/list', [ChatApiController::class, 'list'])->name('chat.list');
-    Route::get('/api/chat/funnel', [ChatApiController::class, 'funnel'])->name('chat.funnel.data');
-    Route::get('/api/chat/conversations/by-customer/{customerId}', [ChatApiController::class, 'showByCustomer'])
-        ->name('chat.conversation.byCustomer');
-    Route::get('/api/chat/conversations/{conversation}/messages', [ChatApiController::class, 'messagesByConversation'])
-        ->name('chat.conversation.messages');
-    Route::get('/api/chat/conversations/{conversation}/messages/updates', [ChatApiController::class, 'updatesByConversation'])
-        ->name('chat.conversation.messages.updates');
-    Route::get('/api/chat/{id}/messages', [ChatApiController::class, 'messages'])->name('chat.messages.api');
-    Route::get('/api/chat/threads/{id}/messages/updates', [ChatApiController::class, 'updates'])
-        ->name('chat.messages.updates');
-    Route::post('/api/chat/send', [ChatApiController::class, 'send'])->name('chat.send');
-    Route::post('/api/chat/conversations/{conversation}/mark-read', [ChatApiController::class, 'markConversationRead'])
-        ->name('chat.conversation.markRead');
-    Route::post('/api/chat/mark-read', [ChatApiController::class, 'markRead'])->name('chat.markRead');
-    Route::post('/api/chat/conversations/{conversation}/sync', [ChatApiController::class, 'syncConversation'])
-        ->name('chat.conversation.sync');
-    Route::post('/api/chat/{id}/sync', [ChatApiController::class, 'sync'])->name('chat.sync');
-    Route::post('/api/chat/conversations/{conversation}/refresh-profile', [ChatApiController::class, 'refreshConversationProfile'])
-        ->name('chat.conversation.refreshProfile');
-    Route::post('/api/chat/customers/{id}/refresh-profile', [ChatApiController::class, 'refreshProfile'])
-        ->name('chat.refreshProfile');
-    Route::get('/api/chat/tags', [ChatApiController::class, 'listConversationTags'])->name('chat.tags');
-    Route::patch('/api/chat/conversations/{conversation}/stage', [ChatApiController::class, 'updateStage'])
-        ->name('chat.stage');
-    Route::patch('/api/chat/conversations/{conversation}/ai', [ChatApiController::class, 'updateAi'])
-        ->name('chat.ai');
-    Route::delete('/api/chat/conversations/{conversation}', [ChatApiController::class, 'archiveConversation'])
-        ->name('chat.archive');
-    Route::delete('/api/chat/conversations/{conversation}/history', [ChatApiController::class, 'clearConversationHistory'])
-        ->name('chat.clearHistory');
-    Route::patch('/api/chat/conversations/{conversation}/tags', [ChatApiController::class, 'updateTags'])
-        ->name('chat.updateTags');
-    Route::get('/api/chat/unread-count', [ChatApiController::class, 'getUnreadCount'])->name('chat.unreadCount');
-    Route::get('/api/saved-files', [SavedFileController::class, 'index'])->name('savedFiles.index');
-    Route::post('/api/saved-files', [SavedFileController::class, 'store'])->name('savedFiles.store');
-    Route::delete('/api/saved-files/{id}', [SavedFileController::class, 'destroy'])->name('savedFiles.destroy');
+    Route::middleware('role:owner,operator')->group(function () {
+        // --- ЧАТ ---
+        Route::get('/messenger', [ChatController::class, 'index'])->name('chat.index');
+        Route::get('/messenger/funnel', [ChatController::class, 'funnel'])->name('chat.funnel');
+        Route::get('/api/chat/list', [ChatApiController::class, 'list'])->name('chat.list');
+        Route::get('/api/chat/funnel', [ChatApiController::class, 'funnel'])->name('chat.funnel.data');
+        Route::get('/api/chat/conversations/by-customer/{customerId}', [ChatApiController::class, 'showByCustomer'])
+            ->name('chat.conversation.byCustomer');
+        Route::get('/api/chat/conversations/{conversation}/messages', [ChatApiController::class, 'messagesByConversation'])
+            ->name('chat.conversation.messages');
+        Route::get('/api/chat/conversations/{conversation}/messages/updates', [ChatApiController::class, 'updatesByConversation'])
+            ->name('chat.conversation.messages.updates');
+        Route::get('/api/chat/{id}/messages', [ChatApiController::class, 'messages'])->name('chat.messages.api');
+        Route::get('/api/chat/threads/{id}/messages/updates', [ChatApiController::class, 'updates'])
+            ->name('chat.messages.updates');
+        Route::post('/api/chat/send', [ChatApiController::class, 'send'])->name('chat.send');
+        Route::post('/api/chat/conversations/{conversation}/mark-read', [ChatApiController::class, 'markConversationRead'])
+            ->name('chat.conversation.markRead');
+        Route::post('/api/chat/mark-read', [ChatApiController::class, 'markRead'])->name('chat.markRead');
+        Route::post('/api/chat/conversations/{conversation}/sync', [ChatApiController::class, 'syncConversation'])
+            ->name('chat.conversation.sync');
+        Route::post('/api/chat/{id}/sync', [ChatApiController::class, 'sync'])->name('chat.sync');
+        Route::post('/api/chat/conversations/{conversation}/refresh-profile', [ChatApiController::class, 'refreshConversationProfile'])
+            ->name('chat.conversation.refreshProfile');
+        Route::post('/api/chat/customers/{id}/refresh-profile', [ChatApiController::class, 'refreshProfile'])
+            ->name('chat.refreshProfile');
+        Route::get('/api/chat/tags', [ChatApiController::class, 'listConversationTags'])->name('chat.tags');
+        Route::patch('/api/chat/conversations/{conversation}/stage', [ChatApiController::class, 'updateStage'])
+            ->name('chat.stage');
+        Route::patch('/api/chat/conversations/{conversation}/ai', [ChatApiController::class, 'updateAi'])
+            ->name('chat.ai');
+        Route::delete('/api/chat/conversations/{conversation}', [ChatApiController::class, 'archiveConversation'])
+            ->name('chat.archive');
+        Route::delete('/api/chat/conversations/{conversation}/history', [ChatApiController::class, 'clearConversationHistory'])
+            ->name('chat.clearHistory');
+        Route::patch('/api/chat/conversations/{conversation}/tags', [ChatApiController::class, 'updateTags'])
+            ->name('chat.updateTags');
+        Route::get('/api/chat/unread-count', [ChatApiController::class, 'getUnreadCount'])->name('chat.unreadCount');
+        Route::get('/api/saved-files', [SavedFileController::class, 'index'])->name('savedFiles.index');
+        Route::post('/api/saved-files', [SavedFileController::class, 'store'])->name('savedFiles.store');
+        Route::delete('/api/saved-files/{id}', [SavedFileController::class, 'destroy'])->name('savedFiles.destroy');
 
-    // --- ГАЛЕРЕЯ ---
-    Route::view('/gallery', 'gallery.index')->name('gallery.index');
+        // --- ГАЛЕРЕЯ ---
+        Route::view('/gallery', 'gallery.index')->name('gallery.index');
+
+        // --- НОВА ПОШТА (Nova Poshta довідники) ---
+        Route::controller(NovaPoshtaController::class)->prefix('nova-poshta')->name('novaPoshta.')->group(function () {
+            Route::get('/cities', 'cities')->name('cities');
+            Route::get('/warehouses', 'warehouses')->name('warehouses');
+            Route::get('/streets', 'streets')->name('streets');
+
+            // Debug маршрут для перевірки даних відправника
+            Route::get('/debug-sender', fn(\App\Services\NovaPoshtaService $np) => $np->getSenderData())->name('debug');
+        });
+    });
 
     // --- ФІНАНСИ / КАСА (Checkbox) ---
-    Route::get('/finance', [FinanceController::class, 'index'])->name('finance.index');
-    Route::get('/api/finance/checkbox', [FinanceController::class, 'data'])->name('finance.checkbox.data');
-    Route::post('/finance/checkbox', [FinanceController::class, 'save'])->name('finance.checkbox.save');
-    Route::post('/finance/checkbox/test', [FinanceController::class, 'test'])->name('finance.checkbox.test');
-    Route::post('/finance/checkbox/shift/open', [FinanceController::class, 'openShift'])->name('finance.checkbox.openShift');
-    Route::post('/finance/checkbox/shift/close', [FinanceController::class, 'closeShift'])->name('finance.checkbox.closeShift');
-    Route::post('/finance/checkbox/queue/process', [FinanceController::class, 'processQueue'])->name('finance.checkbox.processQueue');
-
-    // --- НОВА ПОШТА (Nova Poshta довідники) ---
-    Route::controller(NovaPoshtaController::class)->prefix('nova-poshta')->name('novaPoshta.')->group(function () {
-        Route::get('/cities', 'cities')->name('cities');
-        Route::get('/warehouses', 'warehouses')->name('warehouses');
-        Route::get('/streets', 'streets')->name('streets');
-        
-        // Debug маршрут для перевірки даних відправника
-        Route::get('/debug-sender', fn(\App\Services\NovaPoshtaService $np) => $np->getSenderData())->name('debug');
+    Route::middleware('role:owner')->group(function () {
+        Route::get('/finance', [FinanceController::class, 'index'])->name('finance.index');
+        Route::get('/api/finance/checkbox', [FinanceController::class, 'data'])->name('finance.checkbox.data');
+        Route::post('/finance/checkbox', [FinanceController::class, 'save'])->name('finance.checkbox.save');
+        Route::post('/finance/checkbox/test', [FinanceController::class, 'test'])->name('finance.checkbox.test');
+        Route::post('/finance/checkbox/shift/open', [FinanceController::class, 'openShift'])->name('finance.checkbox.openShift');
+        Route::post('/finance/checkbox/shift/close', [FinanceController::class, 'closeShift'])->name('finance.checkbox.closeShift');
+        Route::post('/finance/checkbox/queue/process', [FinanceController::class, 'processQueue'])->name('finance.checkbox.processQueue');
     });
 
     // Debug: перевірка відповідності StreetRef до SettlementRef для конкретного замовлення
-    Route::get('/debug-np-address/{order}', function (Order $order, \App\Services\NovaPoshtaService $np) {
+    Route::middleware('role:owner')->get('/debug-np-address/{order}', function (Order $order, \App\Services\NovaPoshtaService $np) {
         if (!config('app.debug') && !app()->environment('local')) {
             abort(404);
         }
@@ -287,7 +294,7 @@ Route::middleware('auth')->group(function () {
     })->name('novaPoshta.debugAddress');
 
     // --- ТОВАРИ (Products) ---
-    Route::controller(ProductController::class)->prefix('products')->name('products.')->group(function () {
+    Route::middleware('role:owner,operator')->controller(ProductController::class)->prefix('products')->name('products.')->group(function () {
         Route::get('/', 'index')->name('index');
         Route::get('/categories', 'categories')->name('categories');
         Route::get('/colors', 'colors')->name('colors');
@@ -301,18 +308,28 @@ Route::middleware('auth')->group(function () {
     });
 
     // --- ДОВІДНИКИ ---
-    Route::get('/statuses', [StatusController::class, 'index'])->name('statuses.index');
-    Route::post('/statuses', [StatusController::class, 'store'])->name('statuses.store');
-    Route::put('/statuses/{status}', [StatusController::class, 'update'])->name('statuses.update');
-    Route::delete('/statuses/{status}', [StatusController::class, 'destroy'])->name('statuses.destroy');
-    Route::get('/order-sources', [OrderSourceController::class, 'index'])->name('orderSources.index');
-    Route::get('/tags', [TagController::class, 'index'])->name('tags.index');
-    Route::post('/tags', [TagController::class, 'store'])->name('tags.store');
-    Route::put('/tags/{tag}', [TagController::class, 'update'])->name('tags.update');
-    Route::delete('/tags/{tag}', [TagController::class, 'destroy'])->name('tags.destroy');
+    Route::middleware('role:owner,operator')->group(function () {
+        Route::get('/statuses', [StatusController::class, 'index'])->name('statuses.index');
+        Route::get('/order-sources', [OrderSourceController::class, 'index'])->name('orderSources.index');
+        Route::get('/tags', [TagController::class, 'index'])->name('tags.index');
+    });
+
+    Route::middleware('role:owner')->group(function () {
+        Route::post('/statuses', [StatusController::class, 'store'])->name('statuses.store');
+        Route::put('/statuses/{status}', [StatusController::class, 'update'])->name('statuses.update');
+        Route::delete('/statuses/{status}', [StatusController::class, 'destroy'])->name('statuses.destroy');
+        Route::post('/tags', [TagController::class, 'store'])->name('tags.store');
+        Route::put('/tags/{tag}', [TagController::class, 'update'])->name('tags.update');
+        Route::delete('/tags/{tag}', [TagController::class, 'destroy'])->name('tags.destroy');
+    });
 
     // --- НАЛАШТУВАННЯ: ДОВІДНИКИ ---
-    Route::prefix('settings')->name('settings.')->group(function () {
+    Route::middleware('role:owner')->prefix('settings')->name('settings.')->group(function () {
+        Route::get('/team', [TeamController::class, 'index'])->name('team.index');
+        Route::post('/team', [TeamController::class, 'store'])->name('team.store');
+        Route::patch('/team/{user}', [TeamController::class, 'update'])->name('team.update');
+        Route::delete('/team/{user}', [TeamController::class, 'destroy'])->name('team.destroy');
+
         Route::get('/categories', [CategoryController::class, 'index'])->name('categories.index');
         Route::post('/categories', [CategoryController::class, 'store'])->name('categories.store');
         Route::put('/categories/{category}', [CategoryController::class, 'update'])->name('categories.update');
@@ -349,22 +366,24 @@ Route::middleware('auth')->group(function () {
         Route::post('/nova-poshta', [NovaPoshtaSettingsController::class, 'save'])->name('novaPoshta.save');
         Route::post('/nova-poshta/fetch-refs', [NovaPoshtaSettingsController::class, 'fetchRefs'])->name('novaPoshta.fetchRefs');
     });
-    Route::resource('templates', MessageTemplateController::class);
-    Route::get('/api/templates-list', function () {
-        return MessageTemplate::where('is_active', true)
-            ->orderBy('sort_order', 'desc')
-            ->get(['id', 'title', 'content']);
-    })->name('templates.list');
+    Route::middleware('role:owner,operator')->group(function () {
+        Route::resource('templates', MessageTemplateController::class);
+        Route::get('/api/templates-list', function () {
+            return MessageTemplate::where('is_active', true)
+                ->orderBy('sort_order', 'desc')
+                ->get(['id', 'title', 'content']);
+        })->name('templates.list');
+    });
 
     // --- ФІСКАЛІЗАЦІЯ (Checkbox) ---
-    Route::controller(FiscalController::class)->prefix('api')->name('fiscal.')->group(function () {
+    Route::middleware('role:owner,operator')->controller(FiscalController::class)->prefix('api')->name('fiscal.')->group(function () {
         Route::post('/orders/{order}/fiscalize', 'fiscalize')->name('fiscalize');
         Route::post('/orders/{order}/refund', 'refund')->name('refund');
         Route::get('/orders/{order}/fiscal-status', 'status')->name('status');
     });
 
     // --- ПАКУВАННЯ ---
-    Route::prefix('packing')->name('packing.')->controller(PackingController::class)->group(function () {
+    Route::middleware('role:owner,operator,packer')->prefix('packing')->name('packing.')->controller(PackingController::class)->group(function () {
         Route::get('/list', 'index')->name('list');
         Route::get('/{order}', 'show')->name('show');
         Route::post('/{order}/start', 'start')->name('start');
@@ -374,8 +393,10 @@ Route::middleware('auth')->group(function () {
         Route::post('/{order}/release', 'release')->name('release');
     });
 
-    Route::get('/api/packing/list', [PackingController::class, 'list'])->name('packing.api.list');
-    Route::get('/api/packing/history', [PackingController::class, 'history'])->name('packing.api.history');
+    Route::middleware('role:owner,operator,packer')->group(function () {
+        Route::get('/api/packing/list', [PackingController::class, 'list'])->name('packing.api.list');
+        Route::get('/api/packing/history', [PackingController::class, 'history'])->name('packing.api.history');
+    });
 
     // --- ПРОФІЛЬ КОРИСТУВАЧА ---
     Route::controller(ProfileController::class)->prefix('profile')->name('profile.')->group(function () {
@@ -385,7 +406,7 @@ Route::middleware('auth')->group(function () {
     });
 
     // --- ОБСЛУГОВУВАННЯ СИСТЕМИ ---
-    Route::get('/clear-everything', function () {
+    Route::middleware('role:owner')->get('/clear-everything', function () {
         Artisan::call('route:clear');
         Artisan::call('config:clear');
         Artisan::call('cache:clear');
@@ -393,7 +414,7 @@ Route::middleware('auth')->group(function () {
     });
 
 
-    Route::get('/check-logs', function () {
+    Route::middleware('role:owner')->get('/check-logs', function () {
         $path = storage_path('logs/laravel.log');
         if (!file_exists($path)) return "Файл логів ще не створено.";
         

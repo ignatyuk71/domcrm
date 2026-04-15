@@ -151,6 +151,11 @@
 
 <nav class="navbar navbar-expand-md navbar-light navbar-static">
     <div class="container-fluid px-4">
+        @php
+            $currentUser = Auth::user();
+            $roleLabels = \App\Models\User::roleOptions();
+            $roleLabel = $roleLabels[$currentUser->roleKey()] ?? 'Користувач';
+        @endphp
         
         <!-- ЛІВА ЧАСТИНА -->
         <div class="d-flex align-items-center me-auto">
@@ -172,12 +177,14 @@
         <ul class="navbar-nav flex-row align-items-center gap-3">
             
             <!-- Кнопка очистки кешу -->
-            <li class="nav-item d-none d-md-block">
-                <button id="clearCacheBtn" class="clear-cache-btn">
-                    <span class="icon-broom">🧹</span> 
-                    <span class="btn-text">Очистити кеш</span>
-                </button>
-            </li>
+            @if($currentUser->isOwner())
+                <li class="nav-item d-none d-md-block">
+                    <button id="clearCacheBtn" class="clear-cache-btn">
+                        <span class="icon-broom">🧹</span>
+                        <span class="btn-text">Очистити кеш</span>
+                    </button>
+                </li>
+            @endif
 
             <!-- Дропдаун користувача (СХОВАНО НА МОБІЛЬНОМУ: d-none d-md-block) -->
             <li class="nav-item dropdown d-none d-md-block">
@@ -185,7 +192,7 @@
                     
                     <div class="d-none d-md-block text-end lh-1">
                         <div class="fw-bold text-dark" style="font-size: 0.9rem;">{{ Auth::user()->name }}</div>
-                        <small class="text-muted" style="font-size: 0.75rem; letter-spacing: 0.02em;">Адміністратор</small>
+                        <small class="text-muted" style="font-size: 0.75rem; letter-spacing: 0.02em;">{{ $roleLabel }}</small>
                     </div>
 
                     <img src="https://ui-avatars.com/api/?name={{ urlencode(Auth::user()->name) }}&background=6366f1&color=fff&bold=true&size=128" 
@@ -199,11 +206,13 @@
                             <i class="bi bi-person me-2"></i> Мій профіль
                         </a>
                     </li>
-                    <li>
-                        <a class="dropdown-item" href="#">
-                            <i class="bi bi-gear me-2"></i> Налаштування
-                        </a>
-                    </li>
+                    @if($currentUser->isOwner())
+                        <li>
+                            <a class="dropdown-item" href="{{ route('settings.team.index') }}">
+                                <i class="bi bi-gear me-2"></i> Налаштування
+                            </a>
+                        </li>
+                    @endif
                     
                     <li><hr class="dropdown-divider"></li>
                     

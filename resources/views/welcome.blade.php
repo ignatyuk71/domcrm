@@ -233,7 +233,11 @@
                             @auth
                                 <a href="{{ url('/dashboard') }}" class="btn btn-primary-custom btn-lg">Перейти до Dashboard</a>
                             @else
-                                <a href="{{ route('register') }}" class="btn btn-primary-custom btn-lg">Почати роботу (Безкоштовно)</a>
+                                @if (Route::has('register'))
+                                    <a href="{{ route('register') }}" class="btn btn-primary-custom btn-lg">Почати роботу (Безкоштовно)</a>
+                                @else
+                                    <a href="{{ route('login') }}" class="btn btn-primary-custom btn-lg">Увійти в CRM</a>
+                                @endif
                                 <a href="#features" class="btn btn-outline-custom btn-lg">Дізнатись більше</a>
                             @endauth
                         </div>
