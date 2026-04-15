@@ -8,18 +8,35 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (!Schema::hasTable('products')) {
+            return;
+        }
+
         Schema::table('products', function (Blueprint $table) {
-            $table->foreignId('category_id')->nullable()->constrained('categories')->nullOnDelete();
-            $table->foreignId('color_id')->nullable()->after('category_id')->constrained('colors')->nullOnDelete();
+            if (!Schema::hasColumn('products', 'category_id')) {
+                $table->foreignId('category_id')->nullable()->constrained('categories')->nullOnDelete();
+            }
+
+            if (!Schema::hasColumn('products', 'color_id')) {
+                $table->foreignId('color_id')->nullable()->after('category_id')->constrained('colors')->nullOnDelete();
+            }
         });
     }
 
     public function down(): void
     {
+        if (!Schema::hasTable('products')) {
+            return;
+        }
+
         Schema::table('products', function (Blueprint $table) {
-            $table->dropForeign(['category_id']);
-            $table->dropForeign(['color_id']);
-            $table->dropColumn(['category_id', 'color_id']);
+            if (Schema::hasColumn('products', 'color_id')) {
+                $table->dropConstrainedForeignId('color_id');
+            }
+
+            if (Schema::hasColumn('products', 'category_id')) {
+                $table->dropConstrainedForeignId('category_id');
+            }
         });
     }
 };

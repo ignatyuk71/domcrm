@@ -9,7 +9,8 @@ return new class extends Migration
     public function up(): void
     {
         // Безпечне додавання category/color до products
-        if (Schema::hasTable('products')) {
+        // Виконуємо лише якщо довідники вже існують, інакше це додасть міграція 2026_05_01_000004
+        if (Schema::hasTable('products') && Schema::hasTable('categories') && Schema::hasTable('colors')) {
             Schema::table('products', function (Blueprint $table) {
                 if (!Schema::hasColumn('products', 'category_id')) {
                     $table->foreignId('category_id')->nullable()->after('sku')->constrained('categories')->nullOnDelete();
