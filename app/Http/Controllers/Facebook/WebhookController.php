@@ -280,7 +280,9 @@ class WebhookController extends Controller
         );
 
         if ($secret === '') {
-            return true;
+            Log::error('Facebook Webhook: webhook secret missing, signature validation denied.');
+
+            return false;
         }
 
         $payload = $request->getContent();

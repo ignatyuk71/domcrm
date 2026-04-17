@@ -2,8 +2,9 @@
 
 namespace App\Observers;
 
+use App\Jobs\ProcessBufferedChatInboundMessageJob;
+use App\Models\ChatConversation;
 use App\Models\ChatMessage;
-use App\Services\ChatAiOrchestratorService;
 use Illuminate\Support\Facades\Log;
 
 class ChatMessageObserver
@@ -14,13 +15,13 @@ class ChatMessageObserver
             return;
         }
 
-        if (str_starts_with((string) $message->external_message_id, 'comment:')) {
-            return;
-        }
-
         $conversation = $message->conversation()
             ->with(['contact', 'customer'])
             ->first();
+
+        if (($conversation?->thread_kind ?? null) === ChatConversation::THREAD_KIND_COMMENT) {
+            return;
+        }
 
         if (!$conversation?->contact || !$conversation->customer) {
             return;
@@ -34,9 +35,8 @@ class ChatMessageObserver
         try {
             $messageId = (int) $message->id;
 
-            dispatch(function () use ($messageId): void {
-                app(ChatAiOrchestratorService::class)->handleBufferedInboundMessageById($messageId);
-            })->afterResponse();
+            ProcessBufferedChatInboundMessageJob::dispatch($messageId)
+                ->onConnection('background');
         } catch (\Throwable $e) {
             Log::error('Chat AI observer failed', [
                 'message_id' => $message->id,

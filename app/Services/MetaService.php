@@ -61,6 +61,11 @@ class MetaService
                     ],
                 ],
             ];
+
+            // Для медіа не губимо супровідний текст, якщо оператор додав підпис.
+            if (trim($text) !== '') {
+                $payload['message']['text'] = $text;
+            }
         } else {
             if (trim($text) === '') {
                 return null;

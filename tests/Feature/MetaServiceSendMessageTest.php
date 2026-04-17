@@ -64,6 +64,51 @@ class MetaServiceSendMessageTest extends TestCase
         });
     }
 
+    public function test_send_message_keeps_caption_when_attachment_is_present(): void
+    {
+        Http::fake([
+            'https://graph.facebook.com/*/me/messages' => Http::response([
+                'message_id' => 'mid.test-2',
+            ], 200),
+        ]);
+
+        MetaConnection::query()->create([
+            'provider' => 'meta',
+            'name' => 'Dream v doma',
+            'facebook_page_id' => '103823131052820',
+            'access_token' => 'page-token',
+            'verify_token' => 'verify-token',
+            'webhook_secret' => 'webhook-secret',
+            'is_active' => true,
+        ]);
+
+        $customer = Customer::query()->create([
+            'first_name' => 'Test',
+            'fb_user_id' => 'recipient-200',
+        ]);
+
+        $caption = 'Показую доступний колір';
+
+        $result = app(MetaService::class)->sendMessage(
+            $customer,
+            $caption,
+            [[
+                'type' => 'image',
+                'url' => 'https://cdn.example.com/catalog/model-1.jpg',
+            ]],
+            'messenger'
+        );
+
+        $this->assertSame('mid.test-2', $result['message_id'] ?? null);
+
+        Http::assertSent(function ($request) use ($caption) {
+            return str_contains((string) $request->url(), '/me/messages')
+                && data_get($request->data(), 'message.text') === $caption
+                && data_get($request->data(), 'message.attachment.type') === 'image'
+                && data_get($request->data(), 'message.attachment.payload.url') === 'https://cdn.example.com/catalog/model-1.jpg';
+        });
+    }
+
     protected function setUp(): void
     {
         parent::setUp();

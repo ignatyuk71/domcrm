@@ -66,4 +66,21 @@ class ChatAiReplyFormattingTest extends TestCase
         $this->assertStringContainsString('Кожен смисловий блок пиши з нового рядка', $prompt);
         $this->assertStringContainsString('Між окремими блоками став один порожній рядок', $prompt);
     }
+
+    public function test_structured_output_response_format_uses_strict_json_schema(): void
+    {
+        $service = $this->makeService();
+        $reflection = new ReflectionClass($service);
+        $method = $reflection->getMethod('structuredOutputResponseFormat');
+        $method->setAccessible(true);
+
+        $responseFormat = $method->invoke($service);
+
+        $this->assertSame('json_schema', $responseFormat['type'] ?? null);
+        $this->assertSame('chat_ai_reply', $responseFormat['json_schema']['name'] ?? null);
+        $this->assertTrue((bool) ($responseFormat['json_schema']['strict'] ?? false));
+        $this->assertContains('delivery_fields', $responseFormat['json_schema']['schema']['required'] ?? []);
+        $this->assertContains('cart_items', $responseFormat['json_schema']['schema']['required'] ?? []);
+        $this->assertFalse((bool) ($responseFormat['json_schema']['schema']['additionalProperties'] ?? true));
+    }
 }

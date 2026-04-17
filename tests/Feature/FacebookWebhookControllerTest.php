@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\ProcessBufferedChatInboundMessageJob;
 use App\Models\ChatConversation;
 use App\Models\ChatMessage;
 use App\Models\MetaConnection;
@@ -94,6 +95,7 @@ class FacebookWebhookControllerTest extends TestCase
         $connection = MetaConnection::query()->first();
         $this->assertSame('messenger', $connection?->last_webhook_platform);
         $this->assertNotNull($connection?->last_webhook_at);
+        Bus::assertNotDispatched(ProcessBufferedChatInboundMessageJob::class);
     }
 
     public function test_instagram_direct_message_creates_direct_conversation(): void
@@ -163,6 +165,9 @@ class FacebookWebhookControllerTest extends TestCase
         $connection = MetaConnection::query()->first();
         $this->assertSame('instagram', $connection?->last_webhook_platform);
         $this->assertNotNull($connection?->last_webhook_at);
+        Bus::assertDispatched(ProcessBufferedChatInboundMessageJob::class, function ($job) {
+            return $job->connection === 'background';
+        });
     }
 
     public function test_instagram_direct_message_is_saved_even_if_profile_fetch_fails(): void
@@ -231,6 +236,54 @@ class FacebookWebhookControllerTest extends TestCase
         $this->assertNotNull($conversation);
         $this->assertSame('instagram', $conversation->contact->platform);
         $this->assertSame('direct', $conversation->thread_kind);
+    }
+
+    public function test_webhook_denies_requests_when_secret_is_missing(): void
+    {
+        MetaConnection::query()->create([
+            'provider' => 'meta',
+            'name' => 'Dream v doma',
+            'facebook_page_id' => '103823131052820',
+            'access_token' => 'page-token',
+            'verify_token' => 'verify-token',
+            'webhook_secret' => null,
+            'is_active' => true,
+        ]);
+
+        $payload = [
+            'object' => 'page',
+            'entry' => [[
+                'id' => '103823131052820',
+                'messaging' => [[
+                    'sender' => ['id' => 'user-100'],
+                    'recipient' => ['id' => '103823131052820'],
+                    'timestamp' => 1775120000000,
+                    'message' => [
+                        'mid' => 'mid-no-secret',
+                        'text' => 'test',
+                    ],
+                ]],
+            ]],
+        ];
+
+        $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        $response = $this->call(
+            'POST',
+            '/api/fb-webhook',
+            [],
+            [],
+            [],
+            [
+                'CONTENT_TYPE' => 'application/json',
+                'HTTP_X_HUB_SIGNATURE_256' => 'sha256=' . hash_hmac('sha256', $json, 'wrong-secret'),
+            ],
+            $json
+        );
+
+        $response->assertStatus(403);
+        $this->assertSame(0, ChatMessage::query()->count());
+        Bus::assertNotDispatched(ProcessBufferedChatInboundMessageJob::class);
     }
 
     protected function setUp(): void

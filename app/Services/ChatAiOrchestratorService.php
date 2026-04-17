@@ -538,56 +538,16 @@ class ChatAiOrchestratorService
             ? json_encode($policy, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
             : '{}';
         $knowledgeBlock = $this->chatAiKnowledgeService->buildKnowledgePromptBlock();
-
-        $schemaJson = <<<'JSON'
-{
-  "action": "text|send_product_photo|send_product_gallery|send_collage|ask_clarifying|checkout_request|none",
-  "reply": "string",
-  "stage": "interest|selection|checkout_ready|checkout",
-  "last_intent": "string|null",
-  "intent_purchase": true|false,
-  "requires_human": true|false,
-  "model_phrase": "string|null",
-  "selected_size": "string|null",
-  "selected_color": "string|null",
-  "selected_product_id": number|null,
-  "selected_variant_id": number|null,
-  "gallery_items": [
-    {
-      "product_id": number|null,
-      "variant_id": number|null,
-      "color_id": number|null,
-      "color": "string|null"
-    }
-  ],
-  "cart_items": [
-    {
-      "model": "string|null",
-      "color": "string|null",
-      "size": "string|null",
-      "price": number|null,
-      "qty": number,
-      "line_total": number|null,
-      "product_id": number|null,
-      "variant_id": number|null,
-      "color_id": number|null
-    }
-  ],
-  "missing_slots": ["selected_product","selected_size","selected_variant","name","phone","city","warehouse"],
-  "delivery_fields": {
-    "name": "string|null",
-    "phone": "string|null",
-    "city": "string|null",
-    "warehouse": "string|null"
-  }
-}
-JSON;
+        $schemaJson = json_encode(
+            $this->structuredOutputJsonSchema(),
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT
+        ) ?: '{}';
 
         $basePrompt = trim($promptVersion->system_prompt) . "\n\n"
             . "Працюй тільки українською мовою.\n"
             . "Відповідь повертай тільки у JSON без markdown.\n"
             . "PHP-код не визначає намір клієнта, а лише виконує твою action-команду.\n\n"
-            . "Схема JSON:\n"
+            . "JSON Schema:\n"
             . $schemaJson . "\n\n"
             . "Доступні action:\n"
             . "- text: звичайна текстова відповідь.\n"
@@ -668,6 +628,141 @@ JSON;
         }
 
         return $basePrompt;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function structuredOutputResponseFormat(): array
+    {
+        return [
+            'type' => 'json_schema',
+            'json_schema' => [
+                'name' => 'chat_ai_reply',
+                'strict' => true,
+                'schema' => $this->structuredOutputJsonSchema(),
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function structuredOutputJsonSchema(): array
+    {
+        return [
+            'type' => 'object',
+            'properties' => [
+                'action' => [
+                    'type' => 'string',
+                    'enum' => [
+                        'text',
+                        'send_product_photo',
+                        'send_product_gallery',
+                        'send_collage',
+                        'ask_clarifying',
+                        'checkout_request',
+                        'none',
+                    ],
+                ],
+                'reply' => ['type' => 'string'],
+                'stage' => [
+                    'type' => 'string',
+                    'enum' => [
+                        self::STAGE_INTEREST,
+                        self::STAGE_SELECTION,
+                        self::STAGE_CHECKOUT_READY,
+                        self::STAGE_CHECKOUT,
+                    ],
+                ],
+                'last_intent' => [
+                    'type' => ['string', 'null'],
+                ],
+                'intent_purchase' => ['type' => 'boolean'],
+                'requires_human' => ['type' => 'boolean'],
+                'model_phrase' => ['type' => ['string', 'null']],
+                'selected_size' => ['type' => ['string', 'null']],
+                'selected_color' => ['type' => ['string', 'null']],
+                'selected_product_id' => ['type' => ['integer', 'null']],
+                'selected_variant_id' => ['type' => ['integer', 'null']],
+                'gallery_items' => [
+                    'type' => 'array',
+                    'items' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'product_id' => ['type' => ['integer', 'null']],
+                            'variant_id' => ['type' => ['integer', 'null']],
+                            'color_id' => ['type' => ['integer', 'null']],
+                            'color' => ['type' => ['string', 'null']],
+                        ],
+                        'required' => ['product_id', 'variant_id', 'color_id', 'color'],
+                        'additionalProperties' => false,
+                    ],
+                ],
+                'cart_items' => [
+                    'type' => 'array',
+                    'items' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'model' => ['type' => ['string', 'null']],
+                            'color' => ['type' => ['string', 'null']],
+                            'size' => ['type' => ['string', 'null']],
+                            'price' => ['type' => ['number', 'null']],
+                            'qty' => ['type' => 'integer'],
+                            'line_total' => ['type' => ['number', 'null']],
+                            'product_id' => ['type' => ['integer', 'null']],
+                            'variant_id' => ['type' => ['integer', 'null']],
+                            'color_id' => ['type' => ['integer', 'null']],
+                        ],
+                        'required' => [
+                            'model',
+                            'color',
+                            'size',
+                            'price',
+                            'qty',
+                            'line_total',
+                            'product_id',
+                            'variant_id',
+                            'color_id',
+                        ],
+                        'additionalProperties' => false,
+                    ],
+                ],
+                'missing_slots' => [
+                    'type' => 'array',
+                    'items' => ['type' => 'string'],
+                ],
+                'delivery_fields' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'name' => ['type' => ['string', 'null']],
+                        'phone' => ['type' => ['string', 'null']],
+                        'city' => ['type' => ['string', 'null']],
+                        'warehouse' => ['type' => ['string', 'null']],
+                    ],
+                    'required' => ['name', 'phone', 'city', 'warehouse'],
+                    'additionalProperties' => false,
+                ],
+            ],
+            'required' => [
+                'action',
+                'reply',
+                'stage',
+                'last_intent',
+                'intent_purchase',
+                'requires_human',
+                'model_phrase',
+                'selected_size',
+                'selected_color',
+                'selected_product_id',
+                'selected_variant_id',
+                'gallery_items',
+                'cart_items',
+                'missing_slots',
+                'delivery_fields',
+            ],
+            'additionalProperties' => false,
+        ];
     }
 
     private function buildStateContext(
@@ -789,7 +884,7 @@ JSON;
             'model' => $model,
             'messages' => $messages,
             'temperature' => (float) ($agent->temperature ?? 0.3),
-            'response_format' => ['type' => 'json_object'],
+            'response_format' => $this->structuredOutputResponseFormat(),
         ], $this->buildTokensPayload($model, $this->resolveStructuredMaxTokens($agent)));
 
         if ((bool) config('services.openai.store', false)) {
@@ -973,10 +1068,15 @@ JSON;
                 isset($payload['response_format'])
                 && (
                     str_contains($errorBody, 'response_format')
+                    || str_contains($errorBody, 'json_schema')
                     || str_contains($errorBody, 'json_object')
                 )
             ) {
-                unset($payload['response_format']);
+                if (data_get($payload, 'response_format.type') === 'json_schema') {
+                    $payload['response_format'] = ['type' => 'json_object'];
+                } else {
+                    unset($payload['response_format']);
+                }
                 $fallbackApplied = true;
             }
 
@@ -1129,7 +1229,7 @@ JSON;
                 ],
             ],
             'temperature' => 0,
-            'response_format' => ['type' => 'json_object'],
+            'response_format' => $this->structuredOutputResponseFormat(),
         ], $this->buildTokensPayload($model, max(500, $this->resolveStructuredMaxTokens($agent))));
 
         $response = $this->performOpenAiRequestWithFallbacks($baseUrl, $apiKey, $timeout, $payload);
@@ -1193,7 +1293,7 @@ JSON;
             'model' => $model,
             'messages' => $retryMessages,
             'temperature' => 0,
-            'response_format' => ['type' => 'json_object'],
+            'response_format' => $this->structuredOutputResponseFormat(),
         ], $this->buildTokensPayload($model, max(700, $this->resolveStructuredMaxTokens($agent))));
 
         $response = $this->performOpenAiRequestWithFallbacks($baseUrl, $apiKey, $timeout, $payload);
@@ -1259,7 +1359,7 @@ JSON;
             'model' => $model,
             'messages' => $retryMessages,
             'temperature' => 0,
-            'response_format' => ['type' => 'json_object'],
+            'response_format' => $this->structuredOutputResponseFormat(),
         ], $this->buildTokensPayload($model, max(700, $this->resolveStructuredMaxTokens($agent))));
 
         $response = $this->performOpenAiRequestWithFallbacks($baseUrl, $apiKey, $timeout, $payload);
