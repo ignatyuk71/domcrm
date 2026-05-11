@@ -12,11 +12,20 @@
           <div class="stat-bg-icon"><i class="bi bi-box-seam"></i></div>
         </div>
         
-        <div class="stat-card-modern primary">
+        <div class="stat-card-modern primary queue-stat-card">
           <div class="stat-info">
             <div class="stat-label">Залишилось у черзі</div>
             <div class="stat-value">{{ queueOrdersCount }}</div>
           </div>
+          <button
+            type="button"
+            class="btn-sewing-summary"
+            title="Показати, що треба пошити"
+            @click="openSewingModal"
+          >
+            <i class="bi bi-scissors"></i>
+            <span>Пошиття</span>
+          </button>
           <div class="stat-bg-icon"><i class="bi bi-list-task"></i></div>
         </div>
         
@@ -294,6 +303,68 @@
         </div>
       </div>
     </Transition>
+
+    <Transition name="fade">
+      <div v-if="showSewingModal" class="packing-modal-overlay" @click.self="closeSewingModal">
+        <div class="packing-modal sewing-modal">
+          <div class="modal-header">
+            <div>
+              <div class="modal-title">Пошиття</div>
+              <div class="modal-subtitle">
+                Черга + відкладені: {{ sewingOrdersCount }} {{ declension(sewingOrdersCount, ['замовлення', 'замовлення', 'замовлень']) }},
+                {{ sewingTotalPairs }} {{ declension(sewingTotalPairs, ['пара', 'пари', 'пар']) }}
+              </div>
+            </div>
+            <button class="modal-close" @click="closeSewingModal" aria-label="Закрити">
+              <i class="bi bi-x-lg"></i>
+            </button>
+          </div>
+
+          <div class="modal-body">
+            <div class="sewing-list">
+              <article
+                v-for="item in sewingSummary"
+                :key="item.key"
+                class="sewing-row"
+              >
+                <div class="sewing-photo">
+                  <img
+                    v-if="item.image"
+                    :src="item.image"
+                    :alt="item.title"
+                    loading="lazy"
+                  />
+                  <div v-else class="product-photo-empty">
+                    <i class="bi bi-image"></i>
+                  </div>
+                </div>
+
+                <div class="sewing-content">
+                  <div class="sewing-title">{{ item.title }}</div>
+                  <div class="sewing-specs">
+                    <span v-if="item.type !== '—'">Тип: {{ item.type }}</span>
+                    <span>Колір: {{ item.color }}</span>
+                    <span>Розмір: {{ item.size }}</span>
+                  </div>
+                </div>
+
+                <div class="sewing-qty">
+                  {{ item.qty }} {{ declension(item.qty, ['пара', 'пари', 'пар']) }}
+                </div>
+              </article>
+
+              <div v-if="!sewingSummary.length" class="modal-empty">
+                Немає товарів у черзі або відкладених замовленнях
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-actions">
+            <button class="btn-modal-secondary" @click="closeSewingModal">Закрити</button>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -308,6 +379,7 @@ const loading = ref(true);
 const searchQuery = ref('');
 const autoRefreshEnabled = ref(true);
 const showDetailsModal = ref(false);
+const showSewingModal = ref(false);
 const selectedOrder = ref(null);
 const printingSelected = ref(false);
 
@@ -326,6 +398,8 @@ const myActiveOrder = computed(() => orders.value.find(o => isProcessing(o)));
 const queueOrdersCount = computed(() => orders.value.filter(o => !isPacked(o)).length);
 const pendingOrdersCount = computed(() => orders.value.filter(o => isPending(o)).length);
 const urgentCount = computed(() => orders.value.filter(o => o.is_priority && isPending(o)).length);
+const sewingOrders = computed(() => orders.value.filter(o => isPending(o) || isSkipped(o)));
+const sewingOrdersCount = computed(() => sewingOrders.value.length);
 const selectedItems = computed(() => Array.isArray(selectedOrder.value?.items) ? selectedOrder.value.items : []);
 const selectedDelivery = computed(() => selectedOrder.value?.delivery || {});
 const selectedOrderNumber = computed(() => selectedOrder.value?.order_number || selectedOrder.value?.id || '—');
@@ -356,6 +430,54 @@ const selectedRecipientPhone = computed(() => (
   '—'
 ));
 const canPrintSelected = computed(() => Boolean(selectedOrder.value?.id && selectedDelivery.value?.ttn));
+
+const sewingSummary = computed(() => {
+  const groups = new Map();
+
+  sewingOrders.value.forEach((order) => {
+    const items = Array.isArray(order?.items) ? order.items : [];
+
+    items.forEach((item) => {
+      const title = itemTitle(item);
+      const type = itemType(item);
+      const color = itemColor(item);
+      const size = itemSize(item);
+      const key = [
+        item?.product_id || title,
+        item?.product_variant_id || size,
+        type,
+        color,
+        size,
+      ].join('|');
+
+      if (!groups.has(key)) {
+        groups.set(key, {
+          key,
+          title,
+          type,
+          color,
+          size,
+          image: itemImage(item),
+          qty: 0,
+        });
+      }
+
+      groups.get(key).qty += itemQty(item);
+    });
+  });
+
+  return Array.from(groups.values()).sort((a, b) => {
+    const titleCompare = a.title.localeCompare(b.title, 'uk');
+    if (titleCompare !== 0) return titleCompare;
+
+    const colorCompare = a.color.localeCompare(b.color, 'uk');
+    if (colorCompare !== 0) return colorCompare;
+
+    return String(a.size).localeCompare(String(b.size), 'uk', { numeric: true });
+  });
+});
+
+const sewingTotalPairs = computed(() => sewingSummary.value.reduce((sum, item) => sum + item.qty, 0));
 
 // Фільтрація та сортування
 const filteredOrders = computed(() => {
@@ -489,6 +611,14 @@ const openDetails = (order) => {
 const closeDetails = () => {
   showDetailsModal.value = false;
   selectedOrder.value = null;
+};
+
+const openSewingModal = () => {
+  showSewingModal.value = true;
+};
+
+const closeSewingModal = () => {
+  showSewingModal.value = false;
 };
 
 const printSelectedTtn = async () => {
@@ -688,6 +818,33 @@ onUnmounted(() => {
 .stat-card-modern.primary .stat-value, .stat-card-modern.primary .stat-bg-icon { color: #2563eb; }
 .stat-card-modern.danger .stat-value { color: #dc2626; }
 .stat-card-modern.danger .stat-bg-icon { color: #dc2626; opacity: 0.15; }
+.queue-stat-card {
+  gap: 1rem;
+}
+.btn-sewing-summary {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 42px;
+  padding: 0.55rem 0.9rem;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-weight: 800;
+  font-size: 0.92rem;
+  cursor: pointer;
+  transition: 0.2s;
+  white-space: nowrap;
+}
+.btn-sewing-summary:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
+  color: #1e40af;
+}
 .pulse-icon { animation: pulse 2s infinite; }
 @keyframes pulse { 0% { transform: scale(1) rotate(-15deg); } 50% { transform: scale(1.1) rotate(-15deg); } 100% { transform: scale(1) rotate(-15deg); } }
 
@@ -1126,6 +1283,71 @@ onUnmounted(() => {
   text-align: center;
   padding: 1rem 0;
 }
+.sewing-modal {
+  width: min(960px, 100%);
+}
+.sewing-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  max-height: 65vh;
+  overflow: auto;
+  padding-right: 0.2rem;
+}
+.sewing-row {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr) auto;
+  gap: 0.85rem;
+  align-items: center;
+  border: 1px solid #dbeafe;
+  border-radius: 16px;
+  background: #f8fbff;
+  padding: 0.75rem;
+}
+.sewing-photo {
+  width: 84px;
+  height: 84px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #e2e8f0;
+  border: 1px solid #cbd5e1;
+}
+.sewing-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.sewing-title {
+  font-size: 1rem;
+  font-weight: 900;
+  color: #0f172a;
+  line-height: 1.2;
+}
+.sewing-specs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.5rem;
+  margin-top: 0.4rem;
+  font-size: 0.84rem;
+  color: #475569;
+}
+.sewing-specs span {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  padding: 0.22rem 0.52rem;
+}
+.sewing-qty {
+  min-width: 118px;
+  text-align: center;
+  border-radius: 999px;
+  background: #2563eb;
+  color: #fff;
+  padding: 0.62rem 0.8rem;
+  font-size: 1rem;
+  font-weight: 900;
+  box-shadow: 0 8px 16px -10px rgba(37, 99, 235, 0.7);
+}
 
 .modal-actions {
   display: flex;
@@ -1183,6 +1405,17 @@ onUnmounted(() => {
     grid-column: 1 / -1;
     justify-self: start;
   }
+  .sewing-row {
+    grid-template-columns: 76px 1fr;
+  }
+  .sewing-photo {
+    width: 76px;
+    height: 76px;
+  }
+  .sewing-qty {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
 }
 
 /* Mobile */
@@ -1215,6 +1448,25 @@ onUnmounted(() => {
     height: 180px;
   }
   .product-qty {
+    width: 100%;
+    justify-self: stretch;
+  }
+  .queue-stat-card {
+    align-items: flex-start;
+  }
+  .btn-sewing-summary {
+    width: 100%;
+  }
+  .sewing-row {
+    grid-template-columns: 1fr;
+    gap: 0.55rem;
+  }
+  .sewing-photo {
+    width: 100%;
+    max-width: 160px;
+    height: 160px;
+  }
+  .sewing-qty {
     width: 100%;
     justify-self: stretch;
   }

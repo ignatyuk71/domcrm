@@ -88,6 +88,7 @@ class PackingController extends Controller
             ->orderBy('created_at', 'asc')   // Потім старіші
             ->with([
                 'items.product.color',
+                'items.product.category',
                 'items.variant',
                 'delivery',
                 'customer',
@@ -133,6 +134,7 @@ class PackingController extends Controller
             })
             ->with([
                 'items.product.color',
+                'items.product.category',
                 'items.variant',
                 'delivery',
                 'customer',
