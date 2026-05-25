@@ -35,8 +35,9 @@ class FinanceController extends Controller
             ->where('status', FiscalQueue::STATUS_WAITING)
             ->count();
 
-        $todayStart = now()->startOfDay();
-        $todayEnd = now()->endOfDay();
+        $timezone = config('app.timezone', 'Europe/Kyiv');
+        $todayStart = now($timezone)->startOfDay();
+        $todayEnd = now($timezone)->endOfDay();
 
         $todayReceipts = FiscalReceipt::query()
             ->whereBetween('created_at', [$todayStart, $todayEnd])
@@ -54,40 +55,35 @@ class FinanceController extends Controller
             ]);
 
         $hourlyCounts = array_fill(0, 24, 0);
-        $hourlyRows = FiscalReceipt::query()
-            ->whereBetween('created_at', [$todayStart, $todayEnd])
-            ->selectRaw('HOUR(created_at) as hour, COUNT(*) as count')
-            ->groupBy('hour')
-            ->get();
-
-        foreach ($hourlyRows as $row) {
-            $hour = (int) ($row->hour ?? 0);
-            if ($hour >= 0 && $hour <= 23) {
-                $hourlyCounts[$hour] = (int) $row->count;
-            }
-        }
-
         $hourlyAmounts = array_fill(0, 24, 0);
-        $hourlyAmountRows = FiscalReceipt::query()
-            ->whereBetween('created_at', [$todayStart, $todayEnd])
-            ->where('status', FiscalReceipt::STATUS_SUCCESS)
-            ->where('type', FiscalReceipt::TYPE_SELL)
-            ->selectRaw('HOUR(created_at) as hour, SUM(total_amount) as amount')
-            ->groupBy('hour')
-            ->get();
+        $todayTotal = 0;
 
-        foreach ($hourlyAmountRows as $row) {
-            $hour = (int) ($row->hour ?? 0);
+        FiscalReceipt::query()
+            ->whereBetween('created_at', [$todayStart, $todayEnd])
+            ->get(['type', 'status', 'total_amount', 'created_at'])
+            ->each(function (FiscalReceipt $receipt) use (&$hourlyCounts, &$hourlyAmounts, &$todayTotal, $timezone) {
+                $hour = (int) $receipt->created_at->copy()->timezone($timezone)->hour;
+
+                if ($hour < 0 || $hour > 23) {
+                    return;
+                }
+
+                $hourlyCounts[$hour]++;
+
+                if ($receipt->status !== FiscalReceipt::STATUS_SUCCESS || $receipt->type !== FiscalReceipt::TYPE_SELL) {
+                    return;
+                }
+
+                $amount = (int) $receipt->total_amount;
+                $hourlyAmounts[$hour] += $amount;
+                $todayTotal += $amount;
+            });
+
+        foreach ($hourlyAmounts as $hour => $amount) {
             if ($hour >= 0 && $hour <= 23) {
-                $hourlyAmounts[$hour] = (int) $row->amount;
+                $hourlyAmounts[$hour] = (int) $amount;
             }
         }
-
-        $todayTotal = (int) FiscalReceipt::query()
-            ->whereBetween('created_at', [$todayStart, $todayEnd])
-            ->where('status', FiscalReceipt::STATUS_SUCCESS)
-            ->where('type', FiscalReceipt::TYPE_SELL)
-            ->sum('total_amount');
 
         $shiftStatus = null;
         $connection = CheckboxSetting::resolveCheckboxConnection();

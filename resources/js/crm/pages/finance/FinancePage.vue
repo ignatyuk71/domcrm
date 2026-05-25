@@ -398,7 +398,7 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue';
-import { formatCurrency } from '@/crm/utils/orderDisplay';
+import { formatCurrency, formatTime, getDisplayHour } from '@/crm/utils/orderDisplay';
 import ApexChart from 'vue3-apexcharts';
 import {
   fetchFinanceSettings,
@@ -480,7 +480,7 @@ const chartSeries = computed(() => {
   } else if (receipts.value.length) {
     receipts.value.forEach((r) => {
       if (r?.status !== 'success' || r?.type !== 'sell') return;
-      const h = new Date(r.created_at).getHours();
+      const h = getDisplayHour(r.created_at);
       if (h >= 0 && h < 24) {
         hoursData[h] += (r.total_amount || 0) / 100;
       }
@@ -534,7 +534,7 @@ const receiptStatusLabel = (s) => ({
 }[s] || s);
 const receiptTypeLabel = (t) => ({ sell: 'Продаж', return: 'Повернення', service_in: 'Внесення', service_out: 'Вилучення' }[t] || t);
 const formatReceiptAmount = (a) => formatCurrency(Number(a||0)/100);
-const formatReceiptTime = (v) => v ? new Date(v).toLocaleTimeString('uk-UA', {hour:'2-digit', minute:'2-digit'}) : '-';
+const formatReceiptTime = (v) => v ? formatTime(v) : '-';
 
 // --- Actions (TOASTS) ---
 const showNotice = (type, message) => { 

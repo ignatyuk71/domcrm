@@ -134,19 +134,50 @@ export function formatCurrency(value, currency = 'UAH') {
   return Number(value ?? 0).toLocaleString('uk-UA', { style: 'currency', currency });
 }
 
+export const DISPLAY_TIME_ZONE = 'Europe/Kyiv';
+
+function parseDate(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 export function formatDate(value) {
-  if (!value) return '';
-  try {
-    return new Date(value).toLocaleString('uk-UA', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  } catch {
-    return value;
-  }
+  const date = parseDate(value);
+  if (!date) return value || '';
+
+  return date.toLocaleString('uk-UA', {
+    timeZone: DISPLAY_TIME_ZONE,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+export function formatTime(value) {
+  const date = parseDate(value);
+  if (!date) return value || '';
+
+  return date.toLocaleTimeString('uk-UA', {
+    timeZone: DISPLAY_TIME_ZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+export function getDisplayHour(value) {
+  const date = parseDate(value);
+  if (!date) return null;
+
+  const hour = new Intl.DateTimeFormat('uk-UA', {
+    timeZone: DISPLAY_TIME_ZONE,
+    hour: '2-digit',
+    hourCycle: 'h23',
+  }).format(date);
+
+  return Number.parseInt(hour, 10);
 }
 
 export function buildPhotoUrl(path) {

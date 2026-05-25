@@ -1,7 +1,7 @@
 <script setup>
   import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
   import { fiscalize, refund, fetchFiscalStatus } from '@/crm/api/fiscal';
-  import { formatDate } from '@/crm/utils/orderDisplay';
+  import { formatDate, formatTime } from '@/crm/utils/orderDisplay';
   
   // --- PROPS ---
   const props = defineProps({
@@ -134,9 +134,7 @@
   }
   
   function extractTime(dateString) {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    return date.toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' });
+    return dateString ? formatTime(dateString) : '';
   }
   
   async function runFiscalize(type = 'sell') {
