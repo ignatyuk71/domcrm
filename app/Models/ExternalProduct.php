@@ -5,25 +5,24 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class OrderItem extends Model
+/**
+ * Пам'ять мапінгу: відповідність товару зовнішнього сайту до товару/варіанту CRM.
+ */
+class ExternalProduct extends Model
 {
     protected $fillable = [
-        'order_id',
+        'source_id',
+        'external_id',
+        'external_size',
+        'external_sku',
+        'external_name',
         'product_id',
         'product_variant_id',
-        'external_id',
-        'product_title',
-        'sku',
-        'size',
-        'color',
-        'price',
-        'qty',
-        'total',
     ];
 
-    public function order(): BelongsTo
+    public function source(): BelongsTo
     {
-        return $this->belongsTo(Order::class);
+        return $this->belongsTo(OrderSource::class, 'source_id');
     }
 
     public function product(): BelongsTo

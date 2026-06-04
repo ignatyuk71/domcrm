@@ -35,6 +35,12 @@ class Order extends Model
         'currency',
         'comment_internal',
         'search_blob',
+        'external_id',
+        'needs_review',
+    ];
+
+    protected $casts = [
+        'needs_review' => 'boolean',
     ];
 
     /*

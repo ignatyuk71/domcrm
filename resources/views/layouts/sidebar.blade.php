@@ -426,6 +426,15 @@
                 <span class="icon-frame"><i class="bi bi-archive-fill"></i></span>
                 <span class="item-text">Товари</span>
             </a>
+
+            @php $reviewCount = \App\Models\Order::where('needs_review', true)->count(); @endphp
+            <a href="{{ route('integrations.review') }}" class="sidebar-link {{ request()->is('integrations/review*') ? 'active' : '' }}">
+                <span class="icon-frame"><i class="bi bi-link-45deg"></i></span>
+                <span class="item-text">Незмаплені</span>
+                @if($reviewCount > 0)
+                    <span class="badge rounded-pill ms-auto me-2 shadow-sm" style="background:#f59e0b; font-size:0.75rem; padding:5px 10px;">{{ $reviewCount }}</span>
+                @endif
+            </a>
         @endif
 
         @if($canSeeCommunication)
@@ -481,6 +490,10 @@
                 <a href="{{ route('settings.novaPoshta.index') }}" class="sidebar-link-sub {{ request()->is('settings/nova-poshta') ? 'active' : '' }}">
                     <span class="icon-frame"><i class="bi bi-box-seam"></i></span>
                     <span class="item-text-sub">Нова Пошта</span>
+                </a>
+                <a href="{{ route('settings.integrations.index') }}" class="sidebar-link-sub {{ request()->is('settings/integrations*') ? 'active' : '' }}">
+                    <span class="icon-frame"><i class="bi bi-hdd-network"></i></span>
+                    <span class="item-text-sub">Інтеграції</span>
                 </a>
                 <a href="{{ route('settings.categories.index') }}" class="sidebar-link-sub {{ request()->is('settings/categories') ? 'active' : '' }}">
                     <span class="icon-frame"><i class="bi bi-tags"></i></span>

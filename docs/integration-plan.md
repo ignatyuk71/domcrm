@@ -160,6 +160,7 @@ item із сайту {external_id, sku, name, size, qty, price}
 - `POST /api/v1/orders/intake` + middleware `VerifyExternalSource` (API-key + HMAC).
 - `CustomAdapter` (passthrough).
 - **Результат:** один самописний сайт уже шле замовлення в CRM.
+- **✅ ВИКОНАНО** (гілка `feature/site-integration`). Відхилення від плану: замість рефакторингу `store()` зроблено окремий `ExternalOrderImporter` — щоб не було ризику для ручного створення замовлень. Збудовано: 6 міграцій; моделі `ExternalProduct`, `ExternalOrderRaw` (+ інтеграційні поля в `order_sources`, `external_id`/`needs_review` в `orders`, `external_id` в `order_items`, `phone_normalized` в `customers`); `ProductMatcher` (каскад пам'ять→SKU варіанту→SKU товару); `CustomAdapter` + `AdapterFactory`; `ProcessExternalOrder` (job, ShouldQueue); `VerifyExternalSource` (middleware, API-key + HMAC); `OrderIntakeController`; адмін-сторінка **Налаштування → Інтеграції**. Перевірено tinker-ом і HTTP-ядром: SKU-мапінг у точний варіант, `needs_review` для нерозпізнаних, дедуп клієнта по нормалізованому телефону, ідемпотентність (raw + order), авторизація 401/200/202.
 
 **Фаза 2 — Мапінг (серце)**
 - 2-ступеневий каскад (пам'ять → snapshot + review).

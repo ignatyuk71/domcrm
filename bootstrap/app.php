@@ -21,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->alias([
             'role' => \App\Http\Middleware\EnsureUserRole::class,
+            'verify.external.source' => \App\Http\Middleware\VerifyExternalSource::class,
         ]);
 
         // Вимикаємо перевірку CSRF для маршрутів генерації ТТН

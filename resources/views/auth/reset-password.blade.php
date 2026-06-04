@@ -12,7 +12,7 @@
                 <!-- Email Address -->
                 <div class="mb-3">
                     <label for="email" class="form-label">{{ __('Email') }}</label>
-                    <input id="email" class="form-control @error('email') is-invalid @enderror" type="email" name="email" value="{{ old('email', $request->email)" required autofocus autocomplete="username" />
+                    <input id="email" class="form-control @error('email') is-invalid @enderror" type="email" name="email" value="{{ old('email', $request->email) }}" required autofocus autocomplete="username" />
                     @error('email')
                         <div class="invalid-feedback">{{ $message }}</div>
                     @enderror

@@ -18,6 +18,8 @@ use App\Http\Controllers\SavedFileController;
 use App\Http\Controllers\NovaPoshtaSettingsController;
 use App\Http\Controllers\TeamController;
 use App\Http\Controllers\MessageTemplateController;
+use App\Http\Controllers\IntegrationSettingsController;
+use App\Http\Controllers\IntegrationMappingController;
 use App\Models\Order;
 use App\Models\OrderItem;
 use Carbon\Carbon;
@@ -186,6 +188,12 @@ Route::middleware('auth')->group(function () {
         Route::delete('/{product}', 'destroy')->name('destroy');
     });
 
+    // --- ІНТЕГРАЦІЇ: МАПІНГ ТОВАРІВ (власник + оператор) ---
+    Route::middleware('role:owner,operator')->prefix('integrations')->name('integrations.')->group(function () {
+        Route::get('/review', [IntegrationMappingController::class, 'review'])->name('review');
+        Route::post('/review/map', [IntegrationMappingController::class, 'map'])->name('review.map');
+    });
+
     // --- ДОВІДНИКИ ---
     Route::middleware('role:owner,operator')->group(function () {
         Route::get('/statuses', [StatusController::class, 'index'])->name('statuses.index');
@@ -224,6 +232,13 @@ Route::middleware('auth')->group(function () {
         Route::get('/nova-poshta', [NovaPoshtaSettingsController::class, 'index'])->name('novaPoshta.index');
         Route::post('/nova-poshta', [NovaPoshtaSettingsController::class, 'save'])->name('novaPoshta.save');
         Route::post('/nova-poshta/fetch-refs', [NovaPoshtaSettingsController::class, 'fetchRefs'])->name('novaPoshta.fetchRefs');
+
+        // --- ІНТЕГРАЦІЇ ІЗ САЙТАМИ ---
+        Route::get('/integrations', [IntegrationSettingsController::class, 'index'])->name('integrations.index');
+        Route::post('/integrations', [IntegrationSettingsController::class, 'store'])->name('integrations.store');
+        Route::patch('/integrations/{source}', [IntegrationSettingsController::class, 'update'])->name('integrations.update');
+        Route::post('/integrations/{source}/regenerate', [IntegrationSettingsController::class, 'regenerate'])->name('integrations.regenerate');
+        Route::delete('/integrations/{source}', [IntegrationSettingsController::class, 'destroy'])->name('integrations.destroy');
     });
 
     // --- ФІСКАЛІЗАЦІЯ (Checkbox) ---
