@@ -248,8 +248,8 @@ function mapOrder(payload) {
 
   const items = (payload.items || []).map((item) => ({
     ...item,
-    title: item.product_title || item.title || 'Товар',
-    size: item.size || '',
+    title: item.product?.title || item.product_title || item.title || 'Товар',
+    size: item.variant?.size || item.size || '',
     photo: buildPhotoUrl(item.product?.main_photo_url || item.product?.main_photo_path),
     total: Number(item.total ?? Number(item.qty || 0) * Number(item.price || 0)),
   }));

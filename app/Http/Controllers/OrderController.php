@@ -159,6 +159,7 @@ class OrderController extends Controller
             'tags',
             'delivery',
             'items.product',
+            'items.variant',
             'payment',
             'latestFiscalReceipt' => fn ($q) => $q->select(
                 'fiscal_receipts.id',

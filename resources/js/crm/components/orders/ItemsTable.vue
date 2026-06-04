@@ -25,6 +25,7 @@
         <thead class="sticky-top bg-white shadow-sm z-index-10">
           <tr>
             <th class="ps-4 py-3 text-secondary x-small text-uppercase fw-bold bg-white border-bottom">Товар</th>
+            <th class="py-3 text-secondary x-small text-uppercase fw-bold text-center bg-white border-bottom" style="width: 90px;">Розмір</th>
             <th class="py-3 text-secondary x-small text-uppercase fw-bold text-center bg-white border-bottom" style="width: 140px;">Кількість</th>
             <th class="py-3 text-secondary x-small text-uppercase fw-bold text-end bg-white border-bottom" style="width: 150px;">Ціна</th>
             <th class="py-3 text-secondary x-small text-uppercase fw-bold text-end bg-white border-bottom pe-4" style="width: 60px;"></th>
@@ -51,6 +52,10 @@
                   />
                 </div>
               </div>
+            </td>
+
+            <td class="text-center py-3 border-bottom-dashed">
+              <span v-if="item.size" class="badge bg-light text-dark border fw-normal px-2" style="font-size: 0.75rem;">{{ item.size }}</span>
             </td>
 
             <td class="text-center py-3 border-bottom-dashed">
@@ -108,7 +113,7 @@
         </tbody>
         <tbody v-else>
           <tr>
-             <td colspan="4" class="py-5">
+             <td colspan="5" class="py-5">
               <div class="text-center py-5">
                 <div class="mb-3 position-relative d-inline-block">
                   <div class="icon-circle-lg bg-light text-secondary opacity-50 rounded-circle d-flex align-items-center justify-content-center mx-auto">
