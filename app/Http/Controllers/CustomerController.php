@@ -74,7 +74,11 @@ class CustomerController extends Controller
                 'payment:id,order_id,method,prepay_amount,currency',
                 'statusRef:id,code,name,icon,color',
                 'items' => fn ($q) => $q->select('id', 'order_id', 'product_title', 'qty', 'price', 'product_id', 'size', 'color')
-                    ->with('product:id,main_photo_path'),
+                    ->with([
+                        'product:id,main_photo_path,category_id,color_id',
+                        'product.category:id,name',
+                        'product.color:id,name',
+                    ]),
             ])
             ->withSum('items', 'total')
             ->latest('id')

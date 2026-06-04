@@ -399,12 +399,18 @@ const buildItemsList = (items) => {
 
   return items
     .map((item) => {
-      const title = item?.product_title || item?.product?.name || 'Товар';
-      const parts = [title];
+      // Категорія товару (напр. "Капці Luxury"), з фолбеком на назву товару
+      const category = item?.product?.category?.name
+        || item?.product_title
+        || 'Товар';
+      const parts = [category];
 
-      const color = item?.color ? String(item.color).trim() : '';
+      // Колір товару з довідника, з фолбеком на знімок у позиції замовлення
+      const color = item?.product?.color?.name
+        || (item?.color ? String(item.color).trim() : '');
       if (color) parts.push(color);
 
+      // Розмір варіанту цього замовлення (напр. "36/37")
       const size = item?.size ? String(item.size).trim() : '';
       if (size) parts.push(`розмір ${size}`);
 
