@@ -94,12 +94,28 @@
         <div class="panel h-100">
           <div class="panel-head">
             <div>
-              <h5 class="panel-title">Замовлення за статусом</h5>
-              <p class="panel-sub">Поточний розподіл</p>
+              <h5 class="panel-title">Замовлення за джерелом</h5>
+              <p class="panel-sub">Звідки прийшли, {{ days }} днів</p>
+            </div>
+            <div class="panel-badge">{{ formatNumber(sourceTotal) }}</div>
+          </div>
+          <div v-if="sources.length" class="src-list">
+            <div v-for="(s, idx) in sources" :key="idx" class="src-item">
+              <span class="src-icon" :style="{ background: srcColor(s, idx) }">
+                <i :class="srcIcon(s)"></i>
+              </span>
+              <div class="src-body">
+                <div class="src-row">
+                  <span class="src-name" :title="s.label">{{ s.label }}</span>
+                  <span class="src-count">{{ formatNumber(s.count) }} <small>· {{ sharePct(s.count) }}%</small></span>
+                </div>
+                <div class="src-bar">
+                  <span :style="{ width: sharePct(s.count) + '%', background: srcColor(s, idx) }"></span>
+                </div>
+              </div>
             </div>
           </div>
-          <ApexChart v-if="statusSeries.length" type="donut" height="300" :options="statusOptions" :series="statusSeries" />
-          <div v-else class="empty-block">Немає даних</div>
+          <div v-else class="empty-block">Немає замовлень за період</div>
         </div>
       </div>
     </div>
@@ -204,9 +220,46 @@ const series = ref({ labels: [], created: [], shipped: [], revenue: [] });
 const kpis = ref({});
 const recentOrders = ref([]);
 const topProducts = ref([]);
-const statusBreakdown = ref([]);
+const sources = ref([]);
 
 const palette = ['#6366f1', '#22c55e', '#f59e0b', '#06b6d4', '#a855f7', '#ef4444', '#ec4899', '#14b8a6'];
+
+// Мапа відомих каналів → іконка + колір
+const SOURCE_MAP = {
+  facebook: { icon: 'bi-facebook', color: '#1877f2' },
+  fb: { icon: 'bi-facebook', color: '#1877f2' },
+  instagram: { icon: 'bi-instagram', color: '#e1306c' },
+  insta: { icon: 'bi-instagram', color: '#e1306c' },
+  ig: { icon: 'bi-instagram', color: '#e1306c' },
+  google: { icon: 'bi-google', color: '#ea4335' },
+  tiktok: { icon: 'bi-tiktok', color: '#111111' },
+  telegram: { icon: 'bi-telegram', color: '#0088cc' },
+  tg: { icon: 'bi-telegram', color: '#0088cc' },
+  viber: { icon: 'bi-chat-dots-fill', color: '#7360f2' },
+  whatsapp: { icon: 'bi-whatsapp', color: '#25d366' },
+  messenger: { icon: 'bi-messenger', color: '#0084ff' },
+  site: { icon: 'bi-globe2', color: '#6366f1' },
+  website: { icon: 'bi-globe2', color: '#6366f1' },
+  web: { icon: 'bi-globe2', color: '#6366f1' },
+  olx: { icon: 'bi-tag-fill', color: '#15a06e' },
+  rozetka: { icon: 'bi-bag-fill', color: '#00a046' },
+  prom: { icon: 'bi-shop', color: '#5b2d8e' },
+  phone: { icon: 'bi-telephone-fill', color: '#0ea5e9' },
+  call: { icon: 'bi-telephone-fill', color: '#0ea5e9' },
+  manual: { icon: 'bi-pencil-fill', color: '#64748b' },
+};
+
+const resolveSource = (s) => {
+  const code = String(s?.code || '').toLowerCase().trim();
+  if (SOURCE_MAP[code]) return SOURCE_MAP[code];
+  const label = String(s?.label || '').toLowerCase();
+  for (const key of Object.keys(SOURCE_MAP)) {
+    if (label.includes(key)) return SOURCE_MAP[key];
+  }
+  return null;
+};
+const srcIcon = (s) => resolveSource(s)?.icon || s?.icon || 'bi-three-dots';
+const srcColor = (s, idx = 0) => resolveSource(s)?.color || s?.color || palette[idx % palette.length];
 
 // --- Formatters ---
 const formatNumber = (v) => new Intl.NumberFormat('uk-UA').format(Number(v || 0));
@@ -286,17 +339,12 @@ const ordersOptions = computed(() => ({
   tooltip: { theme: 'light' },
 }));
 
-const statusSeries = computed(() => statusBreakdown.value.map((s) => s.count));
-const statusOptions = computed(() => ({
-  chart: { type: 'donut', fontFamily: 'inherit' },
-  labels: statusBreakdown.value.map((s) => s.label),
-  colors: statusBreakdown.value.map((s, i) => s.color || palette[i % palette.length]),
-  stroke: { width: 0 },
-  legend: { position: 'bottom', fontSize: '12px', markers: { radius: 12 } },
-  dataLabels: { enabled: false },
-  plotOptions: { pie: { donut: { size: '68%', labels: { show: true, total: { show: true, label: 'Всього', formatter: (w) => w.globals.seriesTotals.reduce((a, b) => a + b, 0) } } } } },
-  tooltip: { theme: 'light' },
-}));
+const sourceTotal = computed(() => sources.value.reduce((acc, s) => acc + Number(s.count || 0), 0));
+const sharePct = (count) => {
+  const total = sourceTotal.value;
+  if (!total) return 0;
+  return Math.round((Number(count || 0) / total) * 100);
+};
 
 // --- Load ---
 const load = async () => {
@@ -307,7 +355,7 @@ const load = async () => {
     kpis.value = data.kpis || {};
     recentOrders.value = data.recent_orders || [];
     topProducts.value = data.top_products || [];
-    statusBreakdown.value = data.status_breakdown || [];
+    sources.value = data.source_breakdown || [];
   } catch (e) {
     console.error('Не вдалося завантажити дашборд', e);
   } finally {
@@ -383,6 +431,18 @@ onMounted(load);
 .top-name { font-weight: 600; color: #1f2937; font-size: .85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .top-meta { font-size: .72rem; color: #9ca3af; }
 .top-total { font-weight: 700; color: #111827; font-size: .85rem; white-space: nowrap; }
+
+/* Sources */
+.src-list { display: flex; flex-direction: column; gap: .9rem; margin-top: .8rem; }
+.src-item { display: flex; align-items: center; gap: .8rem; }
+.src-icon { width: 40px; height: 40px; flex-shrink: 0; border-radius: 12px; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 1.15rem; box-shadow: 0 4px 12px rgba(0,0,0,.12); }
+.src-body { flex: 1; min-width: 0; }
+.src-row { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; margin-bottom: .35rem; }
+.src-name { font-weight: 600; color: #1f2937; font-size: .88rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.src-count { font-weight: 700; color: #111827; font-size: .88rem; white-space: nowrap; }
+.src-count small { color: #9ca3af; font-weight: 600; font-size: .75rem; }
+.src-bar { height: 7px; background: #f1f2f6; border-radius: 999px; overflow: hidden; }
+.src-bar span { display: block; height: 100%; border-radius: 999px; transition: width .5s cubic-bezier(.22,.61,.36,1); }
 
 /* Table */
 .dash-table { width: 100%; border-collapse: collapse; }

@@ -39,7 +39,7 @@ class DashboardController extends Controller
         $kpis = $this->buildKpis($rangeStart, $rangeEnd, $today, $tz, $series);
         $recent = $this->recentOrders();
         $topProducts = $this->topProducts($rangeStart, $rangeEnd);
-        $statusBreakdown = $this->statusBreakdown();
+        $sourceBreakdown = $this->sourceBreakdown($rangeStart, $rangeEnd);
 
         return response()->json([
             'days' => $days,
@@ -47,7 +47,7 @@ class DashboardController extends Controller
             'kpis' => $kpis,
             'recent_orders' => $recent,
             'top_products' => $topProducts,
-            'status_breakdown' => $statusBreakdown,
+            'source_breakdown' => $sourceBreakdown,
             'generated_at' => Carbon::now($tz)->toDateTimeString(),
         ]);
     }
@@ -217,20 +217,22 @@ class DashboardController extends Controller
     }
 
     /**
-     * Розподіл активних замовлень по статусах (для donut).
+     * Розподіл замовлень за джерелом (звідки прийшли) за період.
      */
-    private function statusBreakdown(): array
+    private function sourceBreakdown(Carbon $rangeStart, Carbon $rangeEnd): array
     {
         return Order::query()
-            ->leftJoin('statuses', 'statuses.id', '=', 'orders.status_id')
-            ->selectRaw('COALESCE(statuses.name, orders.status) as label, statuses.color as color, COUNT(*) as c')
-            ->groupBy('label', 'color')
+            ->leftJoin('order_sources', 'order_sources.id', '=', 'orders.source_id')
+            ->whereBetween('orders.created_at', [$rangeStart, $rangeEnd])
+            ->selectRaw('COALESCE(order_sources.name, orders.source, "Інше") as label, order_sources.code as code, order_sources.color as color, order_sources.icon as icon, COUNT(*) as c')
+            ->groupBy('label', 'code', 'color', 'icon')
             ->orderByDesc('c')
-            ->limit(8)
             ->get()
             ->map(fn ($row) => [
-                'label' => $row->label ?: '—',
+                'label' => $row->label ?: 'Інше',
+                'code' => $row->code,
                 'color' => $row->color,
+                'icon' => $row->icon,
                 'count' => (int) $row->c,
             ])
             ->all();
