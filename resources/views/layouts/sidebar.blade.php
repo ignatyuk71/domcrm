@@ -444,6 +444,11 @@
                 <span class="icon-frame"><i class="bi bi-images"></i></span>
                 <span class="item-text">Галерея</span>
             </a>
+
+            <a href="{{ route('templates.index') }}" class="sidebar-link {{ request()->is('templates*') ? 'active' : '' }}">
+                <span class="icon-frame"><i class="bi bi-journal-text"></i></span>
+                <span class="item-text">Шаблони</span>
+            </a>
         @endif
     </nav>
 

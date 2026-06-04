@@ -16,6 +16,7 @@ use App\Http\Controllers\PackingController;
 use App\Http\Controllers\SavedFileController;
 use App\Http\Controllers\NovaPoshtaSettingsController;
 use App\Http\Controllers\TeamController;
+use App\Http\Controllers\MessageTemplateController;
 use App\Models\Order;
 use App\Models\OrderItem;
 use Carbon\Carbon;
@@ -324,6 +325,12 @@ Route::middleware('auth')->group(function () {
     Route::middleware('role:owner,operator,packer')->group(function () {
         Route::get('/api/packing/list', [PackingController::class, 'list'])->name('packing.api.list');
         Route::get('/api/packing/history', [PackingController::class, 'history'])->name('packing.api.history');
+    });
+
+    // --- ШАБЛОНИ ПОВІДОМЛЕНЬ ---
+    Route::middleware('role:owner,operator')->group(function () {
+        Route::resource('templates', MessageTemplateController::class)->except(['show']);
+        Route::get('/api/templates-list', [MessageTemplateController::class, 'apiList'])->name('templates.list');
     });
 
     // --- ПРОФІЛЬ КОРИСТУВАЧА ---
