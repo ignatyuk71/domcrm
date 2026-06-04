@@ -84,10 +84,40 @@ class DashboardController extends Controller
             ->groupBy('d')
             ->pluck('c', 'd');
 
+        // Сума ВІДПРАВЛЕНИХ посилок по днях (на скільки відправили)
+        $shippedValueByDate = DB::table(DB::raw('(
+                SELECT order_delivery_id, MIN(entered_at) as first_shipped
+                FROM order_delivery_status_histories
+                WHERE status_code = "in_transit"
+                GROUP BY order_delivery_id
+            ) as t'))
+            ->join('order_deliveries as od', 'od.id', '=', 't.order_delivery_id')
+            ->join(DB::raw('(SELECT order_id, SUM(total) as total FROM order_items GROUP BY order_id) as oi'), 'oi.order_id', '=', 'od.order_id')
+            ->whereBetween('t.first_shipped', [$rangeStart, $rangeEnd])
+            ->selectRaw('DATE(t.first_shipped) as d, SUM(oi.total) as total')
+            ->groupBy('d')
+            ->pluck('total', 'd');
+
+        // Сума ОТРИМАНИХ посилок по днях (на скільки забрали / гроші прийшли)
+        $receivedValueByDate = DB::table(DB::raw('(
+                SELECT order_delivery_id, MIN(entered_at) as first_received
+                FROM order_delivery_status_histories
+                WHERE status_code IN ("received", "received_money")
+                GROUP BY order_delivery_id
+            ) as t'))
+            ->join('order_deliveries as od', 'od.id', '=', 't.order_delivery_id')
+            ->join(DB::raw('(SELECT order_id, SUM(total) as total FROM order_items GROUP BY order_id) as oi'), 'oi.order_id', '=', 'od.order_id')
+            ->whereBetween('t.first_received', [$rangeStart, $rangeEnd])
+            ->selectRaw('DATE(t.first_received) as d, SUM(oi.total) as total')
+            ->groupBy('d')
+            ->pluck('total', 'd');
+
         $labels = [];
         $created = [];
         $shipped = [];
         $revenue = [];
+        $shippedValue = [];
+        $receivedValue = [];
 
         $cursor = $start->copy();
         while ($cursor->lte($today)) {
@@ -96,6 +126,8 @@ class DashboardController extends Controller
             $created[] = (int) ($createdByDate[$key] ?? 0);
             $shipped[] = (int) ($shippedByDate[$key] ?? 0);
             $revenue[] = round((float) ($revenueByDate[$key] ?? 0), 2);
+            $shippedValue[] = round((float) ($shippedValueByDate[$key] ?? 0), 2);
+            $receivedValue[] = round((float) ($receivedValueByDate[$key] ?? 0), 2);
             $cursor->addDay();
         }
 
@@ -104,6 +136,8 @@ class DashboardController extends Controller
             'created' => $created,
             'shipped' => $shipped,
             'revenue' => $revenue,
+            'shipped_value' => $shippedValue,
+            'received_value' => $receivedValue,
         ];
     }
 
@@ -126,6 +160,11 @@ class DashboardController extends Controller
             ->whereBetween('orders.created_at', [$todayStart, $todayEnd])
             ->sum('order_items.total');
         $revenuePeriod = array_sum($series['revenue']);
+
+        $shippedValuePeriod = array_sum($series['shipped_value']);
+        $shippedValueToday = (float) ($series['shipped_value'][count($series['shipped_value']) - 1] ?? 0);
+        $receivedValuePeriod = array_sum($series['received_value']);
+        $receivedValueToday = (float) ($series['received_value'][count($series['received_value']) - 1] ?? 0);
 
         $avgCheck = $createdPeriod > 0 ? $revenuePeriod / $createdPeriod : 0;
 
@@ -154,6 +193,14 @@ class DashboardController extends Controller
                 'today' => round($revenueToday, 2),
                 'period' => round($revenuePeriod, 2),
                 'delta' => $this->delta($revenuePeriod, $prevRevenue),
+            ],
+            'shipped_value' => [
+                'today' => round($shippedValueToday, 2),
+                'period' => round($shippedValuePeriod, 2),
+            ],
+            'received_value' => [
+                'today' => round($receivedValueToday, 2),
+                'period' => round($receivedValuePeriod, 2),
             ],
             'avg_check' => round($avgCheck, 2),
         ];

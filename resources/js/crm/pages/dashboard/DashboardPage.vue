@@ -83,9 +83,12 @@
           <div class="panel-head">
             <div>
               <h5 class="panel-title">Динаміка виторгу</h5>
-              <p class="panel-sub">Сума замовлень по днях</p>
+              <p class="panel-sub">Відправлено та отримано по днях</p>
             </div>
-            <div class="panel-badge">{{ formatMoney(kpis.revenue?.period) }}</div>
+            <div class="legend legend-col">
+              <span class="legend-item"><i class="dot dot-indigo"></i> Відправлено · <b>{{ formatMoney(kpis.shipped_value?.period) }}</b></span>
+              <span class="legend-item"><i class="dot dot-green"></i> Отримано · <b>{{ formatMoney(kpis.received_value?.period) }}</b></span>
+            </div>
           </div>
           <ApexChart type="area" height="320" :options="revenueOptions" :series="revenueSeries" />
         </div>
@@ -298,13 +301,17 @@ const hexToSoft = (hex) => {
 };
 
 // --- Charts ---
-const revenueSeries = computed(() => [{ name: 'Виторг', data: series.value.revenue }]);
+const revenueSeries = computed(() => [
+  { name: 'Відправлено', data: series.value.shipped_value || [] },
+  { name: 'Отримано', data: series.value.received_value || [] },
+]);
 const revenueOptions = computed(() => ({
   chart: { type: 'area', fontFamily: 'inherit', toolbar: { show: false }, zoom: { enabled: false } },
   stroke: { curve: 'smooth', width: 3 },
-  fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.03, stops: [0, 90, 100] } },
-  colors: ['#6366f1'],
+  fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.28, opacityTo: 0.02, stops: [0, 90, 100] } },
+  colors: ['#6366f1', '#22c55e'],
   dataLabels: { enabled: false },
+  legend: { show: false },
   xaxis: {
     categories: series.value.labels,
     axisBorder: { show: false },
@@ -314,7 +321,7 @@ const revenueOptions = computed(() => ({
   },
   yaxis: { labels: { formatter: (v) => `${Math.round(v).toLocaleString('uk-UA')} ₴`, style: { colors: '#9ca3af', fontSize: '11px' } } },
   grid: { borderColor: '#f1f5f9', strokeDashArray: 4, padding: { left: 10, right: 10 } },
-  tooltip: { theme: 'light', y: { formatter: (v) => `${Math.round(v).toLocaleString('uk-UA')} ₴` } },
+  tooltip: { theme: 'light', shared: true, intersect: false, y: { formatter: (v) => `${Math.round(v).toLocaleString('uk-UA')} ₴` } },
 }));
 
 const ordersSeries = computed(() => [
@@ -415,6 +422,8 @@ onMounted(load);
 .panel-badge { background: #eef2ff; color: #4f46e5; font-weight: 700; font-size: .85rem; padding: 6px 12px; border-radius: 999px; white-space: nowrap; }
 
 .legend { display: flex; gap: 14px; }
+.legend-col { flex-direction: column; gap: 4px; align-items: flex-end; }
+.legend-col .legend-item b { color: #111827; }
 .legend-item { font-size: .78rem; color: #6b7280; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
 .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
 .dot-indigo { background: #6366f1; }
