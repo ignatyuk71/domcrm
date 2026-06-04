@@ -163,6 +163,48 @@
       </div>
     </div>
 
+    <!-- Returns -->
+    <div class="row g-3 g-xl-4 mb-4">
+      <div class="col-lg-8">
+        <div class="panel h-100">
+          <div class="panel-head">
+            <div>
+              <h5 class="panel-title">Динаміка повернень</h5>
+              <p class="panel-sub">Відмови / повернення по днях</p>
+            </div>
+            <div class="legend">
+              <span class="legend-item"><i class="dot dot-red"></i> Повернення</span>
+            </div>
+          </div>
+          <ApexChart type="bar" height="280" :options="returnsOptions" :series="returnsSeries" />
+        </div>
+      </div>
+      <div class="col-lg-4">
+        <div class="panel h-100">
+          <div class="panel-head">
+            <div>
+              <h5 class="panel-title">Повернення</h5>
+              <p class="panel-sub">за {{ days }} днів</p>
+            </div>
+            <span class="returns-icon"><i class="bi bi-arrow-return-left"></i></span>
+          </div>
+          <div class="returns-big">{{ formatNumber(kpis.returns?.period) }}</div>
+          <div class="returns-label">повернень / відмов</div>
+          <div class="returns-grid">
+            <div class="returns-cell">
+              <div class="rc-val">{{ formatMoney(kpis.returns?.value) }}</div>
+              <div class="rc-label">сума повернень</div>
+            </div>
+            <div class="returns-cell">
+              <div class="rc-val rc-rate">{{ kpis.returns?.rate ?? 0 }}%</div>
+              <div class="rc-label">від відправлених</div>
+            </div>
+          </div>
+          <div class="returns-today">Сьогодні: <b>{{ formatNumber(kpis.returns?.today) }}</b></div>
+        </div>
+      </div>
+    </div>
+
     <!-- Recent orders -->
     <div class="panel">
       <div class="panel-head">
@@ -346,6 +388,25 @@ const ordersOptions = computed(() => ({
   tooltip: { theme: 'light' },
 }));
 
+const returnsSeries = computed(() => [{ name: 'Повернення', data: series.value.returns || [] }]);
+const returnsOptions = computed(() => ({
+  chart: { type: 'bar', fontFamily: 'inherit', toolbar: { show: false } },
+  colors: ['#ef4444'],
+  plotOptions: { bar: { columnWidth: '55%', borderRadius: 4, borderRadiusApplication: 'end' } },
+  dataLabels: { enabled: false },
+  legend: { show: false },
+  xaxis: {
+    categories: series.value.labels,
+    axisBorder: { show: false },
+    axisTicks: { show: false },
+    labels: { style: { colors: '#9ca3af', fontSize: '11px' }, hideOverlappingLabels: true },
+    tickAmount: Math.min(series.value.labels.length, 10),
+  },
+  yaxis: { labels: { formatter: (v) => Math.round(v), style: { colors: '#9ca3af', fontSize: '11px' } } },
+  grid: { borderColor: '#f1f5f9', strokeDashArray: 4 },
+  tooltip: { theme: 'light', y: { formatter: (v) => `${v} шт` } },
+}));
+
 const sourceTotal = computed(() => sources.value.reduce((acc, s) => acc + Number(s.count || 0), 0));
 const sharePct = (count) => {
   const total = sourceTotal.value;
@@ -428,6 +489,19 @@ onMounted(load);
 .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
 .dot-indigo { background: #6366f1; }
 .dot-green { background: #22c55e; }
+.dot-red { background: #ef4444; }
+
+/* Returns card */
+.returns-icon { width: 44px; height: 44px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; color: #fff; background: linear-gradient(135deg,#ef4444,#dc2626); box-shadow: 0 4px 12px rgba(239,68,68,.3); }
+.returns-big { font-size: 2.4rem; font-weight: 800; color: #dc2626; line-height: 1; letter-spacing: -0.02em; margin-top: .4rem; }
+.returns-label { font-size: .8rem; color: #9ca3af; font-weight: 600; margin-top: .3rem; }
+.returns-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; margin-top: 1.1rem; }
+.returns-cell { background: #fef2f2; border-radius: 12px; padding: .7rem .8rem; }
+.rc-val { font-weight: 800; color: #111827; font-size: 1rem; }
+.rc-rate { color: #dc2626; }
+.rc-label { font-size: .68rem; color: #9ca3af; font-weight: 600; margin-top: 2px; }
+.returns-today { font-size: .78rem; color: #9ca3af; margin-top: 1rem; }
+.returns-today b { color: #dc2626; }
 
 .empty-block { display: flex; align-items: center; justify-content: center; height: 260px; color: #9ca3af; font-size: .9rem; }
 

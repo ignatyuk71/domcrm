@@ -112,12 +112,40 @@ class DashboardController extends Controller
             ->groupBy('d')
             ->pluck('total', 'd');
 
+        // Повернення по днях — перша поява статусу refusal (відмова/повернення)
+        $returnsByDate = DB::table(DB::raw('(
+                SELECT order_delivery_id, MIN(entered_at) as first_ref
+                FROM order_delivery_status_histories
+                WHERE status_code = "refusal"
+                GROUP BY order_delivery_id
+            ) as t'))
+            ->whereBetween('first_ref', [$rangeStart, $rangeEnd])
+            ->selectRaw('DATE(first_ref) as d, COUNT(*) as c')
+            ->groupBy('d')
+            ->pluck('c', 'd');
+
+        // Сума повернень по днях
+        $returnsValueByDate = DB::table(DB::raw('(
+                SELECT order_delivery_id, MIN(entered_at) as first_ref
+                FROM order_delivery_status_histories
+                WHERE status_code = "refusal"
+                GROUP BY order_delivery_id
+            ) as t'))
+            ->join('order_deliveries as od', 'od.id', '=', 't.order_delivery_id')
+            ->join(DB::raw('(SELECT order_id, SUM(total) as total FROM order_items GROUP BY order_id) as oi'), 'oi.order_id', '=', 'od.order_id')
+            ->whereBetween('t.first_ref', [$rangeStart, $rangeEnd])
+            ->selectRaw('DATE(t.first_ref) as d, SUM(oi.total) as total')
+            ->groupBy('d')
+            ->pluck('total', 'd');
+
         $labels = [];
         $created = [];
         $shipped = [];
         $revenue = [];
         $shippedValue = [];
         $receivedValue = [];
+        $returns = [];
+        $returnsValue = [];
 
         $cursor = $start->copy();
         while ($cursor->lte($today)) {
@@ -128,6 +156,8 @@ class DashboardController extends Controller
             $revenue[] = round((float) ($revenueByDate[$key] ?? 0), 2);
             $shippedValue[] = round((float) ($shippedValueByDate[$key] ?? 0), 2);
             $receivedValue[] = round((float) ($receivedValueByDate[$key] ?? 0), 2);
+            $returns[] = (int) ($returnsByDate[$key] ?? 0);
+            $returnsValue[] = round((float) ($returnsValueByDate[$key] ?? 0), 2);
             $cursor->addDay();
         }
 
@@ -138,6 +168,8 @@ class DashboardController extends Controller
             'revenue' => $revenue,
             'shipped_value' => $shippedValue,
             'received_value' => $receivedValue,
+            'returns' => $returns,
+            'returns_value' => $returnsValue,
         ];
     }
 
@@ -165,6 +197,11 @@ class DashboardController extends Controller
         $shippedValueToday = (float) ($series['shipped_value'][count($series['shipped_value']) - 1] ?? 0);
         $receivedValuePeriod = array_sum($series['received_value']);
         $receivedValueToday = (float) ($series['received_value'][count($series['received_value']) - 1] ?? 0);
+
+        $returnsPeriod = array_sum($series['returns']);
+        $returnsToday = (int) ($series['returns'][count($series['returns']) - 1] ?? 0);
+        $returnsValuePeriod = array_sum($series['returns_value']);
+        $returnRate = $shippedPeriod > 0 ? ($returnsPeriod / $shippedPeriod) * 100 : 0;
 
         $avgCheck = $createdPeriod > 0 ? $revenuePeriod / $createdPeriod : 0;
 
@@ -201,6 +238,12 @@ class DashboardController extends Controller
             'received_value' => [
                 'today' => round($receivedValueToday, 2),
                 'period' => round($receivedValuePeriod, 2),
+            ],
+            'returns' => [
+                'today' => $returnsToday,
+                'period' => $returnsPeriod,
+                'value' => round($returnsValuePeriod, 2),
+                'rate' => round($returnRate, 1),
             ],
             'avg_check' => round($avgCheck, 2),
         ];
