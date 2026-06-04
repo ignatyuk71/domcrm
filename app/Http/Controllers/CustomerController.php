@@ -73,7 +73,7 @@ class CustomerController extends Controller
                 'delivery.activeWarehouseStatus',
                 'payment:id,order_id,method,prepay_amount,currency',
                 'statusRef:id,code,name,icon,color',
-                'items' => fn ($q) => $q->select('id', 'order_id', 'product_title', 'qty', 'price', 'product_id')
+                'items' => fn ($q) => $q->select('id', 'order_id', 'product_title', 'qty', 'price', 'product_id', 'size', 'color')
                     ->with('product:id,main_photo_path'),
             ])
             ->withSum('items', 'total')

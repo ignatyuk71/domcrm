@@ -386,16 +386,32 @@ const formatPrepayAmount = (amount, currency) => {
   return formatCurrency(numeric, currency || 'UAH');
 };
 
+const pluralPair = (n) => {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return 'пара';
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'пари';
+  return 'пар';
+};
+
 const buildItemsList = (items) => {
   if (!items || items.length === 0) return 'немає даних';
 
   return items
     .map((item) => {
       const title = item?.product_title || item?.product?.name || 'Товар';
-      const qty = item?.qty ?? 1;
-      return `${title} × ${qty}`;
+      const parts = [title];
+
+      const color = item?.color ? String(item.color).trim() : '';
+      if (color) parts.push(color);
+
+      const size = item?.size ? String(item.size).trim() : '';
+      if (size) parts.push(`розмір ${size}`);
+
+      const qty = Number(item?.qty) || 1;
+      return `• ${parts.join(', ')} — ${qty} ${pluralPair(qty)}`;
     })
-    .join(', ');
+    .join('\n');
 };
 
 const buildWarehouseLabel = (delivery) => {
