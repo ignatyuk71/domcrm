@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\TagController;
@@ -36,89 +37,10 @@ Route::view('/privacy-policy', 'privacy')->name('privacy');
 Route::view('/terms-of-use', 'terms-of-use')->name('terms-of-use');
 
 
-Route::get('/dashboard', function () {
-    $today = Carbon::today();
-
-    $newOrdersCount = Order::whereDate('created_at', $today)->count();
-    $inWorkCount = Order::where('packing_status', 'processing')->count();
-    $readyToShipCount = Order::where('packing_status', 'packed')->count();
-
-    $revenueToday = OrderItem::query()
-        ->join('orders', 'orders.id', '=', 'order_items.order_id')
-        ->whereDate('orders.created_at', $today)
-        ->sum('order_items.total');
-
-    $recentOrders = Order::query()
-        ->with(['customer', 'statusRef'])
-        ->withSum('items', 'total')
-        ->orderByDesc('created_at')
-        ->limit(5)
-        ->get();
-
-    $startDate = $today->copy()->subDays(6)->startOfDay();
-    $endDate = $today->copy()->endOfDay();
-    $salesByDate = OrderItem::query()
-        ->join('orders', 'orders.id', '=', 'order_items.order_id')
-        ->whereBetween('orders.created_at', [$startDate, $endDate])
-        ->selectRaw('DATE(orders.created_at) as date, SUM(order_items.total) as total')
-        ->groupBy('date')
-        ->pluck('total', 'date');
-
-    $chartLabels = [];
-    $chartValues = [];
-    for ($i = 6; $i >= 0; $i--) {
-        $date = $today->copy()->subDays($i);
-        $key = $date->toDateString();
-        $chartLabels[] = $date->format('d.m');
-        $chartValues[] = (float) ($salesByDate[$key] ?? 0);
-    }
-
-    $stats = [
-        [
-            'label' => 'Нові замовлення',
-            'value' => (string) $newOrdersCount,
-            'sub' => 'за сьогодні',
-            'bg' => 'linear-gradient(135deg, #eff6ff, #ffffff)',
-            'icon_bg' => '#dbeafe',
-            'icon_color' => '#2563eb',
-            'icon' => 'bi-cart-plus-fill',
-        ],
-        [
-            'label' => 'В роботі',
-            'value' => (string) $inWorkCount,
-            'sub' => 'у пакуванні',
-            'bg' => 'linear-gradient(135deg, #fffbeb, #ffffff)',
-            'icon_bg' => '#fef3c7',
-            'icon_color' => '#d97706',
-            'icon' => 'bi-fire',
-        ],
-        [
-            'label' => 'Готові до відправки',
-            'value' => (string) $readyToShipCount,
-            'sub' => 'пакування завершено',
-            'bg' => 'linear-gradient(135deg, #f0fdf4, #ffffff)',
-            'icon_bg' => '#dcfce7',
-            'icon_color' => '#16a34a',
-            'icon' => 'bi-box-seam-fill',
-        ],
-        [
-            'label' => 'Дохід за день',
-            'value' => number_format((float) $revenueToday, 0, '.', ' ') . ' ₴',
-            'sub' => 'сьогодні',
-            'bg' => 'linear-gradient(135deg, #f5f3ff, #ffffff)',
-            'icon_bg' => '#ede9fe',
-            'icon_color' => '#7c3aed',
-            'icon' => 'bi-wallet-fill',
-        ],
-    ];
-
-    return view('dashboard', [
-        'stats' => $stats,
-        'recentOrders' => $recentOrders,
-        'chartLabels' => $chartLabels,
-        'chartValues' => $chartValues,
-    ]);
-})->middleware(['auth', 'verified', 'role:owner,operator,packer'])->name('dashboard');
+Route::middleware(['auth', 'verified', 'role:owner,operator,packer'])->group(function () {
+    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/api/dashboard/data', [DashboardController::class, 'data'])->name('dashboard.data');
+});
 
 /*
 |--------------------------------------------------------------------------

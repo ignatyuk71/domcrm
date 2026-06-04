@@ -1,5 +1,6 @@
 import { createApp } from 'vue';
 // import { createPinia } from 'pinia';
+import DashboardPage from './pages/dashboard/DashboardPage.vue';
 import OrderCreatePage from './pages/orders/OrderCreatePage.vue';
 import OrderEditPage from './pages/orders/OrderEditPage.vue';
 import OrderListPage from './pages/orders/OrderListPage.vue';
@@ -17,6 +18,15 @@ import SettingsNovaPoshtaPage from './pages/settings/SettingsNovaPoshtaPage.vue'
 import './styles/crm.css';
 import PackingListPage from '../Pages/Packing/PackingList.vue';
 import PackingWorkspacePage from '../Pages/Packing/PackingWorkspace.vue';
+
+export function mountDashboard(selector = '#crm-dashboard') {
+    const el = document.querySelector(selector);
+    if (!el) return;
+
+    const app = createApp(DashboardPage);
+    app.mount(el);
+    return app;
+}
 
 export function mountOrderCreate(selector = '#crm-order-create') {
     const el = document.querySelector(selector);
@@ -173,6 +183,7 @@ export function mountSettingsNovaPoshta(selector = '#crm-settings-nova-poshta') 
 
 // Auto-mount if element exists
 function autoMount() {
+    mountDashboard();
     mountOrderCreate();
     mountOrderEdit();
     mountOrderList();
