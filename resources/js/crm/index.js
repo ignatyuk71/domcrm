@@ -6,8 +6,6 @@ import OrderListPage from './pages/orders/OrderListPage.vue';
 import OrderShowPage from './pages/orders/OrderShowPage.vue';
 import ProductListPage from './pages/products/ProductListPage.vue';
 import ProductFormPage from './pages/products/ProductFormPage.vue';
-import ChatPage from './pages/chat/ChatPage.vue';
-import ChatFunnelPage from './pages/chat/ChatFunnelPage.vue';
 import GalleryPage from './pages/gallery/GalleryPage.vue';
 import CustomerListPage from './pages/customers/CustomerListPage.vue';
 import FinancePage from './pages/finance/FinancePage.vue';
@@ -16,9 +14,6 @@ import SettingsColorsPage from './pages/settings/SettingsColorsPage.vue';
 import SettingsTagsPage from './pages/settings/SettingsTagsPage.vue';
 import SettingsStatusesPage from './pages/settings/SettingsStatusesPage.vue';
 import SettingsNovaPoshtaPage from './pages/settings/SettingsNovaPoshtaPage.vue';
-import SettingsMetaPage from './pages/settings/SettingsMetaPage.vue';
-import SettingsAiPage from './pages/settings/SettingsAiPage.vue';
-import SettingsAiBasePage from './pages/settings/SettingsAiBasePage.vue';
 import './styles/crm.css';
 import PackingListPage from '../Pages/Packing/PackingList.vue';
 import PackingWorkspacePage from '../Pages/Packing/PackingWorkspace.vue';
@@ -113,32 +108,6 @@ export function mountPackingWorkspace(selector = '#packing-workspace') {
     return app;
 }
 
-export function mountChat(selector = '#crm-chat') {
-    const el = document.querySelector(selector);
-    if (!el) {
-        if (window.__CHAT_DEBUG) {
-            console.warn('[chat] mount target not found', selector);
-        }
-        return;
-    }
-
-    const app = createApp(ChatPage);
-    app.mount(el);
-    if (window.__CHAT_DEBUG) {
-        console.info('[chat] mounted', selector);
-    }
-    return app;
-}
-
-export function mountChatFunnel(selector = '#crm-chat-funnel') {
-    const el = document.querySelector(selector);
-    if (!el) return;
-
-    const app = createApp(ChatFunnelPage);
-    app.mount(el);
-    return app;
-}
-
 export function mountGallery(selector = '#crm-gallery') {
     const el = document.querySelector(selector);
     if (!el) return;
@@ -202,36 +171,6 @@ export function mountSettingsNovaPoshta(selector = '#crm-settings-nova-poshta') 
     return app;
 }
 
-export function mountSettingsMeta(selector = '#crm-settings-meta') {
-    const el = document.querySelector(selector);
-    if (!el) return;
-
-    const app = createApp(SettingsMetaPage, {
-        initialSuccess: el.dataset.success || '',
-        initialError: el.dataset.error || '',
-    });
-    app.mount(el);
-    return app;
-}
-
-export function mountSettingsAi(selector = '#crm-settings-ai') {
-    const el = document.querySelector(selector);
-    if (!el) return;
-
-    const app = createApp(SettingsAiPage);
-    app.mount(el);
-    return app;
-}
-
-export function mountSettingsAiBase(selector = '#crm-settings-ai-base') {
-    const el = document.querySelector(selector);
-    if (!el) return;
-
-    const app = createApp(SettingsAiBasePage);
-    app.mount(el);
-    return app;
-}
-
 // Auto-mount if element exists
 function autoMount() {
     mountOrderCreate();
@@ -243,8 +182,6 @@ function autoMount() {
     mountProductForm();
     mountPackingList();
     mountPackingWorkspace();
-    mountChat();
-    mountChatFunnel();
     mountGallery();
     mountFinance();
     mountSettingsCategories();
@@ -252,9 +189,6 @@ function autoMount() {
     mountSettingsTags();
     mountSettingsStatuses();
     mountSettingsNovaPoshta();
-    mountSettingsMeta();
-    mountSettingsAi();
-    mountSettingsAiBase();
 }
 
 if (document.readyState !== 'loading') {

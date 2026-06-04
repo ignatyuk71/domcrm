@@ -59,45 +59,4 @@ return [
         'sender_warehouse' => env('NP_SENDER_WAREHOUSE'),
     ],
 
-    /*
-    |--------------------------------------------------------------------------
-    | Meta / Facebook / Instagram
-    |--------------------------------------------------------------------------
-    */
-    'meta' => [
-        'app_id' => env('META_APP_ID'),
-        'app_secret' => env('META_APP_SECRET'),
-        'graph_version' => env('META_GRAPH_VERSION', 'v24.0'),
-        'scopes' => array_filter(array_map('trim', explode(',', (string) env(
-            'META_SCOPES',
-            'pages_show_list,pages_messaging,pages_manage_metadata,pages_read_engagement,instagram_basic,instagram_manage_messages,instagram_manage_comments,business_management'
-        )))),
-    ],
-
-    /*
-    |--------------------------------------------------------------------------
-    | OpenAI
-    |--------------------------------------------------------------------------
-    */
-    'openai' => [
-        'api_key' => env('OPENAI_API_KEY'),
-        'base_url' => env('OPENAI_BASE_URL', 'https://api.openai.com/v1'),
-        'model' => env('OPENAI_MODEL', 'gpt-5-mini'),
-        'timeout' => (int) env('OPENAI_TIMEOUT', 30),
-        'store' => env('OPENAI_STORE', false),
-    ],
-
-    /*
-    |--------------------------------------------------------------------------
-    | Chat AI Agent
-    |--------------------------------------------------------------------------
-    */
-    'chat_ai' => [
-        'enabled' => env('CHAT_AI_ENABLED', true),
-        'default_agent_code' => env('CHAT_AI_DEFAULT_AGENT_CODE', 'sales_assistant_v1'),
-        'reply_delay_seconds' => (int) env('CHAT_AI_REPLY_DELAY_SECONDS', 12),
-        'allow_assigned_conversations' => env('CHAT_AI_ALLOW_ASSIGNED_CONVERSATIONS', true),
-        'max_messages' => (int) env('CHAT_AI_MAX_MESSAGES', 12),
-    ],
-
 ];

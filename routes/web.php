@@ -13,16 +13,9 @@ use App\Http\Controllers\ColorController;
 use App\Http\Controllers\FiscalController;
 use App\Http\Controllers\FinanceController;
 use App\Http\Controllers\PackingController;
-use App\Http\Controllers\ChatController;
-use App\Http\Controllers\MessageTemplateController;
-use App\Http\Controllers\ChatApiController;
-use App\Http\Controllers\ChatAiSettingsController;
-use App\Http\Controllers\ChatAiBaseController;
-use App\Http\Controllers\MetaConnectionController;
 use App\Http\Controllers\SavedFileController;
 use App\Http\Controllers\NovaPoshtaSettingsController;
 use App\Http\Controllers\TeamController;
-use App\Models\MessageTemplate;
 use App\Models\Order;
 use App\Models\OrderItem;
 use Carbon\Carbon;
@@ -172,43 +165,6 @@ Route::middleware('auth')->group(function () {
     });
 
     Route::middleware('role:owner,operator')->group(function () {
-        // --- ЧАТ ---
-        Route::get('/messenger', [ChatController::class, 'index'])->name('chat.index');
-        Route::get('/messenger/funnel', [ChatController::class, 'funnel'])->name('chat.funnel');
-        Route::get('/api/chat/list', [ChatApiController::class, 'list'])->name('chat.list');
-        Route::get('/api/chat/funnel', [ChatApiController::class, 'funnel'])->name('chat.funnel.data');
-        Route::get('/api/chat/conversations/by-customer/{customerId}', [ChatApiController::class, 'showByCustomer'])
-            ->name('chat.conversation.byCustomer');
-        Route::get('/api/chat/conversations/{conversation}/messages', [ChatApiController::class, 'messagesByConversation'])
-            ->name('chat.conversation.messages');
-        Route::get('/api/chat/conversations/{conversation}/messages/updates', [ChatApiController::class, 'updatesByConversation'])
-            ->name('chat.conversation.messages.updates');
-        Route::get('/api/chat/{id}/messages', [ChatApiController::class, 'messages'])->name('chat.messages.api');
-        Route::get('/api/chat/threads/{id}/messages/updates', [ChatApiController::class, 'updates'])
-            ->name('chat.messages.updates');
-        Route::post('/api/chat/send', [ChatApiController::class, 'send'])->name('chat.send');
-        Route::post('/api/chat/conversations/{conversation}/mark-read', [ChatApiController::class, 'markConversationRead'])
-            ->name('chat.conversation.markRead');
-        Route::post('/api/chat/mark-read', [ChatApiController::class, 'markRead'])->name('chat.markRead');
-        Route::post('/api/chat/conversations/{conversation}/sync', [ChatApiController::class, 'syncConversation'])
-            ->name('chat.conversation.sync');
-        Route::post('/api/chat/{id}/sync', [ChatApiController::class, 'sync'])->name('chat.sync');
-        Route::post('/api/chat/conversations/{conversation}/refresh-profile', [ChatApiController::class, 'refreshConversationProfile'])
-            ->name('chat.conversation.refreshProfile');
-        Route::post('/api/chat/customers/{id}/refresh-profile', [ChatApiController::class, 'refreshProfile'])
-            ->name('chat.refreshProfile');
-        Route::get('/api/chat/tags', [ChatApiController::class, 'listConversationTags'])->name('chat.tags');
-        Route::patch('/api/chat/conversations/{conversation}/stage', [ChatApiController::class, 'updateStage'])
-            ->name('chat.stage');
-        Route::patch('/api/chat/conversations/{conversation}/ai', [ChatApiController::class, 'updateAi'])
-            ->name('chat.ai');
-        Route::delete('/api/chat/conversations/{conversation}', [ChatApiController::class, 'archiveConversation'])
-            ->name('chat.archive');
-        Route::delete('/api/chat/conversations/{conversation}/history', [ChatApiController::class, 'clearConversationHistory'])
-            ->name('chat.clearHistory');
-        Route::patch('/api/chat/conversations/{conversation}/tags', [ChatApiController::class, 'updateTags'])
-            ->name('chat.updateTags');
-        Route::get('/api/chat/unread-count', [ChatApiController::class, 'getUnreadCount'])->name('chat.unreadCount');
         Route::get('/api/saved-files', [SavedFileController::class, 'index'])->name('savedFiles.index');
         Route::post('/api/saved-files', [SavedFileController::class, 'store'])->name('savedFiles.store');
         Route::delete('/api/saved-files/{id}', [SavedFileController::class, 'destroy'])->name('savedFiles.destroy');
@@ -342,37 +298,9 @@ Route::middleware('auth')->group(function () {
 
         Route::get('/tags', [TagController::class, 'index'])->name('tags.index');
         Route::get('/statuses', [StatusController::class, 'index'])->name('statuses.index');
-        Route::get('/meta', [MetaConnectionController::class, 'index'])->name('meta.index');
-        Route::post('/meta', [MetaConnectionController::class, 'save'])->name('meta.save');
-        Route::get('/meta/redirect', [MetaConnectionController::class, 'redirectToFacebook'])->name('meta.redirect');
-        Route::get('/meta/callback', [MetaConnectionController::class, 'handleFacebookCallback'])->name('meta.callback');
-        Route::post('/meta/disconnect', [MetaConnectionController::class, 'disconnect'])->name('meta.disconnect');
-        Route::get('/ai', [ChatAiSettingsController::class, 'index'])->name('ai.index');
-        Route::post('/ai', [ChatAiSettingsController::class, 'save'])->name('ai.save');
-        Route::patch('/ai/agents/{agent}', [ChatAiSettingsController::class, 'updateAgent'])->name('ai.agents.update');
-        Route::get('/ai/base', [ChatAiBaseController::class, 'index'])->name('ai.base.index');
-        Route::get('/ai/base/products/{product}/variants', [ChatAiBaseController::class, 'variants'])->name('ai.base.variants');
-        Route::post('/ai/base/prompts/{stage}', [ChatAiBaseController::class, 'savePrompt'])->name('ai.base.prompts.save');
-        Route::post('/ai/base/knowledge-items', [ChatAiBaseController::class, 'storeKnowledgeItem'])->name('ai.base.knowledge.store');
-        Route::patch('/ai/base/knowledge-items/{item}', [ChatAiBaseController::class, 'updateKnowledgeItem'])->name('ai.base.knowledge.update');
-        Route::delete('/ai/base/knowledge-items/{item}', [ChatAiBaseController::class, 'deleteKnowledgeItem'])->name('ai.base.knowledge.delete');
-        Route::post('/ai/base/model-maps', [ChatAiBaseController::class, 'storeModelMap'])->name('ai.base.modelMaps.store');
-        Route::patch('/ai/base/model-maps/{modelMap}', [ChatAiBaseController::class, 'updateModelMap'])->name('ai.base.modelMaps.update');
-        Route::delete('/ai/base/model-maps/{modelMap}', [ChatAiBaseController::class, 'deleteModelMap'])->name('ai.base.modelMaps.delete');
-        Route::post('/ai/base/product-media', [ChatAiBaseController::class, 'storeProductMedia'])->name('ai.base.productMedia.store');
-        Route::patch('/ai/base/product-media/{productMedia}', [ChatAiBaseController::class, 'updateProductMedia'])->name('ai.base.productMedia.update');
-        Route::delete('/ai/base/product-media/{productMedia}', [ChatAiBaseController::class, 'deleteProductMedia'])->name('ai.base.productMedia.delete');
         Route::get('/nova-poshta', [NovaPoshtaSettingsController::class, 'index'])->name('novaPoshta.index');
         Route::post('/nova-poshta', [NovaPoshtaSettingsController::class, 'save'])->name('novaPoshta.save');
         Route::post('/nova-poshta/fetch-refs', [NovaPoshtaSettingsController::class, 'fetchRefs'])->name('novaPoshta.fetchRefs');
-    });
-    Route::middleware('role:owner,operator')->group(function () {
-        Route::resource('templates', MessageTemplateController::class);
-        Route::get('/api/templates-list', function () {
-            return MessageTemplate::where('is_active', true)
-                ->orderBy('sort_order', 'desc')
-                ->get(['id', 'title', 'content']);
-        })->name('templates.list');
     });
 
     // --- ФІСКАЛІЗАЦІЯ (Checkbox) ---

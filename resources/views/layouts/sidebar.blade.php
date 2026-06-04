@@ -435,20 +435,6 @@
                 <span class="icon-frame"><i class="bi bi-people-fill"></i></span>
                 <span class="item-text">Клієнти</span>
             </a>
-
-            <a href="{{ url('/messenger') }}" class="sidebar-link {{ request()->is('messenger*') ? 'active' : '' }}">
-                <span class="icon-frame position-relative">
-                    <i class="bi bi-chat-dots-fill"></i>
-                    <span id="chat-unread-dot" class="chat-badge-collapsed d-none"></span>
-                </span>
-                <span class="item-text">Месенджер</span>
-                <span id="chat-unread-badge" class="badge bg-danger rounded-pill ms-auto me-2 chat-badge-expanded d-none" style="font-size: 0.7rem; box-shadow: 0 0 10px rgba(220,38,38,0.5);"></span>
-            </a>
-
-            <a href="{{ url('/messenger/funnel') }}" class="sidebar-link {{ request()->is('messenger/funnel') ? 'active' : '' }}">
-                <span class="icon-frame"><i class="bi bi-kanban-fill"></i></span>
-                <span class="item-text">Воронка продажів</span>
-            </a>
         @endif
 
         @if($canSeeContent)
@@ -457,11 +443,6 @@
             <a href="{{ route('gallery.index') }}" class="sidebar-link {{ request()->is('gallery*') ? 'active' : '' }}">
                 <span class="icon-frame"><i class="bi bi-images"></i></span>
                 <span class="item-text">Галерея</span>
-            </a>
-
-            <a href="{{ route('templates.index') }}" class="sidebar-link {{ request()->is('templates*') ? 'active' : '' }}">
-                <span class="icon-frame"><i class="bi bi-journal-text"></i></span>
-                <span class="item-text">Шаблони</span>
             </a>
         @endif
     </nav>
@@ -492,18 +473,6 @@
 
                 <div class="submenu-divider"></div>
 
-                <a href="{{ route('settings.meta.index') }}" class="sidebar-link-sub {{ request()->is('settings/meta*') ? 'active' : '' }}">
-                    <span class="icon-frame"><i class="bi bi-share-fill"></i></span>
-                    <span class="item-text-sub">Соц. мережі</span>
-                </a>
-                <a href="{{ route('settings.ai.index') }}" class="sidebar-link-sub {{ request()->is('settings/ai') ? 'active' : '' }}">
-                    <span class="icon-frame"><i class="bi bi-robot"></i></span>
-                    <span class="item-text-sub">AI Асистент</span>
-                </a>
-                <a href="{{ route('settings.ai.base.index') }}" class="sidebar-link-sub {{ request()->is('settings/ai/base*') ? 'active' : '' }}">
-                    <span class="icon-frame"><i class="bi bi-database"></i></span>
-                    <span class="item-text-sub">AI База</span>
-                </a>
                 <a href="{{ route('settings.novaPoshta.index') }}" class="sidebar-link-sub {{ request()->is('settings/nova-poshta') ? 'active' : '' }}">
                     <span class="icon-frame"><i class="bi bi-box-seam"></i></span>
                     <span class="item-text-sub">Нова Пошта</span>
@@ -530,34 +499,6 @@
 </aside>
 
 <script>
-/* JS Логіка */
-(() => {
-  const badge = document.getElementById('chat-unread-badge');
-  const dot = document.getElementById('chat-unread-dot');
-  if (!badge) return;
-
-  const updateBadge = async () => {
-    if (document.hidden) return; 
-    try {
-      const response = await fetch('/api/chat/unread-count', { headers: { 'Accept': 'application/json' } });
-      if (!response.ok) return;
-      const data = await response.json();
-      const count = Number(data?.count || 0);
-
-      if (count > 0) {
-        badge.textContent = count > 99 ? '99+' : String(count);
-        badge.classList.remove('d-none');
-        if (dot) dot.classList.remove('d-none');
-      } else {
-        badge.classList.add('d-none');
-        if (dot) dot.classList.add('d-none');
-      }
-    } catch (e) { console.error(e); }
-  };
-  updateBadge();
-  setInterval(updateBadge, 30000);
-})();
-
 // Mobile Toggle Logic
 document.addEventListener('DOMContentLoaded', () => {
     const settingsToggle = document.getElementById('settings-toggle');
@@ -573,18 +514,3 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 
-<style>
-    /* Стилі для бейджа */
-    .chat-badge-collapsed {
-        position: absolute;
-        top: -1px; right: -1px; width: 12px; height: 12px;
-        background: #ef4444; border: 2px solid var(--sidebar-bg); border-radius: 50%;
-        box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
-    }
-
-    @media (min-width: 992px) {
-        .chat-badge-expanded { display: none; }
-        .pro-sidebar:hover .chat-badge-expanded { display: inline-flex; }
-        .pro-sidebar:hover .chat-badge-collapsed { display: none; }
-    }
-</style>

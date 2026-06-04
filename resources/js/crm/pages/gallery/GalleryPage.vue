@@ -36,7 +36,7 @@
 
 <script setup>
 import { onMounted, ref } from 'vue';
-import { deleteSavedFile, getSavedFiles, uploadSavedFile } from '@/crm/services/chatApi';
+import { deleteSavedFile, getSavedFiles, uploadSavedFile } from '@/crm/services/savedFilesApi';
 
 const files = ref([]);
 const isLoading = ref(false);
