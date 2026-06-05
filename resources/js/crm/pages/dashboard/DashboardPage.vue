@@ -25,52 +25,68 @@
 
     <!-- KPI cards -->
     <div class="row g-3 g-xl-4 mb-4">
+      <!-- Створено -->
       <div class="col-12 col-sm-6 col-xl-3">
-        <div class="kpi-card kpi-indigo">
-          <div class="kpi-top">
-            <span class="kpi-icon"><i class="bi bi-cart-plus-fill"></i></span>
+        <div class="kpi-card">
+          <div class="kpi-head">
+            <span class="kpi-icon kpi-icon-indigo"><i class="bi bi-cart-plus-fill"></i></span>
+            <span class="kpi-label">Замовлень створено</span>
             <span v-if="kpis.created?.delta != null" class="kpi-delta" :class="deltaClass(kpis.created.delta)">
-              <i :class="deltaIcon(kpis.created.delta)"></i> {{ Math.abs(kpis.created.delta) }}%
+              <i :class="deltaIcon(kpis.created.delta)"></i>{{ Math.abs(kpis.created.delta) }}%
             </span>
           </div>
           <div class="kpi-value">{{ formatNumber(kpis.created?.period) }}</div>
-          <div class="kpi-label">Замовлень створено</div>
+          <div class="kpi-spark">
+            <ApexChart type="area" height="46" :options="sparkOptions('#6366f1')" :series="[{ name: 'Створено', data: series.created }]" />
+          </div>
           <div class="kpi-sub">Сьогодні: <b>{{ formatNumber(kpis.created?.today) }}</b></div>
         </div>
       </div>
 
+      <!-- Відправлено -->
       <div class="col-12 col-sm-6 col-xl-3">
-        <div class="kpi-card kpi-green">
-          <div class="kpi-top">
-            <span class="kpi-icon"><i class="bi bi-truck"></i></span>
+        <div class="kpi-card">
+          <div class="kpi-head">
+            <span class="kpi-icon kpi-icon-green"><i class="bi bi-truck"></i></span>
+            <span class="kpi-label">Відправлено</span>
           </div>
           <div class="kpi-value">{{ formatNumber(kpis.shipped?.period) }}</div>
-          <div class="kpi-label">Відправлено</div>
+          <div class="kpi-spark">
+            <ApexChart type="area" height="46" :options="sparkOptions('#22c55e')" :series="[{ name: 'Відправлено', data: series.shipped }]" />
+          </div>
           <div class="kpi-sub">Сьогодні: <b>{{ formatNumber(kpis.shipped?.today) }}</b></div>
         </div>
       </div>
 
+      <!-- Виторг -->
       <div class="col-12 col-sm-6 col-xl-3">
-        <div class="kpi-card kpi-violet">
-          <div class="kpi-top">
-            <span class="kpi-icon"><i class="bi bi-wallet-fill"></i></span>
+        <div class="kpi-card">
+          <div class="kpi-head">
+            <span class="kpi-icon kpi-icon-violet"><i class="bi bi-wallet-fill"></i></span>
+            <span class="kpi-label">Виторг за період</span>
             <span v-if="kpis.revenue?.delta != null" class="kpi-delta" :class="deltaClass(kpis.revenue.delta)">
-              <i :class="deltaIcon(kpis.revenue.delta)"></i> {{ Math.abs(kpis.revenue.delta) }}%
+              <i :class="deltaIcon(kpis.revenue.delta)"></i>{{ Math.abs(kpis.revenue.delta) }}%
             </span>
           </div>
           <div class="kpi-value">{{ formatMoney(kpis.revenue?.period) }}</div>
-          <div class="kpi-label">Виторг за період</div>
+          <div class="kpi-spark">
+            <ApexChart type="area" height="46" :options="sparkOptions('#a855f7', true)" :series="[{ name: 'Виторг', data: series.revenue }]" />
+          </div>
           <div class="kpi-sub">Сьогодні: <b>{{ formatMoney(kpis.revenue?.today) }}</b></div>
         </div>
       </div>
 
+      <!-- Середній чек -->
       <div class="col-12 col-sm-6 col-xl-3">
-        <div class="kpi-card kpi-amber">
-          <div class="kpi-top">
-            <span class="kpi-icon"><i class="bi bi-receipt"></i></span>
+        <div class="kpi-card">
+          <div class="kpi-head">
+            <span class="kpi-icon kpi-icon-amber"><i class="bi bi-receipt"></i></span>
+            <span class="kpi-label">Середній чек</span>
           </div>
           <div class="kpi-value">{{ formatMoney(kpis.avg_check) }}</div>
-          <div class="kpi-label">Середній чек</div>
+          <div class="kpi-spark">
+            <ApexChart type="area" height="46" :options="sparkOptions('#f59e0b', true)" :series="[{ name: 'Середній чек', data: avgCheckSeries }]" />
+          </div>
           <div class="kpi-sub">за {{ days }} днів</div>
         </div>
       </div>
@@ -342,6 +358,31 @@ const hexToSoft = (hex) => {
   return `rgba(${r},${g},${b},0.12)`;
 };
 
+// --- Sparklines для KPI-карток ---
+const avgCheckSeries = computed(() => {
+  const rev = series.value.revenue || [];
+  const cr = series.value.created || [];
+  return rev.map((r, i) => (cr[i] > 0 ? Math.round(r / cr[i]) : 0));
+});
+
+const sparkOptions = (color, isMoney = false) => ({
+  chart: { type: 'area', sparkline: { enabled: true }, fontFamily: 'inherit' },
+  stroke: { curve: 'smooth', width: 2 },
+  fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.32, opacityTo: 0.0, stops: [0, 100] } },
+  colors: [color],
+  xaxis: { categories: series.value.labels },
+  tooltip: {
+    enabled: true,
+    theme: 'light',
+    x: { show: true },
+    y: {
+      formatter: (v) => (isMoney ? `${Math.round(v).toLocaleString('uk-UA')} ₴` : `${Math.round(v)}`),
+      title: { formatter: () => '' },
+    },
+    marker: { show: false },
+  },
+});
+
 // --- Charts ---
 const revenueSeries = computed(() => [
   { name: 'Відправлено', data: series.value.shipped_value || [] },
@@ -453,26 +494,23 @@ onMounted(load);
 .btn-refresh.spinning i { animation: spin 0.8s linear infinite; display: inline-block; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* KPI cards */
-.kpi-card { background: #fff; border-radius: 20px; padding: 1.3rem 1.4rem; border: 1px solid #f1f2f6; box-shadow: 0 8px 30px -12px rgba(0,0,0,.08); position: relative; overflow: hidden; transition: transform .3s, box-shadow .3s; height: 100%; }
-.kpi-card:hover { transform: translateY(-4px); box-shadow: 0 18px 40px -14px rgba(79,70,229,.22); }
-.kpi-card::after { content: ''; position: absolute; top: -40px; right: -40px; width: 110px; height: 110px; border-radius: 50%; opacity: .12; }
-.kpi-indigo::after { background: #6366f1; }
-.kpi-green::after { background: #22c55e; }
-.kpi-violet::after { background: #a855f7; }
-.kpi-amber::after { background: #f59e0b; }
-.kpi-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: .9rem; }
-.kpi-icon { width: 46px; height: 46px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; color: #fff; }
-.kpi-indigo .kpi-icon { background: linear-gradient(135deg,#6366f1,#4f46e5); }
-.kpi-green .kpi-icon { background: linear-gradient(135deg,#22c55e,#16a34a); }
-.kpi-violet .kpi-icon { background: linear-gradient(135deg,#a855f7,#7c3aed); }
-.kpi-amber .kpi-icon { background: linear-gradient(135deg,#f59e0b,#d97706); }
-.kpi-delta { font-size: .72rem; font-weight: 700; padding: 3px 8px; border-radius: 999px; display: inline-flex; align-items: center; gap: 3px; }
+/* KPI cards (sparkline) */
+.kpi-card { background: #fff; border-radius: 20px; padding: 1.2rem 1.3rem 1rem; border: 1px solid #eef0f4; box-shadow: 0 8px 30px -14px rgba(0,0,0,.10); transition: transform .3s cubic-bezier(.22,.61,.36,1), box-shadow .3s; height: 100%; display: flex; flex-direction: column; }
+.kpi-card:hover { transform: translateY(-4px); box-shadow: 0 20px 44px -18px rgba(79,70,229,.28); border-color: #e0e3ea; }
+.kpi-head { display: flex; align-items: center; gap: .55rem; margin-bottom: .9rem; }
+.kpi-icon { width: 36px; height: 36px; border-radius: 11px; display: flex; align-items: center; justify-content: center; font-size: 1.05rem; color: #fff; flex-shrink: 0; }
+.kpi-icon-indigo { background: linear-gradient(135deg,#6366f1,#4f46e5); box-shadow: 0 5px 14px -4px rgba(79,70,229,.5); }
+.kpi-icon-green { background: linear-gradient(135deg,#22c55e,#16a34a); box-shadow: 0 5px 14px -4px rgba(22,163,74,.5); }
+.kpi-icon-violet { background: linear-gradient(135deg,#a855f7,#7c3aed); box-shadow: 0 5px 14px -4px rgba(124,58,237,.5); }
+.kpi-icon-amber { background: linear-gradient(135deg,#f59e0b,#d97706); box-shadow: 0 5px 14px -4px rgba(217,119,6,.5); }
+.kpi-label { font-size: .8rem; color: #6b7280; font-weight: 600; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpi-delta { font-size: .7rem; font-weight: 700; padding: 3px 7px; border-radius: 999px; display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; flex-shrink: 0; }
+.kpi-delta i { font-size: .7rem; }
 .kpi-delta.up { color: #16a34a; background: #dcfce7; }
 .kpi-delta.down { color: #dc2626; background: #fee2e2; }
-.kpi-value { font-size: 1.8rem; font-weight: 800; color: #111827; line-height: 1.1; letter-spacing: -0.02em; }
-.kpi-label { font-size: .85rem; color: #6b7280; font-weight: 600; margin-top: 2px; }
-.kpi-sub { font-size: .75rem; color: #9ca3af; margin-top: .5rem; }
+.kpi-value { font-size: 2rem; font-weight: 800; color: #0f172a; line-height: 1; letter-spacing: -0.03em; }
+.kpi-spark { margin: .55rem -1.3rem 0; }
+.kpi-sub { font-size: .75rem; color: #9ca3af; margin-top: .55rem; }
 .kpi-sub b { color: #4b5563; }
 
 /* Panels */
