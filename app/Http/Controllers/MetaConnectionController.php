@@ -131,13 +131,12 @@ class MetaConnectionController extends Controller
             ->with('success', "🟢 «{$info['name']}» — токен живий{$igText}.");
     }
 
-    /** Відключити сторінку (прибрати з CRM). */
+    /** Відключити сторінку — мʼяко (без видалення), щоб зберегти id і історію листування. */
     public function disconnect(MetaConnection $connection)
     {
-        $name = $connection->page_name;
-        $connection->delete();
+        $connection->update(['status' => 'disconnected']);
 
         return redirect()->route('settings.meta.index')
-            ->with('success', "Сторінку «{$name}» відключено.");
+            ->with('success', "Сторінку «{$connection->page_name}» відключено (історію збережено; повторне підключення її відновить).");
     }
 }
