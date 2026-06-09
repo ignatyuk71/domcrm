@@ -12,6 +12,13 @@ class MetaWebhookTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // За замовчуванням без перевірки підпису, щоб тести прийому не залежали від секрету.
+        config(['services.meta.app_secret' => '']);
+    }
+
     private function connection(): MetaConnection
     {
         return MetaConnection::create([
@@ -109,5 +116,34 @@ class MetaWebhookTest extends TestCase
         $this->postJson('/api/meta/webhook', $this->fbPayload('m_dup', 'Hi'))->assertOk();
 
         $this->assertSame(1, InboxMessage::where('external_message_id', 'm_dup')->count());
+    }
+
+    public function test_rejects_invalid_signature_when_secret_is_set(): void
+    {
+        config(['services.meta.app_secret' => 'sek']);
+        $this->connection();
+
+        $this->postJson('/api/meta/webhook', $this->fbPayload('sig_bad', 'фейк'), [
+            'X-Hub-Signature-256' => 'sha256=deadbeef',
+        ])->assertOk();
+
+        $this->assertDatabaseMissing('inbox_messages', ['external_message_id' => 'sig_bad']);
+    }
+
+    public function test_accepts_valid_signature_when_secret_is_set(): void
+    {
+        config(['services.meta.app_secret' => 'sek']);
+        $this->connection();
+
+        $payload = $this->fbPayload('sig_ok', 'справжнє');
+        $body = json_encode($payload);
+        $sig = 'sha256=' . hash_hmac('sha256', $body, 'sek');
+
+        $this->call('POST', '/api/meta/webhook', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_X_HUB_SIGNATURE_256' => $sig,
+        ], $body)->assertOk();
+
+        $this->assertDatabaseHas('inbox_messages', ['external_message_id' => 'sig_ok']);
     }
 }

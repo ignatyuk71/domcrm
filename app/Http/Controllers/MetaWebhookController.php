@@ -35,10 +35,12 @@ class MetaWebhookController extends Controller
             return response('Forbidden', 403);
         }
 
-        // Перевірка підпису. Поки що м'яко: при невдачі логуємо, але обробляємо.
-        // (Зробимо суворо — відхиляти — перед запуском на реальних клієнтів.)
-        if (!$this->processor->verifySignature($request->getContent(), $request->header('X-Hub-Signature-256'))) {
-            Log::warning('Meta webhook: підпис не співпав (поки обробляємо все одно)');
+        // Суворо: якщо задано app_secret (у проді — задано), подія без валідного
+        // підпису відхиляється. Підтверджено на реальному вебхуку, що підпис проходить.
+        $secret = (string) config('services.meta.app_secret');
+        if ($secret !== '' && !$this->processor->verifySignature($request->getContent(), $request->header('X-Hub-Signature-256'))) {
+            Log::warning('Meta webhook: невірний підпис — подію відхилено');
+            return response('EVENT_RECEIVED', 200);
         }
 
         try {
