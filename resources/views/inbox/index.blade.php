@@ -52,11 +52,15 @@
         .ib-bub .t { font-size: .66rem; margin-top: 3px; opacity: .7; }
         .ib-bub img { max-width: 210px; border-radius: 10px; margin-top: 4px; display: block; }
 
-        .ib-composer { padding: 10px 16px 12px; background: #fff; border-top: 1px solid #ecedf1; }
-        .ib-tools { display: flex; align-items: center; gap: 2px; margin-bottom: 6px; position: relative; }
-        .ib-tool { width: 34px; height: 34px; border-radius: 8px; border: none; background: transparent; color: #64748b; display: inline-flex; align-items: center; justify-content: center; font-size: 1.08rem; transition: .15s; }
+        .ib-composer { padding: 12px 16px 14px; background: #fff; border-top: 1px solid #ecedf1; position: relative; }
+        .ib-box { display: flex; align-items: center; gap: 10px; background: #fff; border: 1px solid #dde0e6; border-radius: 26px; padding: 6px 8px 6px 12px; }
+        .ib-box:focus-within { border-color: #c7cbf0; box-shadow: 0 0 0 3px rgba(99,102,241,.08); }
+        .ib-box-av { width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: #f1f2f6; color: #94a3b8; font-size: 15px; }
+        .ib-box input { flex: 1; border: none; background: transparent; outline: none; font-size: .9rem; padding: 5px 2px; }
+        .ib-box-tools { display: flex; align-items: center; gap: 0; flex-shrink: 0; }
+        .ib-tool { width: 34px; height: 34px; border-radius: 50%; border: none; background: transparent; color: #5b6573; display: inline-flex; align-items: center; justify-content: center; font-size: 1.12rem; transition: .15s; }
         .ib-tool:hover { background: #f1f2f6; color: #4f46e5; }
-        .ib-pop { position: absolute; bottom: 42px; left: 0; background: #fff; border: 1px solid #e6e8ee; border-radius: 13px; box-shadow: 0 14px 36px rgba(16,24,40,.16); z-index: 50; padding: 9px; }
+        .ib-pop { position: absolute; bottom: 56px; right: 14px; left: auto; background: #fff; border: 1px solid #e6e8ee; border-radius: 13px; box-shadow: 0 14px 36px rgba(16,24,40,.16); z-index: 50; padding: 9px; }
         .ib-emoji-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; width: 280px; }
         .ib-emoji-grid button { border: none; background: transparent; font-size: 1.25rem; padding: 4px; border-radius: 7px; cursor: pointer; }
         .ib-emoji-grid button:hover { background: #f1f2f6; }
@@ -65,11 +69,6 @@
         .ib-tpl-item:hover { background: #f5f6ff; }
         .ib-tpl-item .tt { font-weight: 600; font-size: .82rem; color: #0f172a; }
         .ib-tpl-item .bd { font-size: .74rem; color: #94a3b8; }
-        .ib-box { display: flex; align-items: center; gap: 8px; background: #f5f6fa; border: 1px solid #ecedf1; border-radius: 22px; padding: 3px 5px 3px 15px; }
-        .ib-box input { flex: 1; border: none; background: transparent; outline: none; font-size: .88rem; padding: 7px 0; }
-        .ib-send { width: 38px; height: 38px; border-radius: 50%; border: none; background: linear-gradient(135deg,#6366f1,#8b5cf6); color: #fff; display: flex; align-items: center; justify-content: center; transition: .15s; flex-shrink: 0; }
-        .ib-send:hover { filter: brightness(1.08); transform: scale(1.05); }
-        .ib-send:disabled { opacity: .5; }
 
         /* права панель — блоки як у FB */
         .ib-iblock { padding: 14px 16px; border-bottom: 1px solid #f0f1f4; }
@@ -112,18 +111,18 @@
                 <div id="thread-header" class="ib-thead"></div>
                 <div id="thread-messages" class="ib-msgs"></div>
                 <div class="ib-composer">
-                    <div class="ib-tools">
-                        <button type="button" class="ib-tool" title="Фото / файл" onclick="document.getElementById('file-input').click()"><i class="bi bi-paperclip"></i></button>
-                        <button type="button" class="ib-tool" title="Швидкі шаблони" onclick="toggleTpl()"><i class="bi bi-chat-square-text"></i></button>
-                        <button type="button" class="ib-tool" title="Емодзі" onclick="toggleEmoji()"><i class="bi bi-emoji-smile"></i></button>
-                        <button type="button" class="ib-tool" title="Надіслати 👍" onclick="sendLike()"><i class="bi bi-hand-thumbs-up"></i></button>
-                        <input type="file" id="file-input" class="d-none" accept="image/*,application/pdf,.doc,.docx" onchange="sendFile(this)">
-                        <div id="emoji-pop" class="ib-pop d-none"><div class="ib-emoji-grid"></div></div>
-                        <div id="tpl-pop" class="ib-pop d-none"><div class="ib-tpl"><div class="text-muted small p-2">Завантаження…</div></div></div>
-                    </div>
+                    <div id="emoji-pop" class="ib-pop d-none"><div class="ib-emoji-grid"></div></div>
+                    <div id="tpl-pop" class="ib-pop d-none"><div class="ib-tpl"><div class="text-muted small p-2">Завантаження…</div></div></div>
                     <form id="reply-form" class="ib-box">
-                        <input id="reply-input" placeholder="Напишіть відповідь…" autocomplete="off">
-                        <button class="ib-send" type="submit"><i class="bi bi-send-fill"></i></button>
+                        <span class="ib-box-av"><i class="bi bi-shop"></i></span>
+                        <input id="reply-input" placeholder="Відповідь у Messenger…" autocomplete="off">
+                        <div class="ib-box-tools">
+                            <button type="button" class="ib-tool" title="Фото / файл" onclick="document.getElementById('file-input').click()"><i class="bi bi-paperclip"></i></button>
+                            <button type="button" class="ib-tool" title="Швидкі шаблони" onclick="toggleTpl()"><i class="bi bi-chat-square-text"></i></button>
+                            <button type="button" class="ib-tool" title="Емодзі" onclick="toggleEmoji()"><i class="bi bi-emoji-smile"></i></button>
+                            <button type="button" class="ib-tool" title="Надіслати 👍" onclick="sendLike()"><i class="bi bi-hand-thumbs-up"></i></button>
+                        </div>
+                        <input type="file" id="file-input" class="d-none" accept="image/*,application/pdf,.doc,.docx" onchange="sendFile(this)">
                     </form>
                     <div id="reply-error" class="text-danger small mt-2 d-none px-2"></div>
                 </div>
@@ -207,6 +206,7 @@
                         <small class="text-muted" style="font-size:.75rem">${chIcon(c.channel)} ${chLabel(c.channel)} · ${esc(c.store)}</small>
                     </div>
                 </div>`;
+            document.getElementById('reply-input').placeholder = 'Відповідь у ' + chLabel(c.channel) + '…';
             renderMessages(data.messages);
             renderInfo(c);
             renderConvList();
