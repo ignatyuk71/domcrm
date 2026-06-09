@@ -39,6 +39,7 @@ class InboxController extends Controller
             ->map(fn (InboxConversation $c) => [
                 'id' => $c->id,
                 'store' => $c->connection?->page_name ?? '—',
+                'store_id' => $c->connection?->page_id,
                 'channel' => $c->channel,
                 'contact_name' => $this->contactName($c->contact?->name, $c->contact?->external_id),
                 'avatar' => $c->contact?->profile_pic,
@@ -75,6 +76,7 @@ class InboxController extends Controller
             'conversation' => [
                 'id' => $conversation->id,
                 'store' => $conversation->connection?->page_name ?? '—',
+                'store_id' => $conversation->connection?->page_id,
                 'channel' => $conversation->channel,
                 'contact_name' => $this->contactName($conversation->contact?->name, $conversation->contact?->external_id),
                 'avatar' => $conversation->contact?->profile_pic,

@@ -53,13 +53,15 @@
         .ib-bub img { max-width: 210px; border-radius: 10px; margin-top: 4px; display: block; }
 
         .ib-composer { padding: 12px 16px 14px; background: #fff; border-top: 1px solid #ecedf1; position: relative; }
-        .ib-box { display: flex; align-items: center; gap: 10px; background: #fff; border: 1px solid #dde0e6; border-radius: 26px; padding: 6px 8px 6px 12px; }
-        .ib-box:focus-within { border-color: #c7cbf0; box-shadow: 0 0 0 3px rgba(99,102,241,.08); }
-        .ib-box-av { width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: #f1f2f6; color: #94a3b8; font-size: 15px; }
-        .ib-box input { flex: 1; border: none; background: transparent; outline: none; font-size: .9rem; padding: 5px 2px; }
-        .ib-box-tools { display: flex; align-items: center; gap: 0; flex-shrink: 0; }
-        .ib-tool { width: 34px; height: 34px; border-radius: 50%; border: none; background: transparent; color: #5b6573; display: inline-flex; align-items: center; justify-content: center; font-size: 1.12rem; transition: .15s; }
-        .ib-tool:hover { background: #f1f2f6; color: #4f46e5; }
+        .ib-box { display: flex; align-items: center; gap: 12px; background: #fff; border: 1px solid #e3e6ea; border-radius: 16px; padding: 12px 16px; }
+        .ib-box:focus-within { border-color: #cfd3da; }
+        .ib-box-av { width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #eef0f3; color: #9aa3af; font-size: 17px; }
+        .ib-box-av img { width: 100%; height: 100%; object-fit: cover; }
+        .ib-box input { flex: 1; border: none; background: transparent; outline: none; font-size: 1rem; color: #1c1e21; padding: 4px 0; }
+        .ib-box input::placeholder { color: #8a8d91; }
+        .ib-box-tools { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+        .ib-tool { width: 34px; height: 34px; border-radius: 50%; border: none; background: transparent; color: #1c1e21; display: inline-flex; align-items: center; justify-content: center; font-size: 22px; cursor: pointer; padding: 0; transition: background .12s; }
+        .ib-tool:hover { background: #f0f1f4; }
         .ib-pop { position: absolute; bottom: 56px; right: 14px; left: auto; background: #fff; border: 1px solid #e6e8ee; border-radius: 13px; box-shadow: 0 14px 36px rgba(16,24,40,.16); z-index: 50; padding: 9px; }
         .ib-emoji-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; width: 280px; }
         .ib-emoji-grid button { border: none; background: transparent; font-size: 1.25rem; padding: 4px; border-radius: 7px; cursor: pointer; }
@@ -114,13 +116,14 @@
                     <div id="emoji-pop" class="ib-pop d-none"><div class="ib-emoji-grid"></div></div>
                     <div id="tpl-pop" class="ib-pop d-none"><div class="ib-tpl"><div class="text-muted small p-2">Завантаження…</div></div></div>
                     <form id="reply-form" class="ib-box">
-                        <span class="ib-box-av"><i class="bi bi-shop"></i></span>
+                        <span class="ib-box-av" id="composer-av"><i class="bi bi-shop"></i></span>
                         <input id="reply-input" placeholder="Відповідь у Messenger…" autocomplete="off">
                         <div class="ib-box-tools">
+                            <button type="button" class="ib-tool" title="Товари / шаблони" onclick="toggleTpl()"><i class="bi bi-bag"></i></button>
                             <button type="button" class="ib-tool" title="Фото / файл" onclick="document.getElementById('file-input').click()"><i class="bi bi-paperclip"></i></button>
-                            <button type="button" class="ib-tool" title="Швидкі шаблони" onclick="toggleTpl()"><i class="bi bi-chat-square-text"></i></button>
+                            <button type="button" class="ib-tool" title="Швидкі відповіді" onclick="toggleTpl()"><i class="bi bi-chat"></i></button>
                             <button type="button" class="ib-tool" title="Емодзі" onclick="toggleEmoji()"><i class="bi bi-emoji-smile"></i></button>
-                            <button type="button" class="ib-tool" title="Надіслати 👍" onclick="sendLike()"><i class="bi bi-hand-thumbs-up"></i></button>
+                            <button type="button" class="ib-tool" title="Надіслати 👍" onclick="sendLike()"><i class="bi bi-hand-thumbs-up-fill"></i></button>
                         </div>
                         <input type="file" id="file-input" class="d-none" accept="image/*,application/pdf,.doc,.docx" onchange="sendFile(this)">
                     </form>
@@ -207,6 +210,13 @@
                     </div>
                 </div>`;
             document.getElementById('reply-input').placeholder = 'Відповідь у ' + chLabel(c.channel) + '…';
+            const av = document.getElementById('composer-av');
+            av.innerHTML = '<i class="bi bi-shop"></i>';
+            if (c.store_id) {
+                const img = new Image();
+                img.onload = () => { av.innerHTML = ''; av.appendChild(img); };
+                img.src = 'https://graph.facebook.com/' + c.store_id + '/picture?type=square&width=80&height=80';
+            }
             renderMessages(data.messages);
             renderInfo(c);
             renderConvList();
