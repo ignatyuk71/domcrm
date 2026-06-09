@@ -495,6 +495,10 @@
                     <span class="icon-frame"><i class="bi bi-hdd-network"></i></span>
                     <span class="item-text-sub">Інтеграції</span>
                 </a>
+                <a href="{{ route('settings.meta.index') }}" class="sidebar-link-sub {{ request()->is('settings/meta*') ? 'active' : '' }}">
+                    <span class="icon-frame"><i class="bi bi-facebook"></i></span>
+                    <span class="item-text-sub">Facebook / IG</span>
+                </a>
                 <a href="{{ route('settings.categories.index') }}" class="sidebar-link-sub {{ request()->is('settings/categories') ? 'active' : '' }}">
                     <span class="icon-frame"><i class="bi bi-tags"></i></span>
                     <span class="item-text-sub">Категорії</span>

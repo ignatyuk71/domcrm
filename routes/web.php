@@ -20,6 +20,7 @@ use App\Http\Controllers\TeamController;
 use App\Http\Controllers\MessageTemplateController;
 use App\Http\Controllers\IntegrationSettingsController;
 use App\Http\Controllers\IntegrationMappingController;
+use App\Http\Controllers\MetaConnectionController;
 use App\Models\Order;
 use App\Models\OrderItem;
 use Carbon\Carbon;
@@ -239,6 +240,13 @@ Route::middleware('auth')->group(function () {
         Route::patch('/integrations/{source}', [IntegrationSettingsController::class, 'update'])->name('integrations.update');
         Route::post('/integrations/{source}/regenerate', [IntegrationSettingsController::class, 'regenerate'])->name('integrations.regenerate');
         Route::delete('/integrations/{source}', [IntegrationSettingsController::class, 'destroy'])->name('integrations.destroy');
+
+        // --- META: підключення Facebook / Instagram ---
+        Route::get('/meta', [MetaConnectionController::class, 'index'])->name('meta.index');
+        Route::get('/meta/connect', [MetaConnectionController::class, 'connect'])->name('meta.connect');
+        Route::get('/meta/callback', [MetaConnectionController::class, 'callback'])->name('meta.callback');
+        Route::post('/meta/{connection}/test', [MetaConnectionController::class, 'test'])->name('meta.test');
+        Route::delete('/meta/{connection}', [MetaConnectionController::class, 'disconnect'])->name('meta.disconnect');
     });
 
     // --- ФІСКАЛІЗАЦІЯ (Checkbox) ---

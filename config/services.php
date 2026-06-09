@@ -59,4 +59,17 @@ return [
         'sender_warehouse' => env('NP_SENDER_WAREHOUSE'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Meta (Facebook / Instagram) API
+    |--------------------------------------------------------------------------
+    */
+    'meta' => [
+        'app_id' => env('META_APP_ID'),
+        'app_secret' => env('META_APP_SECRET'),
+        'verify_token' => env('META_VERIFY_TOKEN'),
+        'graph_version' => env('META_GRAPH_VERSION', 'v21.0'),
+        'scopes' => env('META_SCOPES', 'pages_show_list,pages_manage_metadata,pages_messaging,pages_read_engagement,instagram_basic,instagram_manage_messages,business_management'),
+    ],
+
 ];
