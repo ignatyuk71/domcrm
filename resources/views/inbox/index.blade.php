@@ -39,7 +39,8 @@
         .ib-av { position: relative; flex-shrink: 0; }
         .ib-av .circle { border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; background: linear-gradient(135deg,#818cf8,#a78bfa); overflow: hidden; }
         .ib-av .circle img { width: 100%; height: 100%; object-fit: cover; }
-        .ib-av .ch { position: absolute; right: -1px; bottom: -1px; width: 17px; height: 17px; border-radius: 50%; background: #fff; display: flex; align-items: center; justify-content: center; font-size: 10px; box-shadow: 0 0 0 1.5px #fff; }
+        .ib-av .ch { position: absolute; right: 3px; bottom: 3px; display: flex; align-items: center; justify-content: center; font-size: 15px; line-height: 1; }
+        .ib-av .ch i { filter: drop-shadow(0 1px 1.5px rgba(0,0,0,.4)); }
         .ib-dot { width: 8px; height: 8px; border-radius: 50%; background: #2563eb; flex-shrink: 0; align-self: center; }
 
         .ib-thead { padding: 12px 18px; background: #fff; border-bottom: 1px solid #ecedf1; }
@@ -177,7 +178,7 @@
             if (!items.length) { el.innerHTML = '<div class="ib-empty">Нічого не знайдено</div>'; return; }
             el.innerHTML = items.map(c => `
                 <div class="ib-conv ${c.id === activeId ? 'active' : ''} ${c.unread > 0 ? 'unread' : ''}" onclick="openConversation(${c.id})">
-                    ${avatar(c.contact_name, c.avatar, c.channel, 42)}
+                    ${avatar(c.contact_name, c.avatar, c.channel, 48)}
                     <div class="meta">
                         <div class="d-flex justify-content-between align-items-baseline">
                             <span class="nm text-truncate">${esc(c.contact_name)}</span>
@@ -208,7 +209,7 @@
             t.classList.remove('d-none'); t.classList.add('d-flex');
             document.getElementById('thread-header').innerHTML = `
                 <div class="d-flex align-items-center gap-2">
-                    ${avatar(c.contact_name, c.avatar, c.channel, 38)}
+                    ${avatar(c.contact_name, c.avatar, c.channel, 44)}
                     <div>
                         <div class="fw-bold" style="font-size:.95rem">${esc(c.contact_name)}</div>
                         <small class="text-muted" style="font-size:.75rem">${chIcon(c.channel)} ${chLabel(c.channel)} · ${esc(c.store)}</small>
@@ -233,7 +234,7 @@
             box.classList.remove('d-none');
             box.innerHTML = `
                 <div class="text-center" style="padding:18px 16px 16px; border-bottom:1px solid #f0f1f4">
-                    ${avatar(c.contact_name, c.avatar, c.channel, 76)}
+                    ${avatar(c.contact_name, c.avatar, c.channel, 82)}
                     <div class="fw-bold mt-2" style="font-size:.98rem">${esc(c.contact_name)}</div>
                     <div class="text-muted" style="font-size:.76rem">${chLabel(c.channel)} · ${esc(c.store)}</div>
                 </div>
