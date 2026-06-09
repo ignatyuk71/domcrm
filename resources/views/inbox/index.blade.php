@@ -60,7 +60,7 @@
         .ib-box:focus-within { border-color: #cfd3da; }
         .ib-box-av { width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #eef0f3; color: #9aa3af; font-size: 17px; margin-top: 2px; }
         .ib-box-av img { width: 100%; height: 100%; object-fit: cover; }
-        .ib-box textarea { flex: 1; border: none; background: transparent; outline: none; font-size: 1rem; color: #1c1e21; padding: 7px 0; resize: none; max-height: 168px; overflow-y: auto; line-height: 1.4; font-family: inherit; }
+        .ib-box textarea { flex: 1; border: none; background: transparent; outline: none; font-size: 1rem; color: #1c1e21; padding: 7px 0; resize: none; min-height: 80px; max-height: 200px; overflow-y: auto; line-height: 1.4; font-family: inherit; }
         .ib-box textarea::placeholder { color: #8a8d91; }
         .ib-box-tools { display: flex; align-items: center; gap: 8px; flex-shrink: 0; align-self: flex-end; }
         .ib-tool { width: 34px; height: 34px; border-radius: 50%; border: none; background: transparent; color: #1c1e21; display: inline-flex; align-items: center; justify-content: center; font-size: 22px; cursor: pointer; padding: 0; transition: background .12s; }
@@ -286,7 +286,7 @@
         const replyTa = document.getElementById('reply-input');
         function autoGrow() {
             replyTa.style.height = 'auto';
-            replyTa.style.height = Math.min(replyTa.scrollHeight, 168) + 'px';
+            replyTa.style.height = Math.min(replyTa.scrollHeight, 200) + 'px';
             const has = replyTa.value.trim().length > 0;
             document.getElementById('like-btn').classList.toggle('d-none', has);
             document.getElementById('send-btn').classList.toggle('d-none', !has);
