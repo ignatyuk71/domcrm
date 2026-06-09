@@ -14,19 +14,30 @@ jobs:
       - name: Get latest code
         uses: actions/checkout@v4
 
-      - name: Sync files to Mirohost
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
-        with:
-          server: vs2489.mirohost.net        # НОВИЙ сервер
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          port: 21                            # можна не писати, за замовчуванням 21
-          server-dir: /domcrm.com.ua/         # корінь сайту (як було)
-          exclude: |
-            **/.git/**
-            **/.git*
-            **/node_modules/**
-            **/vendor/**
-            **/storage/**
-            .github/workflows/**
-            .env
+      - name: Install rsync & sshpass
+        run: sudo apt-get update && sudo apt-get install -y rsync sshpass
+
+      # Деплой через SSH (rsync) — надійніше за FTP на Mirohost.
+      # Без --delete: лише додає/оновлює файли, нічого не видаляє (безпечно).
+      - name: Deploy code via rsync over SSH
+        env:
+          SSHPASS: ${{ secrets.SSH_PASSWORD }}
+        run: |
+          sshpass -e rsync -rltz --checksum \
+            -e "ssh -p 22 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
+            --exclude='.git/' \
+            --exclude='.github/' \
+            --exclude='node_modules/' \
+            --exclude='vendor/' \
+            --exclude='storage/' \
+            --exclude='.env' \
+            ./ domcrm_ssh@vs2489.mirohost.net:/var/www/domcrm/domcrm.com.ua/
+
+      # Міграції + скидання кешу прямо в деплої (більше не вручну).
+      - name: Run migrations & clear caches
+        env:
+          SSHPASS: ${{ secrets.SSH_PASSWORD }}
+        run: |
+          sshpass -e ssh -p 22 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            domcrm_ssh@vs2489.mirohost.net \
+            'cd /var/www/domcrm/domcrm.com.ua && php artisan migrate --force && php artisan optimize:clear'
