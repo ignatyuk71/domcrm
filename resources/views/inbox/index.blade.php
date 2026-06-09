@@ -39,8 +39,7 @@
         .ib-av { position: relative; flex-shrink: 0; }
         .ib-av .circle { border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; background: linear-gradient(135deg,#818cf8,#a78bfa); overflow: hidden; }
         .ib-av .circle img { width: 100%; height: 100%; object-fit: cover; }
-        .ib-av .ch { position: absolute; right: 3px; bottom: 3px; display: flex; align-items: center; justify-content: center; font-size: 15px; line-height: 1; }
-        .ib-av .ch i { filter: drop-shadow(0 1px 1.5px rgba(0,0,0,.4)); }
+        .ib-av .ch { position: absolute; right: 3px; bottom: 3px; width: 13px; height: 13px; border-radius: 50%; background: #fff; display: flex; align-items: center; justify-content: center; font-size: 16px; line-height: 1; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
         .ib-dot { width: 8px; height: 8px; border-radius: 50%; background: #2563eb; flex-shrink: 0; align-self: center; }
 
         .ib-thead { padding: 12px 18px; background: #fff; border-bottom: 1px solid #ecedf1; }
