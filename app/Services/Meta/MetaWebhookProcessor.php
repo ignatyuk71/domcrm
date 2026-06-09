@@ -86,9 +86,9 @@ class MetaWebhookProcessor
             'external_id' => (string) $senderId,
         ]);
 
-        // Best-effort: підтягнути імʼя + аватар при першому повідомленні.
-        if ($contact->wasRecentlyCreated) {
-            $profile = $this->oauth->getUserProfile($connection->page_access_token, (string) $senderId);
+        // Best-effort: підтягнути імʼя + аватар (при створенні або якщо імені ще немає).
+        if ($contact->wasRecentlyCreated || !$contact->name) {
+            $profile = $this->oauth->getUserProfile($connection->page_access_token, (string) $senderId, $channel);
             if ($profile) {
                 $contact->update(array_filter([
                     'name' => $profile['name'] ?? null,

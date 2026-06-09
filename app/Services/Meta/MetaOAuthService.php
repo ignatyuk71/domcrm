@@ -134,11 +134,13 @@ class MetaOAuthService
     }
 
     /** Профіль користувача (імʼя + аватар), best-effort, для інбоксу. */
-    public function getUserProfile(string $pageToken, string $userId): array
+    public function getUserProfile(string $pageToken, string $userId, string $channel = 'facebook'): array
     {
         try {
+            // Для IG також беремо username — деякі акаунти не віддають name.
+            $fields = $channel === 'instagram' ? 'name,username,profile_pic' : 'name,profile_pic';
             $r = Http::timeout(5)->get($this->graph()."/{$userId}", [
-                'fields' => 'name,profile_pic',
+                'fields' => $fields,
                 'access_token' => $pageToken,
             ]);
 
@@ -147,7 +149,7 @@ class MetaOAuthService
             }
 
             return array_filter([
-                'name' => $r->json('name'),
+                'name' => $r->json('name') ?: $r->json('username'),
                 'profile_pic' => $r->json('profile_pic'),
             ]);
         } catch (\Throwable) {
