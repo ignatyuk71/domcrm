@@ -66,7 +66,16 @@
         .ib-tool:hover { background: #f0f1f4; }
         .ib-send-btn { border: none; background: transparent; color: #0084ff; font-weight: 600; font-size: .95rem; padding: 6px 8px; cursor: pointer; white-space: nowrap; }
         .ib-send-btn:hover { text-decoration: underline; }
-        .ib-pop { position: absolute; bottom: 56px; right: 14px; left: auto; background: #fff; border: 1px solid #e6e8ee; border-radius: 13px; box-shadow: 0 14px 36px rgba(16,24,40,.16); z-index: 50; padding: 9px; }
+        .ib-pop { position: absolute; bottom: calc(100% - 4px); right: 14px; left: auto; background: #fff; border: 1px solid #e6e8ee; border-radius: 13px; box-shadow: 0 14px 36px rgba(16,24,40,.16); z-index: 50; padding: 9px; }
+        .ib-attach-preview { padding: 4px 6px 10px; }
+        .ib-attach-item { position: relative; display: inline-flex; align-items: center; gap: 8px; background: #f5f6f8; border: 1px solid #e3e6ea; border-radius: 12px; padding: 6px; }
+        .ib-attach-item img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; display: block; }
+        .ib-attach-file { width: 64px; height: 64px; border-radius: 8px; background: #e9ecf2; display: flex; align-items: center; justify-content: center; font-size: 26px; color: #6b7280; }
+        .ib-attach-name { font-size: .8rem; color: #4b5563; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 6px; }
+        .ib-attach-x { position: absolute; top: -7px; right: -7px; width: 22px; height: 22px; border-radius: 50%; border: 2px solid #fff; background: #1c1e21; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; cursor: pointer; line-height: 1; }
+        .ib-gallery { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; width: 304px; max-height: 280px; overflow-y: auto; }
+        .ib-gallery img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; cursor: pointer; border: 2px solid transparent; }
+        .ib-gallery img:hover { border-color: #0084ff; }
         .ib-emoji-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; width: 280px; }
         .ib-emoji-grid button { border: none; background: transparent; font-size: 1.25rem; padding: 4px; border-radius: 7px; cursor: pointer; }
         .ib-emoji-grid button:hover { background: #f1f2f6; }
@@ -119,18 +128,27 @@
                 <div class="ib-composer">
                     <div id="emoji-pop" class="ib-pop d-none"><div class="ib-emoji-grid"></div></div>
                     <div id="tpl-pop" class="ib-pop d-none"><div class="ib-tpl"><div class="text-muted small p-2">Завантаження…</div></div></div>
+                    <div id="gallery-pop" class="ib-pop d-none"><div class="ib-gallery"><div class="text-muted small p-2">Завантаження…</div></div></div>
+                    <div id="attach-preview" class="ib-attach-preview d-none">
+                        <div class="ib-attach-item">
+                            <img id="attach-thumb" src="" alt="">
+                            <span id="attach-file" class="ib-attach-file d-none"><i class="bi bi-file-earmark-text"></i></span>
+                            <span id="attach-name" class="ib-attach-name"></span>
+                            <button type="button" class="ib-attach-x" onclick="clearStaged()" title="Прибрати"><i class="bi bi-x"></i></button>
+                        </div>
+                    </div>
                     <form id="reply-form" class="ib-box">
                         <span class="ib-box-av" id="composer-av"><i class="bi bi-shop"></i></span>
                         <textarea id="reply-input" rows="1" placeholder="Відповідь у Messenger…"></textarea>
                         <div class="ib-box-tools">
-                            <button type="button" class="ib-tool" title="Товари / шаблони" onclick="toggleTpl()"><i class="bi bi-bag"></i></button>
+                            <button type="button" class="ib-tool" title="Галерея зображень" onclick="toggleGallery()"><i class="bi bi-bag"></i></button>
                             <button type="button" class="ib-tool" title="Фото / файл" onclick="document.getElementById('file-input').click()"><i class="bi bi-paperclip"></i></button>
                             <button type="button" class="ib-tool" title="Швидкі відповіді" onclick="toggleTpl()"><i class="bi bi-chat"></i></button>
                             <button type="button" class="ib-tool" title="Емодзі" onclick="toggleEmoji()"><i class="bi bi-emoji-smile"></i></button>
                             <button type="button" class="ib-tool" id="like-btn" title="Надіслати 👍" onclick="sendLike()"><i class="bi bi-hand-thumbs-up-fill"></i></button>
                             <button type="submit" class="ib-send-btn d-none" id="send-btn">Надіслати</button>
                         </div>
-                        <input type="file" id="file-input" class="d-none" accept="image/*,application/pdf,.doc,.docx" onchange="sendFile(this)">
+                        <input type="file" id="file-input" class="d-none" accept="image/*,application/pdf,.doc,.docx" onchange="stageFile(this)">
                     </form>
                     <div id="reply-error" class="text-danger small mt-2 d-none px-2"></div>
                 </div>
@@ -282,11 +300,12 @@
             await openConversation(activeId);
         }
 
+        let stagedFile = null, stagedGalleryName = null;
         const replyTa = document.getElementById('reply-input');
         function autoGrow() {
             replyTa.style.height = 'auto';
             replyTa.style.height = Math.min(replyTa.scrollHeight, 200) + 'px';
-            const has = replyTa.value.trim().length > 0;
+            const has = replyTa.value.trim().length > 0 || !!stagedFile || !!stagedGalleryName;
             document.getElementById('like-btn').classList.toggle('d-none', has);
             document.getElementById('send-btn').classList.toggle('d-none', !has);
         }
@@ -302,11 +321,18 @@
             e.preventDefault();
             const input = document.getElementById('reply-input');
             const text = input.value.trim();
-            if (!text) return;
+            if (!stagedFile && !stagedGalleryName && !text) return;
             document.getElementById('reply-error').classList.add('d-none');
             input.disabled = true;
-            await sendMessage(text);
-            input.value = ''; input.disabled = false; input.focus();
+            let ok = true;
+            if (stagedFile) ok = await uploadAndSendFile(stagedFile);
+            else if (stagedGalleryName) ok = await sendGalleryImage(stagedGalleryName);
+            if (ok) {
+                clearStaged();
+                if (text) await sendMessage(text);
+                input.value = '';
+            }
+            input.disabled = false; input.focus();
             autoGrow();
         });
 
@@ -315,6 +341,7 @@
         const EMOJIS = ['😊','😂','❤️','👍','🙏','🔥','😍','🎉','👌','✅','🤝','😉','🙂','😅','💪','👋','📦','🚚','💰','❓','😎','🤔','🥰','👏','💯','🙌','😢','🤗'];
         function toggleEmoji() {
             document.getElementById('tpl-pop').classList.add('d-none');
+            document.getElementById('gallery-pop').classList.add('d-none');
             const p = document.getElementById('emoji-pop');
             if (!p.dataset.filled) {
                 p.querySelector('.ib-emoji-grid').innerHTML = EMOJIS.map(e => `<button type="button" onclick="insertText('${e}')">${e}</button>`).join('');
@@ -326,6 +353,7 @@
 
         async function toggleTpl() {
             document.getElementById('emoji-pop').classList.add('d-none');
+            document.getElementById('gallery-pop').classList.add('d-none');
             const p = document.getElementById('tpl-pop');
             p.classList.toggle('d-none');
             if (!tplLoaded && !p.classList.contains('d-none')) {
@@ -346,12 +374,39 @@
             autoGrow();
         }
 
-        async function sendFile(input) {
-            if (!activeId || !input.files.length) return;
-            const fd = new FormData();
-            fd.append('file', input.files[0]);
-            input.value = '';
+        function stageFile(input) {
+            if (!input.files.length) return;
+            stagedFile = input.files[0];
+            stagedGalleryName = null;
+            const thumb = document.getElementById('attach-thumb');
+            const fileIcon = document.getElementById('attach-file');
+            if (stagedFile.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = ev => { thumb.src = ev.target.result; };
+                reader.readAsDataURL(stagedFile);
+                thumb.classList.remove('d-none'); fileIcon.classList.add('d-none');
+            } else {
+                thumb.classList.add('d-none'); fileIcon.classList.remove('d-none');
+            }
+            document.getElementById('attach-name').textContent = stagedFile.name;
+            document.getElementById('attach-preview').classList.remove('d-none');
             document.getElementById('reply-error').classList.add('d-none');
+            input.value = '';
+            autoGrow();
+        }
+
+        function clearStaged() {
+            stagedFile = null; stagedGalleryName = null;
+            document.getElementById('attach-preview').classList.add('d-none');
+            document.getElementById('attach-thumb').src = '';
+            document.getElementById('attach-name').textContent = '';
+            autoGrow();
+        }
+
+        async function uploadAndSendFile(file) {
+            if (!activeId) return false;
+            const fd = new FormData();
+            fd.append('file', file);
             try {
                 const res = await fetch(`/api/inbox/conversations/${activeId}/send-attachment`, {
                     method: 'POST', headers: { 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' }, body: fd
@@ -359,7 +414,52 @@
                 const data = await res.json();
                 if (!res.ok || !data.ok) throw new Error(data.error || 'Не вдалося надіслати');
                 await openConversation(activeId);
-            } catch (err) { showErr(err.message); }
+                return true;
+            } catch (err) { showErr(err.message); return false; }
+        }
+
+        async function sendGalleryImage(name) {
+            if (!activeId) return false;
+            try {
+                const res = await fetch(`/api/inbox/conversations/${activeId}/send-gallery`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+                const data = await res.json();
+                if (!res.ok || !data.ok) throw new Error(data.error || 'Не вдалося надіслати');
+                await openConversation(activeId);
+                return true;
+            } catch (err) { showErr(err.message); return false; }
+        }
+
+        async function toggleGallery() {
+            document.getElementById('emoji-pop').classList.add('d-none');
+            document.getElementById('tpl-pop').classList.add('d-none');
+            const p = document.getElementById('gallery-pop');
+            const show = p.classList.contains('d-none');
+            p.classList.toggle('d-none');
+            if (show) {
+                const grid = p.querySelector('.ib-gallery');
+                try {
+                    const res = await fetch('{{ route('inbox.gallery') }}', { headers: { 'Accept': 'application/json' } });
+                    const items = await res.json();
+                    grid.innerHTML = items.length
+                        ? items.map(it => `<img src="${esc(it.url)}" title="${esc(it.name)}" onclick="stageGallery('${esc(it.url)}','${esc(it.name)}')">`).join('')
+                        : '<div class="text-muted small p-2" style="grid-column:1/-1">Поки порожньо. Завантажене фото з’явиться тут.</div>';
+                } catch (e) { grid.innerHTML = '<div class="text-danger small p-2" style="grid-column:1/-1">Помилка завантаження</div>'; }
+            }
+        }
+
+        function stageGallery(url, name) {
+            stagedFile = null; stagedGalleryName = name;
+            const thumb = document.getElementById('attach-thumb');
+            thumb.src = url; thumb.classList.remove('d-none');
+            document.getElementById('attach-file').classList.add('d-none');
+            document.getElementById('attach-name').textContent = name;
+            document.getElementById('attach-preview').classList.remove('d-none');
+            document.getElementById('gallery-pop').classList.add('d-none');
+            autoGrow();
         }
 
         async function syncHistory(btn) {
@@ -373,6 +473,7 @@
             if (!e.target.closest('.ib-tool') && !e.target.closest('.ib-pop')) {
                 document.getElementById('emoji-pop')?.classList.add('d-none');
                 document.getElementById('tpl-pop')?.classList.add('d-none');
+                document.getElementById('gallery-pop')?.classList.add('d-none');
             }
         });
 

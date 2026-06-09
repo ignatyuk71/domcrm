@@ -135,25 +135,63 @@ class InboxController extends Controller
         ]);
     }
 
-    /** Надіслати вкладення (фото/файл) клієнту. */
+    /** Надіслати щойно завантажений файл (фото/файл) клієнту. */
     public function sendAttachment(Request $request, InboxConversation $conversation)
     {
         $request->validate(['file' => ['required', 'file', 'max:10240']]);
-
-        $conversation->loadMissing(['connection', 'contact']);
-        $conn = $conversation->connection;
-        $contact = $conversation->contact;
-        if (!$conn || !$contact) {
-            return response()->json(['ok' => false, 'error' => 'Немає підключення або контакту'], 422);
-        }
 
         $file = $request->file('file');
         $mime = (string) $file->getMimeType();
         $ext = $file->getClientOriginalExtension() ?: ($file->guessExtension() ?: 'bin');
         $name = Str::random(24) . '.' . $ext;
         $file->move(public_path('inbox-uploads'), $name);
-        $url = url('inbox-uploads/' . $name);
         $type = str_starts_with($mime, 'image/') ? 'image' : 'file';
+
+        return $this->dispatchAttachment($conversation, $type, url('inbox-uploads/' . $name));
+    }
+
+    /** Галерея вже завантажених зображень (для повторного використання без перезавантаження). */
+    public function gallery()
+    {
+        $dir = public_path('inbox-uploads');
+        $items = [];
+        if (is_dir($dir)) {
+            $files = glob($dir . '/*.{jpg,jpeg,png,gif,webp,JPG,JPEG,PNG}', GLOB_BRACE) ?: [];
+            usort($files, fn ($a, $b) => filemtime($b) <=> filemtime($a));
+            foreach (array_slice($files, 0, 80) as $f) {
+                $name = basename($f);
+                $items[] = ['name' => $name, 'url' => url('inbox-uploads/' . $name)];
+            }
+        }
+
+        return response()->json($items);
+    }
+
+    /** Надіслати зображення з галереї (вже на сервері) клієнту. */
+    public function sendGallery(Request $request, InboxConversation $conversation)
+    {
+        $data = $request->validate(['name' => ['required', 'string', 'max:200']]);
+        $name = basename($data['name']);
+        $path = public_path('inbox-uploads/' . $name);
+        if (!is_file($path)) {
+            return response()->json(['ok' => false, 'error' => 'Зображення не знайдено'], 404);
+        }
+
+        $mime = (string) (mime_content_type($path) ?: 'image/jpeg');
+        $type = str_starts_with($mime, 'image/') ? 'image' : 'file';
+
+        return $this->dispatchAttachment($conversation, $type, url('inbox-uploads/' . $name));
+    }
+
+    /** Спільна логіка: відправити вкладення за публічним URL + зберегти вихідне повідомлення. */
+    private function dispatchAttachment(InboxConversation $conversation, string $type, string $url)
+    {
+        $conversation->loadMissing(['connection', 'contact']);
+        $conn = $conversation->connection;
+        $contact = $conversation->contact;
+        if (!$conn || !$contact) {
+            return response()->json(['ok' => false, 'error' => 'Немає підключення або контакту'], 422);
+        }
 
         $res = app(MetaSendService::class)->sendAttachment($conn, $contact->external_id, $type, $url);
         if (!($res['ok'] ?? false)) {
