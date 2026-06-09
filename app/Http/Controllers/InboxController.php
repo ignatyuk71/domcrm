@@ -8,6 +8,8 @@ use App\Models\MetaConnection;
 use App\Services\Meta\MetaSendService;
 use App\Services\Meta\MetaSyncService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
 class InboxController extends Controller
@@ -77,6 +79,7 @@ class InboxController extends Controller
                 'id' => $conversation->id,
                 'store' => $conversation->connection?->page_name ?? '—',
                 'store_id' => $conversation->connection?->page_id,
+                'conn_id' => $conversation->connection?->id,
                 'channel' => $conversation->channel,
                 'contact_name' => $this->contactName($conversation->contact?->name, $conversation->contact?->external_id),
                 'avatar' => $conversation->contact?->profile_pic,
@@ -175,6 +178,27 @@ class InboxController extends Controller
         ]);
 
         return response()->json(['ok' => true]);
+    }
+
+    /** Проксі аватара сторінки (Graph picture) — фб не віддає картинку без токена, тому тягнемо з токеном на сервері. */
+    public function pageAvatar(MetaConnection $connection)
+    {
+        $url = Cache::remember("page_pic_{$connection->id}", 3600, function () use ($connection) {
+            $ver = config('services.meta.graph_version', 'v21.0');
+            $r = Http::get("https://graph.facebook.com/{$ver}/{$connection->page_id}/picture", [
+                'redirect' => 'false',
+                'type' => 'square',
+                'width' => 160,
+                'height' => 160,
+                'access_token' => $connection->page_access_token,
+            ]);
+
+            return $r->ok() ? $r->json('data.url') : null;
+        });
+
+        abort_unless($url, 404);
+
+        return redirect()->away($url);
     }
 
     private function contactName(?string $name, ?string $externalId): string

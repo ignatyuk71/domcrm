@@ -99,6 +99,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/api/inbox/conversations/{conversation}/send', [InboxController::class, 'send'])->name('inbox.send');
         Route::post('/api/inbox/sync', [InboxController::class, 'sync'])->name('inbox.sync');
         Route::post('/api/inbox/conversations/{conversation}/send-attachment', [InboxController::class, 'sendAttachment'])->name('inbox.sendAttachment');
+        Route::get('/inbox/page-avatar/{connection}', [InboxController::class, 'pageAvatar'])->name('inbox.pageAvatar');
     });
 
     Route::middleware('role:owner,operator')->group(function () {

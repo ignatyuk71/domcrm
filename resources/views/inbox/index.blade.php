@@ -43,14 +43,16 @@
         .ib-dot { width: 8px; height: 8px; border-radius: 50%; background: #2563eb; flex-shrink: 0; align-self: center; }
 
         .ib-thead { padding: 12px 18px; background: #fff; border-bottom: 1px solid #ecedf1; }
-        .ib-msgs { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 3px; }
-        .ib-row { display: flex; margin-bottom: 5px; }
+        .ib-msgs { flex: 1; overflow-y: auto; padding: 18px 22px; display: flex; flex-direction: column; gap: 2px; background: #fff; }
+        .ib-row { display: flex; margin-bottom: 1px; }
         .ib-row.out { justify-content: flex-end; }
-        .ib-bub { max-width: 70%; padding: 8px 13px; font-size: .88rem; line-height: 1.4; white-space: pre-wrap; word-break: break-word; box-shadow: 0 1px 2px rgba(16,24,40,.05); }
-        .ib-bub.in  { background: #fff; color: #1e293b; border-radius: 15px 15px 15px 4px; }
-        .ib-bub.out { background: linear-gradient(135deg,#6366f1,#8b5cf6); color: #fff; border-radius: 15px 15px 4px 15px; }
-        .ib-bub .t { font-size: .66rem; margin-top: 3px; opacity: .7; }
-        .ib-bub img { max-width: 210px; border-radius: 10px; margin-top: 4px; display: block; }
+        .ib-bub { max-width: 64%; padding: 8px 12px; font-size: .94rem; line-height: 1.38; white-space: pre-wrap; word-break: break-word; }
+        .ib-bub.in  { background: #f0f0f0; color: #050505; border-radius: 18px; }
+        .ib-bub.out { background: #0084ff; color: #fff; border-radius: 18px; }
+        .ib-bub.media { background: transparent; padding: 0; }
+        .ib-bub img { max-width: 230px; border-radius: 16px; display: block; }
+        .ib-time-mini { font-size: .68rem; color: #8a8d91; margin: 2px 6px 8px; }
+        .ib-time-mini.out { text-align: right; }
 
         .ib-composer { padding: 12px 16px 14px; background: #fff; border-top: 1px solid #ecedf1; position: relative; }
         .ib-box { display: flex; align-items: center; gap: 12px; background: #fff; border: 1px solid #e3e6ea; border-radius: 16px; padding: 12px 16px; }
@@ -212,10 +214,10 @@
             document.getElementById('reply-input').placeholder = 'Відповідь у ' + chLabel(c.channel) + '…';
             const av = document.getElementById('composer-av');
             av.innerHTML = '<i class="bi bi-shop"></i>';
-            if (c.store_id) {
+            if (c.conn_id) {
                 const img = new Image();
                 img.onload = () => { av.innerHTML = ''; av.appendChild(img); };
-                img.src = 'https://graph.facebook.com/' + c.store_id + '/picture?type=square&width=80&height=80';
+                img.src = '/inbox/page-avatar/' + c.conn_id;
             }
             renderMessages(data.messages);
             renderInfo(c);
@@ -251,10 +253,14 @@
 
         function renderMessages(messages) {
             const box = document.getElementById('thread-messages');
-            box.innerHTML = messages.map(m => {
+            box.innerHTML = messages.map((m, i) => {
                 const out = m.direction === 'out';
                 const atts = (m.attachments || []).map(a => a.url ? `<img src="${esc(a.url)}">` : '').join('');
-                return `<div class="ib-row ${out ? 'out' : ''}"><div class="ib-bub ${out ? 'out' : 'in'}">${m.text ? esc(m.text) : ''}${atts}<div class="t">${esc(m.sent_at_human || '')}</div></div></div>`;
+                const media = atts && !m.text ? ' media' : '';
+                const next = messages[i + 1];
+                const showTime = !next || next.direction !== m.direction;
+                const time = showTime ? `<div class="ib-time-mini ${out ? 'out' : ''}">${esc(m.sent_at_human || '')}</div>` : '';
+                return `<div class="ib-row ${out ? 'out' : ''}"><div class="ib-bub ${out ? 'out' : 'in'}${media}">${m.text ? esc(m.text) : ''}${atts}</div></div>${time}`;
             }).join('');
             box.scrollTop = box.scrollHeight;
         }
