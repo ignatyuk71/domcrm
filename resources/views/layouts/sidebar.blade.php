@@ -368,6 +368,7 @@
         $canSeePacking = $isOwner || $isOperator || $isPacker;
         $canSeeCommunication = $isOwner || $isOperator;
         $canSeeContent = $isOwner || $isOperator;
+        $inboxUnread = $canSeeCommunication ? (int) \App\Models\InboxConversation::sum('unread_count') : 0;
     @endphp
 
     <nav class="sidebar-nav">
@@ -439,6 +440,14 @@
 
         @if($canSeeCommunication)
             <div class="nav-divider">Комунікація</div>
+
+            <a href="{{ route('inbox.index') }}" class="sidebar-link {{ request()->is('inbox*') ? 'active' : '' }}">
+                <span class="icon-frame"><i class="bi bi-chat-dots-fill"></i></span>
+                <span class="item-text">Чат</span>
+                @if($inboxUnread > 0)
+                    <span class="badge rounded-pill ms-auto me-2 shadow-sm" style="background:#ef4444; font-size:0.75rem; padding:5px 10px;">{{ $inboxUnread }}</span>
+                @endif
+            </a>
 
             <a href="{{ url('/customers') }}" class="sidebar-link {{ request()->is('customers*') ? 'active' : '' }}">
                 <span class="icon-frame"><i class="bi bi-people-fill"></i></span>

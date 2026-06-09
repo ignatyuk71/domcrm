@@ -21,6 +21,7 @@ use App\Http\Controllers\MessageTemplateController;
 use App\Http\Controllers\IntegrationSettingsController;
 use App\Http\Controllers\IntegrationMappingController;
 use App\Http\Controllers\MetaConnectionController;
+use App\Http\Controllers\InboxController;
 use App\Models\Order;
 use App\Models\OrderItem;
 use Carbon\Carbon;
@@ -88,6 +89,14 @@ Route::middleware('auth')->group(function () {
         Route::get('/customers', [CustomerController::class, 'index'])->name('customers.index');
         Route::get('/customers/{customer}', [CustomerController::class, 'show'])->name('customers.show');
         Route::put('/api/customers/{customer}', [CustomerController::class, 'update'])->name('customers.update');
+    });
+
+    // --- ЧАТ / ІНБОКС (Messenger + Instagram) ---
+    Route::middleware('role:owner,operator')->group(function () {
+        Route::get('/inbox', [InboxController::class, 'index'])->name('inbox.index');
+        Route::get('/api/inbox/conversations', [InboxController::class, 'conversations'])->name('inbox.conversations');
+        Route::get('/api/inbox/conversations/{conversation}/messages', [InboxController::class, 'messages'])->name('inbox.messages');
+        Route::post('/api/inbox/conversations/{conversation}/send', [InboxController::class, 'send'])->name('inbox.send');
     });
 
     Route::middleware('role:owner,operator')->group(function () {

@@ -11,10 +11,14 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * Розбирає вебхук-події Meta (Messenger + Instagram) і складає вхідні
- * повідомлення в inbox_* таблиці. Без відправки — лише прийом (Фаза 2, крок 1).
+ * повідомлення в inbox_* таблиці. Без відправки — лише прийом.
  */
 class MetaWebhookProcessor
 {
+    public function __construct(private MetaOAuthService $oauth)
+    {
+    }
+
     /** Перевірка підпису X-Hub-Signature-256 (HMAC-SHA256 тіла на app_secret). */
     public function verifySignature(string $rawBody, ?string $signatureHeader): bool
     {
@@ -49,7 +53,6 @@ class MetaWebhookProcessor
     {
         $message = $event['message'] ?? null;
 
-        // Поки беремо лише вхідні текст/медіа. Echo (наші ж), delivery, read — пропускаємо.
         if (!$message || !empty($message['is_echo'])) {
             return false;
         }
@@ -60,7 +63,6 @@ class MetaWebhookProcessor
             return false;
         }
 
-        // Знайти підключення: FB → page_id = recipient; IG → ig_account_id = recipient/entry id.
         $connection = $channel === 'instagram'
             ? MetaConnection::query()
                 ->where('ig_account_id', $recipientId)
@@ -83,6 +85,14 @@ class MetaWebhookProcessor
             'channel' => $channel,
             'external_id' => (string) $senderId,
         ]);
+
+        // Best-effort: підтягнути імʼя при першому повідомленні.
+        if ($contact->wasRecentlyCreated && !$contact->name) {
+            $name = $this->oauth->getUserName($connection->page_access_token, (string) $senderId);
+            if ($name) {
+                $contact->update(['name' => $name]);
+            }
+        }
 
         $conversation = InboxConversation::firstOrCreate(
             ['inbox_contact_id' => $contact->id],

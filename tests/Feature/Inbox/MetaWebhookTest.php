@@ -15,7 +15,8 @@ class MetaWebhookTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        // За замовчуванням без перевірки підпису, щоб тести прийому не залежали від секрету.
+        // Без реальних HTTP (підтягування імені контакта) і без перевірки підпису за замовчуванням.
+        \Illuminate\Support\Facades\Http::fake();
         config(['services.meta.app_secret' => '']);
     }
 

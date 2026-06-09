@@ -132,4 +132,19 @@ class MetaOAuthService
 
         return $r->successful() ? $r->json() : null;
     }
+
+    /** Імʼя користувача (best-effort) для відображення в інбоксі. */
+    public function getUserName(string $pageToken, string $userId): ?string
+    {
+        try {
+            $r = Http::timeout(5)->get($this->graph()."/{$userId}", [
+                'fields' => 'name',
+                'access_token' => $pageToken,
+            ]);
+
+            return $r->successful() ? ($r->json('name') ?: null) : null;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
 }
