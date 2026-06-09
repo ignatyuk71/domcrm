@@ -50,23 +50,35 @@
         .ib-bub .t { font-size: .68rem; margin-top: 4px; opacity: .7; }
         .ib-bub img { max-width: 220px; border-radius: 10px; margin-top: 4px; display: block; }
 
-        .ib-composer { padding: 14px 18px; background: #fff; border-top: 1px solid #ecedf1; }
-        .ib-composer .box { display: flex; align-items: center; gap: 8px; background: #f5f6fa; border: 1px solid #ecedf1; border-radius: 24px; padding: 4px 6px 4px 16px; }
-        .ib-composer input { flex: 1; border: none; background: transparent; outline: none; font-size: .92rem; padding: 8px 0; }
-        .ib-send { width: 40px; height: 40px; border-radius: 50%; border: none; background: linear-gradient(135deg,#6366f1,#8b5cf6); color: #fff; display: flex; align-items: center; justify-content: center; transition: .15s; }
+        .ib-composer { padding: 12px 18px 14px; background: #fff; border-top: 1px solid #ecedf1; }
+        .ib-tools { display: flex; align-items: center; gap: 2px; margin-bottom: 8px; position: relative; }
+        .ib-tool { width: 36px; height: 36px; border-radius: 9px; border: none; background: transparent; color: #64748b; display: inline-flex; align-items: center; justify-content: center; font-size: 1.15rem; transition: .15s; }
+        .ib-tool:hover { background: #f1f2f6; color: #4f46e5; }
+        .ib-pop { position: absolute; bottom: 44px; left: 0; background: #fff; border: 1px solid #e6e8ee; border-radius: 14px; box-shadow: 0 14px 36px rgba(16,24,40,.16); z-index: 50; padding: 10px; }
+        .ib-emoji-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; width: 286px; }
+        .ib-emoji-grid button { border: none; background: transparent; font-size: 1.3rem; padding: 5px; border-radius: 8px; cursor: pointer; }
+        .ib-emoji-grid button:hover { background: #f1f2f6; }
+        .ib-tpl { width: 330px; max-height: 300px; overflow-y: auto; }
+        .ib-tpl-item { padding: 9px 11px; border-radius: 9px; cursor: pointer; }
+        .ib-tpl-item:hover { background: #f5f6ff; }
+        .ib-tpl-item .tt { font-weight: 600; font-size: .86rem; color: #0f172a; }
+        .ib-tpl-item .bd { font-size: .78rem; color: #94a3b8; }
+        .ib-box { display: flex; align-items: center; gap: 8px; background: #f5f6fa; border: 1px solid #ecedf1; border-radius: 24px; padding: 4px 6px 4px 16px; }
+        .ib-box input { flex: 1; border: none; background: transparent; outline: none; font-size: .92rem; padding: 8px 0; }
+        .ib-send { width: 40px; height: 40px; border-radius: 50%; border: none; background: linear-gradient(135deg,#6366f1,#8b5cf6); color: #fff; display: flex; align-items: center; justify-content: center; transition: .15s; flex-shrink: 0; }
         .ib-send:hover { filter: brightness(1.08); transform: scale(1.05); }
         .ib-send:disabled { opacity: .5; }
 
         .ib-empty { margin: auto; text-align: center; color: #94a3b8; padding: 24px; }
         .ib-empty i { font-size: 2.6rem; opacity: .35; }
         .ib-sec-title { text-transform: uppercase; font-size: .68rem; letter-spacing: .6px; color: #94a3b8; font-weight: 700; }
-        .ib-convs::-webkit-scrollbar, .ib-msgs::-webkit-scrollbar, .ib-info-body::-webkit-scrollbar { width: 7px; }
-        .ib-convs::-webkit-scrollbar-thumb, .ib-msgs::-webkit-scrollbar-thumb, .ib-info-body::-webkit-scrollbar-thumb { background: #d8dae2; border-radius: 8px; }
+        .ib-convs::-webkit-scrollbar, .ib-msgs::-webkit-scrollbar, .ib-info-body::-webkit-scrollbar, .ib-tpl::-webkit-scrollbar { width: 7px; }
+        .ib-convs::-webkit-scrollbar-thumb, .ib-msgs::-webkit-scrollbar-thumb, .ib-info-body::-webkit-scrollbar-thumb, .ib-tpl::-webkit-scrollbar-thumb { background: #d8dae2; border-radius: 8px; }
     </style>
 
     <div class="ib-wrap d-flex">
 
-        {{-- 25% — список діалогів --}}
+        {{-- 25% --}}
         <div class="ib-col ib-list">
             <div class="ib-head d-flex align-items-center justify-content-between">
                 <span class="ib-title"><i class="bi bi-chat-dots-fill text-primary me-1"></i>Чат</span>
@@ -84,22 +96,26 @@
                 <button class="ib-chip" data-f="facebook" onclick="setFilter('facebook', this)"><i class="bi bi-messenger"></i> Messenger</button>
                 <button class="ib-chip" data-f="instagram" onclick="setFilter('instagram', this)"><i class="bi bi-instagram"></i> Instagram</button>
             </div>
-            <div id="conv-list" class="ib-convs">
-                <div class="ib-empty">Завантаження…</div>
-            </div>
+            <div id="conv-list" class="ib-convs"><div class="ib-empty">Завантаження…</div></div>
         </div>
 
-        {{-- 45% — діалог --}}
+        {{-- 45% --}}
         <div class="ib-col ib-thread">
-            <div id="thread-empty" class="ib-empty m-auto">
-                <i class="bi bi-chat-left-text d-block mb-2"></i>
-                Обери діалог зліва
-            </div>
+            <div id="thread-empty" class="ib-empty m-auto"><i class="bi bi-chat-left-text d-block mb-2"></i>Обери діалог зліва</div>
             <div id="thread" class="d-none ib-col h-100">
                 <div id="thread-header" class="ib-thead"></div>
                 <div id="thread-messages" class="ib-msgs"></div>
                 <div class="ib-composer">
-                    <form id="reply-form" class="box">
+                    <div class="ib-tools">
+                        <button type="button" class="ib-tool" title="Фото / файл" onclick="document.getElementById('file-input').click()"><i class="bi bi-paperclip"></i></button>
+                        <button type="button" class="ib-tool" title="Швидкі шаблони" onclick="toggleTpl()"><i class="bi bi-chat-square-text"></i></button>
+                        <button type="button" class="ib-tool" title="Емодзі" onclick="toggleEmoji()"><i class="bi bi-emoji-smile"></i></button>
+                        <button type="button" class="ib-tool" title="Надіслати 👍" onclick="sendLike()"><i class="bi bi-hand-thumbs-up"></i></button>
+                        <input type="file" id="file-input" class="d-none" accept="image/*,application/pdf,.doc,.docx" onchange="sendFile(this)">
+                        <div id="emoji-pop" class="ib-pop d-none"><div class="ib-emoji-grid"></div></div>
+                        <div id="tpl-pop" class="ib-pop d-none"><div class="ib-tpl"><div class="text-muted small p-2">Завантаження…</div></div></div>
+                    </div>
+                    <form id="reply-form" class="ib-box">
                         <input id="reply-input" placeholder="Напишіть відповідь…" autocomplete="off">
                         <button class="ib-send" type="submit"><i class="bi bi-send-fill"></i></button>
                     </form>
@@ -108,12 +124,9 @@
             </div>
         </div>
 
-        {{-- 30% — інформація --}}
+        {{-- 30% --}}
         <div class="ib-col ib-info">
-            <div id="info-empty" class="ib-empty m-auto">
-                <i class="bi bi-person-circle d-block mb-2"></i>
-                Інформація про контакт
-            </div>
+            <div id="info-empty" class="ib-empty m-auto"><i class="bi bi-person-circle d-block mb-2"></i>Інформація про контакт</div>
             <div id="info" class="d-none ib-info-body" style="overflow-y:auto"></div>
         </div>
     </div>
@@ -121,7 +134,7 @@
     @push('scripts')
     <script>
         const CSRF = document.querySelector('meta[name="csrf-token"]').content;
-        let activeId = null, allConvs = [], filter = 'all', search = '';
+        let activeId = null, allConvs = [], filter = 'all', search = '', tplItems = [], tplLoaded = false;
 
         const esc = (s) => { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; };
         const chLabel = (ch) => ch === 'instagram' ? 'Instagram' : 'Messenger';
@@ -179,7 +192,6 @@
             const res = await fetch(`/api/inbox/conversations/${id}/messages`, { headers: { 'Accept': 'application/json' } });
             const data = await res.json();
             const c = data.conversation;
-
             document.getElementById('thread-empty').classList.add('d-none');
             const t = document.getElementById('thread');
             t.classList.remove('d-none'); t.classList.add('d-flex');
@@ -228,41 +240,98 @@
             box.scrollTop = box.scrollHeight;
         }
 
+        function showErr(m) { const e = document.getElementById('reply-error'); e.textContent = m; e.classList.remove('d-none'); }
+
+        async function sendMessage(text) {
+            if (!activeId || !text) return;
+            const res = await fetch(`/api/inbox/conversations/${activeId}/send`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
+                body: JSON.stringify({ text })
+            });
+            const data = await res.json();
+            if (!res.ok || !data.ok) { showErr(data.error || 'Помилка відправки'); return; }
+            await openConversation(activeId);
+        }
+
         document.getElementById('reply-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            if (!activeId) return;
             const input = document.getElementById('reply-input');
             const text = input.value.trim();
             if (!text) return;
-            const errEl = document.getElementById('reply-error'); errEl.classList.add('d-none');
+            document.getElementById('reply-error').classList.add('d-none');
             input.disabled = true;
+            await sendMessage(text);
+            input.value = ''; input.disabled = false; input.focus();
+        });
+
+        function sendLike() { sendMessage('👍'); }
+
+        // --- емодзі ---
+        const EMOJIS = ['😊','😂','❤️','👍','🙏','🔥','😍','🎉','👌','✅','🤝','😉','🙂','😅','💪','👋','📦','🚚','💰','❓','😎','🤔','🥰','👏','💯','🙌','😢','🤗'];
+        function toggleEmoji() {
+            document.getElementById('tpl-pop').classList.add('d-none');
+            const p = document.getElementById('emoji-pop');
+            if (!p.dataset.filled) {
+                p.querySelector('.ib-emoji-grid').innerHTML = EMOJIS.map(e => `<button type="button" onclick="insertText('${e}')">${e}</button>`).join('');
+                p.dataset.filled = '1';
+            }
+            p.classList.toggle('d-none');
+        }
+        function insertText(t) { const i = document.getElementById('reply-input'); i.value += t; i.focus(); }
+
+        // --- шаблони ---
+        async function toggleTpl() {
+            document.getElementById('emoji-pop').classList.add('d-none');
+            const p = document.getElementById('tpl-pop');
+            p.classList.toggle('d-none');
+            if (!tplLoaded && !p.classList.contains('d-none')) {
+                try {
+                    const res = await fetch('{{ route('templates.list') }}', { headers: { 'Accept': 'application/json' } });
+                    tplItems = (await res.json()).data || [];
+                    p.querySelector('.ib-tpl').innerHTML = tplItems.length
+                        ? tplItems.map((t, i) => `<div class="ib-tpl-item" onclick="useTpl(${i})"><div class="tt">${esc(t.title)}</div><div class="bd text-truncate">${esc(t.content)}</div></div>`).join('')
+                        : '<div class="text-muted small p-2">Немає шаблонів. Додай у розділі «Шаблони».</div>';
+                    tplLoaded = true;
+                } catch (e) { p.querySelector('.ib-tpl').innerHTML = '<div class="text-danger small p-2">Помилка завантаження</div>'; }
+            }
+        }
+        function useTpl(i) {
+            document.getElementById('reply-input').value = tplItems[i].content;
+            document.getElementById('tpl-pop').classList.add('d-none');
+            document.getElementById('reply-input').focus();
+        }
+
+        // --- файл ---
+        async function sendFile(input) {
+            if (!activeId || !input.files.length) return;
+            const fd = new FormData();
+            fd.append('file', input.files[0]);
+            input.value = '';
+            document.getElementById('reply-error').classList.add('d-none');
             try {
-                const res = await fetch(`/api/inbox/conversations/${activeId}/send`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
-                    body: JSON.stringify({ text })
+                const res = await fetch(`/api/inbox/conversations/${activeId}/send-attachment`, {
+                    method: 'POST', headers: { 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' }, body: fd
                 });
                 const data = await res.json();
-                if (!res.ok || !data.ok) throw new Error(data.error || 'Помилка відправки');
-                input.value = '';
+                if (!res.ok || !data.ok) throw new Error(data.error || 'Не вдалося надіслати');
                 await openConversation(activeId);
-            } catch (err) {
-                errEl.textContent = err.message; errEl.classList.remove('d-none');
-            } finally {
-                input.disabled = false; input.focus();
-            }
-        });
+            } catch (err) { showErr(err.message); }
+        }
 
         async function syncHistory(btn) {
             const prev = btn.innerHTML;
             btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-            try {
-                await fetch('{{ route('inbox.sync') }}', { method: 'POST', headers: { 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' } });
-                await loadConversations();
-            } catch (e) {} finally {
-                btn.disabled = false; btn.innerHTML = prev;
-            }
+            try { await fetch('{{ route('inbox.sync') }}', { method: 'POST', headers: { 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' } }); await loadConversations(); }
+            catch (e) {} finally { btn.disabled = false; btn.innerHTML = prev; }
         }
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.ib-tool') && !e.target.closest('.ib-pop')) {
+                document.getElementById('emoji-pop')?.classList.add('d-none');
+                document.getElementById('tpl-pop')?.classList.add('d-none');
+            }
+        });
 
         loadConversations();
         setInterval(() => {

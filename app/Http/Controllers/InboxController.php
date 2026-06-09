@@ -8,6 +8,7 @@ use App\Models\MetaConnection;
 use App\Services\Meta\MetaSendService;
 use App\Services\Meta\MetaSyncService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class InboxController extends Controller
 {
@@ -127,6 +128,51 @@ class InboxController extends Controller
                 'sent_at_human' => now()->format('d.m H:i'),
             ],
         ]);
+    }
+
+    /** Надіслати вкладення (фото/файл) клієнту. */
+    public function sendAttachment(Request $request, InboxConversation $conversation)
+    {
+        $request->validate(['file' => ['required', 'file', 'max:10240']]);
+
+        $conversation->loadMissing(['connection', 'contact']);
+        $conn = $conversation->connection;
+        $contact = $conversation->contact;
+        if (!$conn || !$contact) {
+            return response()->json(['ok' => false, 'error' => 'Немає підключення або контакту'], 422);
+        }
+
+        $file = $request->file('file');
+        $mime = (string) $file->getMimeType();
+        $ext = $file->getClientOriginalExtension() ?: ($file->guessExtension() ?: 'bin');
+        $name = Str::random(24) . '.' . $ext;
+        $file->move(public_path('inbox-uploads'), $name);
+        $url = url('inbox-uploads/' . $name);
+        $type = str_starts_with($mime, 'image/') ? 'image' : 'file';
+
+        $res = app(MetaSendService::class)->sendAttachment($conn, $contact->external_id, $type, $url);
+        if (!($res['ok'] ?? false)) {
+            return response()->json(['ok' => false, 'error' => $res['error'] ?? 'Помилка відправки'], 502);
+        }
+
+        InboxMessage::create([
+            'inbox_conversation_id' => $conversation->id,
+            'direction' => 'out',
+            'sender' => 'agent',
+            'external_message_id' => $res['message_id'] ?? null,
+            'text' => null,
+            'attachments' => [['type' => $type, 'url' => $url]],
+            'sent_at' => now(),
+        ]);
+
+        $conversation->update([
+            'last_message_at' => now(),
+            'last_message_text' => '[вкладення]',
+            'last_message_direction' => 'out',
+            'unread_count' => 0,
+        ]);
+
+        return response()->json(['ok' => true]);
     }
 
     private function contactName(?string $name, ?string $externalId): string
