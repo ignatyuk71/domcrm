@@ -86,11 +86,14 @@ class MetaWebhookProcessor
             'external_id' => (string) $senderId,
         ]);
 
-        // Best-effort: підтягнути імʼя при першому повідомленні.
-        if ($contact->wasRecentlyCreated && !$contact->name) {
-            $name = $this->oauth->getUserName($connection->page_access_token, (string) $senderId);
-            if ($name) {
-                $contact->update(['name' => $name]);
+        // Best-effort: підтягнути імʼя + аватар при першому повідомленні.
+        if ($contact->wasRecentlyCreated) {
+            $profile = $this->oauth->getUserProfile($connection->page_access_token, (string) $senderId);
+            if ($profile) {
+                $contact->update(array_filter([
+                    'name' => $profile['name'] ?? null,
+                    'profile_pic' => $profile['profile_pic'] ?? null,
+                ]));
             }
         }
 

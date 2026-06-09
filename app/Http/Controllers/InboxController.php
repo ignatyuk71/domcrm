@@ -18,7 +18,7 @@ class InboxController extends Controller
     public function conversations()
     {
         $items = InboxConversation::query()
-            ->with(['connection:id,page_name', 'contact:id,name,external_id'])
+            ->with(['connection:id,page_name', 'contact:id,name,external_id,profile_pic'])
             ->orderByDesc('last_message_at')
             ->limit(200)
             ->get()
@@ -27,6 +27,7 @@ class InboxController extends Controller
                 'store' => $c->connection?->page_name ?? '—',
                 'channel' => $c->channel,
                 'contact_name' => $this->contactName($c->contact?->name, $c->contact?->external_id),
+                'avatar' => $c->contact?->profile_pic,
                 'last_text' => $c->last_message_text,
                 'last_direction' => $c->last_message_direction,
                 'last_at_human' => $c->last_message_at?->diffForHumans(),
@@ -39,7 +40,7 @@ class InboxController extends Controller
     /** Повідомлення діалогу + позначити прочитаним. */
     public function messages(InboxConversation $conversation)
     {
-        $conversation->loadMissing(['connection:id,page_name', 'contact:id,name,external_id']);
+        $conversation->loadMissing(['connection:id,page_name', 'contact:id,name,external_id,profile_pic']);
 
         $messages = $conversation->messages()
             ->orderBy('id')
@@ -62,6 +63,7 @@ class InboxController extends Controller
                 'store' => $conversation->connection?->page_name ?? '—',
                 'channel' => $conversation->channel,
                 'contact_name' => $this->contactName($conversation->contact?->name, $conversation->contact?->external_id),
+                'avatar' => $conversation->contact?->profile_pic,
             ],
             'messages' => $messages,
         ]);

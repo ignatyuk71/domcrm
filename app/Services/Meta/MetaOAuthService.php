@@ -133,18 +133,25 @@ class MetaOAuthService
         return $r->successful() ? $r->json() : null;
     }
 
-    /** Імʼя користувача (best-effort) для відображення в інбоксі. */
-    public function getUserName(string $pageToken, string $userId): ?string
+    /** Профіль користувача (імʼя + аватар), best-effort, для інбоксу. */
+    public function getUserProfile(string $pageToken, string $userId): array
     {
         try {
             $r = Http::timeout(5)->get($this->graph()."/{$userId}", [
-                'fields' => 'name',
+                'fields' => 'name,profile_pic',
                 'access_token' => $pageToken,
             ]);
 
-            return $r->successful() ? ($r->json('name') ?: null) : null;
+            if (!$r->successful()) {
+                return [];
+            }
+
+            return array_filter([
+                'name' => $r->json('name'),
+                'profile_pic' => $r->json('profile_pic'),
+            ]);
         } catch (\Throwable) {
-            return null;
+            return [];
         }
     }
 }

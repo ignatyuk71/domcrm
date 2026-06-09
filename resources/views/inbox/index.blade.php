@@ -2,7 +2,7 @@
     <div class="d-flex" style="height: calc(100vh - 64px); overflow: hidden;">
 
         {{-- ЛІВА ПАНЕЛЬ: список діалогів --}}
-        <div class="border-end bg-white d-flex flex-column" style="width: 360px; min-width: 280px;">
+        <div class="border-end bg-white d-flex flex-column" style="width: 340px; min-width: 300px;">
             <div class="p-3 border-bottom d-flex align-items-center justify-content-between">
                 <h2 class="h6 fw-bold mb-0"><i class="bi bi-chat-dots-fill text-primary me-1"></i>Чат</h2>
                 <button onclick="loadConversations()" class="btn btn-sm btn-light" title="Оновити"><i class="bi bi-arrow-clockwise"></i></button>
@@ -12,13 +12,12 @@
             </div>
         </div>
 
-        {{-- ПРАВА ПАНЕЛЬ: діалог --}}
+        {{-- ЦЕНТР: діалог --}}
         <div class="flex-grow-1 d-flex flex-column bg-light position-relative">
             <div id="thread-empty" class="m-auto text-center text-muted">
                 <i class="bi bi-chat-left-text fs-1 d-block mb-2 opacity-50"></i>
                 Обери діалог зліва
             </div>
-
             <div id="thread" class="d-none flex-column h-100 w-100">
                 <div id="thread-header" class="p-3 border-bottom bg-white"></div>
                 <div id="thread-messages" class="flex-grow-1 overflow-auto p-3"></div>
@@ -31,6 +30,15 @@
                 </div>
             </div>
         </div>
+
+        {{-- ПРАВА ПАНЕЛЬ: інформація про контакт --}}
+        <div class="border-start bg-white d-none d-lg-flex flex-column" style="width: 300px;" id="info-panel">
+            <div id="info-empty" class="m-auto text-center text-muted p-3">
+                <i class="bi bi-person-circle fs-1 d-block mb-2 opacity-50"></i>
+                Інформація про контакт
+            </div>
+            <div id="info" class="d-none overflow-auto"></div>
+        </div>
     </div>
 
     @push('scripts')
@@ -38,11 +46,23 @@
         const CSRF = document.querySelector('meta[name="csrf-token"]').content;
         let activeId = null;
 
-        const channelIcon = (ch) => ch === 'instagram'
-            ? '<i class="bi bi-instagram text-danger"></i>'
-            : '<i class="bi bi-messenger text-primary"></i>';
-
         const esc = (s) => { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; };
+
+        function channelLabel(ch) { return ch === 'instagram' ? 'Instagram' : 'Messenger'; }
+
+        function avatarHtml(name, url, channel, size = 46) {
+            const letter = esc((name || '?').trim().charAt(0).toUpperCase() || '?');
+            const chIcon = channel === 'instagram'
+                ? '<i class="bi bi-instagram" style="color:#E1306C"></i>'
+                : '<i class="bi bi-messenger" style="color:#0084FF"></i>';
+            const img = url
+                ? `<img src="${esc(url)}" onerror="this.style.display='none'" style="position:absolute;inset:0;width:${size}px;height:${size}px;border-radius:50%;object-fit:cover">`
+                : '';
+            return `<span class="position-relative flex-shrink-0 d-inline-flex align-items-center justify-content-center" style="width:${size}px;height:${size}px;border-radius:50%;background:#6366f1;color:#fff;font-weight:600">
+                ${letter}${img}
+                <span class="position-absolute d-flex align-items-center justify-content-center" style="bottom:-3px;right:-3px;width:18px;height:18px;background:#fff;border-radius:50%;font-size:11px;box-shadow:0 0 0 1px #e5e7eb">${chIcon}</span>
+            </span>`;
+        }
 
         async function loadConversations() {
             try {
@@ -51,18 +71,18 @@
                 const el = document.getElementById('conv-list');
                 if (!items.length) { el.innerHTML = '<div class="text-center text-muted p-4">Поки немає діалогів</div>'; return; }
                 el.innerHTML = items.map(c => `
-                    <div class="p-3 border-bottom ${c.id === activeId ? 'bg-primary-subtle' : ''}" style="cursor:pointer" onclick="openConversation(${c.id})">
-                        <div class="d-flex justify-content-between align-items-start">
-                            <div class="fw-semibold text-truncate" style="max-width:200px">${esc(c.contact_name)}</div>
-                            <small class="text-muted text-nowrap ms-2">${esc(c.last_at_human || '')}</small>
-                        </div>
-                        <div class="small text-muted d-flex align-items-center gap-1 mt-1">
-                            ${channelIcon(c.channel)}
-                            <span class="text-truncate" style="max-width:180px">${c.last_direction === 'out' ? 'Ви: ' : ''}${esc(c.last_text || '')}</span>
-                        </div>
-                        <div class="d-flex justify-content-between align-items-center mt-1">
-                            <span class="badge bg-light text-secondary border fw-normal">${esc(c.store)}</span>
-                            ${c.unread > 0 ? `<span class="badge bg-danger rounded-pill">${c.unread}</span>` : ''}
+                    <div class="d-flex gap-2 p-2 px-3 border-bottom align-items-center ${c.id === activeId ? 'bg-primary-subtle' : ''}" style="cursor:pointer" onclick="openConversation(${c.id})">
+                        ${avatarHtml(c.contact_name, c.avatar, c.channel, 46)}
+                        <div class="flex-grow-1" style="min-width:0">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="fw-semibold text-truncate">${esc(c.contact_name)}</span>
+                                <small class="text-muted text-nowrap ms-2">${esc(c.last_at_human || '')}</small>
+                            </div>
+                            <div class="small text-muted text-truncate">${c.last_direction === 'out' ? 'Ви: ' : ''}${esc(c.last_text || '')}</div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <small class="text-secondary text-truncate">${esc(c.store)}</small>
+                                ${c.unread > 0 ? `<span class="badge bg-danger rounded-pill">${c.unread}</span>` : ''}
+                            </div>
                         </div>
                     </div>`).join('');
             } catch (e) { /* ignore poll errors */ }
@@ -72,14 +92,38 @@
             activeId = id;
             const res = await fetch(`/api/inbox/conversations/${id}/messages`, { headers: { 'Accept': 'application/json' } });
             const data = await res.json();
+            const c = data.conversation;
+
             document.getElementById('thread-empty').classList.add('d-none');
             const t = document.getElementById('thread');
             t.classList.remove('d-none'); t.classList.add('d-flex');
             document.getElementById('thread-header').innerHTML = `
-                <div class="fw-bold">${esc(data.conversation.contact_name)}</div>
-                <small class="text-muted">${channelIcon(data.conversation.channel)} ${esc(data.conversation.store)}</small>`;
+                <div class="d-flex align-items-center gap-2">
+                    ${avatarHtml(c.contact_name, c.avatar, c.channel, 40)}
+                    <div>
+                        <div class="fw-bold">${esc(c.contact_name)}</div>
+                        <small class="text-muted">${channelLabel(c.channel)} • ${esc(c.store)}</small>
+                    </div>
+                </div>`;
             renderMessages(data.messages);
+            renderInfo(c);
             loadConversations();
+        }
+
+        function renderInfo(c) {
+            document.getElementById('info-empty').classList.add('d-none');
+            const box = document.getElementById('info');
+            box.classList.remove('d-none');
+            box.innerHTML = `
+                <div class="p-4 text-center border-bottom">
+                    ${avatarHtml(c.contact_name, c.avatar, c.channel, 72)}
+                    <div class="fw-bold mt-2">${esc(c.contact_name)}</div>
+                    <div class="small text-muted">${channelLabel(c.channel)} • ${esc(c.store)}</div>
+                </div>
+                <div class="p-3">
+                    <div class="text-uppercase text-muted fw-bold mb-2" style="font-size:.7rem; letter-spacing:.5px">Контакт</div>
+                    <div class="text-muted small">Тут зʼявляться деталі: телефон, привʼязаний клієнт CRM, замовлення, нотатки.</div>
+                </div>`;
         }
 
         function renderMessages(messages) {
