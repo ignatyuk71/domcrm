@@ -5,7 +5,10 @@
         <div class="border-end bg-white d-flex flex-column" style="width: 340px; min-width: 300px;">
             <div class="p-3 border-bottom d-flex align-items-center justify-content-between">
                 <h2 class="h6 fw-bold mb-0"><i class="bi bi-chat-dots-fill text-primary me-1"></i>Чат</h2>
-                <button onclick="loadConversations()" class="btn btn-sm btn-light" title="Оновити"><i class="bi bi-arrow-clockwise"></i></button>
+                <div class="d-flex gap-1">
+                    <button onclick="syncHistory(this)" class="btn btn-sm btn-outline-primary" title="Імпортувати історію з Facebook/Instagram"><i class="bi bi-cloud-download"></i></button>
+                    <button onclick="loadConversations()" class="btn btn-sm btn-light" title="Оновити"><i class="bi bi-arrow-clockwise"></i></button>
+                </div>
             </div>
             <div id="conv-list" class="flex-grow-1 overflow-auto">
                 <div class="text-center text-muted p-4">Завантаження…</div>
@@ -86,6 +89,20 @@
                         </div>
                     </div>`).join('');
             } catch (e) { /* ignore poll errors */ }
+        }
+
+        async function syncHistory(btn) {
+            const prev = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+            try {
+                const res = await fetch('{{ route('inbox.sync') }}', { method: 'POST', headers: { 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' } });
+                await res.json();
+                await loadConversations();
+            } catch (e) { /* ignore */ } finally {
+                btn.disabled = false;
+                btn.innerHTML = prev;
+            }
         }
 
         async function openConversation(id) {

@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\InboxConversation;
 use App\Models\InboxMessage;
+use App\Models\MetaConnection;
 use App\Services\Meta\MetaSendService;
+use App\Services\Meta\MetaSyncService;
 use Illuminate\Http\Request;
 
 class InboxController extends Controller
@@ -12,6 +14,17 @@ class InboxController extends Controller
     public function index()
     {
         return view('inbox.index');
+    }
+
+    /** Імпорт історії розмов з Meta (Graph API) для всіх активних підключень. */
+    public function sync(MetaSyncService $sync)
+    {
+        $imported = 0;
+        foreach (MetaConnection::where('status', 'active')->get() as $conn) {
+            $imported += $sync->syncConnection($conn);
+        }
+
+        return response()->json(['ok' => true, 'imported' => $imported]);
     }
 
     /** Список діалогів для лівої панелі. */

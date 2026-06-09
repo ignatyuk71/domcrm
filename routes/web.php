@@ -97,6 +97,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/api/inbox/conversations', [InboxController::class, 'conversations'])->name('inbox.conversations');
         Route::get('/api/inbox/conversations/{conversation}/messages', [InboxController::class, 'messages'])->name('inbox.messages');
         Route::post('/api/inbox/conversations/{conversation}/send', [InboxController::class, 'send'])->name('inbox.send');
+        Route::post('/api/inbox/sync', [InboxController::class, 'sync'])->name('inbox.sync');
     });
 
     Route::middleware('role:owner,operator')->group(function () {
