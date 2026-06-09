@@ -55,15 +55,17 @@
         .ib-time-mini.out { text-align: right; }
 
         .ib-composer { padding: 12px 16px 14px; background: #fff; border-top: 1px solid #ecedf1; position: relative; }
-        .ib-box { display: flex; align-items: center; gap: 12px; background: #fff; border: 1px solid #e3e6ea; border-radius: 16px; padding: 12px 16px; }
+        .ib-box { display: flex; align-items: flex-start; gap: 12px; background: #fff; border: 1px solid #e3e6ea; border-radius: 16px; padding: 10px 14px; }
         .ib-box:focus-within { border-color: #cfd3da; }
-        .ib-box-av { width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #eef0f3; color: #9aa3af; font-size: 17px; }
+        .ib-box-av { width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #eef0f3; color: #9aa3af; font-size: 17px; margin-top: 2px; }
         .ib-box-av img { width: 100%; height: 100%; object-fit: cover; }
-        .ib-box input { flex: 1; border: none; background: transparent; outline: none; font-size: 1rem; color: #1c1e21; padding: 4px 0; }
-        .ib-box input::placeholder { color: #8a8d91; }
-        .ib-box-tools { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+        .ib-box textarea { flex: 1; border: none; background: transparent; outline: none; font-size: 1rem; color: #1c1e21; padding: 7px 0; resize: none; max-height: 168px; overflow-y: auto; line-height: 1.4; font-family: inherit; }
+        .ib-box textarea::placeholder { color: #8a8d91; }
+        .ib-box-tools { display: flex; align-items: center; gap: 8px; flex-shrink: 0; align-self: flex-end; }
         .ib-tool { width: 34px; height: 34px; border-radius: 50%; border: none; background: transparent; color: #1c1e21; display: inline-flex; align-items: center; justify-content: center; font-size: 22px; cursor: pointer; padding: 0; transition: background .12s; }
         .ib-tool:hover { background: #f0f1f4; }
+        .ib-send-btn { border: none; background: transparent; color: #0084ff; font-weight: 600; font-size: .95rem; padding: 6px 8px; cursor: pointer; white-space: nowrap; }
+        .ib-send-btn:hover { text-decoration: underline; }
         .ib-pop { position: absolute; bottom: 56px; right: 14px; left: auto; background: #fff; border: 1px solid #e6e8ee; border-radius: 13px; box-shadow: 0 14px 36px rgba(16,24,40,.16); z-index: 50; padding: 9px; }
         .ib-emoji-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; width: 280px; }
         .ib-emoji-grid button { border: none; background: transparent; font-size: 1.25rem; padding: 4px; border-radius: 7px; cursor: pointer; }
@@ -119,13 +121,14 @@
                     <div id="tpl-pop" class="ib-pop d-none"><div class="ib-tpl"><div class="text-muted small p-2">Завантаження…</div></div></div>
                     <form id="reply-form" class="ib-box">
                         <span class="ib-box-av" id="composer-av"><i class="bi bi-shop"></i></span>
-                        <input id="reply-input" placeholder="Відповідь у Messenger…" autocomplete="off">
+                        <textarea id="reply-input" rows="1" placeholder="Відповідь у Messenger…"></textarea>
                         <div class="ib-box-tools">
                             <button type="button" class="ib-tool" title="Товари / шаблони" onclick="toggleTpl()"><i class="bi bi-bag"></i></button>
                             <button type="button" class="ib-tool" title="Фото / файл" onclick="document.getElementById('file-input').click()"><i class="bi bi-paperclip"></i></button>
                             <button type="button" class="ib-tool" title="Швидкі відповіді" onclick="toggleTpl()"><i class="bi bi-chat"></i></button>
                             <button type="button" class="ib-tool" title="Емодзі" onclick="toggleEmoji()"><i class="bi bi-emoji-smile"></i></button>
-                            <button type="button" class="ib-tool" title="Надіслати 👍" onclick="sendLike()"><i class="bi bi-hand-thumbs-up-fill"></i></button>
+                            <button type="button" class="ib-tool" id="like-btn" title="Надіслати 👍" onclick="sendLike()"><i class="bi bi-hand-thumbs-up-fill"></i></button>
+                            <button type="submit" class="ib-send-btn d-none" id="send-btn">Надіслати</button>
                         </div>
                         <input type="file" id="file-input" class="d-none" accept="image/*,application/pdf,.doc,.docx" onchange="sendFile(this)">
                     </form>
@@ -279,6 +282,22 @@
             await openConversation(activeId);
         }
 
+        const replyTa = document.getElementById('reply-input');
+        function autoGrow() {
+            replyTa.style.height = 'auto';
+            replyTa.style.height = Math.min(replyTa.scrollHeight, 168) + 'px';
+            const has = replyTa.value.trim().length > 0;
+            document.getElementById('like-btn').classList.toggle('d-none', has);
+            document.getElementById('send-btn').classList.toggle('d-none', !has);
+        }
+        replyTa.addEventListener('input', autoGrow);
+        replyTa.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                document.getElementById('reply-form').requestSubmit();
+            }
+        });
+
         document.getElementById('reply-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const input = document.getElementById('reply-input');
@@ -288,6 +307,7 @@
             input.disabled = true;
             await sendMessage(text);
             input.value = ''; input.disabled = false; input.focus();
+            autoGrow();
         });
 
         function sendLike() { sendMessage('👍'); }
@@ -302,7 +322,7 @@
             }
             p.classList.toggle('d-none');
         }
-        function insertText(t) { const i = document.getElementById('reply-input'); i.value += t; i.focus(); }
+        function insertText(t) { const i = document.getElementById('reply-input'); i.value += t; i.focus(); autoGrow(); }
 
         async function toggleTpl() {
             document.getElementById('emoji-pop').classList.add('d-none');
@@ -323,6 +343,7 @@
             document.getElementById('reply-input').value = tplItems[i].content;
             document.getElementById('tpl-pop').classList.add('d-none');
             document.getElementById('reply-input').focus();
+            autoGrow();
         }
 
         async function sendFile(input) {
