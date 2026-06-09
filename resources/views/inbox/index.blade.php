@@ -300,12 +300,12 @@
             await openConversation(activeId);
         }
 
-        let stagedFile = null, stagedGalleryName = null;
+        let stagedFile = null, stagedGalleryId = null;
         const replyTa = document.getElementById('reply-input');
         function autoGrow() {
             replyTa.style.height = 'auto';
             replyTa.style.height = Math.min(replyTa.scrollHeight, 200) + 'px';
-            const has = replyTa.value.trim().length > 0 || !!stagedFile || !!stagedGalleryName;
+            const has = replyTa.value.trim().length > 0 || !!stagedFile || !!stagedGalleryId;
             document.getElementById('like-btn').classList.toggle('d-none', has);
             document.getElementById('send-btn').classList.toggle('d-none', !has);
         }
@@ -321,12 +321,12 @@
             e.preventDefault();
             const input = document.getElementById('reply-input');
             const text = input.value.trim();
-            if (!stagedFile && !stagedGalleryName && !text) return;
+            if (!stagedFile && !stagedGalleryId && !text) return;
             document.getElementById('reply-error').classList.add('d-none');
             input.disabled = true;
             let ok = true;
             if (stagedFile) ok = await uploadAndSendFile(stagedFile);
-            else if (stagedGalleryName) ok = await sendGalleryImage(stagedGalleryName);
+            else if (stagedGalleryId) ok = await sendGalleryImage(stagedGalleryId);
             if (ok) {
                 clearStaged();
                 if (text) await sendMessage(text);
@@ -377,7 +377,7 @@
         function stageFile(input) {
             if (!input.files.length) return;
             stagedFile = input.files[0];
-            stagedGalleryName = null;
+            stagedGalleryId = null;
             const thumb = document.getElementById('attach-thumb');
             const fileIcon = document.getElementById('attach-file');
             if (stagedFile.type.startsWith('image/')) {
@@ -396,7 +396,7 @@
         }
 
         function clearStaged() {
-            stagedFile = null; stagedGalleryName = null;
+            stagedFile = null; stagedGalleryId = null;
             document.getElementById('attach-preview').classList.add('d-none');
             document.getElementById('attach-thumb').src = '';
             document.getElementById('attach-name').textContent = '';
@@ -418,13 +418,13 @@
             } catch (err) { showErr(err.message); return false; }
         }
 
-        async function sendGalleryImage(name) {
+        async function sendGalleryImage(id) {
             if (!activeId) return false;
             try {
                 const res = await fetch(`/api/inbox/conversations/${activeId}/send-gallery`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
-                    body: JSON.stringify({ name })
+                    body: JSON.stringify({ id })
                 });
                 const data = await res.json();
                 if (!res.ok || !data.ok) throw new Error(data.error || 'Не вдалося надіслати');
@@ -442,21 +442,22 @@
             if (show) {
                 const grid = p.querySelector('.ib-gallery');
                 try {
-                    const res = await fetch('{{ route('inbox.gallery') }}', { headers: { 'Accept': 'application/json' } });
-                    const items = await res.json();
+                    const res = await fetch('/api/saved-files', { headers: { 'Accept': 'application/json' } });
+                    const json = await res.json();
+                    const items = (json.data || json || []).filter(f => f.type === 'image' && f.url);
                     grid.innerHTML = items.length
-                        ? items.map(it => `<img src="${esc(it.url)}" title="${esc(it.name)}" onclick="stageGallery('${esc(it.url)}','${esc(it.name)}')">`).join('')
-                        : '<div class="text-muted small p-2" style="grid-column:1/-1">Поки порожньо. Завантажене фото з’явиться тут.</div>';
+                        ? items.map(it => `<img src="${esc(it.url)}" title="${esc(it.filename || '')}" onclick="stageGallery(${it.id}, '${esc(it.url)}')">`).join('')
+                        : '<div class="text-muted small p-2" style="grid-column:1/-1">Галерея порожня. Додайте фото в розділі «Галерея».</div>';
                 } catch (e) { grid.innerHTML = '<div class="text-danger small p-2" style="grid-column:1/-1">Помилка завантаження</div>'; }
             }
         }
 
-        function stageGallery(url, name) {
-            stagedFile = null; stagedGalleryName = name;
+        function stageGallery(id, url) {
+            stagedFile = null; stagedGalleryId = id;
             const thumb = document.getElementById('attach-thumb');
             thumb.src = url; thumb.classList.remove('d-none');
             document.getElementById('attach-file').classList.add('d-none');
-            document.getElementById('attach-name').textContent = name;
+            document.getElementById('attach-name').textContent = '';
             document.getElementById('attach-preview').classList.remove('d-none');
             document.getElementById('gallery-pop').classList.add('d-none');
             autoGrow();

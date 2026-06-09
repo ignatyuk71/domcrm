@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\InboxConversation;
 use App\Models\InboxMessage;
 use App\Models\MetaConnection;
+use App\Models\SavedFile;
 use App\Services\Meta\MetaSendService;
 use App\Services\Meta\MetaSyncService;
 use Illuminate\Http\Request;
@@ -150,37 +151,18 @@ class InboxController extends Controller
         return $this->dispatchAttachment($conversation, $type, url('inbox-uploads/' . $name));
     }
 
-    /** Галерея вже завантажених зображень (для повторного використання без перезавантаження). */
-    public function gallery()
-    {
-        $dir = public_path('inbox-uploads');
-        $items = [];
-        if (is_dir($dir)) {
-            $files = glob($dir . '/*.{jpg,jpeg,png,gif,webp,JPG,JPEG,PNG}', GLOB_BRACE) ?: [];
-            usort($files, fn ($a, $b) => filemtime($b) <=> filemtime($a));
-            foreach (array_slice($files, 0, 80) as $f) {
-                $name = basename($f);
-                $items[] = ['name' => $name, 'url' => url('inbox-uploads/' . $name)];
-            }
-        }
-
-        return response()->json($items);
-    }
-
-    /** Надіслати зображення з галереї (вже на сервері) клієнту. */
+    /** Надіслати зображення з галереї (SavedFile, вже на сервері) клієнту. */
     public function sendGallery(Request $request, InboxConversation $conversation)
     {
-        $data = $request->validate(['name' => ['required', 'string', 'max:200']]);
-        $name = basename($data['name']);
-        $path = public_path('inbox-uploads/' . $name);
-        if (!is_file($path)) {
+        $data = $request->validate(['id' => ['required', 'integer']]);
+        $file = SavedFile::find($data['id']);
+        if (!$file) {
             return response()->json(['ok' => false, 'error' => 'Зображення не знайдено'], 404);
         }
 
-        $mime = (string) (mime_content_type($path) ?: 'image/jpeg');
-        $type = str_starts_with($mime, 'image/') ? 'image' : 'file';
+        $type = $file->type === 'video' ? 'video' : 'image';
 
-        return $this->dispatchAttachment($conversation, $type, url('inbox-uploads/' . $name));
+        return $this->dispatchAttachment($conversation, $type, url($file->path));
     }
 
     /** Спільна логіка: відправити вкладення за публічним URL + зберегти вихідне повідомлення. */
