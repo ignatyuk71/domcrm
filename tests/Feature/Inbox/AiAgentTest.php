@@ -209,6 +209,18 @@ class AiAgentTest extends TestCase
         $this->assertStringContainsString(trim((string) json_encode('38 → 38-39'), '"'), $body);
     }
 
+    public function test_search_ranks_street_products_above_home_ones(): void
+    {
+        \App\Models\Product::create(['title' => 'теплі капці чуні з овчини', 'sku' => 'CH1', 'sale_price' => 320, 'currency' => 'UAH']);
+        \App\Models\Product::create(['title' => 'капці для вулиці рожеві', 'sku' => '6023', 'sale_price' => 530, 'currency' => 'UAH']);
+
+        // «хутром» немає ніде → точний пошук порожній → працює ранжування
+        $res = app(AiAgentService::class)->toolSearchProducts('капці вуличні з хутром');
+
+        $this->assertGreaterThanOrEqual(1, $res['знайдено']);
+        $this->assertSame('капці для вулиці рожеві', $res['товари'][0]['назва']);
+    }
+
     public function test_discards_reply_when_client_wrote_during_generation(): void
     {
         $this->setUpConversation();

@@ -88,6 +88,10 @@ class AiAgentService
                 . "(38 → 38-39, 41 → 40-41), перевір його наявність і запропонуй, обовʼязково уточнивши: "
                 . "«Вам підійде 38-39?». Якщо клієнт пише довжину стопи в сантиметрах — не підбирай розмір сам: "
                 . "попроси його звичний розмір взуття або скажи, що точні заміри устілки підкаже менеджер. "
+                . "\n\nПризначення взуття визначай СУВОРО за назвою і категорією товару: «для вулиці»/«вуличні» — "
+                . "носять надвір; «домашні», «чуні», «тапочки» — лише для дому. Просять «на вулицю» — пропонуй "
+                . "тільки вуличні моделі; немає підходящих вуличних — чесно скажи, що немає, і запропонуй уточнити "
+                . "в менеджера. НІКОЛИ не приписуй товару властивостей, яких немає в його назві чи описі. "
                 . ($categories !== '' ? "\n\nКатегорії магазину: {$categories}." : '');
 
             $model = $global->model ?: 'claude-sonnet-4-6';
@@ -237,12 +241,21 @@ class AiAgentService
         }
     }
 
-    private function toolSearchProducts(string $query): array
+    public function toolSearchProducts(string $query): array
     {
         $words = collect(preg_split('/[\s,.\/]+/u', mb_strtolower(trim($query))))
             ->filter(fn ($w) => mb_strlen($w) >= 2)
-            // грубий «стем»: рожеві → роже, щоб ловити РОЖЕВИЙ/рожева/рожеве
-            ->map(fn ($w) => mb_strlen($w) >= 5 ? mb_substr($w, 0, mb_strlen($w) - 2) : $w)
+            // грубий «стем», щоб ловити різні закінчення: вуличні/вулиці → «вули», рожеві/рожевий → «рож»
+            ->map(function ($w) {
+                $n = mb_strlen($w);
+                if ($n >= 6) {
+                    return mb_substr($w, 0, $n - 3);
+                }
+                if ($n === 5) {
+                    return mb_substr($w, 0, 3);
+                }
+                return $w;
+            })
             ->take(5)
             ->values();
 
@@ -250,7 +263,7 @@ class AiAgentService
             return ['знайдено' => 0, 'товари' => []];
         }
 
-        $build = function ($mode) use ($words) {
+        $build = function ($mode, int $limit = 8) use ($words) {
             return Product::query()
                 ->with(['category:id,name', 'color:id,name', 'variants:id,product_id,size,stock_qty,is_active'])
                 ->where(function ($q) use ($words, $mode) {
@@ -264,13 +277,23 @@ class AiAgentService
                         $mode === 'and' ? $q->where($clause) : $q->orWhere($clause);
                     }
                 })
-                ->limit(8)
+                ->limit($limit)
                 ->get();
         };
 
         $found = $build('and');
         if ($found->isEmpty()) {
-            $found = $build('or'); // мʼякший пошук, якщо точний нічого не дав
+            // Мʼякший пошук: беремо ширше і ранжуємо за кількістю збігів слів,
+            // щоб «капці для вулиці» стояли вище за випадкові збіги.
+            $found = $build('or', 30)
+                ->map(function (Product $p) use ($words) {
+                    $hay = mb_strtolower($p->title . ' ' . ($p->category?->name ?? '') . ' ' . ($p->color?->name ?? '') . ' ' . $p->sku);
+                    $p->setAttribute('search_score', $words->filter(fn ($w) => str_contains($hay, $w))->count());
+                    return $p;
+                })
+                ->sortByDesc('search_score')
+                ->take(8)
+                ->values();
         }
 
         return [
