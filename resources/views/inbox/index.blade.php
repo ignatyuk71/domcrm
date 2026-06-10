@@ -1069,7 +1069,8 @@
                 const next = messages[i + 1];
                 const showTime = !next || next.direction !== m.direction;
                 const time = showTime ? `<div class="ib-time-mini ${out ? 'out' : ''}">${esc(m.sent_at_human || '')}</div>` : '';
-                return `<div class="ib-row ${out ? 'out' : ''}"><div class="ib-bub ${out ? 'out' : 'in'}${media}">${m.text ? esc(m.text) : ''}${atts}</div></div>${time}`;
+                const aiMark = m.sender === 'ai' ? '<i class="bi bi-stars me-1" style="font-size:.72rem;opacity:.85" title="Відповів AI-агент"></i>' : '';
+                return `<div class="ib-row ${out ? 'out' : ''}"><div class="ib-bub ${out ? 'out' : 'in'}${media}">${aiMark}${m.text ? esc(m.text) : ''}${atts}</div></div>${time}`;
             }).join('');
             appendPending();
             box.scrollTop = box.scrollHeight;

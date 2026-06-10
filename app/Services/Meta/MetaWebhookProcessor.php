@@ -2,6 +2,8 @@
 
 namespace App\Services\Meta;
 
+use App\Jobs\AiRespondToMessage;
+
 use App\Models\InboxContact;
 use App\Models\InboxConversation;
 use App\Models\InboxMessage;
@@ -130,7 +132,7 @@ class MetaWebhookProcessor
             ? Carbon::createFromTimestampMs((int) $event['timestamp'])
             : now();
 
-        InboxMessage::create([
+        $msg = InboxMessage::create([
             'inbox_conversation_id' => $conversation->id,
             'direction' => $isEcho ? 'out' : 'in',
             'sender' => $isEcho ? 'agent' : 'contact',
@@ -147,6 +149,11 @@ class MetaWebhookProcessor
         ]);
         if (!$isEcho) {
             $conversation->increment('unread_count');
+
+            // AI-агент: думає вже ПІСЛЯ того, як вебхук віддав фейсбуку 200.
+            if ($conversation->ai_enabled) {
+                AiRespondToMessage::dispatchAfterResponse($conversation->id, $msg->id);
+            }
         }
 
         return true;
