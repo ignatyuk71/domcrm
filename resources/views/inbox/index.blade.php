@@ -76,6 +76,22 @@
         .ib-gallery { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; width: 304px; max-height: 280px; overflow-y: auto; }
         .ib-gallery img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; cursor: pointer; border: 2px solid transparent; }
         .ib-gallery img:hover { border-color: #0084ff; }
+        .ib-modal { position: fixed; inset: 0; background: rgba(15,18,30,.55); z-index: 1080; display: flex; align-items: center; justify-content: center; padding: 24px; }
+        .ib-modal-card { background: #fff; border-radius: 16px; width: min(880px, 96vw); max-height: 88vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 24px 64px rgba(0,0,0,.3); }
+        .ib-modal-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid #ecedf1; }
+        .ib-modal-title { font-weight: 700; font-size: 1.02rem; }
+        .ib-modal-close { border: none; background: transparent; font-size: 17px; color: #6b7280; cursor: pointer; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+        .ib-modal-close:hover { background: #f1f2f6; }
+        .ib-modal-body { padding: 16px 18px; overflow-y: auto; }
+        .ib-mgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 10px; }
+        .ib-mtile { position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden; cursor: pointer; border: 2px solid #eef0f3; }
+        .ib-mtile img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .15s; }
+        .ib-mtile:hover img { transform: scale(1.04); }
+        .ib-mtile.sel { border-color: #0084ff; }
+        .ib-mtile.sel::after { content: ''; position: absolute; inset: 0; background: rgba(0,132,255,.16); }
+        .ib-mtile .num { position: absolute; top: 6px; right: 6px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; background: #0084ff; color: #fff; font-size: .74rem; font-weight: 700; display: flex; align-items: center; justify-content: center; z-index: 1; }
+        .ib-mtile:not(.sel) .num { display: none; }
+        .ib-modal-foot { display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; border-top: 1px solid #ecedf1; gap: 12px; }
         .ib-emoji-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; width: 280px; }
         .ib-emoji-grid button { border: none; background: transparent; font-size: 1.25rem; padding: 4px; border-radius: 7px; cursor: pointer; }
         .ib-emoji-grid button:hover { background: #f1f2f6; }
@@ -128,7 +144,6 @@
                 <div class="ib-composer">
                     <div id="emoji-pop" class="ib-pop d-none"><div class="ib-emoji-grid"></div></div>
                     <div id="tpl-pop" class="ib-pop d-none"><div class="ib-tpl"><div class="text-muted small p-2">Завантаження…</div></div></div>
-                    <div id="gallery-pop" class="ib-pop d-none"><div class="ib-gallery"><div class="text-muted small p-2">Завантаження…</div></div></div>
                     <div id="attach-preview" class="ib-attach-preview d-none">
                         <div class="ib-attach-item">
                             <img id="attach-thumb" src="" alt="">
@@ -141,7 +156,7 @@
                         <span class="ib-box-av" id="composer-av"><i class="bi bi-shop"></i></span>
                         <textarea id="reply-input" rows="1" placeholder="Відповідь у Messenger…"></textarea>
                         <div class="ib-box-tools">
-                            <button type="button" class="ib-tool" title="Галерея зображень" onclick="toggleGallery()"><i class="bi bi-bag"></i></button>
+                            <button type="button" class="ib-tool" title="Галерея зображень" onclick="openGalleryModal()"><i class="bi bi-bag"></i></button>
                             <button type="button" class="ib-tool" title="Фото / файл" onclick="document.getElementById('file-input').click()"><i class="bi bi-paperclip"></i></button>
                             <button type="button" class="ib-tool" title="Швидкі відповіді" onclick="toggleTpl()"><i class="bi bi-chat"></i></button>
                             <button type="button" class="ib-tool" title="Емодзі" onclick="toggleEmoji()"><i class="bi bi-emoji-smile"></i></button>
@@ -341,7 +356,6 @@
         const EMOJIS = ['😊','😂','❤️','👍','🙏','🔥','😍','🎉','👌','✅','🤝','😉','🙂','😅','💪','👋','📦','🚚','💰','❓','😎','🤔','🥰','👏','💯','🙌','😢','🤗'];
         function toggleEmoji() {
             document.getElementById('tpl-pop').classList.add('d-none');
-            document.getElementById('gallery-pop').classList.add('d-none');
             const p = document.getElementById('emoji-pop');
             if (!p.dataset.filled) {
                 p.querySelector('.ib-emoji-grid').innerHTML = EMOJIS.map(e => `<button type="button" onclick="insertText('${e}')">${e}</button>`).join('');
@@ -353,7 +367,6 @@
 
         async function toggleTpl() {
             document.getElementById('emoji-pop').classList.add('d-none');
-            document.getElementById('gallery-pop').classList.add('d-none');
             const p = document.getElementById('tpl-pop');
             p.classList.toggle('d-none');
             if (!tplLoaded && !p.classList.contains('d-none')) {
@@ -418,7 +431,7 @@
             } catch (err) { showErr(err.message); return false; }
         }
 
-        async function sendGalleryImage(id) {
+        async function sendGalleryImage(id, refresh = true) {
             if (!activeId) return false;
             try {
                 const res = await fetch(`/api/inbox/conversations/${activeId}/send-gallery`, {
@@ -428,39 +441,82 @@
                 });
                 const data = await res.json();
                 if (!res.ok || !data.ok) throw new Error(data.error || 'Не вдалося надіслати');
-                await openConversation(activeId);
+                if (refresh) await openConversation(activeId);
                 return true;
             } catch (err) { showErr(err.message); return false; }
         }
 
-        async function toggleGallery() {
-            document.getElementById('emoji-pop').classList.add('d-none');
-            document.getElementById('tpl-pop').classList.add('d-none');
-            const p = document.getElementById('gallery-pop');
-            const show = p.classList.contains('d-none');
-            p.classList.toggle('d-none');
-            if (show) {
-                const grid = p.querySelector('.ib-gallery');
-                try {
-                    const res = await fetch('/api/saved-files', { headers: { 'Accept': 'application/json' } });
-                    const json = await res.json();
-                    const items = (json.data || json || []).filter(f => f.type === 'image' && f.url);
-                    grid.innerHTML = items.length
-                        ? items.map(it => `<img src="${esc(it.url)}" title="${esc(it.filename || '')}" onclick="stageGallery(${it.id}, '${esc(it.url)}')">`).join('')
-                        : '<div class="text-muted small p-2" style="grid-column:1/-1">Галерея порожня. Додайте фото в розділі «Галерея».</div>';
-                } catch (e) { grid.innerHTML = '<div class="text-danger small p-2" style="grid-column:1/-1">Помилка завантаження</div>'; }
-            }
+        // --- Галерея у модальному вікні з мультивибором ---
+        let galleryItems = [], gallerySelected = [];
+        function ensureGalleryModal() {
+            if (document.getElementById('gallery-modal')) return;
+            const el = document.createElement('div');
+            el.id = 'gallery-modal';
+            el.className = 'ib-modal d-none';
+            el.innerHTML = `
+                <div class="ib-modal-card">
+                    <div class="ib-modal-head">
+                        <div class="ib-modal-title">Галерея — оберіть фото</div>
+                        <button type="button" class="ib-modal-close" onclick="closeGalleryModal()"><i class="bi bi-x-lg"></i></button>
+                    </div>
+                    <div class="ib-modal-body"><div id="gallery-modal-grid" class="ib-mgrid"></div></div>
+                    <div class="ib-modal-foot">
+                        <div class="text-muted small" id="gallery-count">Нічого не вибрано</div>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-light btn-sm" onclick="closeGalleryModal()">Скасувати</button>
+                            <button type="button" class="btn btn-primary btn-sm" id="gallery-send-btn" onclick="sendSelectedGallery()" disabled>Надіслати</button>
+                        </div>
+                    </div>
+                </div>`;
+            el.addEventListener('click', ev => { if (ev.target === el) closeGalleryModal(); });
+            document.body.appendChild(el);
         }
-
-        function stageGallery(id, url) {
-            stagedFile = null; stagedGalleryId = id;
-            const thumb = document.getElementById('attach-thumb');
-            thumb.src = url; thumb.classList.remove('d-none');
-            document.getElementById('attach-file').classList.add('d-none');
-            document.getElementById('attach-name').textContent = '';
-            document.getElementById('attach-preview').classList.remove('d-none');
-            document.getElementById('gallery-pop').classList.add('d-none');
-            autoGrow();
+        async function openGalleryModal() {
+            if (!activeId) { showErr('Спершу відкрийте діалог'); return; }
+            ensureGalleryModal();
+            gallerySelected = [];
+            updateGalleryFooter();
+            document.getElementById('gallery-modal').classList.remove('d-none');
+            const grid = document.getElementById('gallery-modal-grid');
+            grid.innerHTML = '<div class="text-muted small p-3" style="grid-column:1/-1">Завантаження…</div>';
+            try {
+                const res = await fetch('/api/saved-files', { headers: { 'Accept': 'application/json' } });
+                const json = await res.json();
+                galleryItems = (json.data || json || []).filter(f => f.type === 'image' && f.url);
+                grid.innerHTML = galleryItems.length
+                    ? galleryItems.map(it => `<div class="ib-mtile" data-id="${it.id}" onclick="toggleGalleryTile(${it.id})"><img src="${esc(it.url)}" loading="lazy"><span class="num"></span></div>`).join('')
+                    : '<div class="text-muted small p-3" style="grid-column:1/-1">Галерея порожня. Додайте фото в розділі «Галерея».</div>';
+            } catch (e) { grid.innerHTML = '<div class="text-danger small p-3" style="grid-column:1/-1">Помилка завантаження</div>'; }
+        }
+        function closeGalleryModal() { document.getElementById('gallery-modal')?.classList.add('d-none'); }
+        function toggleGalleryTile(id) {
+            const i = gallerySelected.indexOf(id);
+            if (i >= 0) gallerySelected.splice(i, 1); else gallerySelected.push(id);
+            document.querySelectorAll('#gallery-modal-grid .ib-mtile').forEach(tile => {
+                const pos = gallerySelected.indexOf(Number(tile.dataset.id));
+                tile.classList.toggle('sel', pos >= 0);
+                tile.querySelector('.num').textContent = pos >= 0 ? (pos + 1) : '';
+            });
+            updateGalleryFooter();
+        }
+        function updateGalleryFooter() {
+            const n = gallerySelected.length;
+            const c = document.getElementById('gallery-count');
+            if (c) c.textContent = n ? ('Вибрано: ' + n) : 'Нічого не вибрано';
+            const btn = document.getElementById('gallery-send-btn');
+            if (btn) { btn.disabled = n === 0; btn.textContent = n ? ('Надіслати (' + n + ')') : 'Надіслати'; }
+        }
+        async function sendSelectedGallery() {
+            if (!activeId || !gallerySelected.length) return;
+            const btn = document.getElementById('gallery-send-btn');
+            const prev = btn.textContent; btn.disabled = true; btn.textContent = 'Надсилаю…';
+            let okAll = true;
+            for (const id of gallerySelected) {
+                if (!(await sendGalleryImage(id, false))) { okAll = false; break; }
+            }
+            btn.textContent = prev;
+            if (okAll) { closeGalleryModal(); await openConversation(activeId); }
+            else { btn.disabled = false; }
         }
 
         async function syncHistory(btn) {
@@ -474,7 +530,6 @@
             if (!e.target.closest('.ib-tool') && !e.target.closest('.ib-pop')) {
                 document.getElementById('emoji-pop')?.classList.add('d-none');
                 document.getElementById('tpl-pop')?.classList.add('d-none');
-                document.getElementById('gallery-pop')?.classList.add('d-none');
             }
         });
 
