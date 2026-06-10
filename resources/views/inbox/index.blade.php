@@ -634,23 +634,15 @@
             let custHtml;
             if (cust && !custEdit) {
                 custHtml = `
-                    <div class="ib-cb-head">
-                        <span class="ib-cb-title"><i class="bi bi-person-vcard me-1"></i>Клієнт CRM</span>
-                        <span class="ib-cb-badge ok"><i class="bi bi-check2"></i> збережено</span>
-                    </div>
                     <div class="d-flex align-items-center justify-content-between gap-2">
                         <div style="min-width:0">
-                            <div class="fw-bold text-truncate" style="font-size:.92rem">${esc(((cust.first_name || '') + ' ' + (cust.last_name || '')).trim() || 'Клієнт')}</div>
-                            <div class="text-muted mt-1" style="font-size:.82rem"><i class="bi bi-telephone me-1"></i>${esc(cust.phone || '—')}</div>
+                            <div class="fw-semibold text-truncate" style="font-size:.88rem">${esc(((cust.first_name || '') + ' ' + (cust.last_name || '')).trim() || 'Клієнт')}</div>
+                            <div class="text-muted" style="font-size:.8rem"><i class="bi bi-telephone me-1"></i>${esc(cust.phone || '—')}</div>
                         </div>
                         <button class="ib-mini-btn" onclick="editCustomer()" title="Змінити"><i class="bi bi-pencil"></i></button>
                     </div>`;
             } else {
                 custHtml = `
-                    <div class="ib-cb-head">
-                        <span class="ib-cb-title"><i class="bi bi-person-vcard me-1"></i>Клієнт CRM</span>
-                        <span class="ib-cb-badge no">не збережено</span>
-                    </div>
                     <div class="ib-input-wrap"><i class="bi bi-person"></i><input id="cf-first" class="form-control form-control-sm ${cyrOk(custDraft.first_name) ? '' : 'bad'}" placeholder="Імʼя (кирилицею)" value="${esc(custDraft.first_name)}" oninput="custDraft.first_name=this.value;vField(this,'first')"></div>
                     <div id="err-first" class="ib-ferr ${cyrOk(custDraft.first_name) ? 'd-none' : ''}">Лише українські/російські літери</div>
                     <div class="ib-input-wrap"><i class="bi bi-person"></i><input id="cf-last" class="form-control form-control-sm ${cyrOk(custDraft.last_name) ? '' : 'bad'}" placeholder="Прізвище (кирилицею)" value="${esc(custDraft.last_name)}" oninput="custDraft.last_name=this.value;vField(this,'last')"></div>
@@ -709,14 +701,21 @@
                 </div>` : '';
 
             box.innerHTML = `
-                <div class="ib-top text-center">
-                    ${avatar(c.contact_name, c.avatar, c.channel, 72)}
-                    <div class="fw-bold mt-2" style="font-size:.98rem">${esc(c.contact_name)}</div>
-                    <div class="d-flex justify-content-center align-items-center gap-2 mt-1">
-                        <span class="text-muted" style="font-size:.74rem">${esc(c.store)}</span>
-                        ${srcBadge}
+                <div class="ib-top">
+                    <div class="d-flex gap-3">
+                        <div class="flex-shrink-0">${avatar(c.contact_name, c.avatar, c.channel, 64)}</div>
+                        <div class="flex-grow-1" style="min-width:0">
+                            <div class="d-flex align-items-center justify-content-between gap-2">
+                                <div class="fw-bold text-truncate" style="font-size:.95rem">${esc(c.contact_name)}</div>
+                                ${cust && !custEdit ? '<span class="ib-cb-badge ok"><i class="bi bi-check2"></i> збережено</span>' : '<span class="ib-cb-badge no">не збережено</span>'}
+                            </div>
+                            <div class="d-flex align-items-center gap-2 mt-1 mb-2">
+                                <span class="text-muted text-truncate" style="font-size:.72rem">${esc(c.store)}</span>
+                                ${srcBadge}
+                            </div>
+                            ${custHtml}
+                        </div>
                     </div>
-                    <div class="ib-client-box">${custHtml}</div>
                 </div>
                 <div class="ib-iblock">
                     <div class="ib-block-title d-flex justify-content-between align-items-center">
