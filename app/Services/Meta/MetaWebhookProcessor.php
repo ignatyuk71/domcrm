@@ -95,6 +95,14 @@ class MetaWebhookProcessor
                     'profile_pic' => $profile['profile_pic'] ?? null,
                 ]));
             }
+
+            // Профіль-АПІ часто закритий (400) — тоді імʼя беремо з Conversations API.
+            if (!$contact->name) {
+                $name = $this->oauth->getNameFromConversations($connection->page_access_token, $connection->page_id, (string) $senderId, $channel);
+                if ($name) {
+                    $contact->update(['name' => $name]);
+                }
+            }
         }
 
         $conversation = InboxConversation::firstOrCreate(

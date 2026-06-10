@@ -145,6 +145,7 @@ class MetaOAuthService
             ]);
 
             if (!$r->successful()) {
+                Log::info('Meta profile fetch failed', ['user' => $userId, 'status' => $r->status(), 'body' => mb_substr($r->body(), 0, 200)]);
                 return [];
             }
 
@@ -154,6 +155,37 @@ class MetaOAuthService
             ]);
         } catch (\Throwable) {
             return [];
+        }
+    }
+
+    /**
+     * Fallback для імені: профіль-АПІ (/{PSID}) фб часто закриває (400),
+     * але Conversations API віддає учасників розмови з іменами.
+     */
+    public function getNameFromConversations(string $pageToken, string $pageId, string $userId, string $channel = 'facebook'): ?string
+    {
+        try {
+            $r = Http::timeout(5)->get($this->graph()."/{$pageId}/conversations", [
+                'platform' => $channel === 'instagram' ? 'instagram' : 'messenger',
+                'user_id' => $userId,
+                'fields' => 'participants',
+                'access_token' => $pageToken,
+            ]);
+
+            if (!$r->successful()) {
+                Log::info('Meta conversations name fetch failed', ['user' => $userId, 'status' => $r->status(), 'body' => mb_substr($r->body(), 0, 200)]);
+                return null;
+            }
+
+            foreach ($r->json('data.0.participants.data') ?? [] as $p) {
+                if ((string) ($p['id'] ?? '') === $userId) {
+                    return $p['name'] ?? $p['username'] ?? null;
+                }
+            }
+
+            return null;
+        } catch (\Throwable) {
+            return null;
         }
     }
 }
