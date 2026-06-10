@@ -149,7 +149,7 @@ class MetaSyncService
                 'external_message_id' => $mid,
                 'text' => $m['message'] ?? null,
                 'attachments' => $attachments ?: null,
-                'sent_at' => isset($m['created_time']) ? Carbon::parse($m['created_time']) : now(),
+                'sent_at' => isset($m['created_time']) ? Carbon::parse($m['created_time'])->setTimezone(config('app.timezone')) : now(),
             ]);
             $imported++;
         }
@@ -160,7 +160,7 @@ class MetaSyncService
             $fromId = (string) ($last['from']['id'] ?? '');
             $dir = in_array($fromId, array_map('strval', $selfIds), true) ? 'out' : 'in';
             $conversation->update([
-                'last_message_at' => isset($last['created_time']) ? Carbon::parse($last['created_time']) : now(),
+                'last_message_at' => isset($last['created_time']) ? Carbon::parse($last['created_time'])->setTimezone(config('app.timezone')) : now(),
                 'last_message_text' => !empty($last['message']) ? mb_substr($last['message'], 0, 480) : '[вкладення]',
                 'last_message_direction' => $dir,
             ]);

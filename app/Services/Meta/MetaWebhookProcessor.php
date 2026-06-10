@@ -128,8 +128,9 @@ class MetaWebhookProcessor
         }
 
         $text = $message['text'] ?? null;
+        // Таймстемп фб — в UTC; приводимо до зони застосунку, інакше стрічка сортується врозкид.
         $sentAt = isset($event['timestamp'])
-            ? Carbon::createFromTimestampMs((int) $event['timestamp'])
+            ? Carbon::createFromTimestampMs((int) $event['timestamp'])->setTimezone(config('app.timezone'))
             : now();
 
         $msg = InboxMessage::create([
