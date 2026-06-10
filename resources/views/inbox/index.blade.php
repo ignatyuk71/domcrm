@@ -53,6 +53,15 @@
         .ib-status-wrap { display: inline-flex; align-items: center; gap: 7px; background: #f0f2f5; border-radius: 999px; padding: 6px 12px 6px 12px; flex-shrink: 0; }
         .ib-status-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--st, #adb5bd); flex-shrink: 0; }
         .ib-status-sel { border: none; background: transparent; outline: none; font-size: .84rem; font-weight: 600; color: #1c1e21; cursor: pointer; max-width: 170px; }
+        .ib-thbtn { width: 36px; height: 36px; border-radius: 50%; border: none; background: #f0f2f5; color: #1c1e21; display: inline-flex; align-items: center; justify-content: center; font-size: 17px; flex-shrink: 0; transition: background .12s; }
+        .ib-thbtn:hover { background: #e4e6eb; }
+        .ib-thbtn:disabled { opacity: .6; }
+        .ib-th-pop { position: absolute; top: 42px; right: 0; background: #fff; border: 1px solid #e6e8ee; border-radius: 12px; box-shadow: 0 14px 36px rgba(16,24,40,.16); z-index: 60; min-width: 200px; padding: 6px; }
+        .ib-th-pop button { display: flex; align-items: center; width: 100%; border: none; background: transparent; padding: 9px 12px; border-radius: 8px; font-size: .88rem; text-align: left; }
+        .ib-th-pop button:hover { background: #f0f2f5; }
+        .ib-th-pop button.danger { color: #dc3545; }
+        .ib-spin { animation: ibspin 1s linear infinite; }
+        @keyframes ibspin { to { transform: rotate(360deg); } }
         .ib-msgs { flex: 1; overflow-y: auto; padding: 18px 22px; display: flex; flex-direction: column; gap: 2px; background: #fff; }
         .ib-row { display: flex; margin-bottom: 1px; }
         .ib-row.out { justify-content: flex-end; }
@@ -288,6 +297,44 @@
             } catch (e) {}
         }
 
+        function toggleThreadMenu(e) {
+            e.stopPropagation();
+            document.getElementById('th-menu')?.classList.toggle('d-none');
+        }
+
+        async function refreshConversation(btn) {
+            if (!activeId) return;
+            const ic = btn.querySelector('i');
+            btn.disabled = true; ic.classList.add('ib-spin');
+            try {
+                await fetch(`/api/inbox/conversations/${activeId}/refresh`, { method: 'POST', headers: { 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' } });
+                await openConversation(activeId);
+                loadConversations();
+            } catch (e) {}
+            btn.disabled = false; ic.classList.remove('ib-spin');
+        }
+
+        async function clearChat() {
+            document.getElementById('th-menu')?.classList.add('d-none');
+            if (!activeId || !confirm('Очистити чат? Всі повідомлення цієї розмови буде видалено з CRM (у Facebook вони залишаться). Кнопка «оновити» зможе підтягнути їх знову.')) return;
+            await fetch(`/api/inbox/conversations/${activeId}/clear`, { method: 'POST', headers: { 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' } });
+            await openConversation(activeId);
+            loadConversations();
+        }
+
+        async function deleteChat() {
+            document.getElementById('th-menu')?.classList.add('d-none');
+            if (!activeId || !confirm('Видалити чат повністю? Розмову, контакт і всі повідомлення буде видалено з бази. Якщо клієнт напише знову — чат зʼявиться як новий.')) return;
+            await fetch(`/api/inbox/conversations/${activeId}`, { method: 'DELETE', headers: { 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' } });
+            activeId = null;
+            const t = document.getElementById('thread');
+            t.classList.add('d-none'); t.classList.remove('d-flex');
+            document.getElementById('thread-empty').classList.remove('d-none');
+            document.getElementById('info')?.classList.add('d-none');
+            document.getElementById('info-empty')?.classList.remove('d-none');
+            loadConversations();
+        }
+
         async function openConversation(id) {
             if (id !== activeId && !sendingNow) { staged = []; renderStaged(); }
             activeId = id;
@@ -310,9 +357,19 @@
                             <div class="ib-th-store">${c.conn_id ? `<img src="/inbox/page-avatar/${c.conn_id}" onerror="this.remove()">` : '<i class="bi bi-shop"></i>'}<span>${esc(c.store)}</span></div>
                         </div>
                     </div>
-                    <div class="ib-status-wrap" style="--st:${curSt?.color || '#adb5bd'}">
-                        <span class="ib-status-dot"></span>
-                        <select class="ib-status-sel" onchange="setChatStatus(this.value)">${stOpts}</select>
+                    <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                        <div class="ib-status-wrap" style="--st:${curSt?.color || '#adb5bd'}">
+                            <span class="ib-status-dot"></span>
+                            <select class="ib-status-sel" onchange="setChatStatus(this.value)">${stOpts}</select>
+                        </div>
+                        <button type="button" class="ib-thbtn" onclick="refreshConversation(this)" title="Підтягнути історію з Facebook"><i class="bi bi-arrow-clockwise"></i></button>
+                        <div class="position-relative">
+                            <button type="button" class="ib-thbtn" onclick="toggleThreadMenu(event)" title="Дії"><i class="bi bi-three-dots"></i></button>
+                            <div id="th-menu" class="ib-th-pop d-none">
+                                <button type="button" onclick="clearChat()"><i class="bi bi-eraser me-2"></i>Очистити чат</button>
+                                <button type="button" class="danger" onclick="deleteChat()"><i class="bi bi-trash me-2"></i>Видалити чат</button>
+                            </div>
+                        </div>
                     </div>
                 </div>`;
             document.getElementById('reply-input').placeholder = 'Відповідь у ' + chLabel(c.channel) + '…';
@@ -653,6 +710,9 @@
             if (!e.target.closest('.ib-tool') && !e.target.closest('.ib-pop')) {
                 document.getElementById('emoji-pop')?.classList.add('d-none');
                 document.getElementById('tpl-pop')?.classList.add('d-none');
+            }
+            if (!e.target.closest('.ib-thbtn') && !e.target.closest('.ib-th-pop')) {
+                document.getElementById('th-menu')?.classList.add('d-none');
             }
         });
 

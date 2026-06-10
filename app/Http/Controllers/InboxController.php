@@ -209,6 +209,44 @@ class InboxController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    /** Підтягнути з Meta всю історію цього контакту (кнопка «оновити»). */
+    public function refresh(InboxConversation $conversation, MetaSyncService $sync)
+    {
+        $conversation->loadMissing(['connection', 'contact']);
+        if (!$conversation->connection || !$conversation->contact) {
+            return response()->json(['ok' => false, 'error' => 'Немає підключення або контакту'], 422);
+        }
+
+        $imported = $sync->syncContactConversation($conversation->connection, $conversation->contact);
+
+        return response()->json(['ok' => true, 'imported' => $imported]);
+    }
+
+    /** Очистити чат: видалити всі повідомлення розмови з бази. */
+    public function clear(InboxConversation $conversation)
+    {
+        $conversation->messages()->delete();
+        $conversation->update([
+            'last_message_at' => null,
+            'last_message_text' => null,
+            'last_message_direction' => null,
+            'unread_count' => 0,
+        ]);
+
+        return response()->json(['ok' => true]);
+    }
+
+    /** Видалити чат повністю: повідомлення + розмова + контакт. */
+    public function destroy(InboxConversation $conversation)
+    {
+        $contact = $conversation->contact;
+        $conversation->messages()->delete();
+        $conversation->delete();
+        $contact?->delete();
+
+        return response()->json(['ok' => true]);
+    }
+
     /** Змінити статус чату для розмови. */
     public function setStatus(Request $request, InboxConversation $conversation)
     {

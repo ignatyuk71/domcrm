@@ -104,6 +104,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/inbox/page-avatar/{connection}', [InboxController::class, 'pageAvatar'])->name('inbox.pageAvatar');
         Route::get('/api/chat-statuses', [ChatStatusController::class, 'index'])->name('chatStatuses.list');
         Route::post('/api/inbox/conversations/{conversation}/status', [InboxController::class, 'setStatus'])->name('inbox.setStatus');
+        Route::post('/api/inbox/conversations/{conversation}/refresh', [InboxController::class, 'refresh'])->name('inbox.refresh');
+        Route::post('/api/inbox/conversations/{conversation}/clear', [InboxController::class, 'clear'])->name('inbox.clear');
+        Route::delete('/api/inbox/conversations/{conversation}', [InboxController::class, 'destroy'])->name('inbox.destroy');
     });
 
     Route::middleware('role:owner,operator')->group(function () {

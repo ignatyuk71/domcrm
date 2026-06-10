@@ -32,6 +32,31 @@ class MetaSyncService
         return $count;
     }
 
+    /** Підтягнути історію ОДНОГО контакту (через ?user_id). Повертає к-ть нових повідомлень. */
+    public function syncContactConversation(MetaConnection $conn, InboxContact $contact, int $msgLimit = 100): int
+    {
+        $platform = $contact->channel === 'instagram' ? 'instagram' : 'messenger';
+
+        $r = Http::get($this->graph()."/{$conn->page_id}/conversations", [
+            'platform' => $platform,
+            'user_id' => $contact->external_id,
+            'fields' => "participants,updated_time,messages.limit({$msgLimit}){id,message,from,created_time,attachments}",
+            'access_token' => $conn->page_access_token,
+        ]);
+
+        if (!$r->successful()) {
+            Log::warning('Meta contact sync failed', ['contact' => $contact->id, 'body' => mb_substr($r->body(), 0, 300)]);
+            return 0;
+        }
+
+        $imported = 0;
+        foreach ($r->json('data') ?? [] as $conv) {
+            $imported += $this->importConversation($conn, $contact->channel, $conv);
+        }
+
+        return $imported;
+    }
+
     private function syncChannel(MetaConnection $conn, string $platform, int $convLimit, int $msgLimit): int
     {
         $channel = $platform === 'instagram' ? 'instagram' : 'facebook';
