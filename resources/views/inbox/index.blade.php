@@ -162,10 +162,19 @@
         .ib-prod .ph { width: 100%; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; color: #c3c8d2; font-size: 26px; background: #f5f6f8; }
         .ib-prod .tt { font-size: .78rem; font-weight: 600; padding: 6px 8px 2px; line-height: 1.25; max-height: 2.7em; overflow: hidden; }
         .ib-prod .pr { font-size: .78rem; color: #2fb344; font-weight: 700; padding: 0 8px 8px; }
-        .ib-var-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 2px; border-bottom: 1px dashed #eef0f3; font-size: .86rem; }
-        .ib-qty { display: inline-flex; align-items: center; gap: 10px; }
-        .ib-qty button { width: 26px; height: 26px; border-radius: 50%; border: 1px solid #e3e6ea; background: #fff; font-size: 15px; line-height: 1; }
-        .ib-qty button:hover { background: #f0f2f5; }
+        .ib-pcard { background: #fff; border-radius: 14px; margin-bottom: 10px; box-shadow: 0 1px 2px rgba(16,24,40,.06); overflow: hidden; }
+        .ib-prow { display: flex; align-items: center; gap: 12px; padding: 12px 14px; cursor: pointer; }
+        .ib-prow img { width: 48px; height: 48px; border-radius: 10px; object-fit: cover; background: #f1f3f6; flex-shrink: 0; }
+        .ib-prow .ph { width: 48px; height: 48px; border-radius: 10px; background: #f1f3f6; flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: #c3c8d2; font-size: 20px; }
+        .ib-ptitle { font-weight: 700; font-size: .92rem; line-height: 1.3; }
+        .ib-sku { font-size: .7rem; background: #f1f3f6; border: 1px solid #e6e8ee; border-radius: 6px; padding: 1px 6px; color: #475467; white-space: nowrap; }
+        .ib-stock { font-size: .74rem; color: #2fb344; font-weight: 600; white-space: nowrap; }
+        .ib-price { color: #0d6efd; font-weight: 800; font-size: 1rem; white-space: nowrap; }
+        .ib-price .cur { font-size: .68rem; color: #8a8d91; font-weight: 600; }
+        .ib-sizes-btn { border: none; background: #eef2f7; border-radius: 999px; padding: 4px 13px; font-size: .78rem; font-weight: 700; color: #0d6efd; margin-top: 5px; white-space: nowrap; }
+        .ib-vrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 10px 10px; border: 1px solid #f0f2f5; border-radius: 12px; padding: 10px 12px; background: #fff; }
+        .ib-add-btn { border: none; border-radius: 999px; padding: 5px 14px; font-size: .8rem; font-weight: 700; background: #eef2f7; color: #0d6efd; white-space: nowrap; margin-top: 4px; }
+        .ib-add-btn.added { background: #0d6efd; color: #fff; }
         .ib-info .btn { font-size: .82rem; }
 
         .ib-empty { margin: auto; text-align: center; color: #94a3b8; padding: 24px; }
@@ -746,8 +755,8 @@
                 ${ordersHtml}`;
         }
 
-        // --- Модалка вибору товару ---
-        let prodCats = null, prodItems = [], prodSel = null, prodQty = {}, prodPrice = 0, prodCatId = '', prodQ = '', prodQT = null;
+        // --- Модалка «Каталог товарів» (як в адмінці) ---
+        let prodCats = null, prodItems = [], prodOpen = {}, prodCatId = '', prodQ = '', prodQT = null;
 
         function ensureProductModal() {
             if (document.getElementById('prod-modal')) return;
@@ -755,16 +764,23 @@
             el.id = 'prod-modal';
             el.className = 'ib-modal d-none';
             el.innerHTML = `
-                <div class="ib-modal-card">
+                <div class="ib-modal-card" style="width:min(760px,96vw)">
                     <div class="ib-modal-head">
-                        <div class="ib-modal-title">Обрати товар</div>
+                        <div>
+                            <div class="ib-modal-title">Каталог товарів</div>
+                            <div class="text-muted" style="font-size:.7rem;letter-spacing:.06em;font-weight:600">ОБЕРІТЬ ПОЗИЦІЇ</div>
+                        </div>
                         <button type="button" class="ib-modal-close" onclick="closeProductModal()"><i class="bi bi-x-lg"></i></button>
                     </div>
-                    <div id="prod-toolbar" style="padding:10px 18px 4px; border-bottom:1px solid #f0f1f4">
-                        <div id="prod-tabs" class="ib-cat-tabs"></div>
-                        <input id="prod-search" class="form-control form-control-sm my-2" placeholder="Пошук товару…" oninput="prodSearchInput(this.value)">
+                    <div id="prod-toolbar" style="padding:12px 18px; background:#f7f8fa; border-bottom:1px solid #eef0f3">
+                        <div class="d-flex gap-2">
+                            <select id="prod-cat" class="form-select form-select-sm" style="max-width:230px; border-radius:10px" onchange="prodCatId=this.value;loadProducts()">
+                                <option value="">Всі категорії</option>
+                            </select>
+                            <input id="prod-search" class="form-control form-control-sm" style="border-radius:10px" placeholder="Пошук товару…" oninput="prodSearchInput(this.value)">
+                        </div>
                     </div>
-                    <div class="ib-modal-body"><div id="prod-body"></div></div>
+                    <div class="ib-modal-body" style="background:#f7f8fa"><div id="prod-body"></div></div>
                 </div>`;
             el.addEventListener('click', ev => { if (ev.target === el) closeProductModal(); });
             document.body.appendChild(el);
@@ -773,26 +789,20 @@
         async function openProductModal() {
             ensureProductModal();
             document.getElementById('prod-modal').classList.remove('d-none');
-            document.getElementById('prod-toolbar').classList.remove('d-none');
             if (!prodCats) {
                 try { prodCats = await (await fetch('/products/categories', { headers: { 'Accept': 'application/json' } })).json(); } catch (e) { prodCats = []; }
+                const sel = document.getElementById('prod-cat');
+                sel.innerHTML = '<option value="">Всі категорії</option>'
+                    + (prodCats || []).map(ct => `<option value="${ct.id}">${esc(ct.name)}</option>`).join('');
             }
-            renderProdTabs();
             loadProducts();
         }
         function closeProductModal() { document.getElementById('prod-modal')?.classList.add('d-none'); }
-
-        function renderProdTabs() {
-            const t = document.getElementById('prod-tabs');
-            if (!t) return;
-            t.innerHTML = `<button type="button" class="ib-cat-tab ${prodCatId === '' ? 'active' : ''}" onclick="prodCatId='';renderProdTabs();loadProducts()">Всі</button>`
-                + (prodCats || []).map(ct => `<button type="button" class="ib-cat-tab ${prodCatId == ct.id ? 'active' : ''}" onclick="prodCatId=${ct.id};renderProdTabs();loadProducts()">${esc(ct.name)}</button>`).join('');
-        }
         function prodSearchInput(v) { prodQ = v.trim(); clearTimeout(prodQT); prodQT = setTimeout(loadProducts, 350); }
 
         async function loadProducts() {
             const b = document.getElementById('prod-body');
-            if (b) b.innerHTML = '<div class="text-muted small p-3">Завантаження…</div>';
+            if (b) b.innerHTML = '<div class="text-muted small p-3 text-center">Завантаження…</div>';
             try {
                 const params = new URLSearchParams({ with_variants: 1, per_page: 100 });
                 if (prodCatId) params.set('category', prodCatId);
@@ -800,88 +810,93 @@
                 const res = await fetch('/products?' + params.toString(), { headers: { 'Accept': 'application/json' } });
                 prodItems = (await res.json()).data || [];
             } catch (e) { prodItems = []; }
-            renderProdGrid();
+            prodOpen = {};
+            renderProdList();
         }
 
-        function renderProdGrid() {
+        function variantCount(pid, vid) {
+            const it = orderItems.find(x => x.product_id === pid && x.product_variant_id === vid);
+            return it ? it.qty : 0;
+        }
+
+        function renderProdList() {
             const b = document.getElementById('prod-body');
             if (!b) return;
-            b.innerHTML = '<div class="ib-prod-grid">' + (prodItems.length ? prodItems.map((p, i) => `
-                <div class="ib-prod" onclick="openProdDetail(${i})">
-                    ${p.main_photo_url ? `<img src="${esc(p.main_photo_url)}" loading="lazy">` : '<div class="ph"><i class="bi bi-image"></i></div>'}
-                    <div class="tt">${esc(p.title)}</div>
-                    <div class="pr">${parseFloat(p.sale_price || 0) ? parseFloat(p.sale_price).toFixed(0) + ' грн' : '—'}</div>
-                </div>`).join('') : '<div class="text-muted small p-3" style="grid-column:1/-1">Нічого не знайдено</div>') + '</div>';
-        }
-
-        function openProdDetail(i) {
-            prodSel = prodItems[i];
-            if (!prodSel) return;
-            prodQty = {};
-            prodPrice = parseFloat(prodSel.sale_price) || 0;
-            document.getElementById('prod-toolbar').classList.add('d-none');
-            const variants = (prodSel.variants || []).filter(v => v.is_active !== false);
-            const b = document.getElementById('prod-body');
-            b.innerHTML = `
-                <button type="button" class="btn btn-sm btn-light border mb-3" onclick="backToProdGrid()"><i class="bi bi-arrow-left me-1"></i>Назад</button>
-                <div class="d-flex gap-3 align-items-center mb-2">
-                    ${prodSel.main_photo_url ? `<img src="${esc(prodSel.main_photo_url)}" style="width:64px;height:64px;object-fit:cover;border-radius:10px">` : ''}
-                    <div>
-                        <div class="fw-bold">${esc(prodSel.title)}</div>
-                        <div class="d-flex align-items-center gap-2 mt-1" style="font-size:.85rem">Ціна:
-                            <input type="number" class="form-control form-control-sm" style="width:96px" value="${prodPrice}" oninput="prodPrice=parseFloat(this.value)||0"> грн
+            if (!prodItems.length) { b.innerHTML = '<div class="text-muted small p-3 text-center">Нічого не знайдено</div>'; return; }
+            b.innerHTML = prodItems.map(p => {
+                const variants = (p.variants || []).filter(v => v.is_active !== false);
+                const totalStock = variants.reduce((s, v) => s + (v.stock_qty || 0), 0);
+                const price = parseFloat(p.sale_price || 0);
+                const open = !!prodOpen[p.id];
+                const rows = !open ? '' : (variants.length ? variants.map(v => {
+                    const cnt = variantCount(p.id, v.id);
+                    return `
+                    <div class="ib-vrow">
+                        <div>
+                            <div class="fw-bold" style="font-size:.95rem">${esc(v.size || '—')}</div>
+                            <div class="d-flex align-items-center gap-2 mt-1">
+                                ${v.sku ? `<span class="ib-sku">${esc(v.sku)}</span>` : ''}
+                                <span class="ib-stock">${v.stock_qty ?? 0} шт.</span>
+                            </div>
+                        </div>
+                        <div class="text-end">
+                            <div class="ib-price">${price.toFixed(2)} <span class="cur">UAH</span></div>
+                            <button type="button" class="ib-add-btn ${cnt ? 'added' : ''}" onclick="addVariant(${p.id}, ${v.id})"><i class="bi bi-plus-lg"></i> Дод.${cnt ? ' (' + cnt + ')' : ''}</button>
+                        </div>
+                    </div>`;
+                }).join('') : (() => {
+                    const cnt = variantCount(p.id, null);
+                    return `
+                    <div class="ib-vrow">
+                        <div class="fw-bold" style="font-size:.92rem">Без розміру</div>
+                        <div class="text-end">
+                            <div class="ib-price">${price.toFixed(2)} <span class="cur">UAH</span></div>
+                            <button type="button" class="ib-add-btn ${cnt ? 'added' : ''}" onclick="addVariant(${p.id}, null)"><i class="bi bi-plus-lg"></i> Дод.${cnt ? ' (' + cnt + ')' : ''}</button>
+                        </div>
+                    </div>`;
+                })());
+                return `
+                <div class="ib-pcard">
+                    <div class="ib-prow" onclick="toggleProd(${p.id})">
+                        ${p.main_photo_url ? `<img src="${esc(p.main_photo_url)}" loading="lazy">` : '<div class="ph"><i class="bi bi-image"></i></div>'}
+                        <div class="flex-grow-1" style="min-width:0">
+                            <div class="ib-ptitle">${esc(p.title)}</div>
+                            <div class="d-flex align-items-center gap-2 mt-1">
+                                ${p.sku ? `<span class="ib-sku">${esc(p.sku)}</span>` : ''}
+                                <span class="ib-stock">Всього ${totalStock} шт.</span>
+                            </div>
+                        </div>
+                        <div class="text-end flex-shrink-0">
+                            <div class="ib-price">${price.toFixed(2)} <span class="cur">UAH</span></div>
+                            <button type="button" class="ib-sizes-btn"><i class="bi bi-chevron-${open ? 'up' : 'down'}"></i> Розміри</button>
                         </div>
                     </div>
-                </div>
-                ${variants.length ? variants.map(v => `
-                    <div class="ib-var-row">
-                        <span class="fw-semibold">${esc(v.size || '—')}</span>
-                        <span class="text-muted" style="font-size:.76rem">${v.stock_qty ?? 0} шт у наявності</span>
-                        <span class="ib-qty">
-                            <button type="button" onclick="prodQtyChange(${v.id},-1)">−</button>
-                            <b id="q-${v.id}">0</b>
-                            <button type="button" onclick="prodQtyChange(${v.id},1)">+</button>
-                        </span>
-                    </div>`).join('') : `
-                    <div class="ib-var-row">
-                        <span class="fw-semibold">Без розміру</span>
-                        <span class="ib-qty">
-                            <button type="button" onclick="prodQtyChange(0,-1)">−</button>
-                            <b id="q-0">0</b>
-                            <button type="button" onclick="prodQtyChange(0,1)">+</button>
-                        </span>
-                    </div>`}
-                <button type="button" class="btn btn-primary w-100 mt-3" onclick="addProdToOrder()"><i class="bi bi-bag-plus me-1"></i>Додати в замовлення</button>`;
+                    ${rows}
+                </div>`;
+            }).join('');
         }
-        function backToProdGrid() {
-            document.getElementById('prod-toolbar').classList.remove('d-none');
-            renderProdGrid();
+
+        function toggleProd(pid) {
+            prodOpen[pid] = !prodOpen[pid];
+            renderProdList();
         }
-        function prodQtyChange(vid, d) {
-            prodQty[vid] = Math.max(0, (prodQty[vid] || 0) + d);
-            const el = document.getElementById('q-' + vid);
-            if (el) el.textContent = prodQty[vid];
-        }
-        function addProdToOrder() {
-            const variants = prodSel.variants || [];
-            let added = 0;
-            Object.entries(prodQty).forEach(([vid, qty]) => {
-                qty = parseInt(qty);
-                if (!qty) return;
-                const v = variants.find(x => x.id === parseInt(vid));
-                orderItems.push({
-                    product_id: prodSel.id,
-                    product_variant_id: v ? v.id : null,
-                    title: prodSel.title,
-                    sku: (v && v.sku) || prodSel.sku || null,
-                    size: v ? v.size : null,
-                    qty,
-                    price: prodPrice,
-                });
-                added++;
+
+        function addVariant(pid, vid) {
+            const p = prodItems.find(x => x.id === pid);
+            if (!p) return;
+            const v = vid ? (p.variants || []).find(x => x.id === vid) : null;
+            const existing = orderItems.find(x => x.product_id === pid && x.product_variant_id === (v ? v.id : null));
+            if (existing) existing.qty++;
+            else orderItems.push({
+                product_id: p.id,
+                product_variant_id: v ? v.id : null,
+                title: p.title,
+                sku: (v && v.sku) || p.sku || null,
+                size: v ? v.size : null,
+                qty: 1,
+                price: parseFloat(p.sale_price) || 0,
             });
-            if (!added) { alert('Вкажіть кількість хоча б для одного розміру'); return; }
-            closeProductModal();
+            renderProdList();
             renderInfo(currentConv);
         }
 
