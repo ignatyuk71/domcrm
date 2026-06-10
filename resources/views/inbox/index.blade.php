@@ -138,9 +138,36 @@
         .ib-input-wrap input { padding-left: 30px; background: #fff; }
         .ib-input-wrap input.bad { border-color: #dc3545; }
         .ib-ferr { font-size: .7rem; color: #dc3545; margin: -4px 0 7px 2px; }
-        .ib-add-order { display: flex; align-items: center; justify-content: space-between; margin: 12px 16px; padding: 11px 14px; border: 1px solid #e3e6ea; border-radius: 12px; font-weight: 700; font-size: .9rem; cursor: pointer; background: #fff; transition: background .12s; user-select: none; }
-        .ib-add-order:hover { background: #f7f8fa; }
-        .ib-add-order.open { background: #eaf3ff; border-color: #c7dcff; color: #0a66c2; }
+        /* === Права панель у мові дизайну адмінки (clean-card) === */
+        #info { background: #f8fafc; }
+        .ib-panel { padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+        .clean-card-sm { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.02); }
+        .ib-sec-title { font-size: .74rem; font-weight: 800; color: #1e293b; text-transform: uppercase; letter-spacing: .04em; display: flex; align-items: center; }
+        .text-purple { color: #8b5cf6 !important; }
+        .form-label-custom { font-size: .66rem; font-weight: 700; text-transform: uppercase; color: #94a3b8; margin-bottom: .3rem; letter-spacing: .03em; display: block; }
+        .custom-input { border-radius: 10px; border: 1px solid #e2e8f0; }
+        .custom-input.has-icon { padding-left: 32px; }
+        .custom-input.bad { border-color: #ef4444; }
+        .input-group-custom { position: relative; }
+        .input-icon-left { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: #94a3b8; z-index: 5; font-size: .85rem; pointer-events: none; }
+        .btn-action { width: 34px; height: 34px; border-radius: 10px; border: none; display: flex; align-items: center; justify-content: center; background: #f8f9fa; color: #64748b; flex-shrink: 0; transition: .2s; }
+        .btn-action.edit:hover { background: #e0f2fe; color: #0ea5e9; }
+        .btn-action.delete:hover { background: #fee2e2; color: #ef4444; }
+        .btn-primary-gradient { background: linear-gradient(135deg, #6366f1, #4f46e5); border: none; color: #fff; border-radius: 10px; }
+        .btn-primary-gradient:hover:not(:disabled) { box-shadow: 0 4px 12px rgba(79,70,229,.35); color: #fff; }
+        .btn-white { background: #fff; }
+        .icon-box { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: #f1f5f9; color: #64748b; flex-shrink: 0; font-size: 17px; transition: .2s; }
+        .icon-box-active { background: linear-gradient(135deg, #6366f1, #4f46e5); color: #fff; box-shadow: 0 2px 8px rgba(79,70,229,.3); }
+        .payment-card { border: 1px solid #e2e8f0; border-radius: 14px; padding: 12px; cursor: pointer; background: #fff; transition: all .2s; user-select: none; }
+        .payment-card.selected { border-color: #4f46e5; box-shadow: 0 0 0 1px #4f46e5, 0 4px 12px rgba(79,70,229,.12); }
+        .custom-radio { width: 18px; height: 18px; border: 2px solid #cbd5e1; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: .2s; }
+        .custom-radio.on { border-color: #4f46e5; }
+        .radio-dot { width: 8px; height: 8px; border-radius: 50%; background: #4f46e5; opacity: 0; transform: scale(0); transition: .2s; }
+        .custom-radio.on .radio-dot { opacity: 1; transform: scale(1); }
+        .ib-payer { flex: 1; border: 1px solid #e2e8f0; background: #fff; border-radius: 10px; padding: 7px 4px; font-size: .78rem; font-weight: 700; color: #64748b; transition: .15s; }
+        .ib-payer.on { border-color: #4f46e5; color: #4f46e5; background: #eef2ff; }
+        .ib-order-toggle { display: flex; align-items: center; gap: 12px; cursor: pointer; user-select: none; }
+        .ib-cur { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: .7rem; color: #94a3b8; font-weight: 700; }
         .ib-item { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px dashed #eef0f3; }
         .ib-item:last-of-type { border-bottom: none; }
         .ib-np-list { position: absolute; top: calc(100% + 3px); left: 0; right: 0; background: #fff; border: 1px solid #e6e8ee; border-radius: 10px; box-shadow: 0 12px 30px rgba(16,24,40,.14); z-index: 70; max-height: 220px; overflow-y: auto; padding: 4px; }
@@ -648,111 +675,173 @@
 
             const cust = panel?.customer;
 
-            let custHtml;
+            // --- Картка «Клієнт» (як CustomerBlock в адмінці) ---
+            let custInner;
             if (cust && !custEdit) {
-                custHtml = `
-                    <div class="d-flex align-items-center justify-content-between gap-2">
-                        <div class="text-muted" style="font-size:.84rem"><i class="bi bi-telephone me-1"></i>${esc(cust.phone || '—')}</div>
-                        <button class="ib-mini-btn" onclick="editCustomer()" title="Змінити"><i class="bi bi-pencil"></i></button>
+                const name = ((cust.first_name || '') + ' ' + (cust.last_name || '')).trim() || c.contact_name;
+                custInner = `
+                    <div class="d-flex align-items-center gap-3">
+                        ${avatar(c.contact_name, c.avatar, c.channel, 52)}
+                        <div class="flex-grow-1" style="min-width:0">
+                            <div class="d-flex align-items-center gap-2 mb-1">
+                                <div class="fw-bold text-dark text-truncate" style="font-size:.92rem">${esc(name)}</div>
+                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2" style="font-size:.64rem">Клієнт</span>
+                            </div>
+                            <div class="text-secondary" style="font-size:.8rem"><i class="bi bi-telephone-fill me-1 text-muted"></i>${esc(cust.phone || '—')}</div>
+                        </div>
+                        <button class="btn-action edit" onclick="editCustomer()" title="Редагувати"><i class="bi bi-pencil-square"></i></button>
                     </div>`;
             } else {
-                custHtml = `
-                    <div class="ib-input-wrap"><i class="bi bi-person"></i><input id="cf-first" class="form-control form-control-sm ${cyrOk(custDraft.first_name) ? '' : 'bad'}" placeholder="Імʼя (кирилицею)" value="${esc(custDraft.first_name)}" oninput="custDraft.first_name=this.value;vField(this,'first')"></div>
-                    <div id="err-first" class="ib-ferr ${cyrOk(custDraft.first_name) ? 'd-none' : ''}">Лише українські/російські літери</div>
-                    <div class="ib-input-wrap"><i class="bi bi-person"></i><input id="cf-last" class="form-control form-control-sm ${cyrOk(custDraft.last_name) ? '' : 'bad'}" placeholder="Прізвище (кирилицею)" value="${esc(custDraft.last_name)}" oninput="custDraft.last_name=this.value;vField(this,'last')"></div>
-                    <div id="err-last" class="ib-ferr ${cyrOk(custDraft.last_name) ? 'd-none' : ''}">Лише українські/російські літери</div>
-                    <div class="ib-input-wrap"><i class="bi bi-telephone"></i><input id="cf-phone" class="form-control form-control-sm" placeholder="0XX XXX XX XX" value="${esc(custDraft.phone)}" oninput="custDraft.phone=this.value;vField(this,'phone')"></div>
-                    <div id="err-phone" class="ib-ferr d-none">Телефон у форматі 0XXXXXXXXX або +380…</div>
+                custInner = `
+                    <div class="d-flex align-items-center gap-2 mb-3">
+                        ${avatar(c.contact_name, c.avatar, c.channel, 40)}
+                        <div class="fw-bold text-truncate" style="font-size:.88rem">${esc(c.contact_name)}</div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label-custom">Мобільний телефон</label>
+                        <div class="input-group-custom">
+                            <i class="bi bi-telephone input-icon-left"></i>
+                            <input id="cf-phone" class="form-control form-control-sm custom-input has-icon" placeholder="0XX XXX XX XX" value="${esc(custDraft.phone)}" oninput="custDraft.phone=this.value;vField(this,'phone')">
+                        </div>
+                        <div id="err-phone" class="ib-ferr d-none">Формат: 0XXXXXXXXX або +380…</div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label-custom">Імʼя</label>
+                            <input id="cf-first" class="form-control form-control-sm custom-input ${cyrOk(custDraft.first_name) ? '' : 'bad'}" placeholder="Кирилицею" value="${esc(custDraft.first_name)}" oninput="custDraft.first_name=this.value;vField(this,'first')">
+                            <div id="err-first" class="ib-ferr ${cyrOk(custDraft.first_name) ? 'd-none' : ''}">Лише кирилиця</div>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label-custom">Прізвище</label>
+                            <input id="cf-last" class="form-control form-control-sm custom-input ${cyrOk(custDraft.last_name) ? '' : 'bad'}" placeholder="Кирилицею" value="${esc(custDraft.last_name)}" oninput="custDraft.last_name=this.value;vField(this,'last')">
+                            <div id="err-last" class="ib-ferr ${cyrOk(custDraft.last_name) ? 'd-none' : ''}">Лише кирилиця</div>
+                        </div>
+                    </div>
                     <div class="d-flex gap-2">
-                        <button class="btn btn-sm btn-primary flex-grow-1" onclick="saveCustomer(this)"><i class="bi bi-person-plus me-1"></i>Зберегти клієнта</button>
-                        ${cust ? '<button class="btn btn-sm btn-light border" onclick="custEdit=false;renderInfo(currentConv)"><i class="bi bi-x-lg"></i></button>' : ''}
+                        <button class="btn btn-primary-gradient w-100 fw-semibold py-2" style="font-size:.86rem" onclick="saveCustomer(this)"><i class="bi bi-check-lg me-1"></i>Зберегти клієнта</button>
+                        ${cust ? '<button class="btn-action delete" onclick="custEdit=false;renderInfo(currentConv)" title="Скасувати"><i class="bi bi-x-lg"></i></button>' : ''}
                     </div>
                     <div id="cust-err" class="ib-ferr mt-2 d-none"></div>`;
             }
 
+            // --- Товари ---
             const itemsHtml = orderItems.length ? orderItems.map((it, i) => `
-                <div class="ib-item">
+                <div class="d-flex align-items-center gap-2 py-2" style="${i ? 'border-top:1px solid #f1f5f9' : ''}">
                     <div class="flex-grow-1" style="min-width:0">
-                        <div class="text-truncate" style="font-size:.82rem;font-weight:600">${esc(it.title)}</div>
-                        <div class="text-muted" style="font-size:.74rem">${it.size ? esc(it.size) + ' · ' : ''}${it.qty} шт · ${it.price} грн</div>
+                        <div class="fw-semibold text-truncate" style="font-size:.82rem">${esc(it.title)}</div>
+                        <div class="text-muted d-flex align-items-center gap-2 mt-1" style="font-size:.72rem">
+                            ${it.size ? `<span class="ib-sku">${esc(it.size)}</span>` : ''}
+                            <span>${it.qty} шт × ${it.price} грн</span>
+                        </div>
                     </div>
-                    <button class="ib-mini-btn" onclick="removeOrderItem(${i})"><i class="bi bi-x-lg"></i></button>
-                </div>`).join('') : '<div class="text-muted" style="font-size:.8rem">Товари не додано</div>';
+                    <div class="fw-bold" style="font-size:.82rem;white-space:nowrap">${(it.qty * (parseFloat(it.price) || 0)).toFixed(0)} грн</div>
+                    <button class="btn-action delete" onclick="removeOrderItem(${i})" title="Прибрати"><i class="bi bi-trash3"></i></button>
+                </div>`).join('') : '<div class="text-muted py-2" style="font-size:.8rem">Поки порожньо — натисніть «Обрати»</div>';
             const totalSum = orderItems.reduce((s, it) => s + it.qty * (parseFloat(it.price) || 0), 0);
 
+            // --- Доставка ---
             const deliveryHtml = `
-                <div class="position-relative mb-2">
-                    <input id="np-city" class="form-control form-control-sm" placeholder="Місто (напр., Рівне)" value="${esc(delivery.city_name)}" oninput="npCitySearch(this.value)" autocomplete="off">
-                    <div id="np-city-list" class="ib-np-list d-none"></div>
+                <div class="mb-2">
+                    <label class="form-label-custom">Місто</label>
+                    <div class="input-group-custom">
+                        <i class="bi bi-geo-alt input-icon-left"></i>
+                        <input id="np-city" class="form-control form-control-sm custom-input has-icon" placeholder="Напр., Рівне" value="${esc(delivery.city_name)}" oninput="npCitySearch(this.value)" autocomplete="off">
+                        <div id="np-city-list" class="ib-np-list d-none"></div>
+                    </div>
                 </div>
-                <div class="position-relative mb-2 ${delivery.city_ref ? '' : 'd-none'}">
-                    <input id="np-wh" class="form-control form-control-sm" placeholder="Відділення / поштомат" value="${esc(delivery.warehouse_name)}" oninput="npWhSearch(this.value)" onfocus="npWhSearch(this.value)" autocomplete="off">
-                    <div id="np-wh-list" class="ib-np-list d-none"></div>
+                <div class="mb-2 ${delivery.city_ref ? '' : 'd-none'}">
+                    <label class="form-label-custom">Відділення / поштомат</label>
+                    <div class="input-group-custom">
+                        <i class="bi bi-box2 input-icon-left"></i>
+                        <input id="np-wh" class="form-control form-control-sm custom-input has-icon" placeholder="Пошук відділення…" value="${esc(delivery.warehouse_name)}" oninput="npWhSearch(this.value)" onfocus="npWhSearch(this.value)" autocomplete="off">
+                        <div id="np-wh-list" class="ib-np-list d-none"></div>
+                    </div>
                 </div>
-                <div class="d-flex gap-3 mt-1" style="font-size:.82rem">
-                    <span class="text-muted">Платник:</span>
-                    <label class="d-flex align-items-center gap-1" style="cursor:pointer"><input type="radio" name="dl-payer" ${delivery.payer === 'recipient' ? 'checked' : ''} onchange="delivery.payer='recipient'">Отримувач</label>
-                    <label class="d-flex align-items-center gap-1" style="cursor:pointer"><input type="radio" name="dl-payer" ${delivery.payer === 'sender' ? 'checked' : ''} onchange="delivery.payer='sender'">Відправник</label>
+                <label class="form-label-custom mt-1">Платник доставки</label>
+                <div class="d-flex gap-2">
+                    <button type="button" class="ib-payer ${delivery.payer === 'recipient' ? 'on' : ''}" onclick="delivery.payer='recipient';renderInfo(currentConv)">Отримувач</button>
+                    <button type="button" class="ib-payer ${delivery.payer === 'sender' ? 'on' : ''}" onclick="delivery.payer='sender';renderInfo(currentConv)">Відправник</button>
                 </div>`;
 
-            const payHtml = `
-                <div class="ib-pay-row">
-                    ${[['cod', 'Наложений', 'bi-box-seam'], ['card', 'На карту', 'bi-credit-card'], ['prepay', 'Передоплата', 'bi-wallet2']].map(([v, l, ic]) => `
-                        <button type="button" class="ib-pay ${payment.method === v ? 'active' : ''}" onclick="setPayMethod('${v}')"><i class="bi ${ic}"></i><span>${l}</span></button>`).join('')}
-                </div>
-                ${payment.method === 'prepay' ? `<input class="form-control form-control-sm mt-2" type="number" min="0" placeholder="Сума передоплати, грн" value="${esc(payment.prepay_amount)}" oninput="payment.prepay_amount=this.value">` : ''}`;
+            // --- Оплата (як PaymentBlock в адмінці) ---
+            const PAY = [
+                ['cod', 'Накладений платіж', 'Оплата у відділенні пошти', 'bi-box-seam'],
+                ['card', 'Оплата на рахунок', 'Повна оплата за реквізитами', 'bi-credit-card'],
+                ['prepay', 'Передоплата', 'Часткова оплата наперед', 'bi-wallet2'],
+            ];
+            const payHtml = '<div class="d-flex flex-column gap-2">' + PAY.map(([v, l, d, ic]) => `
+                <div class="payment-card ${payment.method === v ? 'selected' : ''}" onclick="setPayMethod('${v}')">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="icon-box ${payment.method === v ? 'icon-box-active' : ''}"><i class="bi ${ic}"></i></div>
+                        <div class="flex-grow-1" style="min-width:0">
+                            <div class="d-flex align-items-center justify-content-between gap-2">
+                                <span class="fw-bold text-dark" style="font-size:.84rem">${l}</span>
+                                <span class="custom-radio ${payment.method === v ? 'on' : ''}"><span class="radio-dot"></span></span>
+                            </div>
+                            <div class="text-muted" style="font-size:.7rem">${d}</div>
+                        </div>
+                    </div>
+                </div>`).join('') + '</div>'
+                + (payment.method === 'prepay' ? `
+                <div class="p-3 mt-2 rounded-3" style="background:#f8fafc;border:1px dashed #e2e8f0">
+                    <label class="form-label-custom">Внесена сума</label>
+                    <div class="input-group-custom">
+                        <input class="form-control form-control-sm custom-input" type="number" min="0" placeholder="0" value="${esc(payment.prepay_amount)}" oninput="payment.prepay_amount=this.value">
+                        <span class="ib-cur">UAH</span>
+                    </div>
+                </div>` : '');
 
-            const ordersHtml = (panel?.orders || []).length ? `
-                <div class="ib-iblock" style="border-bottom:none">
-                    <div class="ib-block-title"><i class="bi bi-receipt me-1"></i>Замовлення клієнта</div>
+            // --- Форма замовлення (розгортається) ---
+            const formHtml = !orderFormOpen ? '' : `
+                <div class="mt-3 pt-3" style="border-top:1px solid #f1f5f9">
+                    <div class="ib-sec-title mb-2"><i class="bi bi-box-seam text-warning me-2"></i>Товари
+                        <button class="btn btn-white border shadow-sm ms-auto" style="font-size:.74rem;padding:3px 11px;border-radius:8px" onclick="openProductModal()"><i class="bi bi-plus-lg me-1"></i>Обрати</button>
+                    </div>
+                    ${itemsHtml}
+                    ${orderItems.length ? `<div class="d-flex justify-content-between pt-2 mt-1" style="border-top:1px solid #f1f5f9"><span class="text-muted" style="font-size:.8rem">Разом</span><span class="fw-bold" style="font-size:.9rem">${totalSum.toFixed(0)} грн</span></div>` : ''}
+                </div>
+                <div class="mt-3 pt-3" style="border-top:1px solid #f1f5f9">
+                    <div class="ib-sec-title mb-2"><i class="bi bi-truck text-dark me-2"></i>Доставка — Нова пошта</div>
+                    ${deliveryHtml}
+                </div>
+                <div class="mt-3 pt-3" style="border-top:1px solid #f1f5f9">
+                    <div class="ib-sec-title mb-2"><i class="bi bi-credit-card text-success me-2"></i>Оплата</div>
+                    ${payHtml}
+                </div>
+                <button class="btn btn-primary-gradient w-100 fw-semibold py-2 mt-3" onclick="saveOrderFromChat(this)"><i class="bi bi-check-lg me-1"></i>Зберегти замовлення</button>
+                <div id="order-error" class="ib-ferr mt-2 d-none"></div>`;
+
+            // --- Замовлення клієнта ---
+            const ordersCard = (panel?.orders || []).length ? `
+                <div class="clean-card-sm">
+                    <div class="ib-sec-title mb-2"><i class="bi bi-receipt text-primary me-2"></i>Замовлення клієнта</div>
                     ${panel.orders.map(o => `
                         <a class="ib-order" href="/orders/${o.id}" target="_blank">
                             <span class="fw-bold">#${esc(o.number)}</span>
-                            <span class="text-muted" style="font-size:.74rem">${esc(o.date || '')}</span>
-                            <span class="ms-auto" style="font-size:.8rem">${o.total ? o.total.toFixed(0) + ' грн' : ''}</span>
+                            <span class="text-muted" style="font-size:.72rem">${esc(o.date || '')}</span>
+                            <span class="ms-auto fw-semibold" style="font-size:.78rem">${o.total ? o.total.toFixed(0) + ' грн' : ''}</span>
                             <span class="ib-st-badge" style="background:${esc(o.status_color || '#888')}1f;color:${esc(o.status_color || '#555')}">${esc(o.status)}</span>
                         </a>`).join('')}
                 </div>` : '';
 
             box.innerHTML = `
-                <div class="ib-top">
-                    <div class="d-flex gap-3">
-                        <div class="flex-shrink-0">${avatar(c.contact_name, c.avatar, c.channel, 64)}</div>
-                        <div class="flex-grow-1" style="min-width:0">
-                            <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
-                                <div class="fw-bold text-truncate" style="font-size:.95rem">${esc(cust && !custEdit ? (((cust.first_name || '') + ' ' + (cust.last_name || '')).trim() || c.contact_name) : c.contact_name)}</div>
-                                ${cust && !custEdit ? '<span class="ib-cb-badge ok"><i class="bi bi-check2"></i> збережено</span>' : '<span class="ib-cb-badge no">не збережено</span>'}
-                            </div>
-                            ${custHtml}
+                <div class="ib-panel">
+                    <div class="clean-card-sm">
+                        <div class="ib-sec-title mb-3"><i class="bi bi-person text-purple me-2"></i>Клієнт
+                            ${cust && !custEdit ? '' : '<span class="ib-cb-badge no ms-auto">не збережено</span>'}
                         </div>
+                        ${custInner}
                     </div>
-                </div>
-                <div class="ib-add-order ${orderFormOpen ? 'open' : ''}" onclick="toggleOrderForm()">
-                    <span><i class="bi bi-bag-plus me-2"></i>Додати замовлення</span>
-                    <i class="bi bi-chevron-${orderFormOpen ? 'up' : 'down'}"></i>
-                </div>
-                ${orderFormOpen ? `
-                <div class="ib-iblock" style="border-top:1px solid #f0f1f4">
-                    <div class="ib-block-title d-flex justify-content-between align-items-center">
-                        <span><i class="bi bi-bag me-1"></i>Товари</span>
-                        <button class="btn btn-sm btn-light border" style="font-size:.76rem;padding:3px 10px" onclick="openProductModal()"><i class="bi bi-plus-lg me-1"></i>Обрати</button>
+                    <div class="clean-card-sm">
+                        <div class="ib-order-toggle" onclick="toggleOrderForm()">
+                            <div class="icon-box ${orderFormOpen ? 'icon-box-active' : ''}"><i class="bi bi-bag-plus"></i></div>
+                            <span class="fw-bold flex-grow-1 text-dark" style="font-size:.9rem">Додати замовлення</span>
+                            <i class="bi bi-chevron-${orderFormOpen ? 'up' : 'down'} text-muted"></i>
+                        </div>
+                        ${formHtml}
                     </div>
-                    ${itemsHtml}
-                    ${orderItems.length ? `<div class="text-end fw-bold mt-2" style="font-size:.86rem">Разом: ${totalSum.toFixed(0)} грн</div>` : ''}
-                </div>
-                <div class="ib-iblock">
-                    <div class="ib-block-title"><i class="bi bi-truck me-1"></i>Доставка — Нова пошта</div>
-                    ${deliveryHtml}
-                </div>
-                <div class="ib-iblock">
-                    <div class="ib-block-title"><i class="bi bi-credit-card me-1"></i>Оплата</div>
-                    ${payHtml}
-                </div>
-                <div style="padding:14px 16px">
-                    <button class="btn btn-success w-100 fw-semibold" onclick="saveOrderFromChat(this)"><i class="bi bi-check2-circle me-1"></i>Зберегти замовлення</button>
-                    <div id="order-error" class="text-danger small mt-2 d-none"></div>
-                </div>` : ''}
-                ${ordersHtml}`;
+                    ${ordersCard}
+                </div>`;
         }
 
         // --- Модалка «Каталог товарів» (як в адмінці) ---
