@@ -31,28 +31,35 @@ class InboxController extends Controller
         return response()->json(['ok' => true, 'imported' => $imported]);
     }
 
-    /** Список діалогів для лівої панелі. */
-    public function conversations()
+    /** Список діалогів для лівої панелі (пачками: offset/limit + has_more). */
+    public function conversations(Request $request)
     {
-        $items = InboxConversation::query()
-            ->with(['connection:id,page_name', 'contact:id,name,external_id,profile_pic'])
-            ->orderByDesc('last_message_at')
-            ->limit(200)
-            ->get()
-            ->map(fn (InboxConversation $c) => [
-                'id' => $c->id,
-                'store' => $c->connection?->page_name ?? '—',
-                'store_id' => $c->connection?->page_id,
-                'channel' => $c->channel,
-                'contact_name' => $this->contactName($c->contact?->name, $c->contact?->external_id),
-                'avatar' => $c->contact?->profile_pic,
-                'last_text' => $c->last_message_text,
-                'last_direction' => $c->last_message_direction,
-                'last_at_human' => $c->last_message_at?->diffForHumans(),
-                'unread' => (int) $c->unread_count,
-            ]);
+        $limit = min(max((int) $request->query('limit', 25), 1), 200);
+        $offset = max((int) $request->query('offset', 0), 0);
 
-        return response()->json($items);
+        $items = InboxConversation::query()
+            ->with(['connection:id,page_name,page_id', 'contact:id,name,external_id,profile_pic'])
+            ->orderByDesc('last_message_at')
+            ->skip($offset)
+            ->take($limit + 1) // +1, щоб дізнатись чи є ще
+            ->get();
+
+        $hasMore = $items->count() > $limit;
+
+        $data = $items->take($limit)->map(fn (InboxConversation $c) => [
+            'id' => $c->id,
+            'store' => $c->connection?->page_name ?? '—',
+            'store_id' => $c->connection?->page_id,
+            'channel' => $c->channel,
+            'contact_name' => $this->contactName($c->contact?->name, $c->contact?->external_id),
+            'avatar' => $c->contact?->profile_pic,
+            'last_text' => $c->last_message_text,
+            'last_direction' => $c->last_message_direction,
+            'last_at_human' => $c->last_message_at?->diffForHumans(),
+            'unread' => (int) $c->unread_count,
+        ])->values();
+
+        return response()->json(['data' => $data, 'has_more' => $hasMore]);
     }
 
     /** Повідомлення діалогу + позначити прочитаним. */

@@ -24,6 +24,7 @@
         .ib-chip.active { background: #4f46e5; color: #fff; }
 
         .ib-convs { flex: 1; overflow-y: auto; }
+        .ib-conv-more { display: flex; justify-content: center; padding: 12px 0 16px; color: #8a8d91; }
         .ib-conv { display: flex; gap: 10px; padding: 9px 14px; cursor: pointer; position: relative; transition: background .12s; }
         .ib-conv:hover { background: #f7f8fa; }
         .ib-conv.active { background: #f1f2ff; }
@@ -192,12 +193,33 @@
             return `<span class="ib-av"><span class="circle" style="width:${size}px;height:${size}px;font-size:${size/2.4}px">${inner}</span><span class="ch">${chIcon(ch)}</span></span>`;
         }
 
+        const CONV_PAGE = 25;
+        let convsHasMore = false, convsLoadingMore = false;
+
         async function loadConversations() {
             try {
-                const res = await fetch('{{ route('inbox.conversations') }}', { headers: { 'Accept': 'application/json' } });
-                allConvs = await res.json();
+                // Оновлюємо стільки, скільки вже показано (мінімум одна пачка).
+                const limit = Math.max(allConvs.length, CONV_PAGE);
+                const res = await fetch('{{ route('inbox.conversations') }}?offset=0&limit=' + limit, { headers: { 'Accept': 'application/json' } });
+                const json = await res.json();
+                allConvs = json.data || [];
+                convsHasMore = !!json.has_more;
                 renderConvList();
             } catch (e) {}
+        }
+
+        async function loadMoreConvs() {
+            if (!convsHasMore || convsLoadingMore) return;
+            convsLoadingMore = true;
+            renderConvList(); // показати спінер унизу
+            try {
+                const res = await fetch('{{ route('inbox.conversations') }}?offset=' + allConvs.length + '&limit=' + CONV_PAGE, { headers: { 'Accept': 'application/json' } });
+                const json = await res.json();
+                allConvs = allConvs.concat(json.data || []);
+                convsHasMore = !!json.has_more;
+            } catch (e) {}
+            convsLoadingMore = false;
+            renderConvList();
         }
 
         function renderConvList() {
@@ -218,7 +240,8 @@
                         <div class="store text-truncate">${esc(c.store)}</div>
                     </div>
                     ${c.unread > 0 ? '<span class="ib-dot"></span>' : ''}
-                </div>`).join('');
+                </div>`).join('')
+                + (convsLoadingMore ? '<div class="ib-conv-more"><span class="spinner-border spinner-border-sm"></span></div>' : '');
         }
 
         function setFilter(f, btn) {
@@ -585,6 +608,10 @@
                 document.getElementById('emoji-pop')?.classList.add('d-none');
                 document.getElementById('tpl-pop')?.classList.add('d-none');
             }
+        });
+
+        document.getElementById('conv-list').addEventListener('scroll', function () {
+            if (this.scrollTop + this.clientHeight >= this.scrollHeight - 120) loadMoreConvs();
         });
 
         loadConversations();
