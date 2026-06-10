@@ -295,9 +295,13 @@ class InboxController extends Controller
     public function attachCustomer(Request $request, InboxConversation $conversation)
     {
         $data = $request->validate([
-            'first_name' => ['nullable', 'string', 'max:255'],
-            'last_name' => ['nullable', 'string', 'max:255'],
-            'phone' => ['required', 'string', 'max:32'],
+            'first_name' => ['required', 'string', 'max:255', "regex:/^[\p{Cyrillic}'’ʼ\-\s]+$/u"],
+            'last_name' => ['nullable', 'string', 'max:255', "regex:/^[\p{Cyrillic}'’ʼ\-\s]+$/u"],
+            'phone' => ['required', 'string', 'max:32', 'regex:/^(\+?38)?0\d{9}$/'],
+        ], [
+            'first_name.regex' => 'Імʼя — лише кирилицею (укр/рос)',
+            'last_name.regex' => 'Прізвище — лише кирилицею (укр/рос)',
+            'phone.regex' => 'Телефон у форматі 0XXXXXXXXX або +380XXXXXXXXX',
         ]);
 
         $customer = Customer::firstOrCreate(

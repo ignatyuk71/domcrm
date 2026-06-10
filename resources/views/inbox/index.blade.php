@@ -125,8 +125,19 @@
         .ib-block-title { font-weight: 700; font-size: .9rem; color: #0f172a; margin-bottom: 8px; }
         .ib-mini-btn { width: 26px; height: 26px; border: none; background: #f0f2f5; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; color: #475467; flex-shrink: 0; }
         .ib-mini-btn:hover { background: #e4e6eb; }
-        .ib-cust-card { background: #f8f9fb; border: 1px solid #eef0f3; border-radius: 12px; padding: 10px 12px; }
         .ib-src { display: inline-flex; align-items: center; gap: 5px; font-size: .74rem; font-weight: 600; color: #475467; background: #f0f2f5; border-radius: 999px; padding: 3px 9px; }
+        .ib-top { padding: 16px 16px 14px; border-bottom: 1px solid #f0f1f4; }
+        .ib-client-box { background: linear-gradient(180deg, #f8fafc, #f1f5f9); border: 1px solid #e8ecf2; border-radius: 14px; padding: 12px; margin-top: 12px; text-align: left; }
+        .ib-cb-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .ib-cb-title { font-weight: 700; font-size: .82rem; color: #0f172a; }
+        .ib-cb-badge { font-size: .66rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+        .ib-cb-badge.ok { background: #e7f6ec; color: #2fb344; }
+        .ib-cb-badge.no { background: #fff4e5; color: #d97706; }
+        .ib-input-wrap { position: relative; margin-bottom: 8px; }
+        .ib-input-wrap i { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #9aa3af; font-size: 13px; pointer-events: none; }
+        .ib-input-wrap input { padding-left: 30px; background: #fff; }
+        .ib-input-wrap input.bad { border-color: #dc3545; }
+        .ib-ferr { font-size: .7rem; color: #dc3545; margin: -4px 0 7px 2px; }
         .ib-item { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px dashed #eef0f3; }
         .ib-item:last-of-type { border-bottom: none; }
         .ib-np-list { position: absolute; top: calc(100% + 3px); left: 0; right: 0; background: #fff; border: 1px solid #e6e8ee; border-radius: 10px; box-shadow: 0 12px 30px rgba(16,24,40,.14); z-index: 70; max-height: 220px; overflow-y: auto; padding: 4px; }
@@ -452,20 +463,48 @@
             renderInfo(currentConv);
         }
 
+        // Імʼя/прізвище — лише кирилиця (укр/рос); телефон — 0XXXXXXXXX або +380XXXXXXXXX.
+        const cyrOk = (s) => !s || !s.trim() || /^[Ѐ-ӿ'’ʼ\-\s]+$/.test(s.trim());
+        const normPhone = (s) => (s || '').replace(/[\s\-().]/g, '');
+        const phoneOk = (s) => /^(\+?38)?0\d{9}$/.test(normPhone(s));
+
+        function vField(el, kind) {
+            const v = el.value;
+            let ok = kind === 'phone' ? (!v.trim() || phoneOk(v)) : cyrOk(v);
+            el.classList.toggle('bad', !ok);
+            document.getElementById('err-' + kind)?.classList.toggle('d-none', ok);
+            return ok;
+        }
+
         async function saveCustomer(btn) {
-            const phone = (custDraft.phone || '').trim();
-            if (!phone) { alert('Вкажіть телефон клієнта'); return; }
+            const errBox = document.getElementById('cust-err');
+            errBox?.classList.add('d-none');
+            let bad = false;
+            if (!custDraft.first_name.trim() || !cyrOk(custDraft.first_name)) { document.getElementById('cf-first')?.classList.add('bad'); document.getElementById('err-first')?.classList.remove('d-none'); bad = true; }
+            if (!cyrOk(custDraft.last_name)) { document.getElementById('cf-last')?.classList.add('bad'); document.getElementById('err-last')?.classList.remove('d-none'); bad = true; }
+            if (!phoneOk(custDraft.phone)) { document.getElementById('cf-phone')?.classList.add('bad'); document.getElementById('err-phone')?.classList.remove('d-none'); bad = true; }
+            if (bad) return;
+
             btn.disabled = true;
             try {
                 const res = await fetch(`/api/inbox/conversations/${activeId}/attach-customer`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
-                    body: JSON.stringify(custDraft)
+                    body: JSON.stringify({
+                        first_name: custDraft.first_name.trim(),
+                        last_name: custDraft.last_name.trim(),
+                        phone: normPhone(custDraft.phone),
+                    })
                 });
-                if (!res.ok) throw new Error();
+                if (!res.ok) {
+                    const d = await res.json().catch(() => ({}));
+                    throw new Error(d.message || 'Не вдалося зберегти клієнта');
+                }
                 custEdit = false;
                 await loadPanel();
-            } catch (e) { alert('Не вдалося зберегти клієнта'); }
+            } catch (e) {
+                if (errBox) { errBox.textContent = e.message; errBox.classList.remove('d-none'); }
+            }
             btn.disabled = false;
         }
 
@@ -595,24 +634,34 @@
             let custHtml;
             if (cust && !custEdit) {
                 custHtml = `
-                    <div class="ib-cust-card">
-                        <div class="d-flex align-items-center justify-content-between gap-2">
-                            <div class="fw-bold text-truncate" style="font-size:.9rem"><i class="bi bi-person-check-fill text-success me-1"></i>${esc(((cust.first_name || '') + ' ' + (cust.last_name || '')).trim() || 'Клієнт')}</div>
-                            <button class="ib-mini-btn" onclick="editCustomer()" title="Змінити"><i class="bi bi-pencil"></i></button>
+                    <div class="ib-cb-head">
+                        <span class="ib-cb-title"><i class="bi bi-person-vcard me-1"></i>Клієнт CRM</span>
+                        <span class="ib-cb-badge ok"><i class="bi bi-check2"></i> збережено</span>
+                    </div>
+                    <div class="d-flex align-items-center justify-content-between gap-2">
+                        <div style="min-width:0">
+                            <div class="fw-bold text-truncate" style="font-size:.92rem">${esc(((cust.first_name || '') + ' ' + (cust.last_name || '')).trim() || 'Клієнт')}</div>
+                            <div class="text-muted mt-1" style="font-size:.82rem"><i class="bi bi-telephone me-1"></i>${esc(cust.phone || '—')}</div>
                         </div>
-                        <div class="text-muted mt-1" style="font-size:.82rem"><i class="bi bi-telephone me-1"></i>${esc(cust.phone || '—')}</div>
-                        <div class="mt-2">${srcBadge}</div>
+                        <button class="ib-mini-btn" onclick="editCustomer()" title="Змінити"><i class="bi bi-pencil"></i></button>
                     </div>`;
             } else {
                 custHtml = `
-                    <input class="form-control form-control-sm mb-2" placeholder="Імʼя" value="${esc(custDraft.first_name)}" oninput="custDraft.first_name=this.value">
-                    <input class="form-control form-control-sm mb-2" placeholder="Прізвище" value="${esc(custDraft.last_name)}" oninput="custDraft.last_name=this.value">
-                    <input class="form-control form-control-sm mb-2" placeholder="Телефон (з переписки)" value="${esc(custDraft.phone)}" oninput="custDraft.phone=this.value">
+                    <div class="ib-cb-head">
+                        <span class="ib-cb-title"><i class="bi bi-person-vcard me-1"></i>Клієнт CRM</span>
+                        <span class="ib-cb-badge no">не збережено</span>
+                    </div>
+                    <div class="ib-input-wrap"><i class="bi bi-person"></i><input id="cf-first" class="form-control form-control-sm ${cyrOk(custDraft.first_name) ? '' : 'bad'}" placeholder="Імʼя (кирилицею)" value="${esc(custDraft.first_name)}" oninput="custDraft.first_name=this.value;vField(this,'first')"></div>
+                    <div id="err-first" class="ib-ferr ${cyrOk(custDraft.first_name) ? 'd-none' : ''}">Лише українські/російські літери</div>
+                    <div class="ib-input-wrap"><i class="bi bi-person"></i><input id="cf-last" class="form-control form-control-sm ${cyrOk(custDraft.last_name) ? '' : 'bad'}" placeholder="Прізвище (кирилицею)" value="${esc(custDraft.last_name)}" oninput="custDraft.last_name=this.value;vField(this,'last')"></div>
+                    <div id="err-last" class="ib-ferr ${cyrOk(custDraft.last_name) ? 'd-none' : ''}">Лише українські/російські літери</div>
+                    <div class="ib-input-wrap"><i class="bi bi-telephone"></i><input id="cf-phone" class="form-control form-control-sm" placeholder="0XX XXX XX XX" value="${esc(custDraft.phone)}" oninput="custDraft.phone=this.value;vField(this,'phone')"></div>
+                    <div id="err-phone" class="ib-ferr d-none">Телефон у форматі 0XXXXXXXXX або +380…</div>
                     <div class="d-flex gap-2">
                         <button class="btn btn-sm btn-primary flex-grow-1" onclick="saveCustomer(this)"><i class="bi bi-person-plus me-1"></i>Зберегти клієнта</button>
-                        ${cust ? '<button class="btn btn-sm btn-light border" onclick="custEdit=false;renderInfo(currentConv)">✕</button>' : ''}
+                        ${cust ? '<button class="btn btn-sm btn-light border" onclick="custEdit=false;renderInfo(currentConv)"><i class="bi bi-x-lg"></i></button>' : ''}
                     </div>
-                    <div class="mt-2">${srcBadge}</div>`;
+                    <div id="cust-err" class="ib-ferr mt-2 d-none"></div>`;
             }
 
             const itemsHtml = orderItems.length ? orderItems.map((it, i) => `
@@ -660,14 +709,14 @@
                 </div>` : '';
 
             box.innerHTML = `
-                <div class="text-center" style="padding:16px 16px 12px; border-bottom:1px solid #f0f1f4">
+                <div class="ib-top text-center">
                     ${avatar(c.contact_name, c.avatar, c.channel, 72)}
-                    <div class="fw-bold mt-2" style="font-size:.95rem">${esc(c.contact_name)}</div>
-                    <div class="text-muted" style="font-size:.74rem">${esc(c.store)}</div>
-                </div>
-                <div class="ib-iblock">
-                    <div class="ib-block-title"><i class="bi bi-person me-1"></i>Клієнт</div>
-                    ${custHtml}
+                    <div class="fw-bold mt-2" style="font-size:.98rem">${esc(c.contact_name)}</div>
+                    <div class="d-flex justify-content-center align-items-center gap-2 mt-1">
+                        <span class="text-muted" style="font-size:.74rem">${esc(c.store)}</span>
+                        ${srcBadge}
+                    </div>
+                    <div class="ib-client-box">${custHtml}</div>
                 </div>
                 <div class="ib-iblock">
                     <div class="ib-block-title d-flex justify-content-between align-items-center">
