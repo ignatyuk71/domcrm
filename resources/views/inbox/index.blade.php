@@ -25,6 +25,7 @@
 
         .ib-convs { flex: 1; overflow-y: auto; }
         .ib-conv-more { display: flex; justify-content: center; padding: 12px 0 16px; color: #8a8d91; }
+        .ib-st-badge { font-size: .64rem; font-weight: 700; padding: 2px 7px; border-radius: 999px; line-height: 1.25; white-space: nowrap; flex-shrink: 0; }
         .ib-conv { display: flex; gap: 10px; padding: 9px 14px; cursor: pointer; position: relative; transition: background .12s; }
         .ib-conv:hover { background: #f7f8fa; }
         .ib-conv.active { background: #f1f2ff; }
@@ -231,19 +232,26 @@
             if (filter !== 'all') items = items.filter(c => c.channel === filter);
             if (search) items = items.filter(c => (c.contact_name || '').toLowerCase().includes(search));
             if (!items.length) { el.innerHTML = '<div class="ib-empty">Нічого не знайдено</div>'; return; }
-            el.innerHTML = items.map(c => `
+            el.innerHTML = items.map(c => {
+                const st = chatStatuses.find(s => s.id === c.chat_status_id);
+                const badge = st && !st.is_default
+                    ? `<span class="ib-st-badge" style="background:${esc(st.color)}1f;color:${esc(st.color)}">${esc(st.name)}</span>`
+                    : '';
+                return `
                 <div class="ib-conv ${c.id === activeId ? 'active' : ''} ${c.unread > 0 ? 'unread' : ''}" onclick="openConversation(${c.id})">
                     ${avatar(c.contact_name, c.avatar, c.channel, 48)}
                     <div class="meta">
-                        <div class="d-flex justify-content-between align-items-baseline">
+                        <div class="d-flex align-items-center gap-1">
                             <span class="nm text-truncate">${esc(c.contact_name)}</span>
-                            <span class="ib-time ms-2">${esc(c.last_at_human || '')}</span>
+                            ${badge}
+                            <span class="ib-time ms-auto">${esc(c.last_at_human || '')}</span>
                         </div>
                         <div class="pv text-truncate">${c.last_direction === 'out' ? 'Ви: ' : ''}${esc(c.last_text || '')}</div>
                         <div class="store text-truncate">${esc(c.store)}</div>
                     </div>
                     ${c.unread > 0 ? '<span class="ib-dot"></span>' : ''}
-                </div>`).join('')
+                </div>`;
+            }).join('')
                 + (convsLoadingMore ? '<div class="ib-conv-more"><span class="spinner-border spinner-border-sm"></span></div>' : '');
         }
 
@@ -276,6 +284,7 @@
                 if (conv) conv.chat_status_id = id;
                 const st = chatStatuses.find(s => s.id === id);
                 document.querySelector('.ib-status-wrap')?.style.setProperty('--st', st?.color || '#adb5bd');
+                renderConvList();
             } catch (e) {}
         }
 
@@ -651,8 +660,7 @@
             if (this.scrollTop + this.clientHeight >= this.scrollHeight - 120) loadMoreConvs();
         });
 
-        loadChatStatuses();
-        loadConversations();
+        loadChatStatuses().then(loadConversations);
         setInterval(() => {
             loadConversations();
             if (activeId) {
