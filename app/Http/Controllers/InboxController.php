@@ -55,7 +55,7 @@ class InboxController extends Controller
             'avatar' => $c->contact?->profile_pic,
             'last_text' => $c->last_message_text,
             'last_direction' => $c->last_message_direction,
-            'last_at_human' => $c->last_message_at?->diffForHumans(),
+            'last_at_human' => $this->shortTime($c->last_message_at),
             'unread' => (int) $c->unread_count,
         ])->values();
 
@@ -226,6 +226,24 @@ class InboxController extends Controller
         abort_unless($url, 404);
 
         return redirect()->away($url);
+    }
+
+    /** Компактний відносний час як у ФБ: щойно / 8 хв / 2 год / 3 дн / 05.06. */
+    private function shortTime($time): ?string
+    {
+        if (!$time) {
+            return null;
+        }
+
+        $sec = (int) abs($time->diffInSeconds(now()));
+
+        return match (true) {
+            $sec < 60 => 'щойно',
+            $sec < 3600 => intdiv($sec, 60) . ' хв',
+            $sec < 86400 => intdiv($sec, 3600) . ' год',
+            $sec < 604800 => intdiv($sec, 86400) . ' дн',
+            default => $time->format('d.m'),
+        };
     }
 
     private function contactName(?string $name, ?string $externalId): string
