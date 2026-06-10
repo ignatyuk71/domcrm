@@ -524,6 +524,10 @@
                     <span class="icon-frame"><i class="bi bi-list-check"></i></span>
                     <span class="item-text-sub">Статуси</span>
                 </a>
+                <a href="{{ route('settings.chatStatuses.index') }}" class="sidebar-link-sub {{ request()->is('settings/chat-statuses') ? 'active' : '' }}">
+                    <span class="icon-frame"><i class="bi bi-chat-square-dots"></i></span>
+                    <span class="item-text-sub">Статуси чату</span>
+                </a>
             @endif
         </div>
     </div>

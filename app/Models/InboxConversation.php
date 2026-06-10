@@ -17,6 +17,7 @@ class InboxConversation extends Model
         'last_message_direction',
         'unread_count',
         'status',
+        'chat_status_id',
     ];
 
     protected $casts = [
@@ -24,9 +25,22 @@ class InboxConversation extends Model
         'unread_count' => 'integer',
     ];
 
+    protected static function booted(): void
+    {
+        // Нова розмова одразу отримує статус чату за замовчуванням («Новий»).
+        static::creating(function (self $c) {
+            $c->chat_status_id ??= ChatStatus::query()->where('is_default', true)->value('id');
+        });
+    }
+
     public function connection(): BelongsTo
     {
         return $this->belongsTo(MetaConnection::class, 'meta_connection_id');
+    }
+
+    public function chatStatus(): BelongsTo
+    {
+        return $this->belongsTo(ChatStatus::class);
     }
 
     public function contact(): BelongsTo

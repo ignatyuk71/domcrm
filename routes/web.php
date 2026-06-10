@@ -10,6 +10,7 @@ use App\Http\Controllers\ProductController;
 use App\Http\Controllers\NovaPoshtaController;
 use App\Http\Controllers\OrderSourceController;
 use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\ChatStatusController;
 use App\Http\Controllers\ColorController;
 use App\Http\Controllers\FiscalController;
 use App\Http\Controllers\FinanceController;
@@ -101,6 +102,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/api/inbox/conversations/{conversation}/send-attachment', [InboxController::class, 'sendAttachment'])->name('inbox.sendAttachment');
         Route::post('/api/inbox/conversations/{conversation}/send-gallery', [InboxController::class, 'sendGallery'])->name('inbox.sendGallery');
         Route::get('/inbox/page-avatar/{connection}', [InboxController::class, 'pageAvatar'])->name('inbox.pageAvatar');
+        Route::get('/api/chat-statuses', [ChatStatusController::class, 'index'])->name('chatStatuses.list');
+        Route::post('/api/inbox/conversations/{conversation}/status', [InboxController::class, 'setStatus'])->name('inbox.setStatus');
     });
 
     Route::middleware('role:owner,operator')->group(function () {
@@ -243,6 +246,12 @@ Route::middleware('auth')->group(function () {
 
         Route::get('/tags', [TagController::class, 'index'])->name('tags.index');
         Route::get('/statuses', [StatusController::class, 'index'])->name('statuses.index');
+
+        // --- СТАТУСИ ЧАТУ ---
+        Route::get('/chat-statuses', [ChatStatusController::class, 'page'])->name('chatStatuses.index');
+        Route::post('/chat-statuses', [ChatStatusController::class, 'store'])->name('chatStatuses.store');
+        Route::put('/chat-statuses/{chatStatus}', [ChatStatusController::class, 'update'])->name('chatStatuses.update');
+        Route::delete('/chat-statuses/{chatStatus}', [ChatStatusController::class, 'destroy'])->name('chatStatuses.destroy');
         Route::get('/nova-poshta', [NovaPoshtaSettingsController::class, 'index'])->name('novaPoshta.index');
         Route::post('/nova-poshta', [NovaPoshtaSettingsController::class, 'save'])->name('novaPoshta.save');
         Route::post('/nova-poshta/fetch-refs', [NovaPoshtaSettingsController::class, 'fetchRefs'])->name('novaPoshta.fetchRefs');

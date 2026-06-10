@@ -57,6 +57,7 @@ class InboxController extends Controller
             'last_direction' => $c->last_message_direction,
             'last_at_human' => $this->shortTime($c->last_message_at),
             'unread' => (int) $c->unread_count,
+            'chat_status_id' => $c->chat_status_id,
         ])->values();
 
         return response()->json(['data' => $data, 'has_more' => $hasMore]);
@@ -89,6 +90,7 @@ class InboxController extends Controller
                 'store_id' => $conversation->connection?->page_id,
                 'conn_id' => $conversation->connection?->id,
                 'channel' => $conversation->channel,
+                'chat_status_id' => $conversation->chat_status_id,
                 'contact_name' => $this->contactName($conversation->contact?->name, $conversation->contact?->external_id),
                 'avatar' => $conversation->contact?->profile_pic,
             ],
@@ -203,6 +205,15 @@ class InboxController extends Controller
             'last_message_direction' => 'out',
             'unread_count' => 0,
         ]);
+
+        return response()->json(['ok' => true]);
+    }
+
+    /** Змінити статус чату для розмови. */
+    public function setStatus(Request $request, InboxConversation $conversation)
+    {
+        $data = $request->validate(['chat_status_id' => ['nullable', 'integer', 'exists:chat_statuses,id']]);
+        $conversation->update(['chat_status_id' => $data['chat_status_id'] ?? null]);
 
         return response()->json(['ok' => true]);
     }
