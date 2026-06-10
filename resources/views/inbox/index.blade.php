@@ -44,8 +44,10 @@
 
         .ib-thead { padding: 10px 18px; background: #fff; border-bottom: 1px solid #ecedf1; }
         .ib-th-name { font-weight: 700; font-size: 1.02rem; color: #050505; line-height: 1.25; }
-        .ib-th-store { font-size: .78rem; color: #65676b; display: flex; align-items: center; gap: 5px; margin-top: 1px; }
-        .ib-th-store i { font-size: .82rem; }
+        .ib-th-store { display: inline-flex; align-items: center; gap: 6px; margin-top: 3px; background: #f0f2f5; border-radius: 999px; padding: 2px 10px 2px 3px; font-size: .76rem; font-weight: 600; color: #050505; max-width: 100%; }
+        .ib-th-store img { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; display: block; flex-shrink: 0; }
+        .ib-th-store i { font-size: .85rem; color: #65676b; margin-left: 5px; }
+        .ib-th-store span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .ib-msgs { flex: 1; overflow-y: auto; padding: 18px 22px; display: flex; flex-direction: column; gap: 2px; background: #fff; }
         .ib-row { display: flex; margin-bottom: 1px; }
         .ib-row.out { justify-content: flex-end; }
@@ -246,7 +248,7 @@
                     ${avatar(c.contact_name, c.avatar, c.channel, 44)}
                     <div class="ms-1">
                         <div class="ib-th-name">${esc(c.contact_name)}</div>
-                        <div class="ib-th-store"><i class="bi bi-shop"></i>${esc(c.store)}</div>
+                        <div class="ib-th-store">${c.conn_id ? `<img src="/inbox/page-avatar/${c.conn_id}" onerror="this.remove()">` : '<i class="bi bi-shop"></i>'}<span>${esc(c.store)}</span></div>
                     </div>
                 </div>`;
             document.getElementById('reply-input').placeholder = 'Відповідь у ' + chLabel(c.channel) + '…';
