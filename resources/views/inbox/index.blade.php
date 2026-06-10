@@ -182,6 +182,15 @@
         .ib-order-wrap:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
         .ib-copy { border: none; background: transparent; color: #94a3b8; padding: 0 4px; font-size: .78rem; line-height: 1; }
         .ib-copy:hover { color: #0d6efd; }
+        /* === AI-агент (поки болванка-шаблон) === */
+        .ib-ai-icon { width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 19px; flex-shrink: 0; background: linear-gradient(135deg, #8b5cf6, #6366f1); color: #fff; box-shadow: 0 4px 12px rgba(139,92,246,.3); }
+        .ib-ai-badge { font-size: .62rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: #ede9fe; color: #7c3aed; }
+        .ib-switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; margin: 0; }
+        .ib-switch input { opacity: 0; width: 0; height: 0; }
+        .ib-slider { position: absolute; inset: 0; background: #e2e8f0; border-radius: 999px; transition: .25s; }
+        .ib-slider::before { content: ''; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .25s; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+        .ib-switch input:checked + .ib-slider { background: linear-gradient(135deg, #8b5cf6, #6366f1); }
+        .ib-switch input:checked + .ib-slider::before { transform: translateX(20px); }
         .ib-cat-tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; }
         .ib-cat-tab { border: 1px solid #e3e6ea; background: #fff; border-radius: 999px; padding: 4px 12px; font-size: .8rem; font-weight: 600; color: #475467; white-space: nowrap; }
         .ib-cat-tab.active { background: #0084ff; border-color: #0084ff; color: #fff; }
@@ -869,6 +878,22 @@
                         ${formHtml}
                     </div>
                     ${ordersCard}
+                    <div class="clean-card-sm">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="ib-ai-icon"><i class="bi bi-stars"></i></div>
+                            <div class="flex-grow-1" style="min-width:0">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="fw-bold text-dark" style="font-size:.9rem">AI-агент</span>
+                                    <span class="ib-ai-badge">Скоро</span>
+                                </div>
+                                <div class="text-muted" style="font-size:.72rem">Автовідповіді клієнтам у цьому чаті</div>
+                            </div>
+                            <label class="ib-switch" style="opacity:.45;pointer-events:none" title="В розробці">
+                                <input type="checkbox" disabled>
+                                <span class="ib-slider"></span>
+                            </label>
+                        </div>
+                    </div>
                 </div>`;
         }
 
