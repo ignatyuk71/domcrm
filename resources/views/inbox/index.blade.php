@@ -138,6 +138,9 @@
         .ib-input-wrap input { padding-left: 30px; background: #fff; }
         .ib-input-wrap input.bad { border-color: #dc3545; }
         .ib-ferr { font-size: .7rem; color: #dc3545; margin: -4px 0 7px 2px; }
+        .ib-add-order { display: flex; align-items: center; justify-content: space-between; margin: 12px 16px; padding: 11px 14px; border: 1px solid #e3e6ea; border-radius: 12px; font-weight: 700; font-size: .9rem; cursor: pointer; background: #fff; transition: background .12s; user-select: none; }
+        .ib-add-order:hover { background: #f7f8fa; }
+        .ib-add-order.open { background: #eaf3ff; border-color: #c7dcff; color: #0a66c2; }
         .ib-item { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px dashed #eef0f3; }
         .ib-item:last-of-type { border-bottom: none; }
         .ib-np-list { position: absolute; top: calc(100% + 3px); left: 0; right: 0; background: #fff; border: 1px solid #e6e8ee; border-radius: 10px; box-shadow: 0 12px 30px rgba(16,24,40,.14); z-index: 70; max-height: 220px; overflow-y: auto; padding: 4px; }
@@ -428,15 +431,20 @@
         }
 
         // ====== ПРАВА ПАНЕЛЬ: ОФОРМЛЕННЯ ЗАМОВЛЕННЯ З ЧАТУ ======
-        let currentConv = null, panelConvId = null, panel = null;
+        let currentConv = null, panelConvId = null, panel = null, orderFormOpen = false;
         let custDraft = { first_name: '', last_name: '', phone: '' };
         let custEdit = false;
         let orderItems = [];
         let delivery = { city_ref: '', settlement_ref: '', city_name: '', warehouse_ref: '', warehouse_name: '', payer: 'recipient' };
         let payment = { method: 'cod', prepay_amount: '' };
 
+        function toggleOrderForm() {
+            orderFormOpen = !orderFormOpen;
+            renderInfo(currentConv);
+        }
+
         function resetOrderPanel(c) {
-            panel = null; custEdit = false;
+            panel = null; custEdit = false; orderFormOpen = false;
             const parts = (c?.contact_name || '').trim().split(/\s+/);
             custDraft = { first_name: parts[0] || '', last_name: parts.slice(1).join(' ') || '', phone: '' };
             orderItems = [];
@@ -613,6 +621,7 @@
                 orderItems = [];
                 delivery = { city_ref: '', settlement_ref: '', city_name: '', warehouse_ref: '', warehouse_name: '', payer: 'recipient' };
                 payment = { method: 'cod', prepay_amount: '' };
+                orderFormOpen = false;
                 await openConversation(activeId); // оновлює статус у шапці та списку
                 await loadPanel();
             } catch (e) {
@@ -709,7 +718,12 @@
                         </div>
                     </div>
                 </div>
-                <div class="ib-iblock">
+                <div class="ib-add-order ${orderFormOpen ? 'open' : ''}" onclick="toggleOrderForm()">
+                    <span><i class="bi bi-bag-plus me-2"></i>Додати замовлення</span>
+                    <i class="bi bi-chevron-${orderFormOpen ? 'up' : 'down'}"></i>
+                </div>
+                ${orderFormOpen ? `
+                <div class="ib-iblock" style="border-top:1px solid #f0f1f4">
                     <div class="ib-block-title d-flex justify-content-between align-items-center">
                         <span><i class="bi bi-bag me-1"></i>Товари</span>
                         <button class="btn btn-sm btn-light border" style="font-size:.76rem;padding:3px 10px" onclick="openProductModal()"><i class="bi bi-plus-lg me-1"></i>Обрати</button>
@@ -728,7 +742,7 @@
                 <div style="padding:14px 16px">
                     <button class="btn btn-success w-100 fw-semibold" onclick="saveOrderFromChat(this)"><i class="bi bi-check2-circle me-1"></i>Зберегти замовлення</button>
                     <div id="order-error" class="text-danger small mt-2 d-none"></div>
-                </div>
+                </div>` : ''}
                 ${ordersHtml}`;
         }
 
