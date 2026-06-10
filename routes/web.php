@@ -9,6 +9,7 @@ use App\Http\Controllers\StatusController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\NovaPoshtaController;
 use App\Http\Controllers\OrderSourceController;
+use App\Http\Controllers\AiSettingsController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\ChatStatusController;
 use App\Http\Controllers\ColorController;
@@ -104,6 +105,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/inbox/page-avatar/{connection}', [InboxController::class, 'pageAvatar'])->name('inbox.pageAvatar');
         Route::get('/api/chat-statuses', [ChatStatusController::class, 'index'])->name('chatStatuses.list');
         Route::post('/api/inbox/conversations/{conversation}/status', [InboxController::class, 'setStatus'])->name('inbox.setStatus');
+        Route::post('/api/inbox/conversations/{conversation}/ai', [InboxController::class, 'setAi'])->name('inbox.setAi');
         Route::post('/api/inbox/conversations/{conversation}/refresh', [InboxController::class, 'refresh'])->name('inbox.refresh');
         Route::get('/api/inbox/conversations/{conversation}/panel', [InboxController::class, 'panel'])->name('inbox.panel');
         Route::post('/api/inbox/conversations/{conversation}/attach-customer', [InboxController::class, 'attachCustomer'])->name('inbox.attachCustomer');
@@ -252,6 +254,12 @@ Route::middleware('auth')->group(function () {
 
         Route::get('/tags', [TagController::class, 'index'])->name('tags.index');
         Route::get('/statuses', [StatusController::class, 'index'])->name('statuses.index');
+
+        // --- AI-АГЕНТ ---
+        Route::get('/ai', [AiSettingsController::class, 'page'])->name('ai.index');
+        Route::get('/ai/data', [AiSettingsController::class, 'data'])->name('ai.data');
+        Route::post('/ai/save', [AiSettingsController::class, 'save'])->name('ai.save');
+        Route::post('/ai/test', [AiSettingsController::class, 'test'])->name('ai.test');
 
         // --- СТАТУСИ ЧАТУ ---
         Route::get('/chat-statuses', [ChatStatusController::class, 'page'])->name('chatStatuses.index');

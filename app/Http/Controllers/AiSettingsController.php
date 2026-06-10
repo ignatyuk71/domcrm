@@ -1,0 +1,103 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\AiSetting;
+use App\Models\MetaConnection;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
+
+class AiSettingsController extends Controller
+{
+    /** Сторінка налаштувань AI-агента. */
+    public function page()
+    {
+        return view('settings.ai');
+    }
+
+    /** Дані для сторінки: глобальні + по магазинах. */
+    public function data()
+    {
+        $global = AiSetting::global();
+        $key = $global->api_key;
+
+        $stores = MetaConnection::where('status', 'active')->get()->map(function (MetaConnection $c) {
+            $s = AiSetting::forConnection($c->id);
+
+            return [
+                'meta_connection_id' => $c->id,
+                'page_name' => $c->page_name,
+                'enabled' => (bool) $s->enabled,
+                'system_prompt' => $s->system_prompt,
+            ];
+        })->values();
+
+        return response()->json([
+            'global' => [
+                'has_key' => (bool) $key,
+                'key_hint' => $key ? ('•••' . substr($key, -4)) : null,
+                'model' => $global->model ?: 'claude-sonnet-4-6',
+            ],
+            'stores' => $stores,
+        ]);
+    }
+
+    /** Зберегти все (ключ оновлюється лише якщо передали непорожній). */
+    public function save(Request $request)
+    {
+        $data = $request->validate([
+            'api_key' => ['nullable', 'string', 'max:300'],
+            'model' => ['required', 'string', 'max:100'],
+            'stores' => ['array'],
+            'stores.*.meta_connection_id' => ['required', 'integer', 'exists:meta_connections,id'],
+            'stores.*.enabled' => ['required', 'boolean'],
+            'stores.*.system_prompt' => ['nullable', 'string', 'max:20000'],
+        ]);
+
+        $global = AiSetting::global();
+        $global->model = $data['model'];
+        if (!empty($data['api_key'])) {
+            $global->api_key = trim($data['api_key']);
+        }
+        $global->save();
+
+        foreach ($data['stores'] ?? [] as $row) {
+            AiSetting::forConnection($row['meta_connection_id'])->update([
+                'enabled' => $row['enabled'],
+                'system_prompt' => $row['system_prompt'] ?? null,
+            ]);
+        }
+
+        return response()->json(['ok' => true]);
+    }
+
+    /** Перевірка ключа: GET /v1/models (безкоштовно, без токенів). */
+    public function test(Request $request)
+    {
+        $key = trim((string) $request->input('api_key', ''));
+        if ($key === '') {
+            $key = (string) (AiSetting::global()->api_key ?? '');
+        }
+        if ($key === '') {
+            return response()->json(['ok' => false, 'error' => 'Ключ не вказано'], 422);
+        }
+
+        try {
+            $r = Http::timeout(10)->withHeaders([
+                'x-api-key' => $key,
+                'anthropic-version' => '2023-06-01',
+            ])->get('https://api.anthropic.com/v1/models');
+
+            if ($r->successful()) {
+                return response()->json(['ok' => true]);
+            }
+
+            return response()->json([
+                'ok' => false,
+                'error' => $r->json('error.message') ?? ('HTTP ' . $r->status()),
+            ], 422);
+        } catch (\Throwable $e) {
+            return response()->json(['ok' => false, 'error' => 'Немає зʼєднання з api.anthropic.com'], 422);
+        }
+    }
+}

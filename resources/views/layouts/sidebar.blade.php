@@ -528,6 +528,10 @@
                     <span class="icon-frame"><i class="bi bi-chat-square-dots"></i></span>
                     <span class="item-text-sub">Статуси чату</span>
                 </a>
+                <a href="{{ route('settings.ai.index') }}" class="sidebar-link-sub {{ request()->is('settings/ai') ? 'active' : '' }}">
+                    <span class="icon-frame"><i class="bi bi-robot"></i></span>
+                    <span class="item-text-sub">AI-агент</span>
+                </a>
             @endif
         </div>
     </div>

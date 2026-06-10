@@ -95,6 +95,7 @@ class InboxController extends Controller
                 'conn_id' => $conversation->connection?->id,
                 'channel' => $conversation->channel,
                 'chat_status_id' => $conversation->chat_status_id,
+                'ai_enabled' => (bool) $conversation->ai_enabled,
                 'contact_name' => $this->contactName($conversation->contact?->name, $conversation->contact?->external_id),
                 'avatar' => $conversation->contact?->profile_pic,
             ],
@@ -344,6 +345,15 @@ class InboxController extends Controller
         if ($statusId) {
             $conversation->update(['chat_status_id' => $statusId]);
         }
+
+        return response()->json(['ok' => true]);
+    }
+
+    /** Увімкнути/вимкнути AI-агента для цієї розмови. */
+    public function setAi(Request $request, InboxConversation $conversation)
+    {
+        $data = $request->validate(['enabled' => ['required', 'boolean']]);
+        $conversation->update(['ai_enabled' => $data['enabled']]);
 
         return response()->json(['ok' => true]);
     }

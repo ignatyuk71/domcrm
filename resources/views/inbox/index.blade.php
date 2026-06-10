@@ -184,7 +184,9 @@
         .ib-copy:hover { color: #0d6efd; }
         /* === AI-агент (поки болванка-шаблон) === */
         .ib-ai-icon { width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 19px; flex-shrink: 0; background: linear-gradient(135deg, #8b5cf6, #6366f1); color: #fff; box-shadow: 0 4px 12px rgba(139,92,246,.3); }
-        .ib-ai-badge { font-size: .62rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: #ede9fe; color: #7c3aed; }
+        .ib-ai-badge { font-size: .62rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: #f1f5f9; color: #64748b; }
+        .ib-ai-badge.on { background: #dcfce7; color: #15803d; }
+        .ib-switch { cursor: pointer; }
         .ib-switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; margin: 0; }
         .ib-switch input { opacity: 0; width: 0; height: 0; }
         .ib-slider { position: absolute; inset: 0; background: #e2e8f0; border-radius: 999px; transition: .25s; }
@@ -620,6 +622,21 @@
             btn.innerHTML = '<i class="bi bi-check2 text-success"></i>';
             setTimeout(() => { btn.innerHTML = '<i class="bi bi-clipboard"></i>'; }, 1200);
         }
+
+        async function toggleAi(input) {
+            if (!activeId) return;
+            const enabled = input.checked;
+            try {
+                const res = await fetch(`/api/inbox/conversations/${activeId}/ai`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
+                    body: JSON.stringify({ enabled })
+                });
+                if (!res.ok) throw new Error();
+                if (currentConv) currentConv.ai_enabled = enabled;
+                renderInfo(currentConv);
+            } catch (e) { input.checked = !enabled; }
+        }
         function setPayMethod(m) { payment.method = m; renderInfo(currentConv); }
 
         async function saveOrderFromChat(btn) {
@@ -884,12 +901,12 @@
                             <div class="flex-grow-1" style="min-width:0">
                                 <div class="d-flex align-items-center gap-2">
                                     <span class="fw-bold text-dark" style="font-size:.9rem">AI-агент</span>
-                                    <span class="ib-ai-badge">Скоро</span>
+                                    <span class="ib-ai-badge ${c.ai_enabled ? 'on' : ''}">${c.ai_enabled ? 'Увімкнено' : 'Вимкнено'}</span>
                                 </div>
-                                <div class="text-muted" style="font-size:.72rem">Розумний помічник для цього чату</div>
+                                <div class="text-muted" style="font-size:.72rem">Автовідповіді у цьому чаті</div>
                             </div>
-                            <label class="ib-switch" style="opacity:.45;pointer-events:none" title="В розробці">
-                                <input type="checkbox" disabled>
+                            <label class="ib-switch">
+                                <input type="checkbox" ${c.ai_enabled ? 'checked' : ''} onchange="toggleAi(this)">
                                 <span class="ib-slider"></span>
                             </label>
                         </div>
