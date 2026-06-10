@@ -52,10 +52,13 @@ class MetaWebhookProcessor
     private function handleEvent(array $entry, array $event, string $channel): bool
     {
         $message = $event['message'] ?? null;
-
-        if (!$message || !empty($message['is_echo'])) {
+        if (!$message) {
             return false;
         }
+
+        // Echo = вихідне повідомлення сторінки (відповідь працівника прямо у ФБ/IG
+        // або наш власний Send API — той відсіється дедупом по mid).
+        $isEcho = !empty($message['is_echo']);
 
         $senderId = $event['sender']['id'] ?? null;
         $recipientId = $event['recipient']['id'] ?? null;
@@ -63,12 +66,16 @@ class MetaWebhookProcessor
             return false;
         }
 
+        // Для echo сторінка — відправник, клієнт — отримувач; для вхідних навпаки.
+        $pageSideId = $isEcho ? $senderId : $recipientId;
+        $userId = (string) ($isEcho ? $recipientId : $senderId);
+
         $connection = $channel === 'instagram'
             ? MetaConnection::query()
-                ->where('ig_account_id', $recipientId)
+                ->where('ig_account_id', $pageSideId)
                 ->orWhere('ig_account_id', $entry['id'] ?? '___')
                 ->first()
-            : MetaConnection::query()->where('page_id', $recipientId)->first();
+            : MetaConnection::query()->where('page_id', $pageSideId)->first();
 
         if (!$connection) {
             Log::warning('Inbox: підключення не знайдено', ['channel' => $channel, 'recipient' => $recipientId]);
@@ -83,12 +90,12 @@ class MetaWebhookProcessor
         $contact = InboxContact::firstOrCreate([
             'meta_connection_id' => $connection->id,
             'channel' => $channel,
-            'external_id' => (string) $senderId,
+            'external_id' => $userId,
         ]);
 
         // Best-effort: підтягнути імʼя + аватар (при створенні або якщо імені ще немає).
         if ($contact->wasRecentlyCreated || !$contact->name) {
-            $profile = $this->oauth->getUserProfile($connection->page_access_token, (string) $senderId, $channel);
+            $profile = $this->oauth->getUserProfile($connection->page_access_token, $userId, $channel);
             if ($profile) {
                 $contact->update(array_filter([
                     'name' => $profile['name'] ?? null,
@@ -98,7 +105,7 @@ class MetaWebhookProcessor
 
             // Профіль-АПІ часто закритий (400) — тоді імʼя беремо з Conversations API.
             if (!$contact->name) {
-                $name = $this->oauth->getNameFromConversations($connection->page_access_token, $connection->page_id, (string) $senderId, $channel);
+                $name = $this->oauth->getNameFromConversations($connection->page_access_token, $connection->page_id, $userId, $channel);
                 if ($name) {
                     $contact->update(['name' => $name]);
                 }
@@ -125,8 +132,8 @@ class MetaWebhookProcessor
 
         InboxMessage::create([
             'inbox_conversation_id' => $conversation->id,
-            'direction' => 'in',
-            'sender' => 'contact',
+            'direction' => $isEcho ? 'out' : 'in',
+            'sender' => $isEcho ? 'agent' : 'contact',
             'external_message_id' => $mid,
             'text' => $text,
             'attachments' => $attachments ?: null,
@@ -136,9 +143,11 @@ class MetaWebhookProcessor
         $conversation->update([
             'last_message_at' => $sentAt,
             'last_message_text' => $text ? mb_substr($text, 0, 480) : '[вкладення]',
-            'last_message_direction' => 'in',
+            'last_message_direction' => $isEcho ? 'out' : 'in',
         ]);
-        $conversation->increment('unread_count');
+        if (!$isEcho) {
+            $conversation->increment('unread_count');
+        }
 
         return true;
     }

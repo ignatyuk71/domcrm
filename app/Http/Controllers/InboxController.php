@@ -69,6 +69,7 @@ class InboxController extends Controller
         $conversation->loadMissing(['connection:id,page_name', 'contact:id,name,external_id,profile_pic']);
 
         $messages = $conversation->messages()
+            ->orderBy('sent_at')
             ->orderBy('id')
             ->limit(500)
             ->get()
@@ -209,7 +210,7 @@ class InboxController extends Controller
         return response()->json(['ok' => true]);
     }
 
-    /** Підтягнути з Meta всю історію цього контакту (кнопка «оновити»). */
+    /** Кнопка «оновити»: очистити розмову й перезалити історію контакту з Meta з нуля. */
     public function refresh(InboxConversation $conversation, MetaSyncService $sync)
     {
         $conversation->loadMissing(['connection', 'contact']);
@@ -217,7 +218,10 @@ class InboxController extends Controller
             return response()->json(['ok' => false, 'error' => 'Немає підключення або контакту'], 422);
         }
 
-        $imported = $sync->syncContactConversation($conversation->connection, $conversation->contact);
+        $imported = $sync->syncContactConversation($conversation->connection, $conversation->contact, 100, true);
+        if ($imported === false) {
+            return response()->json(['ok' => false, 'error' => 'Facebook не відповів — чат не чіпали, спробуйте ще раз'], 502);
+        }
 
         return response()->json(['ok' => true, 'imported' => $imported]);
     }

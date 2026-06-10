@@ -32,8 +32,13 @@ class MetaSyncService
         return $count;
     }
 
-    /** Підтягнути історію ОДНОГО контакту (через ?user_id). Повертає к-ть нових повідомлень. */
-    public function syncContactConversation(MetaConnection $conn, InboxContact $contact, int $msgLimit = 100): int
+    /**
+     * Підтягнути історію ОДНОГО контакту (через ?user_id).
+     * $clearFirst — спершу видалити наявні повідомлення розмови (тільки якщо Graph відповів успішно),
+     * щоб історія перезаписалась з нуля в правильному порядку.
+     * Повертає к-ть імпортованих повідомлень або false, якщо Graph не відповів.
+     */
+    public function syncContactConversation(MetaConnection $conn, InboxContact $contact, int $msgLimit = 100, bool $clearFirst = false): int|false
     {
         $platform = $contact->channel === 'instagram' ? 'instagram' : 'messenger';
 
@@ -46,7 +51,11 @@ class MetaSyncService
 
         if (!$r->successful()) {
             Log::warning('Meta contact sync failed', ['contact' => $contact->id, 'body' => mb_substr($r->body(), 0, 300)]);
-            return 0;
+            return false;
+        }
+
+        if ($clearFirst) {
+            InboxConversation::where('inbox_contact_id', $contact->id)->first()?->messages()->delete();
         }
 
         $imported = 0;

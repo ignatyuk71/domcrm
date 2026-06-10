@@ -86,6 +86,43 @@ class MetaWebhookTest extends TestCase
         $this->assertSame('Привіт', $conversation->last_message_text);
     }
 
+    public function test_echo_from_facebook_inbox_is_stored_as_outgoing(): void
+    {
+        $conn = $this->connection();
+
+        // Працівник відповів клієнту прямо у ФБ — приходить echo: sender = сторінка, recipient = клієнт.
+        $payload = [
+            'object' => 'page',
+            'entry' => [[
+                'id' => 'PAGE1',
+                'messaging' => [[
+                    'sender' => ['id' => 'PAGE1'],
+                    'recipient' => ['id' => 'USER1'],
+                    'timestamp' => 1700000000000,
+                    'message' => ['mid' => 'm_echo_1', 'text' => 'Добрий день!', 'is_echo' => true],
+                ]],
+            ]],
+        ];
+
+        $this->postJson('/api/meta/webhook', $payload)->assertOk();
+
+        // Контакт — клієнт (USER1), а не сторінка.
+        $this->assertDatabaseHas('inbox_contacts', [
+            'meta_connection_id' => $conn->id,
+            'channel' => 'facebook',
+            'external_id' => 'USER1',
+        ]);
+        $this->assertDatabaseHas('inbox_messages', [
+            'external_message_id' => 'm_echo_1',
+            'direction' => 'out',
+            'sender' => 'agent',
+            'text' => 'Добрий день!',
+        ]);
+
+        // Вихідне не збільшує лічильник непрочитаних.
+        $this->assertSame(0, (int) InboxConversation::first()->unread_count);
+    }
+
     public function test_instagram_message_is_stored_on_linked_account(): void
     {
         $this->connection();
