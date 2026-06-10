@@ -180,6 +180,8 @@
         .ib-order { display: flex; align-items: center; gap: 8px; padding: 8px 0 4px; text-decoration: none; color: inherit; font-size: .82rem; }
         .ib-order-wrap { border-bottom: 1px dashed #eef0f3; padding-bottom: 7px; margin-bottom: 4px; }
         .ib-order-wrap:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+        .ib-copy { border: none; background: transparent; color: #94a3b8; padding: 0 4px; font-size: .78rem; line-height: 1; }
+        .ib-copy:hover { color: #0d6efd; }
         .ib-cat-tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; }
         .ib-cat-tab { border: 1px solid #e3e6ea; background: #fff; border-radius: 999px; padding: 4px 12px; font-size: .8rem; font-weight: 600; color: #475467; white-space: nowrap; }
         .ib-cat-tab.active { background: #0084ff; border-color: #0084ff; color: #fff; }
@@ -604,6 +606,11 @@
         }
 
         function removeOrderItem(i) { orderItems.splice(i, 1); renderInfo(currentConv); }
+        function copyTtn(btn, ttn) {
+            navigator.clipboard?.writeText(ttn);
+            btn.innerHTML = '<i class="bi bi-check2 text-success"></i>';
+            setTimeout(() => { btn.innerHTML = '<i class="bi bi-clipboard"></i>'; }, 1200);
+        }
         function setPayMethod(m) { payment.method = m; renderInfo(currentConv); }
 
         async function saveOrderFromChat(btn) {
@@ -827,6 +834,12 @@
                                 <span class="ms-auto fw-semibold" style="font-size:.78rem">${o.total ? o.total.toFixed(0) + ' грн' : ''}</span>
                                 <span class="ib-st-badge" style="background:${esc(o.status_color || '#888')}1f;color:${esc(o.status_color || '#555')}">${esc(o.status)}</span>
                             </a>
+                            ${o.ttn ? `
+                            <div class="d-flex align-items-center gap-1 pb-1" style="font-size:.74rem;color:#475467">
+                                <i class="bi bi-upc-scan"></i><span>ТТН</span>
+                                <span class="fw-semibold">${esc(o.ttn)}</span>
+                                <button type="button" class="ib-copy" onclick="copyTtn(this,'${esc(o.ttn)}')" title="Копіювати"><i class="bi bi-clipboard"></i></button>
+                            </div>` : ''}
                             ${(o.items || []).map(it => `
                                 <div class="d-flex align-items-center gap-2 py-1">
                                     ${it.photo
