@@ -182,56 +182,16 @@
         .ib-order-wrap:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
         .ib-copy { border: none; background: transparent; color: #94a3b8; padding: 0 4px; font-size: .78rem; line-height: 1; }
         .ib-copy:hover { color: #0d6efd; }
-        /* === AI-агент (тестовий блок, дизайн зі старого чату) === */
-        .counter-badge { background: #f1f5f9; color: #475569; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
-        .counter-badge.is-on { background: #dcfce7; color: #15803d; }
-        .ai-card { border: 1px solid rgba(148,163,184,.16); border-radius: 12px; overflow: hidden; background: rgba(255,255,255,.96); box-shadow: 0 8px 20px rgba(15,23,42,.04); }
-        .ai-header { width: 100%; border: none; background: #fff; padding: 12px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; text-align: left; }
-        .ai-header-main { display: flex; gap: 10px; align-items: center; }
-        .ai-header-main > i { color: #0ea5e9; font-size: 18px; }
-        .ai-title { font-size: 13px; font-weight: 700; color: #0f172a; }
-        .ai-subtitle { font-size: 11px; color: #64748b; margin-top: 2px; }
-        .ai-body-wrap { max-height: 0; overflow: hidden; transition: max-height .3s ease; }
-        .ai-card.is-open .ai-body-wrap { max-height: 6000px; border-top: 1px solid #f1f5f9; }
-        .ai-body { padding: 10px; display: flex; flex-direction: column; gap: 10px; background: #f8fafc; }
-        .ai-switch-row { display: flex; justify-content: space-between; gap: 10px; align-items: center; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; }
-        .ai-switch-title { font-size: 13px; font-weight: 700; color: #0f172a; }
-        .ai-switch-hint { font-size: 11px; color: #64748b; margin-top: 2px; }
-        .ai-switch-btn { width: 48px; height: 28px; border-radius: 999px; border: none; background: #cbd5e1; position: relative; transition: .2s; flex-shrink: 0; padding: 2px; }
-        .ai-switch-btn.is-on { background: #16a34a; }
-        .ai-switch-knob { width: 24px; height: 24px; background: #fff; border-radius: 50%; display: block; transition: .2s; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
-        .ai-switch-btn.is-on .ai-switch-knob { transform: translateX(20px); }
-        .ai-pipeline-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
-        .ai-pipeline-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-        .ai-pipeline-title { font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: #334155; }
-        .ai-stage-chip { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; border-radius: 999px; font-size: 11px; font-weight: 700; padding: 2px 9px; }
-        .ai-stage-mini { background: #f1f5f9; color: #334155; border: 1px solid #e2e8f0; border-radius: 999px; font-size: 10px; font-weight: 700; padding: 2px 8px; }
-        .ai-steps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
-        .ai-step { display: flex; align-items: center; gap: 7px; border: 1px solid #e2e8f0; background: #f8fafc; border-radius: 8px; padding: 6px 8px; }
-        .ai-step-dot { width: 9px; height: 9px; border-radius: 50%; background: #cbd5e1; flex-shrink: 0; }
-        .ai-step-label { font-size: 11px; font-weight: 700; color: #475569; }
-        .ai-step.state-done { border-color: #bbf7d0; background: #f0fdf4; }
-        .ai-step.state-done .ai-step-dot { background: #16a34a; }
-        .ai-step.state-done .ai-step-label { color: #166534; }
-        .ai-step.state-current { border-color: #bfdbfe; background: #eff6ff; }
-        .ai-step.state-current .ai-step-dot { background: #2563eb; }
-        .ai-step.state-current .ai-step-label { color: #1d4ed8; }
-        .ai-collected-block { display: flex; flex-direction: column; gap: 6px; }
-        .ai-collected-subtitle { font-size: 11px; font-weight: 800; text-transform: uppercase; color: #64748b; letter-spacing: .04em; }
-        .ai-cart-item { border: 1px solid #dbeafe; background: #f8fbff; border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 4px; }
-        .ai-cart-item-head { display: flex; align-items: flex-start; gap: 6px; }
-        .ai-cart-item-index { font-size: 13px; font-weight: 700; color: #334155; }
-        .ai-cart-item-model { font-size: 13px; font-weight: 700; color: #0f172a; line-height: 1.25; }
-        .ai-cart-item-meta { font-size: 12px; color: #475569; }
-        .ai-cart-item-price { font-size: 12px; color: #0f172a; font-weight: 600; }
-        .ai-summary-box { border: 1px solid #dbeafe; background: #f8fbff; color: #1e293b; border-radius: 10px; padding: 10px; font-size: 13px; line-height: 1.35; }
-        .ai-dialog-status { border: 1px solid #bbf7d0; background: #f0fdf4; border-radius: 10px; padding: 8px 10px; font-size: 12px; font-weight: 700; color: #166534; }
-        .ai-delivery-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
-        .ai-delivery-item { display: flex; align-items: center; gap: 6px; border: 1px solid #e2e8f0; background: #f8fafc; border-radius: 8px; padding: 6px 8px; font-size: 11px; font-weight: 600; color: #64748b; }
-        .ai-delivery-item i { color: #94a3b8; font-size: 12px; }
-        .ai-delivery-item.is-done { border-color: #bbf7d0; background: #f0fdf4; color: #166534; }
-        .ai-delivery-item.is-done i { color: #16a34a; }
-        .ai-missing-slots { border-top: 1px dashed #e2e8f0; padding-top: 8px; font-size: 11px; color: #64748b; }
+        /* === AI-агент (поки болванка-шаблон) === */
+        .ib-ai-icon { width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 19px; flex-shrink: 0; background: linear-gradient(135deg, #8b5cf6, #6366f1); color: #fff; box-shadow: 0 4px 12px rgba(139,92,246,.3); }
+        .ib-ai-badge { font-size: .62rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: #ede9fe; color: #7c3aed; }
+        .ib-ai-feat { width: 28px; height: 28px; border-radius: 8px; background: #f5f3ff; color: #7c3aed; display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; }
+        .ib-switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; margin: 0; }
+        .ib-switch input { opacity: 0; width: 0; height: 0; }
+        .ib-slider { position: absolute; inset: 0; background: #e2e8f0; border-radius: 999px; transition: .25s; }
+        .ib-slider::before { content: ''; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .25s; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+        .ib-switch input:checked + .ib-slider { background: linear-gradient(135deg, #8b5cf6, #6366f1); }
+        .ib-switch input:checked + .ib-slider::before { transform: translateX(20px); }
         .ib-cat-tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; }
         .ib-cat-tab { border: 1px solid #e3e6ea; background: #fff; border-radius: 999px; padding: 4px 12px; font-size: .8rem; font-weight: 600; color: #475467; white-space: nowrap; }
         .ib-cat-tab.active { background: #0084ff; border-color: #0084ff; color: #fff; }
@@ -920,76 +880,47 @@
                     </div>
                     ${ordersCard}
                     <div class="clean-card-sm">
-                        <div class="ib-sec-title mb-2" style="justify-content:space-between"><span><i class="bi bi-robot me-2" style="color:#0ea5e9"></i>AI-агент</span><span class="counter-badge is-on">ON</span></div>
-                        <div class="ai-card is-open">
-                            <button type="button" class="ai-header" onclick="this.closest('.ai-card').classList.toggle('is-open')">
-                                <div class="ai-header-main">
-                                    <i class="bi bi-robot"></i>
-                                    <div>
-                                        <div class="ai-title">AI-агент у цьому діалозі</div>
-                                        <div class="ai-subtitle">Етап: Підбір</div>
-                                    </div>
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="ib-ai-icon"><i class="bi bi-stars"></i></div>
+                            <div class="flex-grow-1" style="min-width:0">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="fw-bold text-dark" style="font-size:.9rem">AI-агент</span>
+                                    <span class="ib-ai-badge">Скоро</span>
                                 </div>
-                                <i class="bi bi-chevron-up"></i>
-                            </button>
-                            <div class="ai-body-wrap">
-                                <div class="ai-body">
-                                    <div class="ai-switch-row">
-                                        <div>
-                                            <div class="ai-switch-title">Відповідати автоматично</div>
-                                            <div class="ai-switch-hint">Можна вимкнути AI тільки для цього клієнта.</div>
-                                        </div>
-                                        <button type="button" class="ai-switch-btn is-on" onclick="this.classList.toggle('is-on')">
-                                            <span class="ai-switch-knob"></span>
-                                        </button>
-                                    </div>
-                                    <div class="ai-pipeline-card">
-                                        <div class="ai-pipeline-head">
-                                            <span class="ai-pipeline-title">Етап процесу</span>
-                                            <span class="ai-stage-chip">Підбір</span>
-                                        </div>
-                                        <div class="ai-steps">
-                                            <div class="ai-step state-done"><span class="ai-step-dot"></span><span class="ai-step-label">Зацікавлення</span></div>
-                                            <div class="ai-step state-current"><span class="ai-step-dot"></span><span class="ai-step-label">Підбір</span></div>
-                                            <div class="ai-step"><span class="ai-step-dot"></span><span class="ai-step-label">Готовність</span></div>
-                                            <div class="ai-step"><span class="ai-step-dot"></span><span class="ai-step-label">Оформлення</span></div>
-                                        </div>
-                                    </div>
-                                    <div class="ai-pipeline-card">
-                                        <div class="ai-pipeline-head">
-                                            <span class="ai-pipeline-title">Поля для збору</span>
-                                            <span class="ai-stage-mini">Підбір</span>
-                                        </div>
-                                        <div class="ai-collected-block">
-                                            <div class="ai-collected-subtitle">Кошик (1 товар · 530 грн)</div>
-                                            <div class="ai-cart-item">
-                                                <div class="ai-cart-item-head">
-                                                    <span class="ai-cart-item-index">1)</span>
-                                                    <span class="ai-cart-item-model">Капці для вулиці КАПУЧИНО</span>
-                                                </div>
-                                                <div class="ai-cart-item-meta">Колір: капучино • Розмір: 36-37</div>
-                                                <div class="ai-cart-item-price">530 грн × 1 = 530 грн</div>
-                                            </div>
-                                        </div>
-                                        <div class="ai-collected-block">
-                                            <div class="ai-collected-subtitle">Для менеджера</div>
-                                            <div class="ai-summary-box">Клієнт просить доставку до пʼятниці. Питав про знижку на другу пару.</div>
-                                        </div>
-                                        <div class="ai-collected-block">
-                                            <div class="ai-collected-subtitle">Статус діалогу</div>
-                                            <div class="ai-dialog-status">Підбираємо розмір</div>
-                                        </div>
-                                        <div class="ai-collected-block">
-                                            <div class="ai-collected-subtitle">Поля оформлення</div>
-                                            <div class="ai-delivery-grid">
-                                                <div class="ai-delivery-item is-done"><i class="bi bi-check-circle-fill"></i><span>Імʼя та прізвище</span></div>
-                                                <div class="ai-delivery-item is-done"><i class="bi bi-check-circle-fill"></i><span>Телефон</span></div>
-                                                <div class="ai-delivery-item"><i class="bi bi-circle"></i><span>Місто</span></div>
-                                                <div class="ai-delivery-item"><i class="bi bi-circle"></i><span>Відділення/поштомат</span></div>
-                                            </div>
-                                        </div>
-                                        <div class="ai-missing-slots">Потрібно ще: місто, відділення</div>
-                                    </div>
+                                <div class="text-muted" style="font-size:.72rem">Розумний помічник для цього чату</div>
+                            </div>
+                            <label class="ib-switch" style="opacity:.45;pointer-events:none" title="В розробці">
+                                <input type="checkbox" disabled>
+                                <span class="ib-slider"></span>
+                            </label>
+                        </div>
+                        <div class="mt-3 pt-3 d-flex flex-column gap-2" style="border-top:1px solid #f1f5f9">
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="ib-ai-feat"><i class="bi bi-chat-dots"></i></div>
+                                <div style="min-width:0">
+                                    <div class="fw-semibold" style="font-size:.78rem">Автовідповіді 24/7</div>
+                                    <div class="text-muted" style="font-size:.7rem">Відповідає клієнтам, коли вас немає онлайн</div>
+                                </div>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="ib-ai-feat"><i class="bi bi-clock-history"></i></div>
+                                <div style="min-width:0">
+                                    <div class="fw-semibold" style="font-size:.78rem">Працює за розкладом</div>
+                                    <div class="text-muted" style="font-size:.7rem">Напр., вмикається після 20:00 і у вихідні</div>
+                                </div>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="ib-ai-feat"><i class="bi bi-bag-check"></i></div>
+                                <div style="min-width:0">
+                                    <div class="fw-semibold" style="font-size:.78rem">Знає ваші товари</div>
+                                    <div class="text-muted" style="font-size:.7rem">Підкаже ціну, розміри та наявність з CRM</div>
+                                </div>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="ib-ai-feat"><i class="bi bi-person-raised-hand"></i></div>
+                                <div style="min-width:0">
+                                    <div class="fw-semibold" style="font-size:.78rem">Передає оператору</div>
+                                    <div class="text-muted" style="font-size:.7rem">Складні питання — людині, з усім контекстом</div>
                                 </div>
                             </div>
                         </div>
