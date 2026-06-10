@@ -177,8 +177,9 @@
         .ib-pay { flex: 1; border: 1px solid #e3e6ea; background: #fff; border-radius: 10px; padding: 8px 4px; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: .68rem; font-weight: 600; color: #475467; }
         .ib-pay i { font-size: 16px; }
         .ib-pay.active { border-color: #0084ff; background: #eaf3ff; color: #0a66c2; }
-        .ib-order { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px dashed #eef0f3; text-decoration: none; color: inherit; font-size: .82rem; }
-        .ib-order:last-child { border-bottom: none; }
+        .ib-order { display: flex; align-items: center; gap: 8px; padding: 8px 0 4px; text-decoration: none; color: inherit; font-size: .82rem; }
+        .ib-order-wrap { border-bottom: 1px dashed #eef0f3; padding-bottom: 7px; margin-bottom: 4px; }
+        .ib-order-wrap:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
         .ib-cat-tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; }
         .ib-cat-tab { border: 1px solid #e3e6ea; background: #fff; border-radius: 999px; padding: 4px 12px; font-size: .8rem; font-weight: 600; color: #475467; white-space: nowrap; }
         .ib-cat-tab.active { background: #0084ff; border-color: #0084ff; color: #fff; }
@@ -819,12 +820,23 @@
                 <div class="clean-card-sm">
                     <div class="ib-sec-title mb-2"><i class="bi bi-receipt text-primary me-2"></i>Замовлення клієнта</div>
                     ${panel.orders.map(o => `
-                        <a class="ib-order" href="/orders/${o.id}" target="_blank">
-                            <span class="fw-bold">#${esc(o.number)}</span>
-                            <span class="text-muted" style="font-size:.72rem">${esc(o.date || '')}</span>
-                            <span class="ms-auto fw-semibold" style="font-size:.78rem">${o.total ? o.total.toFixed(0) + ' грн' : ''}</span>
-                            <span class="ib-st-badge" style="background:${esc(o.status_color || '#888')}1f;color:${esc(o.status_color || '#555')}">${esc(o.status)}</span>
-                        </a>`).join('')}
+                        <div class="ib-order-wrap">
+                            <a class="ib-order" href="/orders/${o.id}" target="_blank">
+                                <span class="fw-bold">#${esc(o.number)}</span>
+                                <span class="text-muted" style="font-size:.72rem">${esc(o.date || '')}</span>
+                                <span class="ms-auto fw-semibold" style="font-size:.78rem">${o.total ? o.total.toFixed(0) + ' грн' : ''}</span>
+                                <span class="ib-st-badge" style="background:${esc(o.status_color || '#888')}1f;color:${esc(o.status_color || '#555')}">${esc(o.status)}</span>
+                            </a>
+                            ${(o.items || []).map(it => `
+                                <div class="d-flex align-items-center gap-2 py-1">
+                                    ${it.photo
+                                        ? `<img src="${esc(it.photo)}" style="width:26px;height:26px;border-radius:7px;object-fit:cover;flex-shrink:0">`
+                                        : '<div style="width:26px;height:26px;border-radius:7px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;color:#c3c8d2;flex-shrink:0;font-size:11px"><i class="bi bi-image"></i></div>'}
+                                    <span class="text-truncate" style="font-size:.74rem;color:#475467">${esc(it.title || '')}</span>
+                                    ${it.size ? `<span class="ib-sku" style="font-size:.62rem">${esc(it.size)}</span>` : ''}
+                                    <span class="text-muted ms-auto" style="font-size:.72rem;white-space:nowrap">× ${it.qty}</span>
+                                </div>`).join('')}
+                        </div>`).join('')}
                 </div>` : '';
 
             box.innerHTML = `
