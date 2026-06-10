@@ -265,7 +265,7 @@ class InboxController extends Controller
         if ($customer) {
             $orders = Order::query()
                 ->where('customer_id', $customer->id)
-                ->with(['statusRef:id,name,color', 'items:id,order_id,product_id,product_title,size,qty', 'items.product:id,title'])
+                ->with(['statusRef:id,name,color', 'items:id,order_id,product_id,product_title,size,qty', 'items.product:id,title,main_photo_path'])
                 ->withSum('items as items_total', 'total')
                 ->orderByDesc('id')
                 ->limit(5)
