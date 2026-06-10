@@ -42,7 +42,10 @@
         .ib-av .ch { position: absolute; right: 3px; bottom: 3px; width: 13px; height: 13px; border-radius: 50%; background: #fff; display: flex; align-items: center; justify-content: center; font-size: 16px; line-height: 1; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
         .ib-dot { width: 8px; height: 8px; border-radius: 50%; background: #2563eb; flex-shrink: 0; align-self: center; }
 
-        .ib-thead { padding: 12px 18px; background: #fff; border-bottom: 1px solid #ecedf1; }
+        .ib-thead { padding: 10px 18px; background: #fff; border-bottom: 1px solid #ecedf1; }
+        .ib-th-name { font-weight: 700; font-size: 1.02rem; color: #050505; line-height: 1.25; }
+        .ib-th-store { font-size: .78rem; color: #65676b; display: flex; align-items: center; gap: 5px; margin-top: 1px; }
+        .ib-th-store i { font-size: .82rem; }
         .ib-msgs { flex: 1; overflow-y: auto; padding: 18px 22px; display: flex; flex-direction: column; gap: 2px; background: #fff; }
         .ib-row { display: flex; margin-bottom: 1px; }
         .ib-row.out { justify-content: flex-end; }
@@ -241,9 +244,9 @@
             document.getElementById('thread-header').innerHTML = `
                 <div class="d-flex align-items-center gap-2">
                     ${avatar(c.contact_name, c.avatar, c.channel, 44)}
-                    <div>
-                        <div class="fw-bold" style="font-size:.95rem">${esc(c.contact_name)}</div>
-                        <small class="text-muted" style="font-size:.75rem">${chIcon(c.channel)} ${chLabel(c.channel)} · ${esc(c.store)}</small>
+                    <div class="ms-1">
+                        <div class="ib-th-name">${esc(c.contact_name)}</div>
+                        <div class="ib-th-store"><i class="bi bi-shop"></i>${esc(c.store)}</div>
                     </div>
                 </div>`;
             document.getElementById('reply-input').placeholder = 'Відповідь у ' + chLabel(c.channel) + '…';
