@@ -231,6 +231,10 @@ class AiAgentTest extends TestCase
 
         $this->assertSame(17, $res['знайдено']);
         $this->assertArrayNotHasKey('увага', $res);
+
+        // Зайве слово («жіночі») не повинно ховати кольори: мʼякий пошук теж віддає всі 17
+        $res2 = app(AiAgentService::class)->toolSearchProducts('жіночі капці для вулиці');
+        $this->assertSame(17, $res2['знайдено']);
     }
 
     public function test_discards_reply_when_client_wrote_during_generation(): void

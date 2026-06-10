@@ -289,15 +289,15 @@ class AiAgentService
         if ($found->isEmpty()) {
             // Мʼякший пошук: беремо ширше і ранжуємо за кількістю збігів слів,
             // щоб «капці для вулиці» стояли вище за випадкові збіги.
-            $found = $build('or', 40)
+            $pool = $build('or', 60)
                 ->map(function (Product $p) use ($words) {
                     $hay = mb_strtolower($p->title . ' ' . ($p->category?->name ?? '') . ' ' . ($p->color?->name ?? '') . ' ' . $p->sku);
                     $p->setAttribute('search_score', $words->filter(fn ($w) => str_contains($hay, $w))->count());
                     return $p;
                 })
-                ->sortByDesc('search_score')
-                ->take(10)
-                ->values();
+                ->sortByDesc('search_score');
+            $truncated = $truncated || $pool->count() > 20;
+            $found = $pool->take(20)->values();
         }
 
         $res = [
