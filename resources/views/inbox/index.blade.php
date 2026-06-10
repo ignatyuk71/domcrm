@@ -297,21 +297,57 @@
                 const time = showTime ? `<div class="ib-time-mini ${out ? 'out' : ''}">${esc(m.sent_at_human || '')}</div>` : '';
                 return `<div class="ib-row ${out ? 'out' : ''}"><div class="ib-bub ${out ? 'out' : 'in'}${media}">${m.text ? esc(m.text) : ''}${atts}</div></div>${time}`;
             }).join('');
+            appendPending();
             box.scrollTop = box.scrollHeight;
         }
 
         function showErr(m) { const e = document.getElementById('reply-error'); e.textContent = m; e.classList.remove('d-none'); }
 
-        async function sendMessage(text, convId = activeId) {
+        // Оптимістична відправка тексту: бульбашка зʼявляється миттєво,
+        // POST іде у фоні; при помилці — позначка «не надіслано».
+        let optSeq = 0, pendingTexts = [];
+
+        function optBubbleHtml(p) {
+            return `<div class="ib-row out" data-opt="${p.key}"><div class="ib-bub out">${esc(p.text)}</div></div>`
+                + (p.failed ? '<div class="ib-time-mini out" style="color:#dc3545">не надіслано — спробуйте ще раз</div>' : '');
+        }
+
+        function appendPending() {
+            const mine = pendingTexts.filter(p => p.convId === activeId);
+            if (!mine.length) return;
+            const box = document.getElementById('thread-messages');
+            mine.forEach(p => box.insertAdjacentHTML('beforeend', optBubbleHtml(p)));
+        }
+
+        function sendTextOptimistic(text, convId) {
             if (!convId || !text) return;
-            const res = await fetch(`/api/inbox/conversations/${convId}/send`, {
+            const p = { key: ++optSeq, convId, text, failed: false };
+            pendingTexts.push(p);
+            if (convId === activeId) {
+                const box = document.getElementById('thread-messages');
+                box.insertAdjacentHTML('beforeend', optBubbleHtml(p));
+                box.scrollTop = box.scrollHeight;
+            }
+            fetch(`/api/inbox/conversations/${convId}/send`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
                 body: JSON.stringify({ text })
-            });
-            const data = await res.json();
-            if (!res.ok || !data.ok) { showErr(data.error || 'Помилка відправки'); return; }
-            await openConversation(activeId);
+            })
+                .then(r => r.json().then(d => ({ ok: r.ok && d.ok, d })).catch(() => ({ ok: false, d: {} })))
+                .catch(() => ({ ok: false, d: {} }))
+                .then(({ ok, d }) => {
+                    if (ok) {
+                        pendingTexts = pendingTexts.filter(x => x.key !== p.key);
+                        loadConversations();
+                        return;
+                    }
+                    p.failed = true;
+                    const el = document.querySelector(`[data-opt="${p.key}"]`);
+                    if (el && p.convId === activeId) {
+                        el.insertAdjacentHTML('afterend', '<div class="ib-time-mini out" style="color:#dc3545">не надіслано — спробуйте ще раз</div>');
+                        el.parentElement.scrollTop = el.parentElement.scrollHeight;
+                    }
+                });
         }
 
         let staged = [], sendingNow = false;
@@ -338,11 +374,21 @@
             const text = input.value.trim();
             if (!staged.length && !text) return;
             document.getElementById('reply-error').classList.add('d-none');
+            const convId = activeId;
+
+            // Лише текст — миттєва бульбашка, нічого не блокуємо.
+            if (!staged.length) {
+                input.value = '';
+                sendTextOptimistic(text, convId);
+                input.focus(); autoGrow();
+                return;
+            }
+
+            // Є вкладення — черга зі спінерами, кнопка залочена до кінця.
             sendingNow = true;
             input.disabled = true;
             const sBtn = document.getElementById('send-btn');
             sBtn.disabled = true; sBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-            const convId = activeId;
             let okAll = true;
             while (staged.length) {
                 const item = staged[0];
@@ -353,14 +399,14 @@
                 if (!ok) { item.sending = false; okAll = false; renderStaged(); break; }
                 staged.shift(); renderStaged();
             }
-            if (okAll && text) { await sendMessage(text, convId); input.value = ''; }
-            else if (okAll && convId === activeId) { await openConversation(convId); }
+            if (okAll && convId === activeId) { await openConversation(convId); }
+            if (okAll && text) { sendTextOptimistic(text, convId); input.value = ''; }
             sendingNow = false;
             input.disabled = false; sBtn.disabled = false; sBtn.innerHTML = '<i class="bi bi-send-fill"></i>';
             input.focus(); autoGrow();
         });
 
-        function sendLike() { if (sendingNow) return; sendMessage('👍'); }
+        function sendLike() { if (!activeId || sendingNow) return; sendTextOptimistic('👍', activeId); }
 
         const EMOJIS = ['😊','😂','❤️','👍','🙏','🔥','😍','🎉','👌','✅','🤝','😉','🙂','😅','💪','👋','📦','🚚','💰','❓','😎','🤔','🥰','👏','💯','🙌','😢','🤗'];
         function toggleEmoji() {
