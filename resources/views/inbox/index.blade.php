@@ -318,7 +318,7 @@
         function autoGrow() {
             replyTa.style.height = 'auto';
             replyTa.style.height = Math.min(replyTa.scrollHeight, 200) + 'px';
-            const has = replyTa.value.trim().length > 0 || staged.length > 0;
+            const has = replyTa.value.trim().length > 0 || staged.length > 0 || sendingNow;
             document.getElementById('like-btn').classList.toggle('d-none', has);
             document.getElementById('send-btn').classList.toggle('d-none', !has);
         }
@@ -340,7 +340,7 @@
             sendingNow = true;
             input.disabled = true;
             const sBtn = document.getElementById('send-btn');
-            sBtn.disabled = true;
+            sBtn.disabled = true; sBtn.textContent = 'Надсилаю…';
             const convId = activeId;
             let okAll = true;
             while (staged.length) {
@@ -355,11 +355,11 @@
             if (okAll && text) { await sendMessage(text, convId); input.value = ''; }
             else if (okAll && convId === activeId) { await openConversation(convId); }
             sendingNow = false;
-            input.disabled = false; sBtn.disabled = false;
+            input.disabled = false; sBtn.disabled = false; sBtn.textContent = 'Надіслати';
             input.focus(); autoGrow();
         });
 
-        function sendLike() { sendMessage('👍'); }
+        function sendLike() { if (sendingNow) return; sendMessage('👍'); }
 
         const EMOJIS = ['😊','😂','❤️','👍','🙏','🔥','😍','🎉','👌','✅','🤝','😉','🙂','😅','💪','👋','📦','🚚','💰','❓','😎','🤔','🥰','👏','💯','🙌','😢','🤗'];
         function toggleEmoji() {
