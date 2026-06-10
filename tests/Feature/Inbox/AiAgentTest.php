@@ -205,6 +205,8 @@ class AiAgentTest extends TestCase
         $this->assertStringNotContainsString('777', $body);
         // Розмір з нульовим залишком не у списку «в наявності»
         $this->assertStringContainsString(trim((string) json_encode('36-37'), '"'), $body);
+        // Правило про подвійну розмірну сітку присутнє в system prompt
+        $this->assertStringContainsString(trim((string) json_encode('38 → 38-39'), '"'), $body);
     }
 
     public function test_discards_reply_when_client_wrote_during_generation(): void
