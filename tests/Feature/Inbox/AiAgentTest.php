@@ -144,6 +144,69 @@ class AiAgentTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_agent_searches_products_and_answers_with_db_facts(): void
+    {
+        $this->setUpConversation();
+
+        // Товар у базі: ціна продажу 530, собівартість 777 (унікальна, щоб перевірити витік)
+        $product = \App\Models\Product::create([
+            'title' => 'капці для вулиці рожеві',
+            'sku' => '6023',
+            'sale_price' => 530,
+            'cost_price' => 777,
+            'currency' => 'UAH',
+            'description' => 'хутряні капці',
+        ]);
+        \App\Models\ProductVariant::create(['product_id' => $product->id, 'size' => '36-37', 'sku' => '6023-36-37', 'stock_qty' => 5, 'is_active' => true]);
+        \App\Models\ProductVariant::create(['product_id' => $product->id, 'size' => '38-39', 'sku' => '6023-38-39', 'stock_qty' => 0, 'is_active' => true]);
+
+        Http::fake([
+            'api.anthropic.com/*' => Http::sequence()
+                // 1-й крок: Claude просить пошук
+                ->push([
+                    'content' => [[
+                        'type' => 'tool_use', 'id' => 'tu_1',
+                        'name' => 'search_products', 'input' => ['query' => 'рожеві капці'],
+                    ]],
+                    'stop_reason' => 'tool_use',
+                    'usage' => ['input_tokens' => 300, 'output_tokens' => 40],
+                ], 200)
+                // 2-й крок: фінальна відповідь
+                ->push([
+                    'content' => [['type' => 'text', 'text' => 'Є рожеві капці, 530 грн, розмір 36-37 в наявності 🙂']],
+                    'stop_reason' => 'end_turn',
+                    'usage' => ['input_tokens' => 420, 'output_tokens' => 50],
+                ], 200),
+            'graph.facebook.com/*' => Http::response(['message_id' => 'm_ai_2'], 200),
+        ]);
+
+        $this->runJob();
+
+        // Відповідь надіслана і збережена
+        $this->assertDatabaseHas('inbox_messages', [
+            'sender' => 'ai',
+            'text' => 'Є рожеві капці, 530 грн, розмір 36-37 в наявності 🙂',
+        ]);
+
+        // Запуск залогований з інструментом і сумою токенів обох кроків
+        $run = AiRun::where('status', 'replied')->latest('id')->first();
+        $this->assertNotNull($run);
+        $this->assertSame('search_products', $run->tools_called[0]['tool'] ?? null);
+        $this->assertSame(720, $run->tokens_in);
+        $this->assertSame(90, $run->tokens_out);
+
+        // У другий запит пішов результат пошуку з БД: назва і ціна є, собівартість — НІ
+        $second = collect(Http::recorded())
+            ->filter(fn ($pair) => str_contains($pair[0]->url(), 'api.anthropic.com'))
+            ->last();
+        $body = $second[0]->body();
+        $this->assertStringContainsString(trim((string) json_encode('капці для вулиці рожеві'), '"'), $body);
+        $this->assertStringContainsString('530', $body);
+        $this->assertStringNotContainsString('777', $body);
+        // Розмір з нульовим залишком не у списку «в наявності»
+        $this->assertStringContainsString(trim((string) json_encode('36-37'), '"'), $body);
+    }
+
     public function test_discards_reply_when_client_wrote_during_generation(): void
     {
         $this->setUpConversation();

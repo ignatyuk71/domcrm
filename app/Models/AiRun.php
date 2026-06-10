@@ -12,9 +12,14 @@ class AiRun extends Model
         'inbox_message_id',
         'status',
         'error',
+        'tools_called',
         'tokens_in',
         'tokens_out',
         'duration_ms',
+    ];
+
+    protected $casts = [
+        'tools_called' => 'array',
     ];
 
     public function conversation(): BelongsTo

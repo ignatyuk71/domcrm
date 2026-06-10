@@ -4,18 +4,22 @@ namespace App\Services\Ai;
 
 use App\Models\AiRun;
 use App\Models\AiSetting;
+use App\Models\Category;
 use App\Models\InboxConversation;
 use App\Models\InboxMessage;
+use App\Models\Product;
 use App\Services\Meta\MetaSendService;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Фаза 2: агент відповідає текстом на вхідне повідомлення.
- * Бачить інструкцію магазину + історію діалогу. Без tool-ів (вони у Фазі 3).
+ * Фаза 3: агент відповідає на вхідні, користуючись інструкцією магазину,
+ * історією діалогу та «руками» — живими запитами в базу товарів
+ * (пошук + картка товару). Собівартість і службові поля назовні не виходять.
  */
 class AiAgentService
 {
+    private const MAX_TOOL_LOOPS = 5;
     public function __construct(private MetaSendService $send)
     {
     }
@@ -23,12 +27,14 @@ class AiAgentService
     public function respond(InboxConversation $conversation, int $triggerMessageId): AiRun
     {
         $t0 = microtime(true);
-        $finish = function (string $status, ?string $error = null, int $in = 0, int $out = 0) use ($conversation, $triggerMessageId, $t0) {
+        $toolsCalled = [];
+        $finish = function (string $status, ?string $error = null, int $in = 0, int $out = 0) use ($conversation, $triggerMessageId, $t0, &$toolsCalled) {
             return AiRun::create([
                 'inbox_conversation_id' => $conversation->id,
                 'inbox_message_id' => $triggerMessageId,
                 'status' => $status,
                 'error' => $error,
+                'tools_called' => $toolsCalled ?: null,
                 'tokens_in' => $in,
                 'tokens_out' => $out,
                 'duration_ms' => (int) ((microtime(true) - $t0) * 1000),
@@ -68,30 +74,74 @@ class AiAgentService
                 return $finish('skipped_empty_history');
             }
 
+            $categories = Category::orderBy('name')->pluck('name')->implode(', ');
+
             $system = trim(($store->system_prompt ?: "Ти ввічливий співробітник магазину «{$conversation->connection->page_name}»."))
                 . "\n\nБазові правила (інструкція вище має пріоритет, якщо вони суперечать): "
                 . "відповідай стисло, до 4–5 речень. Якщо інструкція не визначає мову — відповідай українською. "
-                . "Не вигадуй цін, наявності чи термінів — якщо чогось не знаєш, скажи, що уточниш у менеджера.";
+                . "\n\nУ тебе є інструменти пошуку по БАЗІ ТОВАРІВ магазину — використовуй їх щоразу, "
+                . "коли клієнт питає про товар, ціну, колір, розмір або наявність. "
+                . "Ціни, розміри й наявність називай ЛИШЕ з результатів інструментів — ніколи не вигадуй. "
+                . "Якщо інструмент нічого не знайшов — скажи, що уточниш у менеджера. "
+                . ($categories !== '' ? "Категорії магазину: {$categories}." : '');
 
-            $r = Http::timeout(30)->withHeaders([
-                'x-api-key' => $apiKey,
-                'anthropic-version' => '2023-06-01',
-            ])->post('https://api.anthropic.com/v1/messages', [
-                'model' => $global->model ?: 'claude-sonnet-4-6',
-                'max_tokens' => 600,
-                'system' => $system,
-                'messages' => $messages,
-            ]);
+            $model = $global->model ?: 'claude-sonnet-4-6';
+            $tokensIn = 0;
+            $tokensOut = 0;
+            $content = [];
 
-            $tokensIn = (int) $r->json('usage.input_tokens', 0);
-            $tokensOut = (int) $r->json('usage.output_tokens', 0);
+            // Цикл tool-ів: Claude може кілька разів заглянути в базу, потім відповідає.
+            for ($loop = 0; $loop <= self::MAX_TOOL_LOOPS; $loop++) {
+                $payload = [
+                    'model' => $model,
+                    'max_tokens' => 700,
+                    'system' => $system,
+                    'messages' => $messages,
+                    'tools' => $this->toolDefinitions(),
+                ];
+                // Вичерпав ліміт заглядань — зобовʼязаний відповісти текстом.
+                if ($loop === self::MAX_TOOL_LOOPS) {
+                    $payload['tool_choice'] = ['type' => 'none'];
+                }
 
-            if (!$r->successful()) {
-                Log::warning('AI: Claude API error', ['conv' => $conversation->id, 'body' => mb_substr($r->body(), 0, 300)]);
-                return $finish('error', 'Claude: ' . ($r->json('error.message') ?? ('HTTP ' . $r->status())), $tokensIn, $tokensOut);
+                $r = Http::timeout(40)->withHeaders([
+                    'x-api-key' => $apiKey,
+                    'anthropic-version' => '2023-06-01',
+                ])->post('https://api.anthropic.com/v1/messages', $payload);
+
+                $tokensIn += (int) $r->json('usage.input_tokens', 0);
+                $tokensOut += (int) $r->json('usage.output_tokens', 0);
+
+                if (!$r->successful()) {
+                    Log::warning('AI: Claude API error', ['conv' => $conversation->id, 'body' => mb_substr($r->body(), 0, 300)]);
+                    return $finish('error', 'Claude: ' . ($r->json('error.message') ?? ('HTTP ' . $r->status())), $tokensIn, $tokensOut);
+                }
+
+                $content = $r->json('content') ?? [];
+
+                if ($r->json('stop_reason') !== 'tool_use') {
+                    break;
+                }
+
+                // Виконуємо всі запити в базу з цього кроку і віддаємо результати назад.
+                $messages[] = ['role' => 'assistant', 'content' => $content];
+                $results = [];
+                foreach ($content as $block) {
+                    if (($block['type'] ?? '') !== 'tool_use') {
+                        continue;
+                    }
+                    $toolsCalled[] = ['tool' => $block['name'], 'input' => $block['input'] ?? []];
+                    $out = $this->runTool($block['name'], (array) ($block['input'] ?? []));
+                    $results[] = [
+                        'type' => 'tool_result',
+                        'tool_use_id' => $block['id'],
+                        'content' => json_encode($out, JSON_UNESCAPED_UNICODE),
+                    ];
+                }
+                $messages[] = ['role' => 'user', 'content' => $results];
             }
 
-            $text = collect($r->json('content') ?? [])
+            $text = collect($content)
                 ->where('type', 'text')
                 ->pluck('text')
                 ->implode("\n");
@@ -133,6 +183,132 @@ class AiAgentService
             Log::error('AI: respond failed', ['conv' => $conversation->id, 'error' => $e->getMessage()]);
             return $finish('error', mb_substr($e->getMessage(), 0, 500));
         }
+    }
+
+    /** Описи інструментів для Claude. */
+    private function toolDefinitions(): array
+    {
+        return [
+            [
+                'name' => 'search_products',
+                'description' => 'Пошук товарів магазину за словами клієнта: назва, колір, категорія або артикул (SKU). Повертає до 8 товарів з ціною та наявністю.',
+                'input_schema' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'query' => [
+                            'type' => 'string',
+                            'description' => 'Слова пошуку, напр.: "рожеві капці", "дитячі", "піжама", "6026"',
+                        ],
+                    ],
+                    'required' => ['query'],
+                ],
+            ],
+            [
+                'name' => 'get_product',
+                'description' => 'Повна картка товару за його id: усі розміри з реальними залишками, ціна, опис.',
+                'input_schema' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'product_id' => ['type' => 'integer', 'description' => 'id товару з результатів search_products'],
+                    ],
+                    'required' => ['product_id'],
+                ],
+            ],
+        ];
+    }
+
+    /** Виконати інструмент. Назовні йдуть ЛИШЕ безпечні поля (без собівартости й службового). */
+    private function runTool(string $name, array $input): array
+    {
+        try {
+            return match ($name) {
+                'search_products' => $this->toolSearchProducts((string) ($input['query'] ?? '')),
+                'get_product' => $this->toolGetProduct((int) ($input['product_id'] ?? 0)),
+                default => ['помилка' => 'Невідомий інструмент'],
+            };
+        } catch (\Throwable $e) {
+            Log::warning('AI tool failed', ['tool' => $name, 'error' => $e->getMessage()]);
+            return ['помилка' => 'Не вдалося виконати пошук'];
+        }
+    }
+
+    private function toolSearchProducts(string $query): array
+    {
+        $words = collect(preg_split('/[\s,.\/]+/u', mb_strtolower(trim($query))))
+            ->filter(fn ($w) => mb_strlen($w) >= 2)
+            // грубий «стем»: рожеві → роже, щоб ловити РОЖЕВИЙ/рожева/рожеве
+            ->map(fn ($w) => mb_strlen($w) >= 5 ? mb_substr($w, 0, mb_strlen($w) - 2) : $w)
+            ->take(5)
+            ->values();
+
+        if ($words->isEmpty()) {
+            return ['знайдено' => 0, 'товари' => []];
+        }
+
+        $build = function ($mode) use ($words) {
+            return Product::query()
+                ->with(['category:id,name', 'color:id,name', 'variants:id,product_id,size,stock_qty,is_active'])
+                ->where(function ($q) use ($words, $mode) {
+                    foreach ($words as $w) {
+                        $clause = function ($sub) use ($w) {
+                            $sub->where('title', 'like', "%{$w}%")
+                                ->orWhere('sku', 'like', "%{$w}%")
+                                ->orWhereHas('category', fn ($c) => $c->where('name', 'like', "%{$w}%"))
+                                ->orWhereHas('color', fn ($c) => $c->where('name', 'like', "%{$w}%"));
+                        };
+                        $mode === 'and' ? $q->where($clause) : $q->orWhere($clause);
+                    }
+                })
+                ->limit(8)
+                ->get();
+        };
+
+        $found = $build('and');
+        if ($found->isEmpty()) {
+            $found = $build('or'); // мʼякший пошук, якщо точний нічого не дав
+        }
+
+        return [
+            'знайдено' => $found->count(),
+            'товари' => $found->map(fn (Product $p) => $this->productSummary($p))->values()->all(),
+        ];
+    }
+
+    private function toolGetProduct(int $id): array
+    {
+        $p = Product::with(['category:id,name', 'color:id,name', 'variants' => fn ($q) => $q->where('is_active', true)])->find($id);
+        if (!$p) {
+            return ['помилка' => 'Товар не знайдено'];
+        }
+
+        return array_merge($this->productSummary($p), [
+            'опис' => $p->description ?: null,
+            'розміри' => $p->variants->map(fn ($v) => [
+                'розмір' => $v->size,
+                'залишок' => (int) $v->stock_qty,
+                'наявність' => $v->stock_qty > 0 ? 'є' : 'немає',
+            ])->values()->all(),
+        ]);
+    }
+
+    /** Безпечний підсумок товару: БЕЗ собівартости, ваги і службових полів. */
+    private function productSummary(Product $p): array
+    {
+        $inStockSizes = $p->variants
+            ->filter(fn ($v) => $v->is_active !== false && $v->stock_qty > 0)
+            ->pluck('size')
+            ->implode(', ');
+
+        return [
+            'id' => $p->id,
+            'назва' => $p->title,
+            'sku' => $p->sku,
+            'ціна' => round((float) $p->sale_price) . ' грн',
+            'категорія' => $p->category?->name,
+            'колір' => $p->color?->name,
+            'наявність' => $inStockSizes !== '' ? 'є в наявності' : 'немає в наявності',
+            'розміри_в_наявності' => $inStockSizes ?: null,
+        ];
     }
 
     /**
