@@ -26,8 +26,12 @@
                             <option value="claude-opus-4-8">Claude Opus 4.8 — найрозумніший</option>
                         </select>
                     </div>
-                    <div class="col-12 col-md-4 d-flex gap-2">
-                        <button class="btn btn-outline-primary" onclick="testKey(this)"><i class="bi bi-plug me-1"></i>Перевірити зʼєднання</button>
+                    <div class="col-6 col-md-2">
+                        <label class="form-label small text-secondary mb-1">Пауза, сек</label>
+                        <input id="ai-debounce" type="number" class="form-control" min="0" max="60" value="10" title="Скільки чекати, поки клієнт допише (відповідь одна на всю чергу повідомлень)">
+                    </div>
+                    <div class="col-12 col-md-2 d-flex gap-2">
+                        <button class="btn btn-outline-primary" onclick="testKey(this)"><i class="bi bi-plug me-1"></i>Перевірити</button>
                     </div>
                 </div>
                 <div id="test-result" class="small mt-2 d-none"></div>
@@ -49,6 +53,7 @@
             const res = await fetch('{{ route('settings.ai.data') }}', { headers: { 'Accept': 'application/json' } });
             const data = await res.json();
             document.getElementById('ai-model').value = data.global.model || 'claude-sonnet-4-6';
+            document.getElementById('ai-debounce').value = data.global.debounce_seconds ?? 10;
             document.getElementById('key-hint').textContent = data.global.has_key ? ('— збережено ' + data.global.key_hint) : '';
             storesData = data.stores || [];
             renderStores();
@@ -87,6 +92,7 @@
                     body: JSON.stringify({
                         api_key: document.getElementById('ai-key').value.trim() || null,
                         model: document.getElementById('ai-model').value,
+                        debounce_seconds: parseInt(document.getElementById('ai-debounce').value || '10', 10),
                         stores: storesData.map(s => ({ meta_connection_id: s.meta_connection_id, enabled: !!s.enabled, system_prompt: s.system_prompt || null })),
                     })
                 });

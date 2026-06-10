@@ -144,6 +144,34 @@ class AiAgentTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_discards_reply_when_client_wrote_during_generation(): void
+    {
+        $this->setUpConversation();
+        $convId = $this->conv->id;
+
+        Http::fake([
+            // Поки «Claude думає», клієнт дописує ще одне повідомлення
+            'api.anthropic.com/*' => function () use ($convId) {
+                InboxMessage::create([
+                    'inbox_conversation_id' => $convId, 'direction' => 'in', 'sender' => 'contact',
+                    'external_message_id' => 'm_in_late', 'text' => 'А, і ще розмір 38!', 'sent_at' => now(),
+                ]);
+
+                return Http::response([
+                    'content' => [['type' => 'text', 'text' => 'Відповідь на половину питання']],
+                    'usage' => ['input_tokens' => 50, 'output_tokens' => 10],
+                ], 200);
+            },
+            'graph.facebook.com/*' => Http::response(['message_id' => 'm_x'], 200),
+        ]);
+
+        $this->runJob();
+
+        $this->assertDatabaseHas('ai_runs', ['status' => 'skipped_stale_late']);
+        $this->assertDatabaseMissing('inbox_messages', ['sender' => 'ai']);
+        Http::assertNotSent(fn ($req) => str_contains($req->url(), 'graph.facebook.com'));
+    }
+
     public function test_claude_error_is_logged_not_sent(): void
     {
         $this->setUpConversation();

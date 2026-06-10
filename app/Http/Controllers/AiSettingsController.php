@@ -37,6 +37,7 @@ class AiSettingsController extends Controller
                 'has_key' => (bool) $key,
                 'key_hint' => $key ? ('•••' . substr($key, -4)) : null,
                 'model' => $global->model ?: 'claude-sonnet-4-6',
+                'debounce_seconds' => $global->debounce_seconds ?? 10,
             ],
             'stores' => $stores,
         ]);
@@ -48,6 +49,7 @@ class AiSettingsController extends Controller
         $data = $request->validate([
             'api_key' => ['nullable', 'string', 'max:300'],
             'model' => ['required', 'string', 'max:100'],
+            'debounce_seconds' => ['nullable', 'integer', 'min:0', 'max:60'],
             'stores' => ['array'],
             'stores.*.meta_connection_id' => ['required', 'integer', 'exists:meta_connections,id'],
             'stores.*.enabled' => ['required', 'boolean'],
@@ -56,6 +58,7 @@ class AiSettingsController extends Controller
 
         $global = AiSetting::global();
         $global->model = $data['model'];
+        $global->debounce_seconds = $data['debounce_seconds'] ?? 10;
         if (!empty($data['api_key'])) {
             $global->api_key = trim($data['api_key']);
         }

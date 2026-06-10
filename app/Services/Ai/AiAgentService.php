@@ -100,6 +100,13 @@ class AiAgentService
             }
             $text = mb_substr($text, 0, 1900); // ліміт Send API — 2000 символів
 
+            // Клієнт міг дописати, ПОКИ Claude думав — тоді цю відповідь викидаємо,
+            // нова джоба відповість з урахуванням дописаного.
+            $lastNow = $conversation->messages()->orderByDesc('id')->value('id');
+            if ($lastNow !== $triggerMessageId) {
+                return $finish('skipped_stale_late', null, $tokensIn, $tokensOut);
+            }
+
             $sent = $this->send->sendText($conversation->connection, $conversation->contact->external_id, $text);
             if (!($sent['ok'] ?? false)) {
                 return $finish('error', 'Send API: ' . ($sent['error'] ?? 'невідома помилка'), $tokensIn, $tokensOut);

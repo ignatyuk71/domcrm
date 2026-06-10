@@ -29,6 +29,14 @@ class AiRespondToMessage
             return;
         }
 
+        // Пауза, щоб клієнт встиг дописати думку кількома повідомленнями.
+        // Якщо за цей час прийшло нове — ця джоба змовчить (staleness-перевірка
+        // в сервісі), а відповість джоба останнього повідомлення.
+        $wait = (int) (\App\Models\AiSetting::global()->debounce_seconds ?? 10);
+        if ($wait > 0 && !app()->runningUnitTests()) {
+            sleep(min($wait, 60));
+        }
+
         try {
             $ai->respond($conversation, $this->messageId);
         } catch (\Throwable $e) {

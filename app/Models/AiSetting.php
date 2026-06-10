@@ -11,6 +11,7 @@ class AiSetting extends Model
         'meta_connection_id',
         'enabled',
         'model',
+        'debounce_seconds',
         'api_key',
         'system_prompt',
         'schedule',
@@ -20,6 +21,7 @@ class AiSetting extends Model
         'enabled' => 'boolean',
         'schedule' => 'array',
         'api_key' => 'encrypted',
+        'debounce_seconds' => 'integer',
     ];
 
     protected $hidden = ['api_key'];
