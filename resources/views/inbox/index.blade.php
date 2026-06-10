@@ -69,8 +69,9 @@
         .ib-box-tools { display: flex; align-items: center; gap: 8px; flex-shrink: 0; align-self: flex-end; }
         .ib-tool { width: 34px; height: 34px; border-radius: 50%; border: none; background: transparent; color: #1c1e21; display: inline-flex; align-items: center; justify-content: center; font-size: 22px; cursor: pointer; padding: 0; transition: background .12s; }
         .ib-tool:hover { background: #f0f1f4; }
-        .ib-send-btn { border: none; background: transparent; color: #0084ff; font-weight: 600; font-size: .95rem; padding: 6px 8px; cursor: pointer; white-space: nowrap; }
-        .ib-send-btn:hover { text-decoration: underline; }
+        .ib-send-ic { color: #0084ff; }
+        .ib-send-ic:hover { background: #eaf3ff; color: #0084ff; }
+        .ib-send-ic .spinner-border { width: 17px; height: 17px; border-width: 2px; }
         .ib-pop { position: absolute; bottom: calc(100% - 4px); right: 14px; left: auto; background: #fff; border: 1px solid #e6e8ee; border-radius: 13px; box-shadow: 0 14px 36px rgba(16,24,40,.16); z-index: 50; padding: 9px; }
         .ib-attach-preview { padding: 4px 6px 12px; display: flex; flex-wrap: wrap; gap: 12px; }
         .ib-attach-item { position: relative; width: 68px; height: 68px; background: #f5f6f8; border: 1px solid #e3e6ea; border-radius: 12px; }
@@ -158,7 +159,7 @@
                             <button type="button" class="ib-tool" title="Швидкі відповіді" onclick="toggleTpl()"><i class="bi bi-chat"></i></button>
                             <button type="button" class="ib-tool" title="Емодзі" onclick="toggleEmoji()"><i class="bi bi-emoji-smile"></i></button>
                             <button type="button" class="ib-tool" id="like-btn" title="Надіслати 👍" onclick="sendLike()"><i class="bi bi-hand-thumbs-up-fill"></i></button>
-                            <button type="submit" class="ib-send-btn d-none" id="send-btn">Надіслати</button>
+                            <button type="submit" class="ib-tool ib-send-ic d-none" id="send-btn" title="Надіслати"><i class="bi bi-send-fill"></i></button>
                         </div>
                         <input type="file" id="file-input" class="d-none" accept="image/*,application/pdf,.doc,.docx" multiple onchange="stageFile(this)">
                     </form>
@@ -340,7 +341,7 @@
             sendingNow = true;
             input.disabled = true;
             const sBtn = document.getElementById('send-btn');
-            sBtn.disabled = true; sBtn.textContent = 'Надсилаю…';
+            sBtn.disabled = true; sBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
             const convId = activeId;
             let okAll = true;
             while (staged.length) {
@@ -355,7 +356,7 @@
             if (okAll && text) { await sendMessage(text, convId); input.value = ''; }
             else if (okAll && convId === activeId) { await openConversation(convId); }
             sendingNow = false;
-            input.disabled = false; sBtn.disabled = false; sBtn.textContent = 'Надіслати';
+            input.disabled = false; sBtn.disabled = false; sBtn.innerHTML = '<i class="bi bi-send-fill"></i>';
             input.focus(); autoGrow();
         });
 
