@@ -105,6 +105,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/api/chat-statuses', [ChatStatusController::class, 'index'])->name('chatStatuses.list');
         Route::post('/api/inbox/conversations/{conversation}/status', [InboxController::class, 'setStatus'])->name('inbox.setStatus');
         Route::post('/api/inbox/conversations/{conversation}/refresh', [InboxController::class, 'refresh'])->name('inbox.refresh');
+        Route::get('/api/inbox/conversations/{conversation}/panel', [InboxController::class, 'panel'])->name('inbox.panel');
+        Route::post('/api/inbox/conversations/{conversation}/attach-customer', [InboxController::class, 'attachCustomer'])->name('inbox.attachCustomer');
+        Route::post('/api/inbox/conversations/{conversation}/attach-order', [InboxController::class, 'attachOrder'])->name('inbox.attachOrder');
         Route::post('/api/inbox/conversations/{conversation}/clear', [InboxController::class, 'clear'])->name('inbox.clear');
         Route::delete('/api/inbox/conversations/{conversation}', [InboxController::class, 'destroy'])->name('inbox.destroy');
     });

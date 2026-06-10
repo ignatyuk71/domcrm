@@ -2,9 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ChatStatus;
+use App\Models\Customer;
 use App\Models\InboxConversation;
 use App\Models\InboxMessage;
 use App\Models\MetaConnection;
+use App\Models\Order;
 use App\Models\SavedFile;
 use App\Services\Meta\MetaSendService;
 use App\Services\Meta\MetaSyncService;
@@ -247,6 +250,89 @@ class InboxController extends Controller
         $conversation->messages()->delete();
         $conversation->delete();
         $contact?->delete();
+
+        return response()->json(['ok' => true]);
+    }
+
+    /** Права панель: привʼязаний клієнт + його замовлення. */
+    public function panel(InboxConversation $conversation)
+    {
+        $conversation->loadMissing('contact');
+        $contact = $conversation->contact;
+        $customer = $contact?->customer_id ? Customer::find($contact->customer_id) : null;
+
+        $orders = collect();
+        if ($customer) {
+            $orders = Order::query()
+                ->where('customer_id', $customer->id)
+                ->with('statusRef:id,name,color')
+                ->withSum('items as items_total', 'total')
+                ->orderByDesc('id')
+                ->limit(5)
+                ->get()
+                ->map(fn (Order $o) => [
+                    'id' => $o->id,
+                    'number' => $o->order_number,
+                    'status' => $o->statusRef?->name ?? $o->status,
+                    'status_color' => $o->statusRef?->color,
+                    'total' => (float) ($o->items_total ?? 0),
+                    'date' => $o->created_at?->format('d.m.Y'),
+                ]);
+        }
+
+        return response()->json([
+            'customer' => $customer ? [
+                'id' => $customer->id,
+                'first_name' => $customer->first_name,
+                'last_name' => $customer->last_name,
+                'phone' => $customer->phone,
+            ] : null,
+            'orders' => $orders,
+        ]);
+    }
+
+    /** Зберегти клієнта (пошук за телефоном або створення) і привʼязати до контакту чату. */
+    public function attachCustomer(Request $request, InboxConversation $conversation)
+    {
+        $data = $request->validate([
+            'first_name' => ['nullable', 'string', 'max:255'],
+            'last_name' => ['nullable', 'string', 'max:255'],
+            'phone' => ['required', 'string', 'max:32'],
+        ]);
+
+        $customer = Customer::firstOrCreate(
+            ['phone' => trim($data['phone'])],
+            ['first_name' => $data['first_name'] ?? null, 'last_name' => $data['last_name'] ?? null]
+        );
+
+        if (!$customer->first_name && !empty($data['first_name'])) {
+            $customer->update([
+                'first_name' => $data['first_name'],
+                'last_name' => $data['last_name'] ?? $customer->last_name,
+            ]);
+        }
+
+        $conversation->loadMissing('contact');
+        $conversation->contact?->update(['customer_id' => $customer->id]);
+
+        return response()->json(['ok' => true, 'customer_id' => $customer->id]);
+    }
+
+    /** Після збереження замовлення: привʼязати клієнта і поставити статус чату «Замовлення». */
+    public function attachOrder(Request $request, InboxConversation $conversation)
+    {
+        $data = $request->validate(['order_id' => ['required', 'integer', 'exists:orders,id']]);
+        $order = Order::find($data['order_id']);
+
+        $conversation->loadMissing('contact');
+        if ($order->customer_id && $conversation->contact) {
+            $conversation->contact->update(['customer_id' => $order->customer_id]);
+        }
+
+        $statusId = ChatStatus::where('code', 'order')->value('id');
+        if ($statusId) {
+            $conversation->update(['chat_status_id' => $statusId]);
+        }
 
         return response()->json(['ok' => true]);
     }

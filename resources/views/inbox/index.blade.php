@@ -123,6 +123,35 @@
         /* права панель — блоки як у FB */
         .ib-iblock { padding: 14px 16px; border-bottom: 1px solid #f0f1f4; }
         .ib-block-title { font-weight: 700; font-size: .9rem; color: #0f172a; margin-bottom: 8px; }
+        .ib-mini-btn { width: 26px; height: 26px; border: none; background: #f0f2f5; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; color: #475467; flex-shrink: 0; }
+        .ib-mini-btn:hover { background: #e4e6eb; }
+        .ib-cust-card { background: #f8f9fb; border: 1px solid #eef0f3; border-radius: 12px; padding: 10px 12px; }
+        .ib-src { display: inline-flex; align-items: center; gap: 5px; font-size: .74rem; font-weight: 600; color: #475467; background: #f0f2f5; border-radius: 999px; padding: 3px 9px; }
+        .ib-item { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px dashed #eef0f3; }
+        .ib-item:last-of-type { border-bottom: none; }
+        .ib-np-list { position: absolute; top: calc(100% + 3px); left: 0; right: 0; background: #fff; border: 1px solid #e6e8ee; border-radius: 10px; box-shadow: 0 12px 30px rgba(16,24,40,.14); z-index: 70; max-height: 220px; overflow-y: auto; padding: 4px; }
+        .ib-np-list button { display: block; width: 100%; text-align: left; border: none; background: transparent; padding: 7px 9px; border-radius: 7px; font-size: .8rem; }
+        .ib-np-list button:hover { background: #f0f2f5; }
+        .ib-pay-row { display: flex; gap: 6px; }
+        .ib-pay { flex: 1; border: 1px solid #e3e6ea; background: #fff; border-radius: 10px; padding: 8px 4px; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: .68rem; font-weight: 600; color: #475467; }
+        .ib-pay i { font-size: 16px; }
+        .ib-pay.active { border-color: #0084ff; background: #eaf3ff; color: #0a66c2; }
+        .ib-order { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px dashed #eef0f3; text-decoration: none; color: inherit; font-size: .82rem; }
+        .ib-order:last-child { border-bottom: none; }
+        .ib-cat-tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; }
+        .ib-cat-tab { border: 1px solid #e3e6ea; background: #fff; border-radius: 999px; padding: 4px 12px; font-size: .8rem; font-weight: 600; color: #475467; white-space: nowrap; }
+        .ib-cat-tab.active { background: #0084ff; border-color: #0084ff; color: #fff; }
+        .ib-prod-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+        .ib-prod { border: 1px solid #eef0f3; border-radius: 12px; overflow: hidden; cursor: pointer; background: #fff; }
+        .ib-prod:hover { border-color: #0084ff; }
+        .ib-prod img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: #f5f6f8; }
+        .ib-prod .ph { width: 100%; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; color: #c3c8d2; font-size: 26px; background: #f5f6f8; }
+        .ib-prod .tt { font-size: .78rem; font-weight: 600; padding: 6px 8px 2px; line-height: 1.25; max-height: 2.7em; overflow: hidden; }
+        .ib-prod .pr { font-size: .78rem; color: #2fb344; font-weight: 700; padding: 0 8px 8px; }
+        .ib-var-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 2px; border-bottom: 1px dashed #eef0f3; font-size: .86rem; }
+        .ib-qty { display: inline-flex; align-items: center; gap: 10px; }
+        .ib-qty button { width: 26px; height: 26px; border-radius: 50%; border: 1px solid #e3e6ea; background: #fff; font-size: 15px; line-height: 1; }
+        .ib-qty button:hover { background: #f0f2f5; }
         .ib-info .btn { font-size: .82rem; }
 
         .ib-empty { margin: auto; text-align: center; color: #94a3b8; padding: 24px; }
@@ -381,35 +410,425 @@
                 img.src = '/inbox/page-avatar/' + c.conn_id;
             }
             renderMessages(data.messages);
+            if (panelConvId !== id) { resetOrderPanel(c); panelConvId = id; }
             renderInfo(c);
+            loadPanel();
             renderConvList();
         }
 
+        // ====== ПРАВА ПАНЕЛЬ: ОФОРМЛЕННЯ ЗАМОВЛЕННЯ З ЧАТУ ======
+        let currentConv = null, panelConvId = null, panel = null;
+        let custDraft = { first_name: '', last_name: '', phone: '' };
+        let custEdit = false;
+        let orderItems = [];
+        let delivery = { city_ref: '', settlement_ref: '', city_name: '', warehouse_ref: '', warehouse_name: '', payer: 'recipient' };
+        let payment = { method: 'cod', prepay_amount: '' };
+
+        function resetOrderPanel(c) {
+            panel = null; custEdit = false;
+            const parts = (c?.contact_name || '').trim().split(/\s+/);
+            custDraft = { first_name: parts[0] || '', last_name: parts.slice(1).join(' ') || '', phone: '' };
+            orderItems = [];
+            delivery = { city_ref: '', settlement_ref: '', city_name: '', warehouse_ref: '', warehouse_name: '', payer: 'recipient' };
+            payment = { method: 'cod', prepay_amount: '' };
+        }
+
+        async function loadPanel() {
+            if (!activeId) return;
+            const forId = activeId;
+            try {
+                const res = await fetch(`/api/inbox/conversations/${forId}/panel`, { headers: { 'Accept': 'application/json' } });
+                const data = await res.json();
+                if (forId !== activeId) return; // встигли перемкнутись
+                panel = data;
+            } catch (e) { panel = { customer: null, orders: [] }; }
+            if (currentConv) renderInfo(currentConv);
+        }
+
+        function editCustomer() {
+            const cust = panel?.customer;
+            if (cust) custDraft = { first_name: cust.first_name || '', last_name: cust.last_name || '', phone: cust.phone || '' };
+            custEdit = true;
+            renderInfo(currentConv);
+        }
+
+        async function saveCustomer(btn) {
+            const phone = (custDraft.phone || '').trim();
+            if (!phone) { alert('Вкажіть телефон клієнта'); return; }
+            btn.disabled = true;
+            try {
+                const res = await fetch(`/api/inbox/conversations/${activeId}/attach-customer`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
+                    body: JSON.stringify(custDraft)
+                });
+                if (!res.ok) throw new Error();
+                custEdit = false;
+                await loadPanel();
+            } catch (e) { alert('Не вдалося зберегти клієнта'); }
+            btn.disabled = false;
+        }
+
+        // --- Нова пошта: пошук міста і відділення ---
+        let npCityT = null, npWhT = null, npCityItems = [], npWhItems = [];
+        function npCitySearch(q) {
+            delivery.city_name = q; delivery.city_ref = ''; delivery.warehouse_ref = ''; delivery.warehouse_name = '';
+            clearTimeout(npCityT);
+            const list = document.getElementById('np-city-list');
+            if ((q || '').trim().length < 2) { list?.classList.add('d-none'); return; }
+            npCityT = setTimeout(async () => {
+                try {
+                    const res = await fetch(`/nova-poshta/cities?q=${encodeURIComponent(q.trim())}`, { headers: { 'Accept': 'application/json' } });
+                    npCityItems = (await res.json()).data || [];
+                    const l = document.getElementById('np-city-list');
+                    if (!l) return;
+                    l.innerHTML = npCityItems.length
+                        ? npCityItems.map((ct, i) => `<button type="button" onclick="pickCity(${i})">${esc(ct.name)}</button>`).join('')
+                        : '<div class="text-muted small p-2">Не знайдено</div>';
+                    l.classList.remove('d-none');
+                } catch (e) {}
+            }, 300);
+        }
+        function pickCity(i) {
+            const ct = npCityItems[i]; if (!ct) return;
+            delivery.city_ref = ct.ref; delivery.settlement_ref = ct.settlement_ref || ''; delivery.city_name = ct.name;
+            delivery.warehouse_ref = ''; delivery.warehouse_name = '';
+            renderInfo(currentConv);
+            setTimeout(() => document.getElementById('np-wh')?.focus(), 60);
+        }
+        function npWhSearch(q) {
+            delivery.warehouse_name = q; delivery.warehouse_ref = '';
+            clearTimeout(npWhT);
+            if (!delivery.city_ref) return;
+            npWhT = setTimeout(async () => {
+                try {
+                    const res = await fetch(`/nova-poshta/warehouses?city_ref=${encodeURIComponent(delivery.city_ref)}&q=${encodeURIComponent((q || '').trim())}`, { headers: { 'Accept': 'application/json' } });
+                    npWhItems = (await res.json()).data || [];
+                    const l = document.getElementById('np-wh-list');
+                    if (!l) return;
+                    l.innerHTML = npWhItems.length
+                        ? npWhItems.map((w, i) => `<button type="button" onclick="pickWh(${i})">${esc(w.name)}</button>`).join('')
+                        : '<div class="text-muted small p-2">Не знайдено</div>';
+                    l.classList.remove('d-none');
+                } catch (e) {}
+            }, 300);
+        }
+        function pickWh(i) {
+            const w = npWhItems[i]; if (!w) return;
+            delivery.warehouse_ref = w.ref; delivery.warehouse_name = w.name;
+            renderInfo(currentConv);
+        }
+
+        function removeOrderItem(i) { orderItems.splice(i, 1); renderInfo(currentConv); }
+        function setPayMethod(m) { payment.method = m; renderInfo(currentConv); }
+
+        async function saveOrderFromChat(btn) {
+            const err = document.getElementById('order-error');
+            err.classList.add('d-none');
+            const cust = panel?.customer;
+            const useCard = cust && !custEdit;
+            const first = useCard ? (cust.first_name || '') : custDraft.first_name;
+            const last = useCard ? (cust.last_name || '') : custDraft.last_name;
+            const phone = ((useCard ? cust.phone : custDraft.phone) || '').trim();
+            if (!phone) { err.textContent = 'Вкажіть телефон у блоці «Клієнт» і збережіть'; err.classList.remove('d-none'); return; }
+            if (!orderItems.length) { err.textContent = 'Додайте хоча б один товар'; err.classList.remove('d-none'); return; }
+
+            btn.disabled = true; const prev = btn.innerHTML;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Зберігаю…';
+            const payload = {
+                customer: { first_name: first, last_name: last, phone },
+                order: {
+                    status: 'new', payment_status: 'unpaid', currency: 'UAH',
+                    source: currentConv.channel === 'instagram' ? 'instagram' : 'facebook',
+                    comment_internal: 'Створено з чату',
+                },
+                items: orderItems.map(it => ({
+                    product_id: it.product_id, product_variant_id: it.product_variant_id,
+                    title: it.title, sku: it.sku, size: it.size,
+                    qty: it.qty, price: parseFloat(it.price) || 0,
+                })),
+                payment: { method: payment.method, prepay_amount: payment.method === 'prepay' ? (parseFloat(payment.prepay_amount) || 0) : 0, currency: 'UAH' },
+                delivery: {
+                    carrier: 'nova_poshta', delivery_type: 'warehouse', payer: delivery.payer,
+                    city_ref: delivery.city_ref || null, settlement_ref: delivery.settlement_ref || null, city_name: delivery.city_name || null,
+                    warehouse_ref: delivery.warehouse_ref || null, warehouse_name: delivery.warehouse_name || null,
+                    recipient_name: (first + ' ' + last).trim() || null, recipient_phone: phone,
+                },
+            };
+            try {
+                const res = await fetch('{{ route('orders.store') }}', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.message || 'Не вдалося зберегти замовлення');
+                const orderId = data.data?.id;
+                if (orderId) {
+                    await fetch(`/api/inbox/conversations/${activeId}/attach-order`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
+                        body: JSON.stringify({ order_id: orderId })
+                    });
+                }
+                orderItems = [];
+                delivery = { city_ref: '', settlement_ref: '', city_name: '', warehouse_ref: '', warehouse_name: '', payer: 'recipient' };
+                payment = { method: 'cod', prepay_amount: '' };
+                await openConversation(activeId); // оновлює статус у шапці та списку
+                await loadPanel();
+            } catch (e) {
+                err.textContent = e.message || 'Помилка збереження';
+                err.classList.remove('d-none');
+            }
+            btn.disabled = false; btn.innerHTML = prev;
+        }
+
         function renderInfo(c) {
+            currentConv = c;
             document.getElementById('info-empty').classList.add('d-none');
             const box = document.getElementById('info');
             box.classList.remove('d-none');
-            box.innerHTML = `
-                <div class="text-center" style="padding:18px 16px 16px; border-bottom:1px solid #f0f1f4">
-                    ${avatar(c.contact_name, c.avatar, c.channel, 82)}
-                    <div class="fw-bold mt-2" style="font-size:.98rem">${esc(c.contact_name)}</div>
-                    <div class="text-muted" style="font-size:.76rem">${chLabel(c.channel)} · ${esc(c.store)}</div>
+
+            const cust = panel?.customer;
+            const srcBadge = `<span class="ib-src">${chIcon(c.channel)} ${chLabel(c.channel)}</span>`;
+
+            let custHtml;
+            if (cust && !custEdit) {
+                custHtml = `
+                    <div class="ib-cust-card">
+                        <div class="d-flex align-items-center justify-content-between gap-2">
+                            <div class="fw-bold text-truncate" style="font-size:.9rem"><i class="bi bi-person-check-fill text-success me-1"></i>${esc(((cust.first_name || '') + ' ' + (cust.last_name || '')).trim() || 'Клієнт')}</div>
+                            <button class="ib-mini-btn" onclick="editCustomer()" title="Змінити"><i class="bi bi-pencil"></i></button>
+                        </div>
+                        <div class="text-muted mt-1" style="font-size:.82rem"><i class="bi bi-telephone me-1"></i>${esc(cust.phone || '—')}</div>
+                        <div class="mt-2">${srcBadge}</div>
+                    </div>`;
+            } else {
+                custHtml = `
+                    <input class="form-control form-control-sm mb-2" placeholder="Імʼя" value="${esc(custDraft.first_name)}" oninput="custDraft.first_name=this.value">
+                    <input class="form-control form-control-sm mb-2" placeholder="Прізвище" value="${esc(custDraft.last_name)}" oninput="custDraft.last_name=this.value">
+                    <input class="form-control form-control-sm mb-2" placeholder="Телефон (з переписки)" value="${esc(custDraft.phone)}" oninput="custDraft.phone=this.value">
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-sm btn-primary flex-grow-1" onclick="saveCustomer(this)"><i class="bi bi-person-plus me-1"></i>Зберегти клієнта</button>
+                        ${cust ? '<button class="btn btn-sm btn-light border" onclick="custEdit=false;renderInfo(currentConv)">✕</button>' : ''}
+                    </div>
+                    <div class="mt-2">${srcBadge}</div>`;
+            }
+
+            const itemsHtml = orderItems.length ? orderItems.map((it, i) => `
+                <div class="ib-item">
+                    <div class="flex-grow-1" style="min-width:0">
+                        <div class="text-truncate" style="font-size:.82rem;font-weight:600">${esc(it.title)}</div>
+                        <div class="text-muted" style="font-size:.74rem">${it.size ? esc(it.size) + ' · ' : ''}${it.qty} шт · ${it.price} грн</div>
+                    </div>
+                    <button class="ib-mini-btn" onclick="removeOrderItem(${i})"><i class="bi bi-x-lg"></i></button>
+                </div>`).join('') : '<div class="text-muted" style="font-size:.8rem">Товари не додано</div>';
+            const totalSum = orderItems.reduce((s, it) => s + it.qty * (parseFloat(it.price) || 0), 0);
+
+            const deliveryHtml = `
+                <div class="position-relative mb-2">
+                    <input id="np-city" class="form-control form-control-sm" placeholder="Місто (напр., Рівне)" value="${esc(delivery.city_name)}" oninput="npCitySearch(this.value)" autocomplete="off">
+                    <div id="np-city-list" class="ib-np-list d-none"></div>
                 </div>
-                <div class="ib-iblock">
-                    <div class="ib-block-title">Контактні дані</div>
-                    <div class="text-muted" style="font-size:.8rem; line-height:1.5">Телефон, email і привʼязаний клієнт CRM зʼявляться тут згодом.</div>
-                    <button class="btn btn-sm btn-light w-100 mt-2 border" disabled><i class="bi bi-plus-lg me-1"></i>Додати подробиці</button>
+                <div class="position-relative mb-2 ${delivery.city_ref ? '' : 'd-none'}">
+                    <input id="np-wh" class="form-control form-control-sm" placeholder="Відділення / поштомат" value="${esc(delivery.warehouse_name)}" oninput="npWhSearch(this.value)" onfocus="npWhSearch(this.value)" autocomplete="off">
+                    <div id="np-wh-list" class="ib-np-list d-none"></div>
                 </div>
-                <div class="ib-iblock">
-                    <div class="ib-block-title">Дії</div>
-                    <button class="btn btn-sm btn-light w-100 mb-2 border text-start" disabled><i class="bi bi-person-plus me-2"></i>Привʼязати клієнта CRM</button>
-                    <button class="btn btn-sm btn-light w-100 mb-2 border text-start" disabled><i class="bi bi-bag me-2"></i>Створити замовлення</button>
-                    <button class="btn btn-sm btn-light w-100 border text-start" disabled><i class="bi bi-bookmark-star me-2"></i>Позначити як лід</button>
-                </div>
-                <div class="ib-iblock" style="border-bottom:none">
-                    <div class="ib-block-title">Статус замовлення</div>
-                    <select class="form-select form-select-sm" disabled><option>Виберіть варіант</option></select>
+                <div class="d-flex gap-3 mt-1" style="font-size:.82rem">
+                    <span class="text-muted">Платник:</span>
+                    <label class="d-flex align-items-center gap-1" style="cursor:pointer"><input type="radio" name="dl-payer" ${delivery.payer === 'recipient' ? 'checked' : ''} onchange="delivery.payer='recipient'">Отримувач</label>
+                    <label class="d-flex align-items-center gap-1" style="cursor:pointer"><input type="radio" name="dl-payer" ${delivery.payer === 'sender' ? 'checked' : ''} onchange="delivery.payer='sender'">Відправник</label>
                 </div>`;
+
+            const payHtml = `
+                <div class="ib-pay-row">
+                    ${[['cod', 'Наложений', 'bi-box-seam'], ['card', 'На карту', 'bi-credit-card'], ['prepay', 'Передоплата', 'bi-wallet2']].map(([v, l, ic]) => `
+                        <button type="button" class="ib-pay ${payment.method === v ? 'active' : ''}" onclick="setPayMethod('${v}')"><i class="bi ${ic}"></i><span>${l}</span></button>`).join('')}
+                </div>
+                ${payment.method === 'prepay' ? `<input class="form-control form-control-sm mt-2" type="number" min="0" placeholder="Сума передоплати, грн" value="${esc(payment.prepay_amount)}" oninput="payment.prepay_amount=this.value">` : ''}`;
+
+            const ordersHtml = (panel?.orders || []).length ? `
+                <div class="ib-iblock" style="border-bottom:none">
+                    <div class="ib-block-title"><i class="bi bi-receipt me-1"></i>Замовлення клієнта</div>
+                    ${panel.orders.map(o => `
+                        <a class="ib-order" href="/orders/${o.id}" target="_blank">
+                            <span class="fw-bold">#${esc(o.number)}</span>
+                            <span class="text-muted" style="font-size:.74rem">${esc(o.date || '')}</span>
+                            <span class="ms-auto" style="font-size:.8rem">${o.total ? o.total.toFixed(0) + ' грн' : ''}</span>
+                            <span class="ib-st-badge" style="background:${esc(o.status_color || '#888')}1f;color:${esc(o.status_color || '#555')}">${esc(o.status)}</span>
+                        </a>`).join('')}
+                </div>` : '';
+
+            box.innerHTML = `
+                <div class="text-center" style="padding:16px 16px 12px; border-bottom:1px solid #f0f1f4">
+                    ${avatar(c.contact_name, c.avatar, c.channel, 72)}
+                    <div class="fw-bold mt-2" style="font-size:.95rem">${esc(c.contact_name)}</div>
+                    <div class="text-muted" style="font-size:.74rem">${esc(c.store)}</div>
+                </div>
+                <div class="ib-iblock">
+                    <div class="ib-block-title"><i class="bi bi-person me-1"></i>Клієнт</div>
+                    ${custHtml}
+                </div>
+                <div class="ib-iblock">
+                    <div class="ib-block-title d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-bag me-1"></i>Товари</span>
+                        <button class="btn btn-sm btn-light border" style="font-size:.76rem;padding:3px 10px" onclick="openProductModal()"><i class="bi bi-plus-lg me-1"></i>Обрати</button>
+                    </div>
+                    ${itemsHtml}
+                    ${orderItems.length ? `<div class="text-end fw-bold mt-2" style="font-size:.86rem">Разом: ${totalSum.toFixed(0)} грн</div>` : ''}
+                </div>
+                <div class="ib-iblock">
+                    <div class="ib-block-title"><i class="bi bi-truck me-1"></i>Доставка — Нова пошта</div>
+                    ${deliveryHtml}
+                </div>
+                <div class="ib-iblock">
+                    <div class="ib-block-title"><i class="bi bi-credit-card me-1"></i>Оплата</div>
+                    ${payHtml}
+                </div>
+                <div style="padding:14px 16px">
+                    <button class="btn btn-success w-100 fw-semibold" onclick="saveOrderFromChat(this)"><i class="bi bi-check2-circle me-1"></i>Зберегти замовлення</button>
+                    <div id="order-error" class="text-danger small mt-2 d-none"></div>
+                </div>
+                ${ordersHtml}`;
+        }
+
+        // --- Модалка вибору товару ---
+        let prodCats = null, prodItems = [], prodSel = null, prodQty = {}, prodPrice = 0, prodCatId = '', prodQ = '', prodQT = null;
+
+        function ensureProductModal() {
+            if (document.getElementById('prod-modal')) return;
+            const el = document.createElement('div');
+            el.id = 'prod-modal';
+            el.className = 'ib-modal d-none';
+            el.innerHTML = `
+                <div class="ib-modal-card">
+                    <div class="ib-modal-head">
+                        <div class="ib-modal-title">Обрати товар</div>
+                        <button type="button" class="ib-modal-close" onclick="closeProductModal()"><i class="bi bi-x-lg"></i></button>
+                    </div>
+                    <div id="prod-toolbar" style="padding:10px 18px 4px; border-bottom:1px solid #f0f1f4">
+                        <div id="prod-tabs" class="ib-cat-tabs"></div>
+                        <input id="prod-search" class="form-control form-control-sm my-2" placeholder="Пошук товару…" oninput="prodSearchInput(this.value)">
+                    </div>
+                    <div class="ib-modal-body"><div id="prod-body"></div></div>
+                </div>`;
+            el.addEventListener('click', ev => { if (ev.target === el) closeProductModal(); });
+            document.body.appendChild(el);
+        }
+
+        async function openProductModal() {
+            ensureProductModal();
+            document.getElementById('prod-modal').classList.remove('d-none');
+            document.getElementById('prod-toolbar').classList.remove('d-none');
+            if (!prodCats) {
+                try { prodCats = await (await fetch('/products/categories', { headers: { 'Accept': 'application/json' } })).json(); } catch (e) { prodCats = []; }
+            }
+            renderProdTabs();
+            loadProducts();
+        }
+        function closeProductModal() { document.getElementById('prod-modal')?.classList.add('d-none'); }
+
+        function renderProdTabs() {
+            const t = document.getElementById('prod-tabs');
+            if (!t) return;
+            t.innerHTML = `<button type="button" class="ib-cat-tab ${prodCatId === '' ? 'active' : ''}" onclick="prodCatId='';renderProdTabs();loadProducts()">Всі</button>`
+                + (prodCats || []).map(ct => `<button type="button" class="ib-cat-tab ${prodCatId == ct.id ? 'active' : ''}" onclick="prodCatId=${ct.id};renderProdTabs();loadProducts()">${esc(ct.name)}</button>`).join('');
+        }
+        function prodSearchInput(v) { prodQ = v.trim(); clearTimeout(prodQT); prodQT = setTimeout(loadProducts, 350); }
+
+        async function loadProducts() {
+            const b = document.getElementById('prod-body');
+            if (b) b.innerHTML = '<div class="text-muted small p-3">Завантаження…</div>';
+            try {
+                const params = new URLSearchParams({ with_variants: 1, per_page: 100 });
+                if (prodCatId) params.set('category', prodCatId);
+                if (prodQ) params.set('q', prodQ);
+                const res = await fetch('/products?' + params.toString(), { headers: { 'Accept': 'application/json' } });
+                prodItems = (await res.json()).data || [];
+            } catch (e) { prodItems = []; }
+            renderProdGrid();
+        }
+
+        function renderProdGrid() {
+            const b = document.getElementById('prod-body');
+            if (!b) return;
+            b.innerHTML = '<div class="ib-prod-grid">' + (prodItems.length ? prodItems.map((p, i) => `
+                <div class="ib-prod" onclick="openProdDetail(${i})">
+                    ${p.main_photo_url ? `<img src="${esc(p.main_photo_url)}" loading="lazy">` : '<div class="ph"><i class="bi bi-image"></i></div>'}
+                    <div class="tt">${esc(p.title)}</div>
+                    <div class="pr">${parseFloat(p.sale_price || 0) ? parseFloat(p.sale_price).toFixed(0) + ' грн' : '—'}</div>
+                </div>`).join('') : '<div class="text-muted small p-3" style="grid-column:1/-1">Нічого не знайдено</div>') + '</div>';
+        }
+
+        function openProdDetail(i) {
+            prodSel = prodItems[i];
+            if (!prodSel) return;
+            prodQty = {};
+            prodPrice = parseFloat(prodSel.sale_price) || 0;
+            document.getElementById('prod-toolbar').classList.add('d-none');
+            const variants = (prodSel.variants || []).filter(v => v.is_active !== false);
+            const b = document.getElementById('prod-body');
+            b.innerHTML = `
+                <button type="button" class="btn btn-sm btn-light border mb-3" onclick="backToProdGrid()"><i class="bi bi-arrow-left me-1"></i>Назад</button>
+                <div class="d-flex gap-3 align-items-center mb-2">
+                    ${prodSel.main_photo_url ? `<img src="${esc(prodSel.main_photo_url)}" style="width:64px;height:64px;object-fit:cover;border-radius:10px">` : ''}
+                    <div>
+                        <div class="fw-bold">${esc(prodSel.title)}</div>
+                        <div class="d-flex align-items-center gap-2 mt-1" style="font-size:.85rem">Ціна:
+                            <input type="number" class="form-control form-control-sm" style="width:96px" value="${prodPrice}" oninput="prodPrice=parseFloat(this.value)||0"> грн
+                        </div>
+                    </div>
+                </div>
+                ${variants.length ? variants.map(v => `
+                    <div class="ib-var-row">
+                        <span class="fw-semibold">${esc(v.size || '—')}</span>
+                        <span class="text-muted" style="font-size:.76rem">${v.stock_qty ?? 0} шт у наявності</span>
+                        <span class="ib-qty">
+                            <button type="button" onclick="prodQtyChange(${v.id},-1)">−</button>
+                            <b id="q-${v.id}">0</b>
+                            <button type="button" onclick="prodQtyChange(${v.id},1)">+</button>
+                        </span>
+                    </div>`).join('') : `
+                    <div class="ib-var-row">
+                        <span class="fw-semibold">Без розміру</span>
+                        <span class="ib-qty">
+                            <button type="button" onclick="prodQtyChange(0,-1)">−</button>
+                            <b id="q-0">0</b>
+                            <button type="button" onclick="prodQtyChange(0,1)">+</button>
+                        </span>
+                    </div>`}
+                <button type="button" class="btn btn-primary w-100 mt-3" onclick="addProdToOrder()"><i class="bi bi-bag-plus me-1"></i>Додати в замовлення</button>`;
+        }
+        function backToProdGrid() {
+            document.getElementById('prod-toolbar').classList.remove('d-none');
+            renderProdGrid();
+        }
+        function prodQtyChange(vid, d) {
+            prodQty[vid] = Math.max(0, (prodQty[vid] || 0) + d);
+            const el = document.getElementById('q-' + vid);
+            if (el) el.textContent = prodQty[vid];
+        }
+        function addProdToOrder() {
+            const variants = prodSel.variants || [];
+            let added = 0;
+            Object.entries(prodQty).forEach(([vid, qty]) => {
+                qty = parseInt(qty);
+                if (!qty) return;
+                const v = variants.find(x => x.id === parseInt(vid));
+                orderItems.push({
+                    product_id: prodSel.id,
+                    product_variant_id: v ? v.id : null,
+                    title: prodSel.title,
+                    sku: (v && v.sku) || prodSel.sku || null,
+                    size: v ? v.size : null,
+                    qty,
+                    price: prodPrice,
+                });
+                added++;
+            });
+            if (!added) { alert('Вкажіть кількість хоча б для одного розміру'); return; }
+            closeProductModal();
+            renderInfo(currentConv);
         }
 
         function renderMessages(messages) {
@@ -713,6 +1132,9 @@
             }
             if (!e.target.closest('.ib-thbtn') && !e.target.closest('.ib-th-pop')) {
                 document.getElementById('th-menu')?.classList.add('d-none');
+            }
+            if (!e.target.closest('.ib-np-list') && e.target.id !== 'np-city' && e.target.id !== 'np-wh') {
+                document.querySelectorAll('.ib-np-list').forEach(l => l.classList.add('d-none'));
             }
         });
 
