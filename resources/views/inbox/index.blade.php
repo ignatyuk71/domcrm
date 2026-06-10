@@ -185,6 +185,7 @@
         /* === AI-агент (поки болванка-шаблон) === */
         .ib-ai-icon { width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 19px; flex-shrink: 0; background: linear-gradient(135deg, #8b5cf6, #6366f1); color: #fff; box-shadow: 0 4px 12px rgba(139,92,246,.3); }
         .ib-ai-badge { font-size: .62rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: #ede9fe; color: #7c3aed; }
+        .ib-ai-feat { width: 28px; height: 28px; border-radius: 8px; background: #f5f3ff; color: #7c3aed; display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; }
         .ib-switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; margin: 0; }
         .ib-switch input { opacity: 0; width: 0; height: 0; }
         .ib-slider { position: absolute; inset: 0; background: #e2e8f0; border-radius: 999px; transition: .25s; }
@@ -886,12 +887,42 @@
                                     <span class="fw-bold text-dark" style="font-size:.9rem">AI-агент</span>
                                     <span class="ib-ai-badge">Скоро</span>
                                 </div>
-                                <div class="text-muted" style="font-size:.72rem">Автовідповіді клієнтам у цьому чаті</div>
+                                <div class="text-muted" style="font-size:.72rem">Розумний помічник для цього чату</div>
                             </div>
                             <label class="ib-switch" style="opacity:.45;pointer-events:none" title="В розробці">
                                 <input type="checkbox" disabled>
                                 <span class="ib-slider"></span>
                             </label>
+                        </div>
+                        <div class="mt-3 pt-3 d-flex flex-column gap-2" style="border-top:1px solid #f1f5f9">
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="ib-ai-feat"><i class="bi bi-chat-dots"></i></div>
+                                <div style="min-width:0">
+                                    <div class="fw-semibold" style="font-size:.78rem">Автовідповіді 24/7</div>
+                                    <div class="text-muted" style="font-size:.7rem">Відповідає клієнтам, коли вас немає онлайн</div>
+                                </div>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="ib-ai-feat"><i class="bi bi-clock-history"></i></div>
+                                <div style="min-width:0">
+                                    <div class="fw-semibold" style="font-size:.78rem">Працює за розкладом</div>
+                                    <div class="text-muted" style="font-size:.7rem">Напр., вмикається після 20:00 і у вихідні</div>
+                                </div>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="ib-ai-feat"><i class="bi bi-bag-check"></i></div>
+                                <div style="min-width:0">
+                                    <div class="fw-semibold" style="font-size:.78rem">Знає ваші товари</div>
+                                    <div class="text-muted" style="font-size:.7rem">Підкаже ціну, розміри та наявність з CRM</div>
+                                </div>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="ib-ai-feat"><i class="bi bi-person-raised-hand"></i></div>
+                                <div style="min-width:0">
+                                    <div class="fw-semibold" style="font-size:.78rem">Передає оператору</div>
+                                    <div class="text-muted" style="font-size:.7rem">Складні питання — людині, з усім контекстом</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>`;
