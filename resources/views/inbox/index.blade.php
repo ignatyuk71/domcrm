@@ -727,6 +727,9 @@
             // --- Товари ---
             const itemsHtml = orderItems.length ? orderItems.map((it, i) => `
                 <div class="d-flex align-items-center gap-2 py-2" style="${i ? 'border-top:1px solid #f1f5f9' : ''}">
+                    ${it.photo
+                        ? `<img src="${esc(it.photo)}" style="width:38px;height:38px;border-radius:9px;object-fit:cover;flex-shrink:0">`
+                        : '<div style="width:38px;height:38px;border-radius:9px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;color:#c3c8d2;flex-shrink:0"><i class="bi bi-image"></i></div>'}
                     <div class="flex-grow-1" style="min-width:0">
                         <div class="fw-semibold text-truncate" style="font-size:.82rem">${esc(it.title)}</div>
                         <div class="text-muted d-flex align-items-center gap-2 mt-1" style="font-size:.72rem">
@@ -984,6 +987,7 @@
                 size: v ? v.size : null,
                 qty: 1,
                 price: parseFloat(p.sale_price) || 0,
+                photo: p.main_photo_url || null,
             });
             renderProdList();
             renderInfo(currentConv);
