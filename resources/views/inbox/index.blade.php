@@ -72,11 +72,11 @@
         .ib-send-btn { border: none; background: transparent; color: #0084ff; font-weight: 600; font-size: .95rem; padding: 6px 8px; cursor: pointer; white-space: nowrap; }
         .ib-send-btn:hover { text-decoration: underline; }
         .ib-pop { position: absolute; bottom: calc(100% - 4px); right: 14px; left: auto; background: #fff; border: 1px solid #e6e8ee; border-radius: 13px; box-shadow: 0 14px 36px rgba(16,24,40,.16); z-index: 50; padding: 9px; }
-        .ib-attach-preview { padding: 4px 6px 10px; }
-        .ib-attach-item { position: relative; display: inline-flex; align-items: center; gap: 8px; background: #f5f6f8; border: 1px solid #e3e6ea; border-radius: 12px; padding: 6px; }
-        .ib-attach-item img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; display: block; }
-        .ib-attach-file { width: 64px; height: 64px; border-radius: 8px; background: #e9ecf2; display: flex; align-items: center; justify-content: center; font-size: 26px; color: #6b7280; }
-        .ib-attach-name { font-size: .8rem; color: #4b5563; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 6px; }
+        .ib-attach-preview { padding: 4px 6px 12px; display: flex; flex-wrap: wrap; gap: 12px; }
+        .ib-attach-item { position: relative; width: 68px; height: 68px; background: #f5f6f8; border: 1px solid #e3e6ea; border-radius: 12px; }
+        .ib-attach-item img { width: 100%; height: 100%; object-fit: cover; border-radius: 11px; display: block; }
+        .ib-attach-file { width: 100%; height: 100%; border-radius: 11px; background: #e9ecf2; display: flex; align-items: center; justify-content: center; font-size: 26px; color: #6b7280; }
+        .ib-attach-spin { position: absolute; inset: 0; border-radius: 11px; background: rgba(233,236,242,.78); display: flex; align-items: center; justify-content: center; color: #65676b; }
         .ib-attach-x { position: absolute; top: -7px; right: -7px; width: 22px; height: 22px; border-radius: 50%; border: 2px solid #fff; background: #1c1e21; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; cursor: pointer; line-height: 1; }
         .ib-gallery { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; width: 304px; max-height: 280px; overflow-y: auto; }
         .ib-gallery img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; cursor: pointer; border: 2px solid transparent; }
@@ -148,14 +148,7 @@
                 <div class="ib-composer">
                     <div id="emoji-pop" class="ib-pop d-none"><div class="ib-emoji-grid"></div></div>
                     <div id="tpl-pop" class="ib-pop d-none"><div class="ib-tpl"><div class="text-muted small p-2">Завантаження…</div></div></div>
-                    <div id="attach-preview" class="ib-attach-preview d-none">
-                        <div class="ib-attach-item">
-                            <img id="attach-thumb" src="" alt="">
-                            <span id="attach-file" class="ib-attach-file d-none"><i class="bi bi-file-earmark-text"></i></span>
-                            <span id="attach-name" class="ib-attach-name"></span>
-                            <button type="button" class="ib-attach-x" onclick="clearStaged()" title="Прибрати"><i class="bi bi-x"></i></button>
-                        </div>
-                    </div>
+                    <div id="attach-preview" class="ib-attach-preview d-none"></div>
                     <form id="reply-form" class="ib-box">
                         <span class="ib-box-av" id="composer-av"><i class="bi bi-shop"></i></span>
                         <textarea id="reply-input" rows="1" placeholder="Відповідь у Messenger…"></textarea>
@@ -167,7 +160,7 @@
                             <button type="button" class="ib-tool" id="like-btn" title="Надіслати 👍" onclick="sendLike()"><i class="bi bi-hand-thumbs-up-fill"></i></button>
                             <button type="submit" class="ib-send-btn d-none" id="send-btn">Надіслати</button>
                         </div>
-                        <input type="file" id="file-input" class="d-none" accept="image/*,application/pdf,.doc,.docx" onchange="stageFile(this)">
+                        <input type="file" id="file-input" class="d-none" accept="image/*,application/pdf,.doc,.docx" multiple onchange="stageFile(this)">
                     </form>
                     <div id="reply-error" class="text-danger small mt-2 d-none px-2"></div>
                 </div>
@@ -236,6 +229,7 @@
         function onSearch(v) { search = (v || '').toLowerCase().trim(); renderConvList(); }
 
         async function openConversation(id) {
+            if (id !== activeId && !sendingNow) { staged = []; renderStaged(); }
             activeId = id;
             const res = await fetch(`/api/inbox/conversations/${id}/messages`, { headers: { 'Accept': 'application/json' } });
             const data = await res.json();
@@ -307,9 +301,9 @@
 
         function showErr(m) { const e = document.getElementById('reply-error'); e.textContent = m; e.classList.remove('d-none'); }
 
-        async function sendMessage(text) {
-            if (!activeId || !text) return;
-            const res = await fetch(`/api/inbox/conversations/${activeId}/send`, {
+        async function sendMessage(text, convId = activeId) {
+            if (!convId || !text) return;
+            const res = await fetch(`/api/inbox/conversations/${convId}/send`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
                 body: JSON.stringify({ text })
@@ -319,12 +313,12 @@
             await openConversation(activeId);
         }
 
-        let stagedFile = null, stagedGalleryId = null;
+        let staged = [], sendingNow = false;
         const replyTa = document.getElementById('reply-input');
         function autoGrow() {
             replyTa.style.height = 'auto';
             replyTa.style.height = Math.min(replyTa.scrollHeight, 200) + 'px';
-            const has = replyTa.value.trim().length > 0 || !!stagedFile || !!stagedGalleryId;
+            const has = replyTa.value.trim().length > 0 || staged.length > 0;
             document.getElementById('like-btn').classList.toggle('d-none', has);
             document.getElementById('send-btn').classList.toggle('d-none', !has);
         }
@@ -338,21 +332,31 @@
 
         document.getElementById('reply-form').addEventListener('submit', async (e) => {
             e.preventDefault();
+            if (sendingNow) return;
             const input = document.getElementById('reply-input');
             const text = input.value.trim();
-            if (!stagedFile && !stagedGalleryId && !text) return;
+            if (!staged.length && !text) return;
             document.getElementById('reply-error').classList.add('d-none');
+            sendingNow = true;
             input.disabled = true;
-            let ok = true;
-            if (stagedFile) ok = await uploadAndSendFile(stagedFile);
-            else if (stagedGalleryId) ok = await sendGalleryImage(stagedGalleryId);
-            if (ok) {
-                clearStaged();
-                if (text) await sendMessage(text);
-                input.value = '';
+            const sBtn = document.getElementById('send-btn');
+            sBtn.disabled = true;
+            const convId = activeId;
+            let okAll = true;
+            while (staged.length) {
+                const item = staged[0];
+                item.sending = true; renderStaged();
+                const ok = item.kind === 'file'
+                    ? await uploadAndSendFile(item.file, convId)
+                    : await sendGalleryImage(item.id, convId);
+                if (!ok) { item.sending = false; okAll = false; renderStaged(); break; }
+                staged.shift(); renderStaged();
             }
-            input.disabled = false; input.focus();
-            autoGrow();
+            if (okAll && text) { await sendMessage(text, convId); input.value = ''; }
+            else if (okAll && convId === activeId) { await openConversation(convId); }
+            sendingNow = false;
+            input.disabled = false; sBtn.disabled = false;
+            input.focus(); autoGrow();
         });
 
         function sendLike() { sendMessage('👍'); }
@@ -391,61 +395,63 @@
             autoGrow();
         }
 
+        function renderStaged() {
+            const box = document.getElementById('attach-preview');
+            if (!staged.length) { box.classList.add('d-none'); box.innerHTML = ''; autoGrow(); return; }
+            box.classList.remove('d-none');
+            box.innerHTML = staged.map((s, i) => `
+                <div class="ib-attach-item">
+                    ${s.url ? `<img src="${s.url}">` : '<span class="ib-attach-file"><i class="bi bi-file-earmark-text"></i></span>'}
+                    ${s.sending
+                        ? '<span class="ib-attach-spin"><span class="spinner-border spinner-border-sm"></span></span>'
+                        : `<button type="button" class="ib-attach-x" onclick="removeStaged(${i})" title="Прибрати"><i class="bi bi-x"></i></button>`}
+                </div>`).join('');
+            autoGrow();
+        }
+
+        function removeStaged(i) {
+            staged.splice(i, 1);
+            renderStaged();
+        }
+
         function stageFile(input) {
             if (!input.files.length) return;
-            stagedFile = input.files[0];
-            stagedGalleryId = null;
-            const thumb = document.getElementById('attach-thumb');
-            const fileIcon = document.getElementById('attach-file');
-            if (stagedFile.type.startsWith('image/')) {
-                const reader = new FileReader();
-                reader.onload = ev => { thumb.src = ev.target.result; };
-                reader.readAsDataURL(stagedFile);
-                thumb.classList.remove('d-none'); fileIcon.classList.add('d-none');
-            } else {
-                thumb.classList.add('d-none'); fileIcon.classList.remove('d-none');
+            for (const f of input.files) {
+                const item = { kind: 'file', file: f, url: null };
+                staged.push(item);
+                if (f.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = ev => { item.url = ev.target.result; renderStaged(); };
+                    reader.readAsDataURL(f);
+                }
             }
-            document.getElementById('attach-name').textContent = stagedFile.name;
-            document.getElementById('attach-preview').classList.remove('d-none');
             document.getElementById('reply-error').classList.add('d-none');
             input.value = '';
-            autoGrow();
+            renderStaged();
         }
 
-        function clearStaged() {
-            stagedFile = null; stagedGalleryId = null;
-            document.getElementById('attach-preview').classList.add('d-none');
-            document.getElementById('attach-thumb').src = '';
-            document.getElementById('attach-name').textContent = '';
-            autoGrow();
-        }
-
-        async function uploadAndSendFile(file) {
-            if (!activeId) return false;
+        async function uploadAndSendFile(file, convId) {
             const fd = new FormData();
             fd.append('file', file);
             try {
-                const res = await fetch(`/api/inbox/conversations/${activeId}/send-attachment`, {
+                const res = await fetch(`/api/inbox/conversations/${convId}/send-attachment`, {
                     method: 'POST', headers: { 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' }, body: fd
                 });
                 const data = await res.json();
                 if (!res.ok || !data.ok) throw new Error(data.error || 'Не вдалося надіслати');
-                await openConversation(activeId);
                 return true;
             } catch (err) { showErr(err.message); return false; }
         }
 
-        async function sendGalleryImage(id, refresh = true) {
-            if (!activeId) return false;
+        async function sendGalleryImage(id, convId) {
             try {
-                const res = await fetch(`/api/inbox/conversations/${activeId}/send-gallery`, {
+                const res = await fetch(`/api/inbox/conversations/${convId}/send-gallery`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
                     body: JSON.stringify({ id })
                 });
                 const data = await res.json();
                 if (!res.ok || !data.ok) throw new Error(data.error || 'Не вдалося надіслати');
-                if (refresh) await openConversation(activeId);
                 return true;
             } catch (err) { showErr(err.message); return false; }
         }
@@ -468,7 +474,7 @@
                         <div class="text-muted small" id="gallery-count">Нічого не вибрано</div>
                         <div class="d-flex gap-2">
                             <button type="button" class="btn btn-light btn-sm" onclick="closeGalleryModal()">Скасувати</button>
-                            <button type="button" class="btn btn-primary btn-sm" id="gallery-send-btn" onclick="sendSelectedGallery()" disabled>Надіслати</button>
+                            <button type="button" class="btn btn-primary btn-sm" id="gallery-send-btn" onclick="addSelectedGallery()" disabled>Додати</button>
                         </div>
                     </div>
                 </div>`;
@@ -508,19 +514,16 @@
             const c = document.getElementById('gallery-count');
             if (c) c.textContent = n ? ('Вибрано: ' + n) : 'Нічого не вибрано';
             const btn = document.getElementById('gallery-send-btn');
-            if (btn) { btn.disabled = n === 0; btn.textContent = n ? ('Надіслати (' + n + ')') : 'Надіслати'; }
+            if (btn) { btn.disabled = n === 0; btn.textContent = n ? ('Додати (' + n + ')') : 'Додати'; }
         }
-        async function sendSelectedGallery() {
-            if (!activeId || !gallerySelected.length) return;
-            const btn = document.getElementById('gallery-send-btn');
-            const prev = btn.textContent; btn.disabled = true; btn.textContent = 'Надсилаю…';
-            let okAll = true;
+        function addSelectedGallery() {
+            if (!gallerySelected.length) return;
             for (const id of gallerySelected) {
-                if (!(await sendGalleryImage(id, false))) { okAll = false; break; }
+                const it = galleryItems.find(g => g.id === id);
+                if (it) staged.push({ kind: 'gallery', id: it.id, url: it.url });
             }
-            btn.textContent = prev;
-            if (okAll) { closeGalleryModal(); await openConversation(activeId); }
-            else { btn.disabled = false; }
+            closeGalleryModal();
+            renderStaged();
         }
 
         async function syncHistory(btn) {
