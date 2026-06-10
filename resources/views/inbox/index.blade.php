@@ -83,10 +83,9 @@
         .ib-modal-close { border: none; background: transparent; font-size: 17px; color: #6b7280; cursor: pointer; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
         .ib-modal-close:hover { background: #f1f2f6; }
         .ib-modal-body { padding: 16px 18px; overflow-y: auto; }
-        .ib-mgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 10px; }
-        .ib-mtile { position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden; cursor: pointer; border: 2px solid #eef0f3; }
-        .ib-mtile img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .15s; }
-        .ib-mtile:hover img { transform: scale(1.04); }
+        .ib-mgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+        .ib-mtile { position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden; cursor: pointer; border: 2px solid #eef0f3; background: #f7f8fa; }
+        .ib-mtile img { width: 100%; height: 100%; object-fit: contain; display: block; }
         .ib-mtile.sel { border-color: #0084ff; }
         .ib-mtile.sel::after { content: ''; position: absolute; inset: 0; background: rgba(0,132,255,.16); }
         .ib-mtile .num { position: absolute; top: 6px; right: 6px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; background: #0084ff; color: #fff; font-size: .74rem; font-weight: 700; display: flex; align-items: center; justify-content: center; z-index: 1; }
