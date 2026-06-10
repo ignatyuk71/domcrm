@@ -634,10 +634,7 @@
             if (cust && !custEdit) {
                 custHtml = `
                     <div class="d-flex align-items-center justify-content-between gap-2">
-                        <div style="min-width:0">
-                            <div class="fw-semibold text-truncate" style="font-size:.88rem">${esc(((cust.first_name || '') + ' ' + (cust.last_name || '')).trim() || 'Клієнт')}</div>
-                            <div class="text-muted" style="font-size:.8rem"><i class="bi bi-telephone me-1"></i>${esc(cust.phone || '—')}</div>
-                        </div>
+                        <div class="text-muted" style="font-size:.84rem"><i class="bi bi-telephone me-1"></i>${esc(cust.phone || '—')}</div>
                         <button class="ib-mini-btn" onclick="editCustomer()" title="Змінити"><i class="bi bi-pencil"></i></button>
                     </div>`;
             } else {
@@ -705,7 +702,7 @@
                         <div class="flex-shrink-0">${avatar(c.contact_name, c.avatar, c.channel, 64)}</div>
                         <div class="flex-grow-1" style="min-width:0">
                             <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
-                                <div class="fw-bold text-truncate" style="font-size:.95rem">${esc(c.contact_name)}</div>
+                                <div class="fw-bold text-truncate" style="font-size:.95rem">${esc(cust && !custEdit ? (((cust.first_name || '') + ' ' + (cust.last_name || '')).trim() || c.contact_name) : c.contact_name)}</div>
                                 ${cust && !custEdit ? '<span class="ib-cb-badge ok"><i class="bi bi-check2"></i> збережено</span>' : '<span class="ib-cb-badge no">не збережено</span>'}
                             </div>
                             ${custHtml}
