@@ -221,6 +221,18 @@ class AiAgentTest extends TestCase
         $this->assertSame('капці для вулиці рожеві', $res['товари'][0]['назва']);
     }
 
+    public function test_search_returns_all_color_variants_up_to_twenty(): void
+    {
+        foreach (range(1, 17) as $i) {
+            \App\Models\Product::create(['title' => "капці для вулиці колір{$i}", 'sku' => "S{$i}", 'sale_price' => 530, 'currency' => 'UAH']);
+        }
+
+        $res = app(AiAgentService::class)->toolSearchProducts('капці для вулиці');
+
+        $this->assertSame(17, $res['знайдено']);
+        $this->assertArrayNotHasKey('увага', $res);
+    }
+
     public function test_discards_reply_when_client_wrote_during_generation(): void
     {
         $this->setUpConversation();

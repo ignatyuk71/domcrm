@@ -281,25 +281,34 @@ class AiAgentService
                 ->get();
         };
 
-        $found = $build('and');
+        // Точний пошук: до 21, щоб помітити обрізання (у магазині буває 15+ кольорів однієї моделі)
+        $found = $build('and', 21);
+        $truncated = $found->count() > 20;
+        $found = $found->take(20);
+
         if ($found->isEmpty()) {
             // Мʼякший пошук: беремо ширше і ранжуємо за кількістю збігів слів,
             // щоб «капці для вулиці» стояли вище за випадкові збіги.
-            $found = $build('or', 30)
+            $found = $build('or', 40)
                 ->map(function (Product $p) use ($words) {
                     $hay = mb_strtolower($p->title . ' ' . ($p->category?->name ?? '') . ' ' . ($p->color?->name ?? '') . ' ' . $p->sku);
                     $p->setAttribute('search_score', $words->filter(fn ($w) => str_contains($hay, $w))->count());
                     return $p;
                 })
                 ->sortByDesc('search_score')
-                ->take(8)
+                ->take(10)
                 ->values();
         }
 
-        return [
+        $res = [
             'знайдено' => $found->count(),
             'товари' => $found->map(fn (Product $p) => $this->productSummary($p))->values()->all(),
         ];
+        if ($truncated) {
+            $res['увага'] = 'Показано перші 20 — є ще збіги, уточни запит (колір/категорія), і не кажи «всі», бо список неповний.';
+        }
+
+        return $res;
     }
 
     private function toolGetProduct(int $id): array
