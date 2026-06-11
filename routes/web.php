@@ -9,6 +9,7 @@ use App\Http\Controllers\StatusController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\NovaPoshtaController;
 use App\Http\Controllers\OrderSourceController;
+use App\Http\Controllers\AiGalleryController;
 use App\Http\Controllers\AiSettingsController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\ChatStatusController;
@@ -260,6 +261,19 @@ Route::middleware('auth')->group(function () {
         Route::get('/ai/data', [AiSettingsController::class, 'data'])->name('ai.data');
         Route::post('/ai/save', [AiSettingsController::class, 'save'])->name('ai.save');
         Route::post('/ai/test', [AiSettingsController::class, 'test'])->name('ai.test');
+
+        // --- ГАЛЕРЕЯ ШІ (фото для агента) ---
+        Route::get('/ai-gallery', [AiGalleryController::class, 'page'])->name('aiGallery.index');
+        Route::get('/ai-gallery/data', [AiGalleryController::class, 'data'])->name('aiGallery.data');
+        Route::get('/ai-gallery/product-search', [AiGalleryController::class, 'productSearch'])->name('aiGallery.productSearch');
+        Route::post('/ai-gallery/groups', [AiGalleryController::class, 'storeGroup'])->name('aiGallery.storeGroup');
+        Route::patch('/ai-gallery/groups/{group}', [AiGalleryController::class, 'updateGroup'])->name('aiGallery.updateGroup');
+        Route::delete('/ai-gallery/groups/{group}', [AiGalleryController::class, 'destroyGroup'])->name('aiGallery.destroyGroup');
+        Route::post('/ai-gallery/groups/{group}/products', [AiGalleryController::class, 'attachProduct'])->name('aiGallery.attachProduct');
+        Route::delete('/ai-gallery/groups/{group}/products/{product}', [AiGalleryController::class, 'detachProduct'])->name('aiGallery.detachProduct');
+        Route::post('/ai-gallery/groups/{group}/photos', [AiGalleryController::class, 'uploadPhotos'])->name('aiGallery.uploadPhotos');
+        Route::patch('/ai-gallery/photos/{photo}', [AiGalleryController::class, 'updatePhoto'])->name('aiGallery.updatePhoto');
+        Route::delete('/ai-gallery/photos/{photo}', [AiGalleryController::class, 'destroyPhoto'])->name('aiGallery.destroyPhoto');
 
         // --- СТАТУСИ ЧАТУ ---
         Route::get('/chat-statuses', [ChatStatusController::class, 'page'])->name('chatStatuses.index');

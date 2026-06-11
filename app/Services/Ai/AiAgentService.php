@@ -2,6 +2,8 @@
 
 namespace App\Services\Ai;
 
+use App\Models\AiPhoto;
+use App\Models\AiPhotoGroup;
 use App\Models\AiRun;
 use App\Models\AiSetting;
 use App\Models\Category;
@@ -100,6 +102,14 @@ class AiAgentService
                 . "носять надвір; «домашні», «чуні», «тапочки» — лише для дому. Просять «на вулицю» — пропонуй "
                 . "тільки вуличні моделі; немає підходящих вуличних — чесно скажи, що немає, і запропонуй уточнити "
                 . "в менеджера. НІКОЛИ не приписуй товару властивостей, яких немає в його назві чи описі. "
+                . "\n\nФото: у товарів з пошуку є поля «фото» (номер фото саме цього кольору), «колаж» (номер "
+                . "спільного фото групи з кількома кольорами) і «група». Інструмент send_photos надсилає клієнту "
+                . "фото за цими номерами (до 3 за виклик), вони доходять як картинки в чат. Правила: клієнт питає "
+                . "загально або просить фото без конкретики → надішли колаж групи (один раз, не дублюй) і запитай, "
+                . "який колір чи тип цікавить; клієнт назвав конкретний колір/модель → надішли «фото» цього товару; "
+                . "клієнт прямо просить фото («можна фото», «покажіть») → обовʼязково надішли. Якщо номер null — "
+                . "фото не існує: не вигадуй, не обіцяй і не вставляй жодних посилань у текст; на пряме прохання "
+                . "скажи, що фото надішле менеджер. Спершу фото, потім коротка текстова відповідь. "
                 . ($categories !== '' ? "\n\nКатегорії магазину: {$categories}." : '');
 
             $model = $global->model ?: 'claude-sonnet-4-6';
@@ -148,7 +158,7 @@ class AiAgentService
                         continue;
                     }
                     $toolsCalled[] = ['tool' => $block['name'], 'input' => $block['input'] ?? []];
-                    $out = $this->runTool($block['name'], (array) ($block['input'] ?? []));
+                    $out = $this->runTool($block['name'], (array) ($block['input'] ?? []), $conversation);
                     $results[] = [
                         'type' => 'tool_result',
                         'tool_use_id' => $block['id'],
@@ -168,10 +178,14 @@ class AiAgentService
             }
             $text = mb_substr($text, 0, 1900); // ліміт Send API — 2000 символів
 
-            // Клієнт міг дописати, ПОКИ Claude думав — тоді цю відповідь викидаємо,
-            // нова джоба відповість з урахуванням дописаного.
-            $lastNow = $conversation->messages()->orderByDesc('id')->value('id');
-            if ($lastNow !== $triggerMessageId) {
+            // Клієнт (або оператор) міг написати, ПОКИ Claude думав — тоді цю відповідь
+            // викидаємо, нова джоба відповість з урахуванням дописаного. Власні
+            // повідомлення агента (надіслані фото) новизною НЕ вважаються.
+            $newerForeign = $conversation->messages()
+                ->where('id', '>', $triggerMessageId)
+                ->where('sender', '!=', 'ai')
+                ->exists();
+            if ($newerForeign) {
                 return $finish('skipped_stale_late', null, $tokensIn, $tokensOut);
             }
 
@@ -231,22 +245,110 @@ class AiAgentService
                     'required' => ['product_id'],
                 ],
             ],
+            [
+                'name' => 'send_photos',
+                'description' => 'Надіслати клієнту фото за номерами з полів «фото» і «колаж» результатів пошуку. До 3 за виклик. Колаж — для огляду групи, фото кольору — коли клієнт обрав конкретний колір.',
+                'input_schema' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'photo_ids' => [
+                            'type' => 'array',
+                            'items' => ['type' => 'integer'],
+                            'description' => 'Номери фото, напр. [11] або [13, 14]',
+                        ],
+                    ],
+                    'required' => ['photo_ids'],
+                ],
+            ],
         ];
     }
 
     /** Виконати інструмент. Назовні йдуть ЛИШЕ безпечні поля (без собівартости й службового). */
-    private function runTool(string $name, array $input): array
+    private function runTool(string $name, array $input, InboxConversation $conversation): array
     {
         try {
             return match ($name) {
                 'search_products' => $this->toolSearchProducts((string) ($input['query'] ?? '')),
                 'get_product' => $this->toolGetProduct((int) ($input['product_id'] ?? 0)),
+                'send_photos' => $this->toolSendPhotos($conversation, (array) ($input['photo_ids'] ?? [])),
                 default => ['помилка' => 'Невідомий інструмент'],
             };
         } catch (\Throwable $e) {
             Log::warning('AI tool failed', ['tool' => $name, 'error' => $e->getMessage()]);
             return ['помилка' => 'Не вдалося виконати пошук'];
         }
+    }
+
+    /**
+     * Надіслати клієнту фото з галереї ШІ (до 3). Система сама фільтрує
+     * нещодавно відправлені, щоб агент не спамив тим самим колажем.
+     */
+    public function toolSendPhotos(InboxConversation $conversation, array $photoIds): array
+    {
+        $ids = array_values(array_unique(array_map('intval', $photoIds)));
+        $extra = count($ids) > 3 ? 'Ліміт 3 фото за виклик — надіслано перші 3.' : null;
+        $ids = array_slice($ids, 0, 3);
+
+        if (empty($ids)) {
+            return ['помилка' => 'Не передано жодного номера фото'];
+        }
+
+        $conversation->loadMissing(['connection', 'contact']);
+
+        // URL-и з останніх вихідних повідомлень — захист від дублювання.
+        $recentUrls = $conversation->messages()
+            ->where('direction', 'out')
+            ->orderByDesc('id')
+            ->limit(10)
+            ->pluck('attachments')
+            ->filter()
+            ->flatten(1)
+            ->pluck('url')
+            ->all();
+
+        $result = [];
+        foreach ($ids as $id) {
+            $photo = AiPhoto::find($id);
+            if (!$photo) {
+                $result["фото №{$id}"] = 'не знайдено — такого номера немає';
+                continue;
+            }
+
+            $url = $photo->url();
+            if (in_array($url, $recentUrls, true)) {
+                $result["фото №{$id}"] = 'щойно надсилалося цьому клієнту — пропущено, не дублюй';
+                continue;
+            }
+
+            $sent = $this->send->sendAttachment($conversation->connection, $conversation->contact->external_id, 'image', $url);
+            if (!($sent['ok'] ?? false)) {
+                $result["фото №{$id}"] = 'помилка відправки';
+                continue;
+            }
+
+            InboxMessage::create([
+                'inbox_conversation_id' => $conversation->id,
+                'direction' => 'out',
+                'sender' => 'ai',
+                'external_message_id' => $sent['message_id'] ?? null,
+                'text' => null,
+                'attachments' => [['type' => 'image', 'url' => $url]],
+                'sent_at' => now(),
+            ]);
+            $conversation->update([
+                'last_message_at' => now(),
+                'last_message_text' => '[фото]',
+                'last_message_direction' => 'out',
+            ]);
+
+            $result["фото №{$id}"] = 'надіслано';
+        }
+
+        if ($extra) {
+            $result['увага'] = $extra;
+        }
+
+        return $result;
     }
 
     public function toolSearchProducts(string $query): array
@@ -308,9 +410,11 @@ class AiAgentService
             $found = $pool->take(20)->values();
         }
 
+        $photoInfo = $this->photoInfoFor($found->pluck('id')->all());
+
         $res = [
             'знайдено' => $found->count(),
-            'товари' => $found->map(fn (Product $p) => $this->productSummary($p))->values()->all(),
+            'товари' => $found->map(fn (Product $p) => $this->productSummary($p, $photoInfo))->values()->all(),
         ];
         if ($truncated) {
             $res['увага'] = 'Показано перші 20 — є ще збіги, уточни запит (колір/категорія), і не кажи «всі», бо список неповний.';
@@ -326,7 +430,7 @@ class AiAgentService
             return ['помилка' => 'Товар не знайдено'];
         }
 
-        return array_merge($this->productSummary($p), [
+        return array_merge($this->productSummary($p, $this->photoInfoFor([$p->id])), [
             'опис' => $p->description ?: null,
             'розміри' => $p->variants->map(fn ($v) => [
                 'розмір' => $v->size,
@@ -337,12 +441,14 @@ class AiAgentService
     }
 
     /** Безпечний підсумок товару: БЕЗ собівартости, ваги і службових полів. */
-    private function productSummary(Product $p): array
+    private function productSummary(Product $p, array $photoInfo = []): array
     {
         $inStockSizes = $p->variants
             ->filter(fn ($v) => $v->is_active !== false && $v->stock_qty > 0)
             ->pluck('size')
             ->implode(', ');
+
+        $info = $photoInfo[$p->id] ?? [];
 
         return [
             'id' => $p->id,
@@ -353,7 +459,49 @@ class AiAgentService
             'колір' => $p->color?->name,
             'наявність' => $inStockSizes !== '' ? 'є в наявності' : 'немає в наявності',
             'розміри_в_наявності' => $inStockSizes ?: null,
+            'група' => $info['група'] ?? null,
+            'фото' => $info['фото'] ?? null,
+            'колаж' => $info['колаж'] ?? null,
         ];
+    }
+
+    /**
+     * Мапа товар → його фото з галереї ШІ: «фото» (де він один),
+     * «колаж» (перше спільне фото групи), «група» (назва лінійки).
+     */
+    private function photoInfoFor(array $productIds): array
+    {
+        if (empty($productIds)) {
+            return [];
+        }
+
+        $groups = AiPhotoGroup::query()
+            ->whereHas('products', fn ($q) => $q->whereIn('products.id', $productIds))
+            ->with(['products:products.id', 'photos.products:products.id'])
+            ->get();
+
+        $map = [];
+        foreach ($groups as $group) {
+            $collage = $group->photos->first(fn (AiPhoto $p) => $p->products->count() >= 2);
+
+            foreach ($group->products as $product) {
+                if (!in_array($product->id, $productIds) || isset($map[$product->id])) {
+                    continue;
+                }
+
+                $own = $group->photos->first(
+                    fn (AiPhoto $p) => $p->products->count() === 1 && (int) $p->products->first()->id === (int) $product->id
+                );
+
+                $map[$product->id] = [
+                    'група' => $group->name,
+                    'фото' => $own?->id,
+                    'колаж' => $collage?->id,
+                ];
+            }
+        }
+
+        return $map;
     }
 
     /**
