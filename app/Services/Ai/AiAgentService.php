@@ -39,6 +39,17 @@ class AiAgentService
         $clean = preg_replace('/(?:' . implode('|', self::INTERNAL_WORDS) . ')/iu', '', $text);
         return trim(preg_replace('/[ \t]{2,}/u', ' ', $clean));
     }
+
+    /**
+     * Вирізати плейсхолдер фото («[зображення]» тощо). Фото шле лише send_photos;
+     * якщо модель надрукувала позначку текстом — клієнт побачив би сміття.
+     * Чистимо і вихідний текст, і історію (щоб модель не копіювала позначку далі).
+     */
+    private function stripPhotoPlaceholder(?string $text): string
+    {
+        $clean = preg_replace('/\[\s*(?:зображення|фото|image|photo|картинк[аи])\s*\]/iu', '', (string) $text);
+        return trim(preg_replace('/\n{3,}/u', "\n\n", (string) $clean));
+    }
     public function __construct(private MetaSendService $send)
     {
     }
@@ -160,8 +171,7 @@ class AiAgentService
                 ->implode("\n");
             // Страхувальник: якщо модель усе ж надрукувала плейсхолдер фото —
             // вирізаємо, бо текстом фото не надсилається (його шле send_photos).
-            $text = preg_replace('/\[\s*(?:зображення|фото|image|photo|картинк[аи])\s*\]/iu', '', $text);
-            $text = trim(preg_replace('/\n{3,}/u', "\n\n", (string) $text));
+            $text = $this->stripPhotoPlaceholder($text);
             if ($text === '') {
                 return $finish('error', 'Порожня відповідь моделі', $tokensIn, $tokensOut);
             }
@@ -530,9 +540,10 @@ class AiAgentService
             $role = $m->direction === 'in' ? 'user' : 'assistant';
             $text = trim((string) $m->text);
 
-            // Власні минулі репліки агента чистимо від службових слів.
+            // Власні минулі репліки агента чистимо від службових слів і від
+            // плейсхолдерів фото, щоб модель не вчилась друкувати їх текстом.
             if ($role === 'assistant') {
-                $text = (string) $this->scrub($text);
+                $text = $this->stripPhotoPlaceholder((string) $this->scrub($text));
             }
 
             if ($text === '') {
