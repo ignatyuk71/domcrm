@@ -5,6 +5,12 @@ on:
     branches:
       - main
 
+# Деплої не ганяються наввипередки: новий пуш скасовує той, що ще їде.
+# Інакше старіший може фінішувати останнім і відкотити свіжий код (було двічі).
+concurrency:
+  group: deploy-production
+  cancel-in-progress: true
+
 jobs:
   web-deploy:
     name: Deploy
