@@ -127,14 +127,92 @@ class AiGalleryTest extends TestCase
     {
         [, $collage, $blackPhoto] = $this->makeGroupWithPhotos();
 
+        $catalog = app(AiAgentService::class)->buildCatalog();
+        $this->assertStringContainsString('ЛІНІЯ: Вуличні пухнасті тапки', $catalog);
+        $this->assertStringContainsString("Колажі лінії: [{$collage->id}]", $catalog);
+
         $black = $this->catalogLine('Вуличні тапки чорні');
         $this->assertStringContainsString("фото:[{$blackPhoto->id}]", $black);
         $this->assertStringContainsString("колаж:{$collage->id}", $black);
-        $this->assertStringContainsString('група: Вуличні пухнасті тапки', $black);
 
         $grey = $this->catalogLine('Вуличні тапки сірі');
         $this->assertStringNotContainsString('фото:[', $grey); // власного фото немає
         $this->assertStringContainsString("колаж:{$collage->id}", $grey);
+    }
+
+    public function test_showcase_descriptions_and_ungrouped_block_in_catalog(): void
+    {
+        [$group] = $this->makeGroupWithPhotos();
+        $group->update(['ai_description' => 'Маломірять — радь на розмір більше. Підошва ЕВА, не ковзає.']);
+
+        // Товар поза лініями
+        Product::create(['title' => 'Піжама тепла', 'sku' => 'PJ9', 'sale_price' => 900, 'currency' => 'UAH', 'is_active' => true]);
+
+        $catalog = app(AiAgentService::class)->buildCatalog();
+
+        // Опис лінії йде під заголовком як «Від магазину»
+        $this->assertStringContainsString('Від магазину: Маломірять — радь на розмір більше', $catalog);
+        // Нерозкладене — в блоці «ІНШІ ТОВАРИ», після ліній
+        $this->assertStringContainsString('ІНШІ ТОВАРИ', $catalog);
+        $this->assertGreaterThan(
+            mb_strpos($catalog, 'ЛІНІЯ: Вуличні пухнасті тапки'),
+            mb_strpos($catalog, 'Піжама тепла')
+        );
+        // Збереження опису через адмінку
+        $owner = $this->owner();
+        $this->actingAs($owner)->patchJson("/settings/ai-gallery/groups/{$group->id}", ['ai_description' => 'нове знання'])
+            ->assertOk();
+        $this->assertSame('нове знання', $group->fresh()->ai_description);
+        $data = $this->actingAs($owner)->getJson('/settings/ai-gallery/data')->assertOk()->json();
+        $this->assertSame('нове знання', $data[0]['ai_description']);
+    }
+
+    public function test_history_remembers_which_products_were_on_sent_photos(): void
+    {
+        [, $collage] = $this->makeGroupWithPhotos();
+
+        $conn = MetaConnection::create(['page_id' => 'P9', 'page_name' => 'Shop', 'page_access_token' => 'tok', 'status' => 'active']);
+        \App\Models\AiSetting::global()->update(['api_key' => 'sk-ant-test']);
+        \App\Models\AiSetting::forConnection($conn->id)->update(['enabled' => true]);
+        $contact = InboxContact::create(['meta_connection_id' => $conn->id, 'channel' => 'facebook', 'external_id' => 'U9']);
+        $conv = InboxConversation::create(['meta_connection_id' => $conn->id, 'inbox_contact_id' => $contact->id, 'channel' => 'facebook']);
+
+        // Розмова завжди починається з клієнта (як у вебхуку)
+        InboxMessage::create([
+            'inbox_conversation_id' => $conv->id, 'direction' => 'in', 'sender' => 'contact',
+            'external_message_id' => 'm_hi', 'text' => 'Покажіть вуличні', 'sent_at' => now(),
+        ]);
+
+        // Агент надіслав фото-колаж (без тексту)
+        InboxMessage::create([
+            'inbox_conversation_id' => $conv->id, 'direction' => 'out', 'sender' => 'ai',
+            'external_message_id' => 'm_sent_ph', 'text' => null,
+            'attachments' => [['type' => 'image', 'url' => url($collage->path)]],
+            'sent_at' => now(),
+        ]);
+        $ask = InboxMessage::create([
+            'inbox_conversation_id' => $conv->id, 'direction' => 'in', 'sender' => 'contact',
+            'external_message_id' => 'm_these', 'text' => 'Яка ціна цих?', 'sent_at' => now(),
+        ]);
+
+        Http::fake([
+            'api.anthropic.com/*' => Http::response([
+                'content' => [['type' => 'text', 'text' => 'Ці — 450 грн 🙂']],
+                'stop_reason' => 'end_turn',
+                'usage' => ['input_tokens' => 700, 'output_tokens' => 20],
+            ], 200),
+            'graph.facebook.com/*' => Http::response(['message_id' => 'm_these_out'], 200),
+        ]);
+
+        (new \App\Jobs\AiRespondToMessage($conv->id, $ask->id))->handle(app(AiAgentService::class));
+
+        $body = collect(Http::recorded())
+            ->filter(fn ($pair) => str_contains($pair[0]->url(), 'api.anthropic.com'))
+            ->first()[0]->body();
+
+        // Модель бачить, ЩО саме було на надісланому фото — «цих» має адресата
+        $this->assertStringContainsString(trim((string) json_encode('надіслала клієнту фото товарів'), '"'), $body);
+        $this->assertStringContainsString(trim((string) json_encode('Вуличні тапки чорні'), '"'), $body);
     }
 
     public function test_color_with_many_angles_exposes_all_its_photos(): void

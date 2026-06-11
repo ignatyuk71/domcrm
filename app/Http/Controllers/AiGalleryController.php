@@ -31,6 +31,7 @@ class AiGalleryController extends Controller
                 return [
                     'id' => $g->id,
                     'name' => $g->name,
+                    'ai_description' => $g->ai_description,
                     'products' => $g->products->map(fn (Product $p) => [
                         'id' => $p->id,
                         'label' => $p->title . ' (' . $p->sku . ')',
@@ -83,8 +84,11 @@ class AiGalleryController extends Controller
 
     public function updateGroup(Request $request, AiPhotoGroup $group)
     {
-        $data = $request->validate(['name' => ['required', 'string', 'max:120']]);
-        $group->update(['name' => $data['name']]);
+        $data = $request->validate([
+            'name' => ['sometimes', 'required', 'string', 'max:120'],
+            'ai_description' => ['sometimes', 'nullable', 'string', 'max:3000'],
+        ]);
+        $group->update($data);
 
         return response()->json(['ok' => true]);
     }

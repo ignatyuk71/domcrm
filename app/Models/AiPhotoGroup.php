@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class AiPhotoGroup extends Model
 {
-    protected $fillable = ['name', 'sort_order'];
+    protected $fillable = ['name', 'ai_description', 'sort_order'];
 
     public function photos(): HasMany
     {

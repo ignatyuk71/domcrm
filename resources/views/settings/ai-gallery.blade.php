@@ -123,6 +123,16 @@
 
             return `
                 <hr class="my-3">
+                <div class="border border-primary-subtle rounded-3 p-3 mb-3" style="background:#f8f9ff">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <span class="small fw-semibold"><i class="bi bi-stars text-primary me-1"></i>Опис для ШІ</span>
+                        <button class="btn btn-sm btn-primary" id="descr-save-${g.id}" onclick="saveDescription(${g.id}, this)"><i class="bi bi-check-lg me-1"></i>Зберегти опис</button>
+                    </div>
+                    <textarea id="descr-${g.id}" class="form-control" rows="3"
+                        placeholder="Пиши як для нової продавчині: маломірять чи ні, чим відрізняється від інших ліній, матеріал/підошва, догляд, як впізнати на фото. Ціни й розміри НЕ писати — вони підтягуються з бази самі."
+                        onclick="event.stopPropagation()">${esc(g.ai_description || '')}</textarea>
+                    <div class="form-text">Це знання агент використовує у відповідях клієнтам. Цифри (ціни, розміри, наявність) він бере з бази товарів автоматично.</div>
+                </div>
                 <div class="small text-secondary fw-semibold mb-2">Товари групи</div>
                 <div class="aig-search mb-2" style="max-width:420px">
                     <input class="form-control form-control-sm" placeholder="Додати товар: пошук по SKU або назві…"
@@ -153,6 +163,20 @@
             const res = await api('POST', BASE + '/groups', { name: name.trim() });
             openId = res.id;
             loadData();
+        }
+
+        async function saveDescription(id, btn) {
+            btn.disabled = true;
+            try {
+                await api('PATCH', BASE + '/groups/' + id, { ai_description: document.getElementById('descr-' + id).value.trim() || null });
+                const g = groups.find(x => x.id === id);
+                if (g) g.ai_description = document.getElementById('descr-' + id).value.trim();
+                btn.innerHTML = '<i class="bi bi-check2-all me-1"></i>Збережено';
+                setTimeout(() => { btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Зберегти опис'; btn.disabled = false; }, 1500);
+            } catch (e) {
+                btn.disabled = false;
+                alert('Не вдалося зберегти опис');
+            }
         }
 
         async function renameGroup(id) {

@@ -241,10 +241,16 @@ class AiAgentService
         $rules = trim(($storePrompt ?: "Ти ввічливий співробітник магазину «{$pageName}»."))
             . "\n\nБазові правила (інструкція вище має пріоритет, якщо вони суперечать): "
             . "відповідай стисло, до 4–5 речень; якщо інструкція не визначає мову — українською. "
-            . "Нижче — ПОВНИЙ каталог магазину з живими даними з бази. Сам вирішуй, що підходить клієнту, "
-            . "за ЗМІСТОМ його слів. Ціни, розміри й наявність бери ЛИШЕ з каталогу — не вигадуй і не "
-            . "приписуй товарам властивостей, яких немає в назві чи описі. Чого в каталозі немає — чесно "
-            . "скажи й одразу запропонуй найближче з того, що Є, не видаючи одне за інше. "
+            . "Нижче — ПОВНИЙ каталог магазину з живими даними з бази, структурований по ЛІНІЯХ (моделях): "
+            . "заголовок «═ ЛІНІЯ ═», під ним «Від магазину» — знання продавчині про цю модель (маломірність, "
+            . "відмінності від інших ліній, матеріал, догляд, як впізнати на фото) — спирайся на них як на "
+            . "факти й відповідай ними на питання клієнта; далі кольори лінії. Блок «ІНШІ ТОВАРИ» — товари "
+            . "поза лініями. Сам вирішуй, що підходить клієнту, за ЗМІСТОМ його слів. Ціни, розміри й "
+            . "наявність бери ЛИШЕ з каталогу — не вигадуй і не приписуй товарам властивостей, яких немає "
+            . "в назві чи описах. Чого в каталозі немає — чесно скажи й одразу запропонуй найближче з того, "
+            . "що Є, не видаючи одне за інше. "
+            . "Якщо клієнт називає лише РОЗМІР — перевір його по ВСІХ лініях і покажи, в яких моделях він Є; "
+            . "не кажи «немає», якщо розмір закінчився лише в одній лінії, а в іншій доступний. "
             . "На КОЖНЕ товарне питання звіряйся з каталогом заново: твої минулі відповіді в розмові могли "
             . "застаріти, і якщо вони суперечать каталогу — правда в каталозі. Давай ПОВНУ картину: якщо "
             . "запиту відповідають кілька моделей чи цін — покажи всі підходящі варіанти з цінами, не звужуй "
@@ -350,8 +356,10 @@ class AiAgentService
     }
 
     /**
-     * Повний каталог для системного промпта: один рядок на товар, живі дані.
-     * Рішення «що підходить клієнту» приймає Claude, а не пошук по словах.
+     * Повний каталог для системного промпта, структурований по ЛІНІЯХ (вітрина):
+     * заголовок лінії → «Від магазину» (знання продавчині з ai_description) →
+     * кольори лінії з живими цінами/розмірами/фото. Товари поза лініями — внизу
+     * блоком «ІНШІ ТОВАРИ». Цифри завжди з бази, слова — від власника.
      */
     public function buildCatalog(): string
     {
@@ -361,15 +369,16 @@ class AiAgentService
             ->orderBy('category_id')
             ->orderBy('title')
             ->limit(300)
-            ->get();
+            ->get()
+            ->keyBy('id');
 
         if ($products->isEmpty()) {
             return '(каталог порожній)';
         }
 
-        $photoInfo = $this->photoInfoFor($products->pluck('id')->all());
+        $photoInfo = $this->photoInfoFor($products->keys()->all());
 
-        return $products->map(function (Product $p) use ($photoInfo) {
+        $line = function (Product $p) use ($photoInfo): string {
             $sizes = $p->variants->filter(fn ($v) => $v->stock_qty > 0)->pluck('size')->implode(',');
             $i = $photoInfo[$p->id] ?? [];
 
@@ -383,11 +392,49 @@ class AiAgentService
                 $sizes !== '' ? "розміри: {$sizes}" : 'НЕМАЄ в наявності',
                 !empty($i['фото']) ? 'фото:[' . implode(',', $i['фото']) . ']' : null,
                 !empty($i['колаж']) ? 'колаж:' . $i['колаж'] : null,
-                !empty($i['група']) ? 'група: ' . $i['група'] : null,
             ], fn ($x) => $x !== null && $x !== '');
 
             return implode(' | ', $parts);
-        })->implode("\n");
+        };
+
+        $sections = [];
+        $used = [];
+
+        $groups = AiPhotoGroup::with(['products:products.id', 'photos.products:products.id'])
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get();
+
+        foreach ($groups as $g) {
+            $ids = $g->products->pluck('id')
+                ->filter(fn ($id) => $products->has($id) && !isset($used[$id]))
+                ->values();
+            if ($ids->isEmpty()) {
+                continue;
+            }
+
+            $head = '═ ЛІНІЯ: ' . $this->scrub($g->name) . ' ═';
+            $collages = $g->photos->filter(fn (AiPhoto $p) => $p->products->count() >= 2)->pluck('id')->all();
+            if ($collages) {
+                $head .= "\nКолажі лінії: [" . implode(',', $collages) . ']';
+            }
+            if (trim((string) $g->ai_description) !== '') {
+                $head .= "\nВід магазину: " . trim((string) $this->scrub($g->ai_description));
+            }
+
+            $sections[] = $head . "\n" . $ids->map(fn ($id) => '  ' . $line($products[$id]))->implode("\n");
+            foreach ($ids as $id) {
+                $used[$id] = true;
+            }
+        }
+
+        $rest = $products->keys()->reject(fn ($id) => isset($used[$id]))->values();
+        if ($rest->isNotEmpty()) {
+            $sections[] = "═ ІНШІ ТОВАРИ (поза лініями, без опису від магазину) ═\n"
+                . $rest->map(fn ($id) => '  ' . $line($products[$id]))->implode("\n");
+        }
+
+        return implode("\n\n", $sections);
     }
 
     /**
@@ -621,13 +668,16 @@ class AiAgentService
                     continue;
                 }
                 // Фото в історії НЕ позначаємо токеном-плейсхолдером: модель починала
-                // друкувати його як текст замість виклику send_photos. Вхідне фото
-                // позначаємо словами (клієнт має знати), власні надіслані — пропускаємо
-                // (від повторів захищає дедуп у send_photos).
+                // друкувати його як текст замість виклику send_photos.
                 if ($role === 'user') {
                     $text = '(клієнт надіслав фото)';
                 } else {
-                    continue;
+                    // Власні надіслані фото — службова примітка З ТОВАРАМИ:
+                    // інакше бот не памʼятає, що показував, і «ціна цих?» губиться.
+                    $text = $this->sentPhotosNote($m);
+                    if ($text === '') {
+                        continue;
+                    }
                 }
             }
 
@@ -656,6 +706,41 @@ class AiAgentService
         }
 
         return $messages;
+    }
+
+    /** Кеш фото галереї з товарами (на час одного запиту). */
+    private ?\Illuminate\Support\Collection $galleryPhotosMemo = null;
+
+    private function galleryPhotos(): \Illuminate\Support\Collection
+    {
+        return $this->galleryPhotosMemo ??= AiPhoto::with('products:products.id,title,sale_price')->get();
+    }
+
+    /**
+     * Службова примітка про надіслані клієнту фото: які САМЕ товари він побачив.
+     * Без неї модель не памʼятає, що показувала, і «яка ціна цих?» втрачає сенс.
+     */
+    private function sentPhotosNote(InboxMessage $m): string
+    {
+        $labels = [];
+        foreach ($m->attachments ?? [] as $a) {
+            $url = (string) ($a['url'] ?? '');
+            if ($url === '') {
+                continue;
+            }
+            $photo = $this->galleryPhotos()->first(fn (AiPhoto $p) => str_contains($url, $p->path));
+            if (!$photo) {
+                continue;
+            }
+            $list = $photo->products
+                ->map(fn ($p) => '#' . $p->id . ' ' . $this->scrub($p->title) . ' — ' . round((float) $p->sale_price) . ' грн')
+                ->implode('; ');
+            $labels[] = $list !== '' ? $list : "фото №{$photo->id}";
+        }
+
+        return $labels
+            ? '(надіслала клієнту фото товарів: ' . implode(' | ', array_unique($labels)) . ')'
+            : '';
     }
 
     /** URL-и картинок клієнта з повідомлення (лише вхідні зображення). */
