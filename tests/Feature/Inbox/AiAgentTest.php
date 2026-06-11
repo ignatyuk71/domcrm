@@ -269,6 +269,63 @@ class AiAgentTest extends TestCase
         $this->assertDatabaseHas('inbox_messages', ['text' => 'Це наші домашні пухнасті — 380 грн 🙂']);
     }
 
+    public function test_screenshot_of_our_gallery_photo_is_matched_exactly(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD недоступний');
+        }
+
+        $this->setUpConversation();
+
+        // Наше фото в галереї (реальний PNG на диску) з привʼязаним товаром
+        $product = \App\Models\Product::create(['title' => 'Капці для вулиці КАПУЧИНО', 'sku' => '6033', 'sale_price' => 530, 'currency' => 'UAH', 'is_active' => true]);
+        $group = \App\Models\AiPhotoGroup::create(['name' => 'Вуличні']);
+        $group->products()->attach($product->id);
+
+        $img = imagecreatetruecolor(40, 30);
+        imagefilledrectangle($img, 0, 0, 39, 29, imagecolorallocate($img, 200, 150, 90));
+        imagefilledellipse($img, 20, 15, 22, 14, imagecolorallocate($img, 80, 50, 20));
+        $dir = public_path('ai-gallery');
+        if (!is_dir($dir)) { @mkdir($dir, 0755, true); }
+        imagepng($img, $dir . '/test-match.png');
+        imagedestroy($img);
+
+        $photo = \App\Models\AiPhoto::create(['ai_photo_group_id' => $group->id, 'path' => 'ai-gallery/test-match.png', 'sort_order' => 1]);
+        $photo->products()->attach($product->id);
+
+        // Клієнт «скидає скрін» цього ж фото
+        $bytes = (string) file_get_contents($dir . '/test-match.png');
+        $msg = InboxMessage::create([
+            'inbox_conversation_id' => $this->conv->id, 'direction' => 'in', 'sender' => 'contact',
+            'external_message_id' => 'm_screen', 'text' => 'Ціна?',
+            'attachments' => [['type' => 'image', 'url' => 'https://scontent.test/screen.png']],
+            'sent_at' => now(),
+        ]);
+
+        Http::fake([
+            'scontent.test/*' => Http::response($bytes, 200, ['Content-Type' => 'image/png']),
+            'api.anthropic.com/*' => Http::response([
+                'content' => [['type' => 'text', 'text' => 'Це вуличні капучино — 530 грн 🙂']],
+                'stop_reason' => 'end_turn',
+                'usage' => ['input_tokens' => 1500, 'output_tokens' => 30],
+            ], 200),
+            'graph.facebook.com/*' => Http::response(['message_id' => 'm_match_1'], 200),
+        ]);
+
+        (new AiRespondToMessage($this->conv->id, $msg->id))->handle(app(AiAgentService::class));
+
+        $body = collect(Http::recorded())
+            ->filter(fn ($pair) => str_contains($pair[0]->url(), 'api.anthropic.com'))
+            ->first()[0]->body();
+
+        // Системна позначка про точний збіг пішла моделі разом із товаром і ціною
+        $this->assertStringContainsString(trim((string) json_encode('це фото збігається з фото №'), '"'), $body);
+        $this->assertStringContainsString(trim((string) json_encode('Капці для вулиці КАПУЧИНО'), '"'), $body);
+        $this->assertStringContainsString('530', $body);
+
+        @unlink($dir . '/test-match.png');
+    }
+
     public function test_expired_client_photo_degrades_to_text_note(): void
     {
         $this->setUpConversation();

@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
  */
 class AiPhoto extends Model
 {
-    protected $fillable = ['ai_photo_group_id', 'path', 'sort_order'];
+    protected $fillable = ['ai_photo_group_id', 'path', 'sort_order', 'phash'];
 
     public function group(): BelongsTo
     {
