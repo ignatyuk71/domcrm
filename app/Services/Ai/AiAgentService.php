@@ -537,6 +537,8 @@ class AiAgentService
     private function buildHistory(InboxConversation $conversation, int $limit = 20): array
     {
         $items = $conversation->messages()
+            // «Скинути памʼять ШІ»: усе до мітки для агента не існує.
+            ->when($conversation->ai_context_after_id, fn ($q) => $q->where('id', '>', $conversation->ai_context_after_id))
             ->orderByDesc('id')
             ->limit($limit)
             ->get()

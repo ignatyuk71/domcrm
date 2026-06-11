@@ -194,6 +194,46 @@ class AiAgentTest extends TestCase
         $this->assertStringContainsString('cache_control', $body);
     }
 
+    public function test_ai_context_reset_hides_old_history_from_model(): void
+    {
+        $this->setUpConversation();
+
+        // Стара (засмічена) переписка
+        InboxMessage::create([
+            'inbox_conversation_id' => $this->conv->id, 'direction' => 'out', 'sender' => 'ai',
+            'external_message_id' => 'm_old_ai', 'text' => 'СТАРА_РЕПЛІКА_ПРО_ЛІНІЙКУ', 'sent_at' => now(),
+        ]);
+
+        // Скидання памʼяті (як кнопкою в чаті)
+        $this->conv->update(['ai_context_after_id' => $this->conv->messages()->max('id')]);
+
+        // Нове вхідне після скидання
+        $fresh = InboxMessage::create([
+            'inbox_conversation_id' => $this->conv->id, 'direction' => 'in', 'sender' => 'contact',
+            'external_message_id' => 'm_fresh', 'text' => 'Хочу пушисті', 'sent_at' => now(),
+        ]);
+
+        Http::fake([
+            'api.anthropic.com/*' => Http::response([
+                'content' => [['type' => 'text', 'text' => 'Покажу всі варіанти 🙂']],
+                'stop_reason' => 'end_turn',
+                'usage' => ['input_tokens' => 100, 'output_tokens' => 10],
+            ], 200),
+            'graph.facebook.com/*' => Http::response(['message_id' => 'm_after_reset'], 200),
+        ]);
+
+        (new AiRespondToMessage($this->conv->id, $fresh->id))->handle(app(AiAgentService::class));
+
+        $body = collect(Http::recorded())
+            ->filter(fn ($pair) => str_contains($pair[0]->url(), 'api.anthropic.com'))
+            ->first()[0]->body();
+
+        // Стара репліка в запит НЕ потрапила, нове питання — потрапило
+        $this->assertStringNotContainsString('СТАРА_РЕПЛІКА_ПРО_ЛІНІЙКУ', $body);
+        $this->assertStringContainsString(trim((string) json_encode('Хочу пушисті'), '"'), $body);
+        $this->assertDatabaseHas('inbox_messages', ['text' => 'Покажу всі варіанти 🙂']);
+    }
+
     public function test_image_placeholder_is_stripped_from_reply(): void
     {
         $this->setUpConversation();

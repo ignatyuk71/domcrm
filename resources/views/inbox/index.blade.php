@@ -910,8 +910,28 @@
                                 <span class="ib-slider"></span>
                             </label>
                         </div>
+                        <button class="btn btn-sm btn-outline-secondary w-100 mt-2" style="font-size:.74rem" onclick="resetAiContext(this)" title="Агент забуде стару переписку цієї розмови і почне з чистого аркуша. Повідомлення в чаті лишаються.">
+                            <i class="bi bi-eraser me-1"></i>Скинути памʼять ШІ (почати з нуля)
+                        </button>
                     </div>
                 </div>`;
+        }
+
+        async function resetAiContext(btn) {
+            if (!activeId || !confirm('ШІ забуде стару переписку цієї розмови і почне з чистого аркуша. Повідомлення в чаті залишаться. Продовжити?')) return;
+            btn.disabled = true;
+            try {
+                const res = await fetch(`/api/inbox/conversations/${activeId}/ai-reset`, {
+                    method: 'POST',
+                    headers: { 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
+                });
+                if (!res.ok) throw new Error();
+                btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Памʼять скинуто';
+                setTimeout(() => { btn.innerHTML = '<i class="bi bi-eraser me-1"></i>Скинути памʼять ШІ (почати з нуля)'; btn.disabled = false; }, 2000);
+            } catch (e) {
+                btn.disabled = false;
+                alert('Не вдалося скинути памʼять');
+            }
         }
 
         // --- Модалка «Каталог товарів» (як в адмінці) ---

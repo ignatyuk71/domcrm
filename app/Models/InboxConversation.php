@@ -19,6 +19,7 @@ class InboxConversation extends Model
         'status',
         'chat_status_id',
         'ai_enabled',
+        'ai_context_after_id',
     ];
 
     protected $casts = [

@@ -358,6 +358,15 @@ class InboxController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    /** Скинути памʼять ШІ: агент читає розмову лише з цього моменту (повідомлення в чаті лишаються). */
+    public function resetAiContext(InboxConversation $conversation)
+    {
+        $lastId = (int) $conversation->messages()->max('id');
+        $conversation->update(['ai_context_after_id' => $lastId ?: null]);
+
+        return response()->json(['ok' => true]);
+    }
+
     /** Змінити статус чату для розмови. */
     public function setStatus(Request $request, InboxConversation $conversation)
     {
