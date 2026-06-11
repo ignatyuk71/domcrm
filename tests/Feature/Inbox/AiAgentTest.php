@@ -234,6 +234,73 @@ class AiAgentTest extends TestCase
         $this->assertDatabaseHas('inbox_messages', ['text' => 'Покажу всі варіанти 🙂']);
     }
 
+    public function test_client_photo_goes_to_model_as_image_block(): void
+    {
+        $this->setUpConversation();
+
+        // Клієнт надсилає фото з питанням ціни
+        $photoMsg = InboxMessage::create([
+            'inbox_conversation_id' => $this->conv->id, 'direction' => 'in', 'sender' => 'contact',
+            'external_message_id' => 'm_img_1', 'text' => 'Яка ціна на такі?',
+            'attachments' => [['type' => 'image', 'url' => 'https://scontent.test/client-photo.jpg']],
+            'sent_at' => now(),
+        ]);
+
+        Http::fake([
+            'scontent.test/*' => Http::response('FAKE_JPEG_BYTES', 200, ['Content-Type' => 'image/jpeg']),
+            'api.anthropic.com/*' => Http::response([
+                'content' => [['type' => 'text', 'text' => 'Це наші домашні пухнасті — 380 грн 🙂']],
+                'stop_reason' => 'end_turn',
+                'usage' => ['input_tokens' => 1500, 'output_tokens' => 30],
+            ], 200),
+            'graph.facebook.com/*' => Http::response(['message_id' => 'm_vision_1'], 200),
+        ]);
+
+        (new AiRespondToMessage($this->conv->id, $photoMsg->id))->handle(app(AiAgentService::class));
+
+        $body = collect(Http::recorded())
+            ->filter(fn ($pair) => str_contains($pair[0]->url(), 'api.anthropic.com'))
+            ->first()[0]->body();
+
+        // Картинка пішла image-блоком (base64 від байтів фото), текст питання поруч
+        $this->assertStringContainsString('"type":"image"', $body);
+        $this->assertStringContainsString(base64_encode('FAKE_JPEG_BYTES'), $body);
+        $this->assertStringContainsString(trim((string) json_encode('Яка ціна на такі?'), '"'), $body);
+        $this->assertDatabaseHas('inbox_messages', ['text' => 'Це наші домашні пухнасті — 380 грн 🙂']);
+    }
+
+    public function test_expired_client_photo_degrades_to_text_note(): void
+    {
+        $this->setUpConversation();
+
+        $photoMsg = InboxMessage::create([
+            'inbox_conversation_id' => $this->conv->id, 'direction' => 'in', 'sender' => 'contact',
+            'external_message_id' => 'm_img_dead', 'text' => '',
+            'attachments' => [['type' => 'image', 'url' => 'https://scontent.test/expired.jpg']],
+            'sent_at' => now(),
+        ]);
+
+        Http::fake([
+            'scontent.test/*' => Http::response('gone', 403),
+            'api.anthropic.com/*' => Http::response([
+                'content' => [['type' => 'text', 'text' => 'Підкажіть, що саме цікавить? 🙂']],
+                'stop_reason' => 'end_turn',
+                'usage' => ['input_tokens' => 200, 'output_tokens' => 15],
+            ], 200),
+            'graph.facebook.com/*' => Http::response(['message_id' => 'm_vision_2'], 200),
+        ]);
+
+        (new AiRespondToMessage($this->conv->id, $photoMsg->id))->handle(app(AiAgentService::class));
+
+        $body = collect(Http::recorded())
+            ->filter(fn ($pair) => str_contains($pair[0]->url(), 'api.anthropic.com'))
+            ->first()[0]->body();
+
+        // Фото протухло → image-блоку нема, але модель знає, що клієнт щось надсилав
+        $this->assertStringNotContainsString('"type":"image"', $body);
+        $this->assertStringContainsString(trim((string) json_encode('клієнт надіслав фото'), '"'), $body);
+    }
+
     public function test_image_placeholder_is_stripped_from_reply(): void
     {
         $this->setUpConversation();

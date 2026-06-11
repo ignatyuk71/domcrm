@@ -23,6 +23,9 @@ class AiAgentService
 {
     private const MAX_TOOL_LOOPS = 5;
 
+    /** Скільки останніх фото клієнта передаємо моделі як картинки (vision). */
+    private const MAX_VISION_IMAGES = 2;
+
     /**
      * Внутрішні назви лінійок (вигадані для CRM, клієнти їх не знають).
      * Вирізаються з УСЬОГО, що бачить модель: каталог, картки, історія.
@@ -256,6 +259,11 @@ class AiAgentService
             . "Розміри в каталозі діапазонами: клієнт каже «38» → це 38-39, перевір наявність і підтверди "
             . "(«Вам підійде 38-39?»). Довжину в сантиметрах сам не конвертуй — спитай звичний розмір або "
             . "передай менеджеру. "
+            . "Фото ВІД клієнта: якщо в повідомленні є картинка — уважно роздивись її: тип (домашні/вуличні/"
+            . "дитячі), колір, хутро, і знайди відповідник у каталозі за виглядом. Впізнав — назви товар "
+            . "своїми словами, ціну й наявні розміри, надішли наші фото цього товару. Це може бути скрін "
+            . "нашого ж фото чи колажу — тоді це саме той товар. Не впевнений — скажи, що бачиш "
+            . "(«схожі на наші домашні пухнасті…») і постав ОДНЕ уточнення; нічого не вигадуй. "
             . "\n\nФото: у товарів в каталозі є номери «фото» (ракурси цього кольору) і «колаж» (спільне фото "
             . "групи). Надсилай їх інструментом send_photos (до 3 за виклик), клієнт отримує картинки в чат. "
             . "Ти — як жива продавчиня: товар ПОКАЗУЮТЬ, а не описують словами. НІКОЛИ не питай «показати "
@@ -545,6 +553,15 @@ class AiAgentService
             ->reverse()
             ->values();
 
+        // Vision: 2 НАЙСВІЖІШІ фото клієнта передаємо моделі як картинки —
+        // вона бачить, що на них, і звіряє з каталогом. Старіші — лише текстом.
+        $visionMessageIds = $items
+            ->filter(fn ($m) => $m->direction === 'in' && $this->clientImageUrls($m) !== [])
+            ->sortByDesc('id')
+            ->take(self::MAX_VISION_IMAGES)
+            ->pluck('id')
+            ->all();
+
         $messages = [];
         foreach ($items as $m) {
             $role = $m->direction === 'in' ? 'user' : 'assistant';
@@ -556,7 +573,20 @@ class AiAgentService
                 $text = $this->stripPhotoPlaceholder((string) $this->scrub($text));
             }
 
-            if ($text === '') {
+            $blocks = [];
+            if ($role === 'user' && in_array($m->id, $visionMessageIds, true)) {
+                foreach (array_slice($this->clientImageUrls($m), 0, 2) as $url) {
+                    $img = $this->fetchImageBlock($url);
+                    if ($img) {
+                        $blocks[] = $img;
+                    }
+                }
+                if ($blocks && $text === '') {
+                    $text = '(фото від клієнта вище — роздивись і знайди відповідник у каталозі)';
+                }
+            }
+
+            if ($text === '' && empty($blocks)) {
                 if (empty($m->attachments)) {
                     continue;
                 }
@@ -571,10 +601,22 @@ class AiAgentService
                 }
             }
 
+            if ($text !== '') {
+                $blocks[] = ['type' => 'text', 'text' => $text];
+            }
+
             if (!empty($messages) && $messages[count($messages) - 1]['role'] === $role) {
-                $messages[count($messages) - 1]['content'] .= "\n" . $text;
+                $prev = $messages[count($messages) - 1]['content'];
+                $messages[count($messages) - 1]['content'] = array_merge(
+                    is_array($prev) ? $prev : [['type' => 'text', 'text' => $prev]],
+                    $blocks
+                );
             } else {
-                $messages[] = ['role' => $role, 'content' => $text];
+                // Чисто текстове повідомлення лишаємо рядком (компактніше в логах/кеші).
+                $messages[] = [
+                    'role' => $role,
+                    'content' => (count($blocks) === 1 && $blocks[0]['type'] === 'text') ? $blocks[0]['text'] : $blocks,
+                ];
             }
         }
 
@@ -584,5 +626,46 @@ class AiAgentService
         }
 
         return $messages;
+    }
+
+    /** URL-и картинок клієнта з повідомлення (лише вхідні зображення). */
+    private function clientImageUrls(InboxMessage $m): array
+    {
+        return collect($m->attachments ?? [])
+            ->filter(fn ($a) => !empty($a['url']) && str_contains((string) ($a['type'] ?? ''), 'image'))
+            ->pluck('url')
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Завантажити картинку і перетворити на image-блок Claude (base64).
+     * Посилання Meta тимчасові, тому тягнемо самі й віддаємо вміст;
+     * не вдалося (протухло/завелике) — повертаємо null, історія деградує в текст.
+     */
+    private function fetchImageBlock(string $url): ?array
+    {
+        try {
+            $r = Http::timeout(10)->get($url);
+            if (!$r->successful()) {
+                return null;
+            }
+            $mime = trim(explode(';', (string) $r->header('Content-Type'))[0]) ?: 'image/jpeg';
+            if (!str_starts_with($mime, 'image/')) {
+                return null;
+            }
+            $body = $r->body();
+            if (strlen($body) > 4 * 1024 * 1024) { // ліміт API ~5MB на картинку, з запасом
+                return null;
+            }
+
+            return [
+                'type' => 'image',
+                'source' => ['type' => 'base64', 'media_type' => $mime, 'data' => base64_encode($body)],
+            ];
+        } catch (\Throwable $e) {
+            Log::warning('AI vision: не вдалося завантажити фото клієнта', ['url' => mb_substr($url, 0, 120), 'error' => $e->getMessage()]);
+            return null;
+        }
     }
 }
