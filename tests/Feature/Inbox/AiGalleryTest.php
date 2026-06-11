@@ -123,6 +123,29 @@ class AiGalleryTest extends TestCase
         $this->assertSame($collage->id, $greyRow['колаж']);
     }
 
+    public function test_product_gets_its_own_collage_and_all_group_collages_listed(): void
+    {
+        [$group, $collage1] = $this->makeGroupWithPhotos();
+
+        // Друга пара кольорів лінійки живе на колажі №2
+        $bordo = Product::create(['title' => 'Вуличні тапки бордо', 'sku' => '6028', 'sale_price' => 450, 'currency' => 'UAH']);
+        $beige = Product::create(['title' => 'Вуличні тапки беж', 'sku' => '6029', 'sale_price' => 450, 'currency' => 'UAH']);
+        $group->products()->attach([$bordo->id, $beige->id]);
+
+        $collage2 = AiPhoto::create(['ai_photo_group_id' => $group->id, 'path' => 'ai-gallery/collage2.jpg', 'sort_order' => 5]);
+        $collage2->products()->attach([$bordo->id, $beige->id]);
+
+        $res = app(AiAgentService::class)->toolSearchProducts('вуличні тапки');
+        $byTitle = collect($res['товари'])->keyBy('назва');
+
+        // Бордо живе на колажі №2 — саме його й отримує, а не перший-ліпший
+        $this->assertSame($collage2->id, $byTitle['Вуличні тапки бордо']['колаж']);
+        // Чорні — як і були, на колажі №1
+        $this->assertSame($collage1->id, $byTitle['Вуличні тапки чорні']['колаж']);
+        // І всі бачать повний список колажів групи по порядку
+        $this->assertSame([$collage1->id, $collage2->id], $byTitle['Вуличні тапки бордо']['колажі_групи']);
+    }
+
     public function test_send_photos_sends_saves_and_dedupes(): void
     {
         [, $collage] = $this->makeGroupWithPhotos();
