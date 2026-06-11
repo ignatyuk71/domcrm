@@ -96,6 +96,20 @@ class AiGalleryTest extends TestCase
         return $line;
     }
 
+    public function test_internal_line_names_never_reach_the_model(): void
+    {
+        Product::create(['title' => 'Капці Luxury чорні', 'sku' => 'L1', 'sale_price' => 500, 'currency' => 'UAH', 'is_active' => true]);
+        Product::create(['title' => 'Домашні капці з хутра Halluci сині', 'sku' => 'H1', 'sale_price' => 380, 'currency' => 'UAH', 'is_active' => true]);
+
+        $catalog = app(AiAgentService::class)->buildCatalog();
+
+        // Службові назви вирізані, людська частина назви лишилась
+        $this->assertStringNotContainsStringIgnoringCase('luxury', $catalog);
+        $this->assertStringNotContainsStringIgnoringCase('halluci', $catalog);
+        $this->assertStringContainsString('Капці чорні', $catalog);
+        $this->assertStringContainsString('Домашні капці з хутра сині', $catalog);
+    }
+
     public function test_catalog_lists_every_active_product(): void
     {
         Product::create(['title' => 'Вуличні пухнасті тапки чорні', 'sku' => 'V1', 'sale_price' => 450, 'currency' => 'UAH', 'is_active' => true]);

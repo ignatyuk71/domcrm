@@ -22,6 +22,23 @@ use Illuminate\Support\Facades\Log;
 class AiAgentService
 {
     private const MAX_TOOL_LOOPS = 5;
+
+    /**
+     * Внутрішні назви лінійок (вигадані для CRM, клієнти їх не знають).
+     * Вирізаються з УСЬОГО, що бачить модель: каталог, картки, історія.
+     * Модель не може сказати слово, якого ніколи не бачила.
+     */
+    private const INTERNAL_WORDS = ['halluci', 'luxury'];
+
+    /** Прибрати службові слова з тексту для моделі. */
+    private function scrub(?string $text): ?string
+    {
+        if ($text === null || $text === '') {
+            return $text;
+        }
+        $clean = preg_replace('/(?:' . implode('|', self::INTERNAL_WORDS) . ')/iu', '', $text);
+        return trim(preg_replace('/[ \t]{2,}/u', ' ', $clean));
+    }
     public function __construct(private MetaSendService $send)
     {
     }
@@ -89,12 +106,9 @@ class AiAgentService
                 . "застаріти, і якщо вони суперечать каталогу — правда в каталозі. Давай ПОВНУ картину: якщо "
                 . "запиту відповідають кілька груп чи цін — покажи всі підходящі варіанти з цінами, не звужуй "
                 . "до однієї лінійки. "
-                . "СУВОРА ЗАБОРОНА: слова Halluci, Luxury, назви груп і SKU — внутрішні позначення магазину, "
-                . "клієнт їх не знає. НІКОЛИ не пиши їх клієнту — навіть якщо вони стоять у НАЗВІ товару в "
-                . "каталозі, і навіть якщо вже звучали в цій розмові (твої минулі повідомлення — не виправдання). "
-                . "Перекладай назву в просту мову: тип (домашні/вуличні/дитячі) + матеріал (пухнасті, з хутра) + "
-                . "колір + ціна. Замість «Капці Luxury чорні — 500 грн» кажи «домашні пухнасті капці у чорному — "
-                . "500 грн». Артикул називай лише якщо клієнт сам ним користується. "
+                . "Клієнту описуй товар простими словами: тип (домашні/вуличні/дитячі) + матеріал (пухнасті, "
+                . "з хутра) + колір + ціна, напр. «домашні пухнасті капці у чорному — 500 грн». Жодних службових "
+                . "кодів чи назв лінійок. Артикул називай лише якщо клієнт сам ним користується. "
                 . "Деталі (матеріал, підошва, стелька, догляд, маломірність) — виклич get_product і відповідай "
                 . "з опису; «уточню в менеджера» — лише якщо і там немає. "
                 . "Максимум ОДНЕ коротке уточнення на тему: клієнт відповів або повторив — покажи конкретні "
@@ -298,8 +312,8 @@ class AiAgentService
 
             $parts = array_filter([
                 '#' . $p->id,
-                $p->title,
-                $p->category?->name,
+                $this->scrub($p->title),
+                $this->scrub($p->category?->name),
                 $p->color?->name,
                 'SKU ' . $p->sku,
                 round((float) $p->sale_price) . ' грн',
@@ -393,7 +407,7 @@ class AiAgentService
         }
 
         return array_merge($this->productSummary($p, $this->photoInfoFor([$p->id])), [
-            'опис' => $p->description ?: null,
+            'опис' => $this->scrub($p->description ?: null),
             'розміри' => $p->variants->map(fn ($v) => [
                 'розмір' => $v->size,
                 'залишок' => (int) $v->stock_qty,
@@ -414,10 +428,10 @@ class AiAgentService
 
         return [
             'id' => $p->id,
-            'назва' => $p->title,
+            'назва' => $this->scrub($p->title),
             'sku' => $p->sku,
             'ціна' => round((float) $p->sale_price) . ' грн',
-            'категорія' => $p->category?->name,
+            'категорія' => $this->scrub($p->category?->name),
             'колір' => $p->color?->name,
             'наявність' => $inStockSizes !== '' ? 'є в наявності' : 'немає в наявності',
             'розміри_в_наявності' => $inStockSizes ?: null,
@@ -464,7 +478,7 @@ class AiAgentService
                 $ownCollage = $collages->first(fn (AiPhoto $p) => $p->products->contains('id', $product->id));
 
                 $map[$product->id] = [
-                    'група' => $group->name,
+                    'група' => $this->scrub($group->name),
                     'фото' => $own ?: null,
                     'колаж' => $ownCollage?->id ?? ($collages->first()?->id),
                     'колажі_групи' => $collageIds ?: null,
@@ -492,6 +506,11 @@ class AiAgentService
         foreach ($items as $m) {
             $role = $m->direction === 'in' ? 'user' : 'assistant';
             $text = trim((string) $m->text);
+            // Власні минулі репліки агента чистимо від службових слів,
+            // щоб історія не «перенавчала» модель ними користуватись.
+            if ($role === 'assistant') {
+                $text = (string) $this->scrub($text);
+            }
             if ($text === '') {
                 $text = !empty($m->attachments) ? '[зображення]' : '';
             }
