@@ -115,12 +115,28 @@ class AiGalleryTest extends TestCase
 
         $blackRow = $byTitle['Вуличні тапки чорні'];
         $this->assertSame('Вуличні пухнасті тапки', $blackRow['група']);
-        $this->assertSame($blackPhoto->id, $blackRow['фото']);
+        $this->assertSame([$blackPhoto->id], $blackRow['фото']);
         $this->assertSame($collage->id, $blackRow['колаж']);
 
         $greyRow = $byTitle['Вуличні тапки сірі'];
         $this->assertNull($greyRow['фото']); // власного фото немає
         $this->assertSame($collage->id, $greyRow['колаж']);
+    }
+
+    public function test_color_with_many_angles_exposes_all_its_photos(): void
+    {
+        [$group, , $blackPhoto, $black] = $this->makeGroupWithPhotos();
+
+        // Ще два ракурси чорних
+        $angle2 = AiPhoto::create(['ai_photo_group_id' => $group->id, 'path' => 'ai-gallery/black2.jpg', 'sort_order' => 3]);
+        $angle2->products()->attach([$black->id]);
+        $angle3 = AiPhoto::create(['ai_photo_group_id' => $group->id, 'path' => 'ai-gallery/black3.jpg', 'sort_order' => 4]);
+        $angle3->products()->attach([$black->id]);
+
+        $res = app(AiAgentService::class)->toolSearchProducts('вуличні тапки чорні');
+        $blackRow = collect($res['товари'])->keyBy('назва')['Вуличні тапки чорні'];
+
+        $this->assertSame([$blackPhoto->id, $angle2->id, $angle3->id], $blackRow['фото']);
     }
 
     public function test_product_gets_its_own_collage_and_all_group_collages_listed(): void
