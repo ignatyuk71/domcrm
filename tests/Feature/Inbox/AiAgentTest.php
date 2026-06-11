@@ -194,6 +194,26 @@ class AiAgentTest extends TestCase
         $this->assertStringContainsString('cache_control', $body);
     }
 
+    public function test_image_placeholder_is_stripped_from_reply(): void
+    {
+        $this->setUpConversation();
+
+        Http::fake([
+            'api.anthropic.com/*' => Http::response([
+                'content' => [['type' => 'text', 'text' => "[зображення]\n[фото]\nОсь рожеві капці — 380 грн 💗"]],
+                'stop_reason' => 'end_turn',
+                'usage' => ['input_tokens' => 100, 'output_tokens' => 20],
+            ], 200),
+            'graph.facebook.com/*' => Http::response(['message_id' => 'm_strip'], 200),
+        ]);
+
+        $this->runJob();
+
+        $msg = InboxMessage::where('sender', 'ai')->latest('id')->first();
+        $this->assertSame('Ось рожеві капці — 380 грн 💗', $msg->text);
+        $this->assertStringNotContainsString('[зображення]', $msg->text);
+    }
+
     public function test_agent_reads_description_via_get_product(): void
     {
         $this->setUpConversation();
