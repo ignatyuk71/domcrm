@@ -36,3 +36,9 @@ Schedule::command('packing:auto-release')
     ->withoutOverlapping()
     ->onOneServer()
     ->description('Автоматичне розблокування завислих пакувань');
+
+Schedule::command('ai:sweep')
+    ->everyMinute() // фактично спрацьовує з частотою крона Mirohost (зараз ~5 хв)
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->description('Страховка ШІ: добрати вхідні без реакції (фоновий процес вбито хостингом)');

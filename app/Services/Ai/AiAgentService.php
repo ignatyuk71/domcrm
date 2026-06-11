@@ -10,6 +10,7 @@ use App\Models\InboxConversation;
 use App\Models\InboxMessage;
 use App\Models\Product;
 use App\Services\Meta\MetaSendService;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -73,6 +74,13 @@ class AiAgentService
                 'duration_ms' => (int) ((microtime(true) - $t0) * 1000),
             ]);
         };
+
+        // Замок на повідомлення: швидкий шлях і крон-страховка не повинні
+        // відповісти одночасно. Не взяли замок — хтось уже обробляє.
+        $lock = Cache::lock('ai-respond-msg-' . $triggerMessageId, 300);
+        if (!$lock->get()) {
+            return $finish('skipped_in_progress');
+        }
 
         try {
             $conversation->loadMissing(['connection', 'contact']);
@@ -215,6 +223,8 @@ class AiAgentService
         } catch (\Throwable $e) {
             Log::error('AI: respond failed', ['conv' => $conversation->id, 'error' => $e->getMessage()]);
             return $finish('error', mb_substr($e->getMessage(), 0, 500));
+        } finally {
+            $lock->release();
         }
     }
 
