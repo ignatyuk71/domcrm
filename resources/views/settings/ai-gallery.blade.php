@@ -17,11 +17,13 @@
         .aig-chip .x { border: none; background: none; color: #94a3b8; padding: 0; line-height: 1; cursor: pointer; }
         .aig-chip .x:hover { color: #dc3545; }
         .aig-nophoto { font-size: .64rem; }
-        .aig-photo { border: 2px solid #eef0f3; border-radius: 12px; overflow: hidden; background: #fff; cursor: pointer; position: relative; width: 168px; }
-        .aig-photo.sel { border-color: #4f46e5; }
-        .aig-photo img { width: 100%; height: 120px; object-fit: cover; display: block; background: #f5f6f8; }
-        .aig-photo .ft { display: flex; align-items: center; justify-content: space-between; padding: 5px 8px; }
+        .aig-photo { border: 1px solid #e6e8ee; border-radius: 12px; overflow: hidden; background: #fff; position: relative; width: 200px; display: flex; flex-direction: column; }
+        .aig-photo img { width: 100%; height: 140px; object-fit: cover; display: block; background: #f5f6f8; }
+        .aig-photo .ft { display: flex; align-items: center; justify-content: space-between; padding: 5px 8px; border-top: 1px solid #f0f2f5; }
         .aig-photo .tbadge { position: absolute; top: 6px; left: 6px; font-size: .66rem; }
+        .aig-marks { border-top: 1px solid #f0f2f5; padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 5px; font-size: .84rem; flex: 1; }
+        .aig-marks .hint { font-size: .68rem; color: #94a3b8; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+        .aig-marks label { display: flex; align-items: center; gap: 7px; margin: 0; cursor: pointer; }
         .aig-mini { width: 24px; height: 24px; border: none; background: #f1f3f6; border-radius: 6px; color: #475467; font-size: .75rem; display: inline-flex; align-items: center; justify-content: center; }
         .aig-mini:hover { background: #e2e5ea; }
         .aig-mini.danger:hover { background: #fde8e8; color: #dc3545; }
@@ -37,7 +39,7 @@
         const CSRF = document.querySelector('meta[name="csrf-token"]').content;
         const BASE = '{{ url('settings/ai-gallery') }}';
         const esc = (s) => String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-        let groups = [], openId = null, selPhoto = null;
+        let groups = [], openId = null;
 
         async function api(method, url, body, isForm = false) {
             const opts = { method, headers: { 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' } };
@@ -50,9 +52,8 @@
             return res.json();
         }
 
-        async function loadData(keepSel = false) {
+        async function loadData() {
             groups = await api('GET', BASE + '/data');
-            if (!keepSel) selPhoto = null;
             render();
         }
 
@@ -95,31 +96,25 @@
             const photos = g.photos.map(p => {
                 const [label, cls] = photoType(p);
                 return `
-                <div class="aig-photo ${selPhoto === p.id ? 'sel' : ''}" onclick="selectPhoto(${p.id})">
+                <div class="aig-photo">
                     <span class="badge ${cls} tbadge">${label}</span>
                     <img src="${esc(p.url)}" loading="lazy" alt="">
-                    <div class="ft" onclick="event.stopPropagation()">
-                        <span class="small text-secondary">${p.product_ids.length ? p.product_ids.length + ' тов.' : '—'}</span>
+                    <div class="aig-marks">
+                        <span class="hint">Хто на фото — відміть:</span>
+                        ${g.products.length ? g.products.map(pr => `
+                            <label><input type="checkbox" class="form-check-input m-0" ${p.product_ids.includes(pr.id) ? 'checked' : ''}
+                                onchange="toggleMark(${p.id}, ${pr.id}, this.checked)"> ${esc(pr.short)}</label>`).join('')
+                            : '<span class="small text-secondary">Спершу додай товари в групу</span>'}
+                    </div>
+                    <div class="ft">
                         <span class="d-flex gap-1">
                             <button class="aig-mini" title="Вище" onclick="movePhoto(${p.id}, 'up')"><i class="bi bi-arrow-up"></i></button>
                             <button class="aig-mini" title="Нижче" onclick="movePhoto(${p.id}, 'down')"><i class="bi bi-arrow-down"></i></button>
-                            <button class="aig-mini danger" title="Видалити" onclick="deletePhoto(${p.id})"><i class="bi bi-trash"></i></button>
                         </span>
+                        <button class="aig-mini danger" title="Видалити фото" onclick="deletePhoto(${p.id})"><i class="bi bi-trash"></i></button>
                     </div>
                 </div>`;
             }).join('');
-
-            const sel = g.photos.find(p => p.id === selPhoto);
-            const checksPanel = sel ? `
-                <div class="bg-light rounded-3 p-3 mt-3">
-                    <div class="small text-secondary mb-2">Хто на цьому фото (відміть галочками):</div>
-                    <div class="aig-checks">
-                        ${g.products.length ? g.products.map(p => `
-                            <label><input type="checkbox" class="form-check-input me-1" ${sel.product_ids.includes(p.id) ? 'checked' : ''}
-                                onchange="toggleMark(${sel.id}, ${p.id}, this.checked)"> ${esc(p.short)}</label>`).join('')
-                            : '<span class="small text-secondary">Спершу додай товари в групу.</span>'}
-                    </div>
-                </div>` : '';
 
             return `
                 <hr class="my-3">
@@ -140,12 +135,10 @@
                     </div>
                     <input type="file" id="file-${g.id}" class="d-none" accept="image/*" multiple onchange="uploadPhotos(${g.id}, this)">
                 </div>
-                <div class="d-flex flex-wrap gap-3">${photos || '<span class="small text-secondary">Фото ще не завантажені.</span>'}</div>
-                ${checksPanel}`;
+                <div class="d-flex flex-wrap gap-3">${photos || '<span class="small text-secondary">Фото ще не завантажені.</span>'}</div>`;
         }
 
-        function toggleGroup(id) { openId = openId === id ? null : id; selPhoto = null; render(); }
-        function selectPhoto(id) { selPhoto = selPhoto === id ? null : id; render(); }
+        function toggleGroup(id) { openId = openId === id ? null : id; render(); }
 
         async function createGroup() {
             const name = prompt('Назва групи (модельна лінійка):');
@@ -160,7 +153,7 @@
             const name = prompt('Нова назва групи:', g?.name || '');
             if (!name || !name.trim()) return;
             await api('PATCH', BASE + '/groups/' + id, { name: name.trim() });
-            loadData(true);
+            loadData();
         }
 
         async function deleteGroup(id) {
@@ -190,12 +183,12 @@
 
         async function attachProduct(groupId, productId) {
             await api('POST', BASE + '/groups/' + groupId + '/products', { product_id: productId });
-            loadData(true);
+            loadData();
         }
 
         async function detachProduct(groupId, productId) {
             await api('DELETE', BASE + '/groups/' + groupId + '/products/' + productId);
-            loadData(true);
+            loadData();
         }
 
         async function uploadPhotos(groupId, input) {
@@ -204,7 +197,7 @@
             for (const f of input.files) fd.append('files[]', f);
             await api('POST', BASE + '/groups/' + groupId + '/photos', fd, true);
             input.value = '';
-            loadData(true);
+            loadData();
         }
 
         async function toggleMark(photoId, productId, checked) {
@@ -214,19 +207,18 @@
             const ids = new Set(p.product_ids);
             checked ? ids.add(productId) : ids.delete(productId);
             await api('PATCH', BASE + '/photos/' + photoId, { product_ids: [...ids] });
-            loadData(true);
+            loadData();
         }
 
         async function movePhoto(photoId, dir) {
             await api('PATCH', BASE + '/photos/' + photoId, { move: dir });
-            loadData(true);
+            loadData();
         }
 
         async function deletePhoto(photoId) {
             if (!confirm('Видалити це фото?')) return;
             await api('DELETE', BASE + '/photos/' + photoId);
-            if (selPhoto === photoId) selPhoto = null;
-            loadData(true);
+            loadData();
         }
 
         document.addEventListener('click', () => document.querySelectorAll('.aig-drop').forEach(d => d.classList.add('d-none')));
