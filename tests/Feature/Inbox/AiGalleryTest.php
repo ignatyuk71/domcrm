@@ -26,8 +26,8 @@ class AiGalleryTest extends TestCase
 
     private function makeGroupWithPhotos(): array
     {
-        $black = Product::create(['title' => 'Вуличні тапки чорні', 'sku' => '6026', 'sale_price' => 450, 'currency' => 'UAH']);
-        $grey = Product::create(['title' => 'Вуличні тапки сірі', 'sku' => '6027', 'sale_price' => 450, 'currency' => 'UAH']);
+        $black = Product::create(['title' => 'Вуличні тапки чорні', 'sku' => '6026', 'sale_price' => 450, 'currency' => 'UAH', 'is_active' => true]);
+        $grey = Product::create(['title' => 'Вуличні тапки сірі', 'sku' => '6027', 'sale_price' => 450, 'currency' => 'UAH', 'is_active' => true]);
 
         $group = AiPhotoGroup::create(['name' => 'Вуличні пухнасті тапки']);
         $group->products()->attach([$black->id, $grey->id]);
@@ -87,79 +87,69 @@ class AiGalleryTest extends TestCase
         $this->assertSame(0, $blackPhoto->fresh()->products->count());
     }
 
-    public function test_partial_match_search_is_flagged_for_the_agent(): void
+    /** Рядок каталогу, що містить goal-підрядок. */
+    private function catalogLine(string $needle): string
     {
-        Product::create(['title' => 'Вуличні пухнасті тапки чорні', 'sku' => 'V1', 'sale_price' => 450, 'currency' => 'UAH']);
-        Product::create(['title' => 'Домашні хутряні капці білі', 'sku' => 'D1', 'sale_price' => 530, 'currency' => 'UAH']);
-
-        $svc = app(AiAgentService::class);
-
-        // «літні капці» — точного збігу немає, fallback мусить чесно попередити агента
-        $partial = $svc->toolSearchProducts('літні капці');
-        $this->assertGreaterThan(0, $partial['знайдено']);
-        $this->assertStringContainsString('ЧАСТКОВИЙ', $partial['збіг']);
-
-        // Точний запит — позначка «точний»
-        $exact = $svc->toolSearchProducts('хутряні капці');
-        $this->assertSame('точний', $exact['збіг']);
+        $line = collect(explode("\n", app(AiAgentService::class)->buildCatalog()))
+            ->first(fn ($l) => str_contains($l, $needle));
+        $this->assertNotNull($line, "рядок каталогу не знайдено: {$needle}");
+        return $line;
     }
 
-    public function test_search_results_carry_photo_collage_and_group(): void
+    public function test_catalog_lists_every_active_product(): void
+    {
+        Product::create(['title' => 'Вуличні пухнасті тапки чорні', 'sku' => 'V1', 'sale_price' => 450, 'currency' => 'UAH', 'is_active' => true]);
+        Product::create(['title' => 'Домашні хутряні капці білі', 'sku' => 'D1', 'sale_price' => 530, 'currency' => 'UAH', 'is_active' => true]);
+
+        $catalog = app(AiAgentService::class)->buildCatalog();
+
+        $this->assertStringContainsString('Вуличні пухнасті тапки чорні', $catalog);
+        $this->assertStringContainsString('Домашні хутряні капці білі', $catalog);
+        $this->assertStringContainsString('450 грн', $catalog);
+        $this->assertStringContainsString('НЕМАЄ в наявності', $catalog); // варіантів зі стоком немає
+    }
+
+    public function test_catalog_carries_photo_collage_and_group(): void
     {
         [, $collage, $blackPhoto] = $this->makeGroupWithPhotos();
 
-        $res = app(AiAgentService::class)->toolSearchProducts('вуличні тапки');
+        $black = $this->catalogLine('Вуличні тапки чорні');
+        $this->assertStringContainsString("фото:[{$blackPhoto->id}]", $black);
+        $this->assertStringContainsString("колаж:{$collage->id}", $black);
+        $this->assertStringContainsString('група: Вуличні пухнасті тапки', $black);
 
-        $this->assertSame(2, $res['знайдено']);
-        $byTitle = collect($res['товари'])->keyBy('назва');
-
-        $blackRow = $byTitle['Вуличні тапки чорні'];
-        $this->assertSame('Вуличні пухнасті тапки', $blackRow['група']);
-        $this->assertSame([$blackPhoto->id], $blackRow['фото']);
-        $this->assertSame($collage->id, $blackRow['колаж']);
-
-        $greyRow = $byTitle['Вуличні тапки сірі'];
-        $this->assertNull($greyRow['фото']); // власного фото немає
-        $this->assertSame($collage->id, $greyRow['колаж']);
+        $grey = $this->catalogLine('Вуличні тапки сірі');
+        $this->assertStringNotContainsString('фото:[', $grey); // власного фото немає
+        $this->assertStringContainsString("колаж:{$collage->id}", $grey);
     }
 
     public function test_color_with_many_angles_exposes_all_its_photos(): void
     {
         [$group, , $blackPhoto, $black] = $this->makeGroupWithPhotos();
 
-        // Ще два ракурси чорних
         $angle2 = AiPhoto::create(['ai_photo_group_id' => $group->id, 'path' => 'ai-gallery/black2.jpg', 'sort_order' => 3]);
         $angle2->products()->attach([$black->id]);
         $angle3 = AiPhoto::create(['ai_photo_group_id' => $group->id, 'path' => 'ai-gallery/black3.jpg', 'sort_order' => 4]);
         $angle3->products()->attach([$black->id]);
 
-        $res = app(AiAgentService::class)->toolSearchProducts('вуличні тапки чорні');
-        $blackRow = collect($res['товари'])->keyBy('назва')['Вуличні тапки чорні'];
-
-        $this->assertSame([$blackPhoto->id, $angle2->id, $angle3->id], $blackRow['фото']);
+        $line = $this->catalogLine('Вуличні тапки чорні');
+        $this->assertStringContainsString("фото:[{$blackPhoto->id},{$angle2->id},{$angle3->id}]", $line);
     }
 
-    public function test_product_gets_its_own_collage_and_all_group_collages_listed(): void
+    public function test_product_gets_its_own_collage_not_the_first_one(): void
     {
         [$group, $collage1] = $this->makeGroupWithPhotos();
 
         // Друга пара кольорів лінійки живе на колажі №2
-        $bordo = Product::create(['title' => 'Вуличні тапки бордо', 'sku' => '6028', 'sale_price' => 450, 'currency' => 'UAH']);
-        $beige = Product::create(['title' => 'Вуличні тапки беж', 'sku' => '6029', 'sale_price' => 450, 'currency' => 'UAH']);
+        $bordo = Product::create(['title' => 'Вуличні тапки бордо', 'sku' => '6028', 'sale_price' => 450, 'currency' => 'UAH', 'is_active' => true]);
+        $beige = Product::create(['title' => 'Вуличні тапки беж', 'sku' => '6029', 'sale_price' => 450, 'currency' => 'UAH', 'is_active' => true]);
         $group->products()->attach([$bordo->id, $beige->id]);
 
         $collage2 = AiPhoto::create(['ai_photo_group_id' => $group->id, 'path' => 'ai-gallery/collage2.jpg', 'sort_order' => 5]);
         $collage2->products()->attach([$bordo->id, $beige->id]);
 
-        $res = app(AiAgentService::class)->toolSearchProducts('вуличні тапки');
-        $byTitle = collect($res['товари'])->keyBy('назва');
-
-        // Бордо живе на колажі №2 — саме його й отримує, а не перший-ліпший
-        $this->assertSame($collage2->id, $byTitle['Вуличні тапки бордо']['колаж']);
-        // Чорні — як і були, на колажі №1
-        $this->assertSame($collage1->id, $byTitle['Вуличні тапки чорні']['колаж']);
-        // І всі бачать повний список колажів групи по порядку
-        $this->assertSame([$collage1->id, $collage2->id], $byTitle['Вуличні тапки бордо']['колажі_групи']);
+        $this->assertStringContainsString("колаж:{$collage2->id}", $this->catalogLine('Вуличні тапки бордо'));
+        $this->assertStringContainsString("колаж:{$collage1->id}", $this->catalogLine('Вуличні тапки чорні'));
     }
 
     public function test_send_photos_sends_saves_and_dedupes(): void
