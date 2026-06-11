@@ -87,6 +87,23 @@ class AiGalleryTest extends TestCase
         $this->assertSame(0, $blackPhoto->fresh()->products->count());
     }
 
+    public function test_partial_match_search_is_flagged_for_the_agent(): void
+    {
+        Product::create(['title' => 'Вуличні пухнасті тапки чорні', 'sku' => 'V1', 'sale_price' => 450, 'currency' => 'UAH']);
+        Product::create(['title' => 'Домашні хутряні капці білі', 'sku' => 'D1', 'sale_price' => 530, 'currency' => 'UAH']);
+
+        $svc = app(AiAgentService::class);
+
+        // «літні капці» — точного збігу немає, fallback мусить чесно попередити агента
+        $partial = $svc->toolSearchProducts('літні капці');
+        $this->assertGreaterThan(0, $partial['знайдено']);
+        $this->assertStringContainsString('ЧАСТКОВИЙ', $partial['збіг']);
+
+        // Точний запит — позначка «точний»
+        $exact = $svc->toolSearchProducts('хутряні капці');
+        $this->assertSame('точний', $exact['збіг']);
+    }
+
     public function test_search_results_carry_photo_collage_and_group(): void
     {
         [, $collage, $blackPhoto] = $this->makeGroupWithPhotos();
