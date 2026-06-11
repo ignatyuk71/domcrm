@@ -47,3 +47,8 @@ jobs:
           sshpass -e ssh -p 22 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             domcrm_ssh@vs2489.mirohost.net \
             'cd /var/www/domcrm/domcrm.com.ua && php artisan migrate --force && php artisan optimize:clear'
+
+      # Скидання FPM OPcache: optimize:clear його НЕ чистить, тому без цього
+      # сервер міг крутити стару версію коду навіть після успішного rsync.
+      - name: Reset PHP OPcache (web SAPI)
+        run: curl -s -m 20 "https://domcrm.com.ua/opcache-reset.php?token=dom-oc-2026" || true
