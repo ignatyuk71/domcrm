@@ -110,7 +110,7 @@ class MetaOAuthService
     public function subscribePageWebhook(string $pageId, string $pageToken): bool
     {
         $r = Http::asForm()->post($this->graph()."/{$pageId}/subscribed_apps", [
-            'subscribed_fields' => 'messages,message_echoes,messaging_postbacks,messaging_optins,message_deliveries,message_reads,messaging_referrals',
+            'subscribed_fields' => 'messages,message_echoes,messaging_postbacks,messaging_optins,message_deliveries,message_reads,messaging_referrals,feed',
             'access_token' => $pageToken,
         ]);
 

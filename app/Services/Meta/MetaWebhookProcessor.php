@@ -4,6 +4,7 @@ namespace App\Services\Meta;
 
 use App\Jobs\AiRespondToMessage;
 
+use App\Models\InboxComment;
 use App\Models\InboxContact;
 use App\Models\InboxConversation;
 use App\Models\InboxMessage;
@@ -48,9 +49,112 @@ class MetaWebhookProcessor
                     $stored++;
                 }
             }
+
+            // Коментарі під постами приходять окремим каналом — entry.changes.
+            foreach ($entry['changes'] ?? [] as $change) {
+                if ($this->handleCommentChange($entry, $change, $channel)) {
+                    $stored++;
+                }
+            }
         }
 
         return $stored;
+    }
+
+    /** Коментар з вебхука (FB field=feed item=comment / IG field=comments). */
+    private function handleCommentChange(array $entry, array $change, string $channel): bool
+    {
+        $field = $change['field'] ?? '';
+        $v = $change['value'] ?? [];
+
+        if ($channel === 'facebook') {
+            if ($field !== 'feed' || ($v['item'] ?? '') !== 'comment' || ($v['verb'] ?? 'add') !== 'add') {
+                return false;
+            }
+            $commentId = $v['comment_id'] ?? null;
+            $postId = $v['post_id'] ?? null;
+            $fromId = $v['from']['id'] ?? null;
+            $fromName = $v['from']['name'] ?? null;
+            $text = $v['message'] ?? null;
+            $parent = ($v['parent_id'] ?? null) !== $postId ? ($v['parent_id'] ?? null) : null;
+            $at = isset($v['created_time']) ? Carbon::createFromTimestamp((int) $v['created_time'])->setTimezone(config('app.timezone')) : now();
+            $connection = MetaConnection::where('page_id', $entry['id'] ?? '___')->first();
+            $selfId = $connection?->page_id;
+        } else {
+            if ($field !== 'comments') {
+                return false;
+            }
+            $commentId = $v['id'] ?? null;
+            $postId = $v['media']['id'] ?? null;
+            $fromId = $v['from']['id'] ?? null;
+            $fromName = $v['from']['username'] ?? null;
+            $text = $v['text'] ?? null;
+            $parent = $v['parent_id'] ?? null;
+            $at = now();
+            $connection = MetaConnection::where('ig_account_id', $entry['id'] ?? '___')->first();
+            $selfId = $connection?->ig_account_id;
+        }
+
+        if (!$connection || !$commentId || !$postId || !$fromId) {
+            return false;
+        }
+        // Власні відповіді сторінки під постом — не клієнтські коментарі.
+        if ((string) $fromId === (string) $selfId) {
+            return false;
+        }
+        if (InboxComment::where('comment_id', $commentId)->exists()) {
+            return false; // дубль
+        }
+
+        [$postExcerpt, $postImage] = $this->postPreview($connection, $postId, $channel);
+
+        InboxComment::create([
+            'meta_connection_id' => $connection->id,
+            'channel' => $channel,
+            'post_id' => $postId,
+            'post_excerpt' => $postExcerpt,
+            'post_image' => $postImage,
+            'comment_id' => $commentId,
+            'parent_comment_id' => $parent,
+            'from_id' => (string) $fromId,
+            'from_name' => $fromName,
+            'text' => $text,
+            'commented_at' => $at,
+        ]);
+
+        return true;
+    }
+
+    /**
+     * Превʼю поста (текст + картинка) для картки коментаря. Беремо з уже
+     * збереженого коментаря цього ж поста або тягнемо з Graph і качаємо копію.
+     * @return array{0: ?string, 1: ?string}
+     */
+    private function postPreview(MetaConnection $connection, string $postId, string $channel): array
+    {
+        $known = InboxComment::where('post_id', $postId)->whereNotNull('post_image')->first()
+            ?? InboxComment::where('post_id', $postId)->first();
+        if ($known) {
+            return [$known->post_excerpt, $known->post_image];
+        }
+
+        try {
+            $fields = $channel === 'instagram' ? 'media_url,thumbnail_url,caption' : 'full_picture,message';
+            $r = Http::timeout(10)->get(
+                'https://graph.facebook.com/' . config('services.meta.graph_version', 'v21.0') . "/{$postId}",
+                ['fields' => $fields, 'access_token' => $connection->page_access_token]
+            );
+            if (!$r->successful()) {
+                return [null, null];
+            }
+            $excerpt = mb_substr((string) ($r->json('message') ?? $r->json('caption') ?? ''), 0, 200) ?: null;
+            $imgUrl = $r->json('full_picture') ?? $r->json('thumbnail_url') ?? $r->json('media_url');
+
+            return [$excerpt, $imgUrl ? $this->downloadContextMedia($imgUrl) : null];
+        } catch (\Throwable $e) {
+            Log::info('Inbox: не вдалося отримати превʼю поста', ['post' => $postId, 'error' => $e->getMessage()]);
+            return [null, null];
+        }
     }
 
     private function handleEvent(array $entry, array $event, string $channel): bool

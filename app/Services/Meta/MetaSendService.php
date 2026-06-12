@@ -39,6 +39,27 @@ class MetaSendService
     }
 
     /**
+     * Приватна відповідь на коментар: повідомлення летить людині в Messenger/Direct.
+     * Обмеження Meta: одна відповідь на коментар, вікно 7 днів.
+     * @return array{ok: bool, message_id?: string|null, error?: string}
+     */
+    public function sendPrivateReply(MetaConnection $conn, string $commentId, string $text): array
+    {
+        $r = Http::asJson()->post($this->graph() . "/{$conn->page_id}/messages", [
+            'recipient' => ['comment_id' => $commentId],
+            'message' => ['text' => $text],
+            'access_token' => $conn->page_access_token,
+        ]);
+
+        if (!$r->successful()) {
+            Log::warning('Meta private reply failed', ['page' => $conn->page_id, 'comment' => $commentId, 'body' => $r->body()]);
+            return ['ok' => false, 'error' => $r->json('error.message') ?? 'Не вдалося надіслати'];
+        }
+
+        return ['ok' => true, 'message_id' => $r->json('message_id')];
+    }
+
+    /**
      * Надіслати вкладення (image|file|video|audio) за публічним URL.
      * @return array{ok: bool, message_id?: string|null, error?: string}
      */

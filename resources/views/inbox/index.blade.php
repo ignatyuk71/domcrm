@@ -19,6 +19,22 @@
         .ib-search .bi-search { position: absolute; left: 26px; top: 8px; color: #94a3b8; font-size: .85rem; }
 
         .ib-filters { display: flex; gap: 5px; padding: 0 14px 10px; }
+        .ib-tabs { display: flex; gap: 2px; padding: 0 14px 8px; border-bottom: 1px solid #f0f1f4; }
+        .ib-tab { flex: 1; border: none; background: transparent; padding: 8px 6px; font-size: .82rem; font-weight: 600; color: #64748b; border-bottom: 2px solid transparent; cursor: pointer; }
+        .ib-tab.active { color: #4f46e5; border-bottom-color: #4f46e5; }
+        .ib-tab-badge { background: #e11d48; color: #fff; border-radius: 999px; font-size: .64rem; padding: 1px 6px; margin-left: 3px; }
+        .ib-cm { padding: 10px 14px; border-bottom: 1px solid #f5f6f8; }
+        .ib-cm .hd { display: flex; align-items: center; gap: 8px; }
+        .ib-cm .nm { font-weight: 600; font-size: .85rem; color: #1e293b; flex: 1; min-width: 0; }
+        .ib-cm .tm { font-size: .68rem; color: #9aa3b2; white-space: nowrap; }
+        .ib-cm .tx { font-size: .82rem; color: #334155; margin: 5px 0 0 0; }
+        .ib-cm .post { display: flex; gap: 8px; align-items: center; background: #f6f7f9; border-radius: 9px; padding: 6px 8px; margin-top: 7px; }
+        .ib-cm .post img { width: 38px; height: 38px; border-radius: 7px; object-fit: cover; flex-shrink: 0; }
+        .ib-cm .post span { font-size: .72rem; color: #6b7280; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+        .ib-cm .actions { margin-top: 7px; display: flex; gap: 6px; align-items: center; }
+        .ib-cm .dm-form { display: flex; gap: 6px; margin-top: 7px; }
+        .ib-cm .dm-form input { flex: 1; border: 1px solid #dde0e6; border-radius: 9px; padding: 5px 10px; font-size: .82rem; outline: none; }
+        .ib-cm-sent { font-size: .72rem; color: #16a34a; font-weight: 600; }
         .ib-chip { font-size: .76rem; padding: 4px 11px; border-radius: 18px; background: #f1f2f6; color: #64748b; border: none; cursor: pointer; transition: .15s; font-weight: 500; }
         .ib-chip:hover { background: #e9eaf0; }
         .ib-chip.active { background: #4f46e5; color: #fff; }
@@ -237,16 +253,30 @@
                     <button onclick="loadConversations()" class="ib-iconbtn" title="Оновити"><i class="bi bi-arrow-clockwise"></i></button>
                 </div>
             </div>
-            <div class="ib-search">
-                <i class="bi bi-search"></i>
-                <input id="search" placeholder="Пошук за іменем…" autocomplete="off" oninput="onSearch(this.value)">
+            <div class="ib-tabs">
+                <button id="tab-msgs" class="ib-tab active" onclick="setTab('msgs')"><i class="bi bi-chat-left-text me-1"></i>Повідомлення</button>
+                <button id="tab-comments" class="ib-tab" onclick="setTab('comments')"><i class="bi bi-chat-square-quote me-1"></i>Коментарі <span id="cm-badge" class="ib-tab-badge d-none">0</span></button>
             </div>
-            <div class="ib-filters">
-                <button class="ib-chip active" data-f="all" onclick="setFilter('all', this)">Усі</button>
-                <button class="ib-chip" data-f="facebook" onclick="setFilter('facebook', this)"><i class="bi bi-messenger"></i> Messenger</button>
-                <button class="ib-chip" data-f="instagram" onclick="setFilter('instagram', this)"><i class="bi bi-instagram"></i> Instagram</button>
+            <div id="pane-msgs">
+                <div class="ib-search">
+                    <i class="bi bi-search"></i>
+                    <input id="search" placeholder="Пошук за іменем…" autocomplete="off" oninput="onSearch(this.value)">
+                </div>
+                <div class="ib-filters">
+                    <button class="ib-chip active" data-f="all" onclick="setFilter('all', this)">Усі</button>
+                    <button class="ib-chip" data-f="facebook" onclick="setFilter('facebook', this)"><i class="bi bi-messenger"></i> Messenger</button>
+                    <button class="ib-chip" data-f="instagram" onclick="setFilter('instagram', this)"><i class="bi bi-instagram"></i> Instagram</button>
+                </div>
+            </div>
+            <div id="pane-comments" class="d-none">
+                <div class="ib-filters">
+                    <button class="ib-chip active" data-cf="all" onclick="setCmFilter('all', this)">Усі</button>
+                    <button class="ib-chip" data-cf="facebook" onclick="setCmFilter('facebook', this)"><i class="bi bi-messenger"></i> Facebook</button>
+                    <button class="ib-chip" data-cf="instagram" onclick="setCmFilter('instagram', this)"><i class="bi bi-instagram"></i> Instagram</button>
+                </div>
             </div>
             <div id="conv-list" class="ib-convs"><div class="ib-empty">Завантаження…</div></div>
+            <div id="comments-list" class="ib-convs d-none"><div class="ib-empty">Завантаження…</div></div>
         </div>
 
         {{-- 50% --}}
@@ -1403,9 +1433,95 @@
             if (this.scrollTop + this.clientHeight >= this.scrollHeight - 120) loadMoreConvs();
         });
 
+        // --- Вкладка «Коментарі» ---
+        let ibTab = 'msgs', cmFilter = 'all', cmItems = [], cmOpenDm = null;
+
+        function setTab(t) {
+            ibTab = t;
+            document.getElementById('tab-msgs').classList.toggle('active', t === 'msgs');
+            document.getElementById('tab-comments').classList.toggle('active', t === 'comments');
+            document.getElementById('pane-msgs').classList.toggle('d-none', t !== 'msgs');
+            document.getElementById('pane-comments').classList.toggle('d-none', t !== 'comments');
+            document.getElementById('conv-list').classList.toggle('d-none', t !== 'msgs');
+            document.getElementById('comments-list').classList.toggle('d-none', t !== 'comments');
+            if (t === 'comments') loadComments();
+        }
+
+        function setCmFilter(f, btn) {
+            cmFilter = f;
+            document.querySelectorAll('#pane-comments .ib-chip').forEach(c => c.classList.toggle('active', c === btn));
+            loadComments();
+        }
+
+        async function loadComments() {
+            try {
+                const res = await fetch(`/api/inbox/comments${cmFilter !== 'all' ? ('?channel=' + cmFilter) : ''}`, { headers: { 'Accept': 'application/json' } });
+                const data = await res.json();
+                cmItems = data.items || [];
+                const badge = document.getElementById('cm-badge');
+                badge.textContent = data.new_count;
+                badge.classList.toggle('d-none', !data.new_count);
+                if (ibTab === 'comments') renderComments();
+            } catch (e) {}
+        }
+
+        function chIcon(ch) { return ch === 'instagram' ? '<i class="bi bi-instagram" style="color:#d63384"></i>' : '<i class="bi bi-messenger" style="color:#0084ff"></i>'; }
+
+        function renderComments() {
+            const box = document.getElementById('comments-list');
+            if (!cmItems.length) {
+                box.innerHTML = '<div class="ib-empty"><i class="bi bi-chat-square-quote d-block mb-2"></i>Коментарів поки немає</div>';
+                return;
+            }
+            box.innerHTML = cmItems.map(c => {
+                const post = (c.post_image || c.post_excerpt)
+                    ? `<div class="post">${c.post_image ? `<img src="${esc(c.post_image)}" loading="lazy">` : ''}<span>${esc(c.post_excerpt || 'Пост')}</span></div>`
+                    : '';
+                const action = c.status === 'dm_sent'
+                    ? '<span class="ib-cm-sent"><i class="bi bi-check2-all me-1"></i>Надіслано в директ</span>'
+                    : (cmOpenDm === c.id
+                        ? `<form class="dm-form" onsubmit="return sendCmDm(event, ${c.id})">
+                               <input id="dm-input-${c.id}" placeholder="Доброго дня! …" autocomplete="off">
+                               <button class="btn btn-sm btn-primary" type="submit"><i class="bi bi-send"></i></button>
+                           </form>`
+                        : `<button class="btn btn-sm btn-outline-primary" onclick="cmOpenDm=${c.id};renderComments();setTimeout(()=>document.getElementById('dm-input-${c.id}')?.focus(),50)"><i class="bi bi-send me-1"></i>Написати в директ</button>`);
+                return `<div class="ib-cm">
+                    <div class="hd">${chIcon(c.channel)}<span class="nm">${esc(c.from_name)}</span><span class="tm">${esc(c.at_human || '')}</span></div>
+                    <div class="tx">${esc(c.text || '')}</div>
+                    ${post}
+                    <div class="actions">${action}</div>
+                </div>`;
+            }).join('');
+        }
+
+        async function sendCmDm(e, id) {
+            e.preventDefault();
+            const input = document.getElementById('dm-input-' + id);
+            const text = (input?.value || '').trim();
+            if (!text) return false;
+            input.disabled = true;
+            try {
+                const res = await fetch(`/api/inbox/comments/${id}/dm`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
+                    body: JSON.stringify({ text }),
+                });
+                const data = await res.json();
+                if (!data.ok) { alert(data.error || 'Не вдалося надіслати'); input.disabled = false; return false; }
+                cmOpenDm = null;
+                loadComments();
+            } catch (err) {
+                alert('Помилка відправки');
+                input.disabled = false;
+            }
+            return false;
+        }
+
         loadChatStatuses().then(loadConversations);
+        loadComments();
         setInterval(() => {
             loadConversations();
+            loadComments();
             if (activeId) {
                 fetch(`/api/inbox/conversations/${activeId}/messages`, { headers: { 'Accept': 'application/json' } })
                     .then(r => r.json()).then(d => renderMessages(d.messages)).catch(() => {});

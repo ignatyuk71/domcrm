@@ -445,6 +445,60 @@ class InboxController extends Controller
         };
     }
 
+    /** Коментарі під постами (вкладка «Коментарі»). */
+    public function comments(Request $request)
+    {
+        $channel = $request->query('channel');
+
+        $items = \App\Models\InboxComment::query()
+            ->with('connection:id,page_name')
+            ->when(in_array($channel, ['facebook', 'instagram'], true), fn ($q) => $q->where('channel', $channel))
+            ->orderByDesc('commented_at')
+            ->orderByDesc('id')
+            ->limit(200)
+            ->get()
+            ->map(fn (\App\Models\InboxComment $c) => [
+                'id' => $c->id,
+                'channel' => $c->channel,
+                'store' => $c->connection?->page_name ?? '—',
+                'from_name' => $c->from_name ?: ('Користувач ' . substr($c->from_id, -6)),
+                'text' => $c->text,
+                'post_excerpt' => $c->post_excerpt,
+                'post_image' => $c->post_image ? url($c->post_image) : null,
+                'status' => $c->status,
+                'at_human' => ($c->commented_at ?? $c->created_at)?->diffForHumans(),
+            ]);
+
+        return response()->json([
+            'items' => $items,
+            'new_count' => \App\Models\InboxComment::where('status', 'new')->count(),
+        ]);
+    }
+
+    /** Приватна відповідь на коментар → людині в Messenger/Direct. */
+    public function commentDm(Request $request, \App\Models\InboxComment $comment)
+    {
+        $data = $request->validate(['text' => ['required', 'string', 'max:1900']]);
+
+        if ($comment->status === 'dm_sent') {
+            return response()->json(['ok' => false, 'error' => 'На цей коментар уже відповідали в директ (Meta дозволяє лише раз)'], 422);
+        }
+
+        $conn = $comment->connection;
+        if (!$conn) {
+            return response()->json(['ok' => false, 'error' => 'Немає підключення'], 422);
+        }
+
+        $res = app(MetaSendService::class)->sendPrivateReply($conn, $comment->comment_id, $data['text']);
+        if (!($res['ok'] ?? false)) {
+            return response()->json(['ok' => false, 'error' => $res['error'] ?? 'Помилка відправки'], 502);
+        }
+
+        $comment->update(['status' => 'dm_sent']);
+
+        return response()->json(['ok' => true]);
+    }
+
     private function contactName(?string $name, ?string $externalId): string
     {
         if ($name) {
