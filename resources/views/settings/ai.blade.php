@@ -33,6 +33,14 @@
                     <div class="col-12 col-md-2 d-flex gap-2">
                         <button class="btn btn-outline-primary" onclick="testKey(this)"><i class="bi bi-plug me-1"></i>Перевірити</button>
                     </div>
+                    <div class="col-12 col-md-5">
+                        <label class="form-label small text-secondary mb-1">Каталог для агента</label>
+                        <select id="ai-catalog-mode" class="form-select">
+                            <option value="all">Вся база товарів (вітрина + інші товари)</option>
+                            <option value="showcase">Лише вітрина — продає тільки те, що в Галереї ШІ</option>
+                        </select>
+                        <div class="form-text">«Лише вітрина»: чого нема в групах Галереї ШІ — того для агента не існує.</div>
+                    </div>
                 </div>
                 <div id="test-result" class="small mt-2 d-none"></div>
             </div>
@@ -54,6 +62,7 @@
             const data = await res.json();
             document.getElementById('ai-model').value = data.global.model || 'claude-sonnet-4-6';
             document.getElementById('ai-debounce').value = data.global.debounce_seconds ?? 10;
+            document.getElementById('ai-catalog-mode').value = data.global.catalog_mode || 'all';
             document.getElementById('key-hint').textContent = data.global.has_key ? ('— збережено ' + data.global.key_hint) : '';
             storesData = data.stores || [];
             renderStores();
@@ -93,6 +102,7 @@
                         api_key: document.getElementById('ai-key').value.trim() || null,
                         model: document.getElementById('ai-model').value,
                         debounce_seconds: parseInt(document.getElementById('ai-debounce').value || '10', 10),
+                        catalog_mode: document.getElementById('ai-catalog-mode').value,
                         stores: storesData.map(s => ({ meta_connection_id: s.meta_connection_id, enabled: !!s.enabled, system_prompt: s.system_prompt || null })),
                     })
                 });

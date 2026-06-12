@@ -428,10 +428,18 @@ class AiAgentService
             }
         }
 
-        $rest = $products->keys()->reject(fn ($id) => isset($used[$id]))->values();
-        if ($rest->isNotEmpty()) {
-            $sections[] = "═ ІНШІ ТОВАРИ (поза лініями, без опису від магазину) ═\n"
-                . $rest->map(fn ($id) => '  ' . $line($products[$id]))->implode("\n");
+        // Жорсткий режим «лише вітрина»: що не розкладено по лініях — того для ШІ не існує.
+        $showcaseOnly = AiSetting::global()->catalog_mode === 'showcase';
+        if (!$showcaseOnly) {
+            $rest = $products->keys()->reject(fn ($id) => isset($used[$id]))->values();
+            if ($rest->isNotEmpty()) {
+                $sections[] = "═ ІНШІ ТОВАРИ (поза лініями, без опису від магазину) ═\n"
+                    . $rest->map(fn ($id) => '  ' . $line($products[$id]))->implode("\n");
+            }
+        }
+
+        if (empty($sections)) {
+            return '(вітрина порожня — додай групи з товарами в Галереї ШІ)';
         }
 
         return implode("\n\n", $sections);

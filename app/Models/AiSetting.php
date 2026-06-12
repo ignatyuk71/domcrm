@@ -14,6 +14,7 @@ class AiSetting extends Model
         'debounce_seconds',
         'api_key',
         'system_prompt',
+        'catalog_mode',
         'schedule',
     ];
 

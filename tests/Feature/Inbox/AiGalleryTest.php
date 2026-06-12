@@ -167,6 +167,34 @@ class AiGalleryTest extends TestCase
         $this->assertSame('нове знання', $data[0]['ai_description']);
     }
 
+    public function test_showcase_mode_hides_ungrouped_products_completely(): void
+    {
+        $this->makeGroupWithPhotos();
+        Product::create(['title' => 'Піжама тепла', 'sku' => 'PJ8', 'sale_price' => 900, 'currency' => 'UAH', 'is_active' => true]);
+
+        // Режим «вся база»: піжама видима в блоці «інші»
+        \App\Models\AiSetting::global()->update(['catalog_mode' => 'all']);
+        $this->assertStringContainsString('Піжама тепла', app(AiAgentService::class)->buildCatalog());
+
+        // Режим «лише вітрина»: піжами для ШІ не існує, блоку «інші» нема
+        \App\Models\AiSetting::global()->update(['catalog_mode' => 'showcase']);
+        $catalog = app(AiAgentService::class)->buildCatalog();
+        $this->assertStringNotContainsString('Піжама тепла', $catalog);
+        $this->assertStringNotContainsString('ІНШІ ТОВАРИ', $catalog);
+        $this->assertStringContainsString('ЛІНІЯ: Вуличні пухнасті тапки', $catalog); // вітрина лишилась
+
+        // Порожня вітрина — чесна заглушка
+        \App\Models\AiPhotoGroup::query()->delete();
+        $this->assertStringContainsString('вітрина порожня', app(AiAgentService::class)->buildCatalog());
+
+        // Перемикач зберігається через налаштування
+        $owner = $this->owner();
+        $this->actingAs($owner)->postJson('/settings/ai/save', [
+            'model' => 'claude-sonnet-4-6', 'catalog_mode' => 'showcase', 'stores' => [],
+        ])->assertOk();
+        $this->assertSame('showcase', \App\Models\AiSetting::global()->fresh()->catalog_mode);
+    }
+
     public function test_history_remembers_which_products_were_on_sent_photos(): void
     {
         [, $collage] = $this->makeGroupWithPhotos();
