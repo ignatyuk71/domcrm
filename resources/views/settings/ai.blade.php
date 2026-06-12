@@ -71,18 +71,10 @@
                             <label class="form-check-label small" for="cm-ig"><i class="bi bi-instagram"></i> Instagram</label>
                         </div>
                     </div>
-                    <div class="col-6 col-md-3">
-                        <label class="form-label small text-secondary mb-1">На які коментарі</label>
-                        <select id="cm-mode" class="form-select form-select-sm">
-                            <option value="keywords">Лише з тригер-словами</option>
-                            <option value="all">На всі коментарі</option>
-                        </select>
-                        <input id="cm-keywords" class="form-control form-control-sm mt-2" placeholder="ціна, скільки, хочу, +">
-                    </div>
-                    <div class="col-12 col-md-7">
+                    <div class="col-12 col-md-10">
                         <label class="form-label small text-secondary mb-1">Відкривач, коли модель з поста не розпізнано</label>
                         <textarea id="cm-opener" class="form-control" rows="2"></textarea>
-                        <div class="form-text">Якщо лінійку видно з тексту поста — агент сам назве її й ціну. Одна відповідь на коментар (ліміт Meta).</div>
+                        <div class="form-text">Бот відповідає в директ на КОЖЕН коментар. Якщо лінійку видно з тексту поста — сам назве її й ціну, інакше — цей відкривач. Одна відповідь на коментар (ліміт Meta).</div>
                     </div>
                 </div>
             </div>
@@ -110,8 +102,6 @@
             document.getElementById('cm-enabled').checked = !!cm.enabled;
             document.getElementById('cm-fb').checked = cm.facebook !== false;
             document.getElementById('cm-ig').checked = cm.instagram !== false;
-            document.getElementById('cm-mode').value = cm.mode || 'keywords';
-            document.getElementById('cm-keywords').value = cm.keywords || '';
             document.getElementById('cm-opener').value = cm.opener || '';
             document.getElementById('key-hint').textContent = data.global.has_key ? ('— збережено ' + data.global.key_hint) : '';
             storesData = data.stores || [];
@@ -179,8 +169,6 @@
                             enabled: document.getElementById('cm-enabled').checked,
                             facebook: document.getElementById('cm-fb').checked,
                             instagram: document.getElementById('cm-ig').checked,
-                            mode: document.getElementById('cm-mode').value,
-                            keywords: document.getElementById('cm-keywords').value.trim(),
                             opener: document.getElementById('cm-opener').value.trim(),
                         },
                         stores: storesData.map(s => ({ meta_connection_id: s.meta_connection_id, enabled: !!s.enabled, system_prompt: s.system_prompt || null, schedule: s.schedule || null })),

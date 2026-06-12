@@ -173,7 +173,7 @@ class AiAutomationTest extends TestCase
         $g = AiPhotoGroup::create(['name' => 'Вуличні пухнасті тапки']);
         $g->products()->attach(Product::create(['title' => 'Вуличні чорні', 'sku' => 'V9', 'sale_price' => 530, 'currency' => 'UAH', 'is_active' => true])->id);
 
-        AiSetting::global()->update(['comment_settings' => ['enabled' => true, 'facebook' => true, 'instagram' => true, 'mode' => 'keywords', 'keywords' => 'ціна, скільки', 'opener' => 'Відкривач']]);
+        AiSetting::global()->update(['comment_settings' => ['enabled' => true, 'facebook' => true, 'instagram' => true, 'opener' => 'Відкривач']]);
 
         Http::fake(['graph.facebook.com/*' => Http::response(['message_id' => 'mid_funnel_1'], 200)]);
 
@@ -192,10 +192,10 @@ class AiAutomationTest extends TestCase
         });
     }
 
-    public function test_comment_funnel_uses_opener_when_line_unknown_and_respects_gates(): void
+    public function test_comment_funnel_replies_to_every_comment_and_respects_switches(): void
     {
         $this->setUpConversation();
-        AiSetting::global()->update(['comment_settings' => ['enabled' => true, 'facebook' => true, 'instagram' => false, 'mode' => 'keywords', 'keywords' => 'ціна', 'opener' => 'Підкажіть, які тапулі цікавлять?']]);
+        AiSetting::global()->update(['comment_settings' => ['enabled' => true, 'facebook' => true, 'instagram' => false, 'opener' => 'Підкажіть, які тапулі цікавлять?']]);
 
         // 1) Лінійка не розпізнана → відкривач
         Http::fake(['graph.facebook.com/*' => Http::response(['message_id' => 'mid_open_1'], 200)]);
@@ -204,14 +204,16 @@ class AiAutomationTest extends TestCase
         $this->assertSame('dm_sent', $c1->fresh()->status);
         Http::assertSent(fn ($r) => str_contains((string) ($r['message']['text'] ?? ''), 'Підкажіть, які тапулі цікавлять?'));
 
-        // 2) Без тригер-слова → мовчимо
-        Http::fake();
-        $c2 = $this->makeComment('Класні!', 'будь-що');
+        // 2) БУДЬ-ЯКИЙ коментар (без слова «ціна») → теж відповідаємо
+        Http::swap(new \Illuminate\Http\Client\Factory());
+        Http::fake(['graph.facebook.com/*' => Http::response(['message_id' => 'mid_open_2'], 200)]);
+        $c2 = $this->makeComment('Класні! 😍', 'будь-що');
         (new AiReplyToComment($c2->id))->handle(app(MetaSendService::class));
-        $this->assertSame('new', $c2->fresh()->status);
-        Http::assertNothingSent();
+        $this->assertSame('dm_sent', $c2->fresh()->status);
 
         // 3) Instagram вимкнено → мовчимо
+        Http::swap(new \Illuminate\Http\Client\Factory());
+        Http::fake();
         $c3 = $this->makeComment('Ціна?', 'будь-що', 'instagram');
         (new AiReplyToComment($c3->id))->handle(app(MetaSendService::class));
         $this->assertSame('new', $c3->fresh()->status);

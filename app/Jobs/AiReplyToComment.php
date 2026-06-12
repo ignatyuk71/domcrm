@@ -38,9 +38,6 @@ class AiReplyToComment
         if (!($cfg[$comment->channel] ?? true)) {
             return; // канал вимкнено (напр. Instagram off)
         }
-        if (($cfg['mode'] ?? 'keywords') === 'keywords' && !self::matchesKeywords((string) $comment->text, (string) ($cfg['keywords'] ?? ''))) {
-            return;
-        }
 
         // Замок: вебхук-джоба і крон-добирач не повинні відповісти двічі.
         $lock = Cache::lock('ai-comment-' . $comment->id, 300);
@@ -73,20 +70,6 @@ class AiReplyToComment
         } finally {
             $lock->release();
         }
-    }
-
-    /** Чи містить коментар тригер-слово (регістронезалежно, по підрядку). */
-    public static function matchesKeywords(string $text, string $keywords): bool
-    {
-        $text = mb_strtolower($text);
-        foreach (preg_split('/[,;\n]+/u', mb_strtolower($keywords)) as $kw) {
-            $kw = trim($kw);
-            if ($kw !== '' && str_contains($text, $kw)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /** Класи призначення: маркер у тексті → маркер у назві групи. */
