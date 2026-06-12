@@ -333,6 +333,54 @@ class AiGalleryTest extends TestCase
         $this->actingAs($operator)->get('/settings/ai-gallery')->assertForbidden();
     }
 
+    public function test_reply_to_our_collage_tells_model_which_products_it_shows(): void
+    {
+        [, $collage] = $this->makeGroupWithPhotos();
+
+        $conn = MetaConnection::create(['page_id' => 'P_QR', 'page_name' => 'Shop', 'page_access_token' => 'tok', 'status' => 'active']);
+        \App\Models\AiSetting::global()->update(['api_key' => 'sk-ant-test']);
+        \App\Models\AiSetting::forConnection($conn->id)->update(['enabled' => true]);
+        $contact = InboxContact::create(['meta_connection_id' => $conn->id, 'channel' => 'facebook', 'external_id' => 'U_QR']);
+        $conv = InboxConversation::create(['meta_connection_id' => $conn->id, 'inbox_contact_id' => $contact->id, 'channel' => 'facebook']);
+
+        InboxMessage::create([
+            'inbox_conversation_id' => $conv->id, 'direction' => 'in', 'sender' => 'contact',
+            'external_message_id' => 'm_q0', 'text' => 'Покажіть вуличні', 'sent_at' => now(),
+        ]);
+        // Наш колаж, на який клієнт відповість цитатою
+        InboxMessage::create([
+            'inbox_conversation_id' => $conv->id, 'direction' => 'out', 'sender' => 'ai',
+            'external_message_id' => 'm_collage_q', 'text' => null,
+            'attachments' => [['type' => 'image', 'url' => url($collage->path)]],
+            'sent_at' => now(),
+        ]);
+        $ask = InboxMessage::create([
+            'inbox_conversation_id' => $conv->id, 'direction' => 'in', 'sender' => 'contact',
+            'external_message_id' => 'm_q1', 'text' => 'Покажіть мені коричневі',
+            'context' => ['type' => 'reply', 'mid' => 'm_collage_q'],
+            'sent_at' => now(),
+        ]);
+
+        Http::fake([
+            'api.anthropic.com/*' => Http::response([
+                'content' => [['type' => 'text', 'text' => 'Зараз покажу 🤎']],
+                'stop_reason' => 'end_turn',
+                'usage' => ['input_tokens' => 700, 'output_tokens' => 15],
+            ], 200),
+            'graph.facebook.com/*' => Http::response(['message_id' => 'm_qr_out'], 200),
+        ]);
+
+        (new \App\Jobs\AiRespondToMessage($conv->id, $ask->id))->handle(app(AiAgentService::class));
+
+        $body = collect(Http::recorded())
+            ->filter(fn ($pair) => str_contains($pair[0]->url(), 'api.anthropic.com'))
+            ->first()[0]->body();
+
+        // Модель знає, що цитований колаж містить наші товари
+        $this->assertStringContainsString(trim((string) json_encode('у відповідь на наше фото; на ньому товари'), '"'), $body);
+        $this->assertStringContainsString(trim((string) json_encode('Вуличні тапки чорні'), '"'), $body);
+    }
+
     public function test_story_reply_context_feeds_vision_and_exact_match(): void
     {
         if (!extension_loaded('gd')) {

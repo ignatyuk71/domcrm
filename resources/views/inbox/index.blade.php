@@ -1084,10 +1084,10 @@
 
         function ctxHtml(c, out) {
             if (!c) return '';
-            if (c.type === 'reply') {
-                return `<div class="ib-row ${out ? 'out' : ''}"><div class="ib-ctx"><i class="bi bi-reply-fill me-1"></i>У відповідь на: ${esc(c.text || '')}</div></div>`;
-            }
             const img = c.image ? `<img src="${esc(c.image)}" loading="lazy" onerror="this.remove()">` : '';
+            if (c.type === 'reply') {
+                return `<div class="ib-row ${out ? 'out' : ''}"><div class="ib-ctx">${img}<span><i class="bi bi-reply-fill me-1"></i>У відповідь на: ${esc(c.text || '')}</span></div></div>`;
+            }
             return `<div class="ib-row ${out ? 'out' : ''}"><div class="ib-ctx">${img}<span><i class="bi bi-pin-angle me-1"></i>${esc(c.label || 'Контекст')}</span></div></div>`;
         }
 

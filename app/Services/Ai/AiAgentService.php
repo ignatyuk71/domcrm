@@ -686,11 +686,11 @@ class AiAgentService
             ->pluck('id')
             ->all();
 
-        // Цитати «у відповідь на повідомлення»: mid → текст (одним запитом).
+        // Цитати «у відповідь на повідомлення»: mid → процитоване повідомлення (одним запитом).
         $quotedMids = $items->pluck('context.mid')->filter()->unique()->values();
-        $quotedTexts = $quotedMids->isEmpty()
+        $quoted = $quotedMids->isEmpty()
             ? collect()
-            : $conversation->messages()->whereIn('external_message_id', $quotedMids)->pluck('text', 'external_message_id');
+            : $conversation->messages()->whereIn('external_message_id', $quotedMids)->get()->keyBy('external_message_id');
 
         $messages = [];
         foreach ($items as $m) {
@@ -739,14 +739,25 @@ class AiAgentService
 
             // Примітка про контекст: на ЩО відповів клієнт.
             if ($role === 'user' && ($c = $m->context)) {
-                $note = match ($c['type'] ?? '') {
-                    'reply' => ($qt = trim((string) ($quotedTexts[$c['mid'] ?? ''] ?? ''))) !== ''
-                        ? '(у відповідь на повідомлення: «' . mb_substr($qt, 0, 140) . '»)'
-                        : '(у відповідь на одне з попередніх повідомлень)',
-                    'story' => '(клієнт відповів на нашу СТОРІС' . (in_array($m->id, $visionMessageIds, true) ? ' — її зображення вище, визнач по ньому товар' : '') . ')',
-                    'share' => '(клієнт переслав наш ПОСТ' . (in_array($m->id, $visionMessageIds, true) ? ' — його зображення вище, визнач по ньому товар' : '') . ')',
-                    default => '',
-                };
+                $note = '';
+                if (($c['type'] ?? '') === 'reply') {
+                    $q = $quoted[$c['mid'] ?? ''] ?? null;
+                    $qt = trim((string) ($q?->text ?? ''));
+                    if ($qt !== '') {
+                        $note = '(у відповідь на повідомлення: «' . mb_substr($qt, 0, 140) . '»)';
+                    } elseif ($q && ($lbl = $this->photoProductsLabel($q)) !== '') {
+                        // Відповідь на наше фото/колаж → бот знає, ЩО саме на ньому.
+                        $note = "(у відповідь на наше фото; на ньому товари: {$lbl})";
+                    } elseif ($q && !empty($q->attachments)) {
+                        $note = '(у відповідь на фото в цій розмові)';
+                    } else {
+                        $note = '(у відповідь на одне з попередніх повідомлень)';
+                    }
+                } elseif (($c['type'] ?? '') === 'story') {
+                    $note = '(клієнт відповів на нашу СТОРІС' . (in_array($m->id, $visionMessageIds, true) ? ' — її зображення вище, визнач по ньому товар' : '') . ')';
+                } elseif (($c['type'] ?? '') === 'share') {
+                    $note = '(клієнт переслав наш ПОСТ' . (in_array($m->id, $visionMessageIds, true) ? ' — його зображення вище, визнач по ньому товар' : '') . ')';
+                }
                 if ($note !== '') {
                     $text = trim($note . "\n" . $text);
                 }
@@ -809,7 +820,8 @@ class AiAgentService
      * Службова примітка про надіслані клієнту фото: які САМЕ товари він побачив.
      * Без неї модель не памʼятає, що показувала, і «яка ціна цих?» втрачає сенс.
      */
-    private function sentPhotosNote(InboxMessage $m): string
+    /** Які товари зображені на фото повідомлення (по нашій галереї). '' якщо не наші фото. */
+    private function photoProductsLabel(InboxMessage $m): string
     {
         $labels = [];
         foreach ($m->attachments ?? [] as $a) {
@@ -827,9 +839,14 @@ class AiAgentService
             $labels[] = $list !== '' ? $list : "фото №{$photo->id}";
         }
 
-        return $labels
-            ? '(надіслала клієнту фото товарів: ' . implode(' | ', array_unique($labels)) . ')'
-            : '';
+        return implode(' | ', array_unique($labels));
+    }
+
+    private function sentPhotosNote(InboxMessage $m): string
+    {
+        $label = $this->photoProductsLabel($m);
+
+        return $label !== '' ? "(надіслала клієнту фото товарів: {$label})" : '';
     }
 
     /** Картинка контексту (сторіс/пост, на які відповів клієнт): локальна копія або віддалена. */

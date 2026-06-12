@@ -89,9 +89,11 @@ class InboxController extends Controller
             if ($c) {
                 if (($c['type'] ?? '') === 'reply') {
                     $q = $quoted[$c['mid'] ?? ''] ?? null;
+                    $qImage = $q ? collect($q->attachments ?? [])->first(fn ($a) => !empty($a['url']))['url'] ?? null : null;
                     $ctx = [
                         'type' => 'reply',
-                        'text' => $q ? mb_substr((string) ($q->text ?: '[фото]'), 0, 120) : 'повідомлення',
+                        'text' => $q ? mb_substr((string) ($q->text ?: ($qImage ? 'фото' : 'повідомлення')), 0, 120) : 'повідомлення',
+                        'image' => $qImage,
                     ];
                 } else {
                     $ctx = [
