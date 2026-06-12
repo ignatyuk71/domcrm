@@ -82,7 +82,15 @@ class AiSettingsController extends Controller
         $global->catalog_mode = $data['catalog_mode'] ?? 'all';
         $global->operator_pause_hours = $data['operator_pause_hours'] ?? 6;
         if (array_key_exists('comment_settings', $data)) {
-            $global->comment_settings = $data['comment_settings'];
+            $new = $data['comment_settings'] ?? [];
+            $old = $global->comment_settings ?? [];
+            // Момент увімкнення: бот відповідає лише на коментарі ПІСЛЯ нього.
+            if (($new['enabled'] ?? false) && !($old['enabled'] ?? false)) {
+                $new['enabled_at'] = now()->toDateTimeString();
+            } elseif (($new['enabled'] ?? false) && isset($old['enabled_at'])) {
+                $new['enabled_at'] = $old['enabled_at'];
+            }
+            $global->comment_settings = $new;
         }
         if (!empty($data['api_key'])) {
             $global->api_key = trim($data['api_key']);

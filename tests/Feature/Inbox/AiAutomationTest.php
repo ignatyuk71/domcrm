@@ -167,7 +167,7 @@ class AiAutomationTest extends TestCase
         ]);
     }
 
-    public function test_comment_funnel_detects_line_from_post_text_and_replies(): void
+    public function test_comment_funnel_ai_classifies_post_caches_per_post_and_replies(): void
     {
         $this->setUpConversation();
         $g = AiPhotoGroup::create(['name' => 'Вуличні пухнасті тапки']);
@@ -175,21 +175,55 @@ class AiAutomationTest extends TestCase
 
         AiSetting::global()->update(['comment_settings' => ['enabled' => true, 'facebook' => true, 'instagram' => true, 'opener' => 'Відкривач']]);
 
-        Http::fake(['graph.facebook.com/*' => Http::response(['message_id' => 'mid_funnel_1'], 200)]);
+        Http::fake([
+            'api.anthropic.com/*' => Http::response([
+                'content' => [['type' => 'text', 'text' => 'Вуличні пухнасті тапки']],
+                'stop_reason' => 'end_turn',
+                'usage' => ['input_tokens' => 300, 'output_tokens' => 5],
+            ], 200),
+            'graph.facebook.com/*' => Http::response(['message_id' => 'mid_funnel_1'], 200),
+        ]);
 
-        $comment = $this->makeComment('Ціна?', '🤍 Наші ВУЛИЧНІ пухнасті тапки — новинка!');
+        $comment = $this->makeComment('Ціна?', 'Затишок для ваших ніжок надворі цієї зими 🤍');
         (new AiReplyToComment($comment->id))->handle(app(MetaSendService::class));
 
         $comment->refresh();
         $this->assertSame('dm_sent', $comment->status);
         $this->assertSame('mid_funnel_1', $comment->dm_message_id);
         $this->assertSame('Вуличні пухнасті тапки', $comment->matched_group_name);
+        // Класифікацію закешовано на пост
+        $this->assertDatabaseHas('ai_post_lines', ['post_id' => 'post_x', 'ai_photo_group_id' => $g->id, 'source' => 'ai']);
 
-        Http::assertSent(function ($request) {
-            return str_contains($request->url(), '/P_AUT/messages')
-                && ($request['recipient']['comment_id'] ?? null) === request_comment_id($request)
-                && str_contains((string) ($request['message']['text'] ?? ''), '530 грн');
-        });
+        Http::assertSent(fn ($r) => str_contains($r->url(), '/P_AUT/messages')
+            && str_contains((string) ($r['message']['text'] ?? ''), '530 грн'));
+
+        // Другий коментар того ж поста → з кешу, БЕЗ нового виклику Claude
+        $anthropicCalls = collect(Http::recorded())->filter(fn ($p) => str_contains($p[0]->url(), 'api.anthropic.com'))->count();
+        $comment2 = $this->makeComment('І мені ціну', 'Затишок для ваших ніжок надворі цієї зими 🤍');
+        (new AiReplyToComment($comment2->id))->handle(app(MetaSendService::class));
+        $this->assertSame('dm_sent', $comment2->fresh()->status);
+        $anthropicCallsAfter = collect(Http::recorded())->filter(fn ($p) => str_contains($p[0]->url(), 'api.anthropic.com'))->count();
+        $this->assertSame($anthropicCalls, $anthropicCallsAfter);
+    }
+
+    public function test_comment_funnel_ignores_comments_created_before_enabling(): void
+    {
+        $this->setUpConversation();
+        AiSetting::global()->update(['comment_settings' => [
+            'enabled' => true, 'facebook' => true, 'instagram' => true,
+            'opener' => 'X', 'enabled_at' => now()->toDateTimeString(),
+        ]]);
+
+        // Коментар, що існував ДО ввімкнення рубильника
+        $old = $this->makeComment('Ціна?', 'будь-що');
+        $old->created_at = now()->subHours(2);
+        $old->save();
+
+        Http::fake();
+        (new AiReplyToComment($old->id))->handle(app(MetaSendService::class));
+
+        $this->assertSame('new', $old->fresh()->status); // лишився для ручної відповіді
+        Http::assertNothingSent();
     }
 
     public function test_comment_funnel_replies_to_every_comment_and_respects_switches(): void
@@ -197,14 +231,22 @@ class AiAutomationTest extends TestCase
         $this->setUpConversation();
         AiSetting::global()->update(['comment_settings' => ['enabled' => true, 'facebook' => true, 'instagram' => false, 'opener' => 'Підкажіть, які тапулі цікавлять?']]);
 
-        // 1) Лінійка не розпізнана → відкривач
-        Http::fake(['graph.facebook.com/*' => Http::response(['message_id' => 'mid_open_1'], 200)]);
+        // 1) ШІ не розпізнав («невідомо») → відкривач
+        Http::fake([
+            'api.anthropic.com/*' => Http::response([
+                'content' => [['type' => 'text', 'text' => 'невідомо']],
+                'stop_reason' => 'end_turn',
+                'usage' => ['input_tokens' => 200, 'output_tokens' => 3],
+            ], 200),
+            'graph.facebook.com/*' => Http::response(['message_id' => 'mid_open_1'], 200),
+        ]);
         $c1 = $this->makeComment('Ціна?', 'Просто красиве відео без назви');
         (new AiReplyToComment($c1->id))->handle(app(MetaSendService::class));
         $this->assertSame('dm_sent', $c1->fresh()->status);
         Http::assertSent(fn ($r) => str_contains((string) ($r['message']['text'] ?? ''), 'Підкажіть, які тапулі цікавлять?'));
+        $this->assertDatabaseHas('ai_post_lines', ['post_id' => 'post_x', 'ai_photo_group_id' => null, 'source' => 'none']);
 
-        // 2) БУДЬ-ЯКИЙ коментар (без слова «ціна») → теж відповідаємо
+        // 2) БУДЬ-ЯКИЙ коментар (без слова «ціна») того ж поста → теж відповідаємо (з кешу)
         Http::swap(new \Illuminate\Http\Client\Factory());
         Http::fake(['graph.facebook.com/*' => Http::response(['message_id' => 'mid_open_2'], 200)]);
         $c2 = $this->makeComment('Класні! 😍', 'будь-що');

@@ -957,7 +957,7 @@ class AiAgentService
      * найчастіший випадок). Збіг = точний товар, модель не вгадує.
      * Відбитки галереї рахуються ліниво й кешуються в БД.
      */
-    private function matchGalleryPhoto(string $bytes): ?AiPhoto
+    public function matchGalleryPhoto(string $bytes): ?AiPhoto
     {
         $hash = $this->imageHash($bytes);
         if (!$hash) {

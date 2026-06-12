@@ -3,18 +3,23 @@
 namespace App\Jobs;
 
 use App\Models\AiPhotoGroup;
+use App\Models\AiPostLine;
 use App\Models\AiSetting;
 use App\Models\InboxComment;
+use App\Services\Ai\AiAgentService;
 use App\Services\Meta\MetaSendService;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Автоворонка коментарів: клієнт пише «Ціна?» під постом → ШІ шле ОДНУ
- * приватну відповідь у директ (ліміт Meta). Лінійку визначає з ТЕКСТУ поста
- * (власник пише її в підписі), не впізнав — чесний відкривач-питання.
- * Колажі й ціни полетять у звичайній розмові, щойно людина відповість.
+ * Автоворонка коментарів: новий коментар → ОДНА приватна відповідь у директ.
+ * Лінійку поста визначає (один раз на пост, далі кеш ai_post_lines):
+ *   1) відбиток картинки поста по галереї (безкоштовно, точно);
+ *   2) ШІ читає текст + фото поста і називає лінійку;
+ *   3) не зрозумів → шаблонний відкривач.
+ * Відповідає ЛИШЕ на коментарі, що прийшли ПІСЛЯ ввімкнення рубильника.
  */
 class AiReplyToComment
 {
@@ -38,6 +43,12 @@ class AiReplyToComment
         if (!($cfg[$comment->channel] ?? true)) {
             return; // канал вимкнено (напр. Instagram off)
         }
+        // Тільки НОВІ коментарі — ті, що прийшли після ввімкнення рубильника.
+        // Старі (до ввімкнення) лишаються в вкладці для ручної відповіді.
+        $enabledAt = $cfg['enabled_at'] ?? null;
+        if ($enabledAt && $comment->created_at && $comment->created_at->lt(\Carbon\Carbon::parse($enabledAt))) {
+            return;
+        }
 
         // Замок: вебхук-джоба і крон-добирач не повинні відповісти двічі.
         $lock = Cache::lock('ai-comment-' . $comment->id, 300);
@@ -51,7 +62,8 @@ class AiReplyToComment
                 return;
             }
 
-            [$group, $text] = self::buildReply($comment, $cfg);
+            $group = $this->resolveLine($comment);
+            $text = self::replyText($group, $cfg);
 
             $res = $send->sendPrivateReply($comment->connection, $comment->comment_id, $text);
             if (!($res['ok'] ?? false)) {
@@ -72,62 +84,105 @@ class AiReplyToComment
         }
     }
 
-    /** Класи призначення: маркер у тексті → маркер у назві групи. */
-    private const PURPOSE_STEMS = ['вулиц', 'вулич', 'домашн', 'дитяч', 'чолов', 'жіноч'];
+    /** Визначити лінійку поста: кеш → відбиток → ШІ. null = не розпізнано. */
+    private function resolveLine(InboxComment $comment): ?AiPhotoGroup
+    {
+        // 0) Кеш: пост уже класифіковано (першим коментарем)
+        $cached = AiPostLine::where('post_id', $comment->post_id)->first();
+        if ($cached) {
+            return $cached->group;
+        }
+
+        // 1) Відбиток картинки поста по галереї — безкоштовно і точно
+        if ($comment->post_image && is_file(public_path($comment->post_image))) {
+            $photo = app(AiAgentService::class)->matchGalleryPhoto((string) file_get_contents(public_path($comment->post_image)));
+            if ($photo && $photo->group) {
+                AiPostLine::create(['post_id' => $comment->post_id, 'ai_photo_group_id' => $photo->group->id, 'source' => 'hash']);
+
+                return $photo->group;
+            }
+        }
+
+        // 2) ШІ читає пост (текст + фото) і називає лінійку
+        [$group, $definitive] = $this->classifyWithAi($comment);
+        if ($definitive) {
+            AiPostLine::create(['post_id' => $comment->post_id, 'ai_photo_group_id' => $group?->id, 'source' => $group ? 'ai' : 'none']);
+        }
+
+        return $group;
+    }
 
     /**
-     * Визначити лінійку з ТЕКСТУ поста за словом ПРИЗНАЧЕННЯ (власник пише його
-     * в підписі: «домашні», «вуличні», «дитячі»…). Слова типу «пухнасті/тапочки»
-     * не розрізняють — у нас усе пухнасте. Немає однозначного маркера → відкривач.
-     * @return array{0: ?AiPhotoGroup, 1: string}
+     * Класифікація постів через Claude: повертає [група|null, чи відповідь остаточна].
+     * Не остаточна (помилка API/нема ключа) — не кешуємо, спрацює відкривач.
+     * @return array{0: ?AiPhotoGroup, 1: bool}
      */
-    public static function buildReply(InboxComment $comment, array $cfg): array
+    private function classifyWithAi(InboxComment $comment): array
     {
-        $haystack = mb_strtolower(trim(($comment->post_excerpt ?? '') . ' ' . ($comment->text ?? '')));
-
-        // Які класи призначення згадані в тексті (вулич/вулиц — одне і те ж)
-        $norm = fn (string $s) => $s === 'вулич' ? 'вулиц' : $s;
-        $textClasses = [];
-        foreach (self::PURPOSE_STEMS as $stem) {
-            if (str_contains($haystack, $stem)) {
-                $textClasses[$norm($stem)] = true;
-            }
+        $groups = AiPhotoGroup::orderBy('id')->get();
+        if ($groups->isEmpty()) {
+            return [null, true];
         }
 
-        $best = null;
-        if (count($textClasses) === 1) {
-            $class = array_key_first($textClasses);
-            $matched = AiPhotoGroup::with('products:id,sale_price')->get()
-                ->filter(function (AiPhotoGroup $g) use ($class, $norm) {
-                    $name = mb_strtolower($g->name);
-                    foreach (self::PURPOSE_STEMS as $stem) {
-                        if ($norm($stem) === $class && str_contains($name, $stem)) {
-                            return true;
-                        }
-                    }
-                    return false;
-                })
-                ->values();
-            if ($matched->count() === 1) {
-                $best = $matched->first();
-            }
+        $apiKey = AiSetting::global()->api_key;
+        if (!$apiKey) {
+            return [null, false];
         }
 
-        if ($best) {
-            $prices = $best->products->pluck('sale_price')->filter();
+        $list = $groups->map(fn ($g) => '- ' . $g->name)->implode("\n");
+        $content = [];
+        if ($comment->post_image && is_file(public_path($comment->post_image))) {
+            $bytes = (string) file_get_contents(public_path($comment->post_image));
+            $mime = match (strtolower(pathinfo($comment->post_image, PATHINFO_EXTENSION))) {
+                'png' => 'image/png', 'webp' => 'image/webp', 'gif' => 'image/gif', default => 'image/jpeg',
+            };
+            if (strlen($bytes) < 4 * 1024 * 1024) {
+                $content[] = ['type' => 'image', 'source' => ['type' => 'base64', 'media_type' => $mime, 'data' => base64_encode($bytes)]];
+            }
+        }
+        $content[] = ['type' => 'text', 'text' => "Текст поста: " . mb_substr((string) ($comment->post_excerpt ?: '(немає)'), 0, 400)];
+
+        try {
+            $r = Http::timeout(30)->withHeaders([
+                'x-api-key' => $apiKey,
+                'anthropic-version' => '2023-06-01',
+            ])->post('https://api.anthropic.com/v1/messages', [
+                'model' => AiSetting::global()->model ?: 'claude-sonnet-4-6',
+                'max_tokens' => 30,
+                'system' => "Це пост магазину тапочок. Визнач, про яку лінійку йдеться, за текстом і фото.\nЛінійки:\n{$list}\nВідповідай ЛИШЕ точною назвою лінійки зі списку або словом «невідомо». Нічого більше.",
+                'messages' => [['role' => 'user', 'content' => $content]],
+            ]);
+
+            if (!$r->successful()) {
+                Log::warning('AI post classify error', ['post' => $comment->post_id, 'body' => mb_substr($r->body(), 0, 200)]);
+                return [null, false];
+            }
+
+            $answer = trim((string) collect($r->json('content') ?? [])->where('type', 'text')->pluck('text')->implode(' '));
+            $matched = $groups->first(fn ($g) => $answer !== '' && mb_stripos($answer, $g->name) !== false);
+
+            return [$matched, true];
+        } catch (\Throwable $e) {
+            Log::warning('AI post classify failed', ['post' => $comment->post_id, 'error' => $e->getMessage()]);
+            return [null, false];
+        }
+    }
+
+    /** Текст директа: відома лінійка → шаблон з живою ціною; ні → відкривач. */
+    public static function replyText(?AiPhotoGroup $group, array $cfg): string
+    {
+        if ($group) {
+            $prices = $group->products()->pluck('sale_price')->filter();
             $price = $prices->isNotEmpty() ? round((float) $prices->min()) : null;
-            $name = mb_strtolower(trim(preg_replace('/\s*\(.*?\)\s*/u', ' ', $best->name)));
-            $text = "Доброго дня! 💛 Це наші {$name}" . ($price ? " — {$price} грн" : '')
-                . ". Підкажіть, який колір і розмір вас цікавить — надішлю фото й перевірю наявність 🙂";
+            $name = mb_strtolower(trim(preg_replace('/\s*\(.*?\)\s*/u', ' ', $group->name)));
 
-            return [$best, $text];
+            return "Доброго дня! 💛 Це наші {$name}" . ($price ? " — {$price} грн" : '')
+                . ". Підкажіть, який колір і розмір вас цікавить — надішлю фото й перевірю наявність 🙂";
         }
 
         $opener = trim((string) ($cfg['opener'] ?? ''));
-        if ($opener === '') {
-            $opener = 'Доброго дня! 💛 Підкажіть, які саме тапулі вас цікавлять — домашні, вуличні чи дитячі? Підберу варіанти, покажу фото й ціни 🙂';
-        }
 
-        return [null, $opener];
+        return $opener !== '' ? $opener
+            : 'Доброго дня! 💛 Підкажіть, які саме тапулі вас цікавлять — домашні, вуличні чи дитячі? Підберу варіанти, покажу фото й ціни 🙂';
     }
 }
