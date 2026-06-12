@@ -89,39 +89,48 @@ class AiReplyToComment
         return false;
     }
 
+    /** Класи призначення: маркер у тексті → маркер у назві групи. */
+    private const PURPOSE_STEMS = ['вулиц', 'вулич', 'домашн', 'дитяч', 'чолов', 'жіноч'];
+
     /**
-     * Визначити лінійку з ТЕКСТУ поста (слова з назви групи) і скласти відповідь.
+     * Визначити лінійку з ТЕКСТУ поста за словом ПРИЗНАЧЕННЯ (власник пише його
+     * в підписі: «домашні», «вуличні», «дитячі»…). Слова типу «пухнасті/тапочки»
+     * не розрізняють — у нас усе пухнасте. Немає однозначного маркера → відкривач.
      * @return array{0: ?AiPhotoGroup, 1: string}
      */
     public static function buildReply(InboxComment $comment, array $cfg): array
     {
         $haystack = mb_strtolower(trim(($comment->post_excerpt ?? '') . ' ' . ($comment->text ?? '')));
 
-        $best = null;
-        $bestHits = 0;
-        $ambiguous = false;
-        foreach (AiPhotoGroup::with('products:id,sale_price')->get() as $g) {
-            $hits = 0;
-            foreach (preg_split('/[\s,\/()«»"\']+/u', mb_strtolower($g->name)) as $word) {
-                if (mb_strlen($word) < 4) {
-                    continue;
-                }
-                // обрізаємо закінчення: «вуличні» ловить і «вуличних», і «вуличні»
-                $stem = mb_strlen($word) >= 6 ? mb_substr($word, 0, mb_strlen($word) - 2) : $word;
-                if (str_contains($haystack, $stem)) {
-                    $hits++;
-                }
-            }
-            if ($hits > $bestHits) {
-                $best = $g;
-                $bestHits = $hits;
-                $ambiguous = false;
-            } elseif ($hits > 0 && $hits === $bestHits) {
-                $ambiguous = true;
+        // Які класи призначення згадані в тексті (вулич/вулиц — одне і те ж)
+        $norm = fn (string $s) => $s === 'вулич' ? 'вулиц' : $s;
+        $textClasses = [];
+        foreach (self::PURPOSE_STEMS as $stem) {
+            if (str_contains($haystack, $stem)) {
+                $textClasses[$norm($stem)] = true;
             }
         }
 
-        if ($best && !$ambiguous && $bestHits > 0) {
+        $best = null;
+        if (count($textClasses) === 1) {
+            $class = array_key_first($textClasses);
+            $matched = AiPhotoGroup::with('products:id,sale_price')->get()
+                ->filter(function (AiPhotoGroup $g) use ($class, $norm) {
+                    $name = mb_strtolower($g->name);
+                    foreach (self::PURPOSE_STEMS as $stem) {
+                        if ($norm($stem) === $class && str_contains($name, $stem)) {
+                            return true;
+                        }
+                    }
+                    return false;
+                })
+                ->values();
+            if ($matched->count() === 1) {
+                $best = $matched->first();
+            }
+        }
+
+        if ($best) {
             $prices = $best->products->pluck('sale_price')->filter();
             $price = $prices->isNotEmpty() ? round((float) $prices->min()) : null;
             $name = mb_strtolower(trim(preg_replace('/\s*\(.*?\)\s*/u', ' ', $best->name)));
