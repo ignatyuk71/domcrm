@@ -110,6 +110,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/api/inbox/conversations/{conversation}/ai-reset', [InboxController::class, 'resetAiContext'])->name('inbox.aiReset');
         Route::get('/api/inbox/comments', [InboxController::class, 'comments'])->name('inbox.comments');
         Route::post('/api/inbox/comments/{comment}/dm', [InboxController::class, 'commentDm'])->name('inbox.commentDm');
+        Route::get('/api/inbox/comments/{comment}/conversation', [InboxController::class, 'commentConversation'])->name('inbox.commentConversation');
         Route::post('/api/inbox/conversations/{conversation}/refresh', [InboxController::class, 'refresh'])->name('inbox.refresh');
         Route::get('/api/inbox/conversations/{conversation}/panel', [InboxController::class, 'panel'])->name('inbox.panel');
         Route::post('/api/inbox/conversations/{conversation}/attach-customer', [InboxController::class, 'attachCustomer'])->name('inbox.attachCustomer');

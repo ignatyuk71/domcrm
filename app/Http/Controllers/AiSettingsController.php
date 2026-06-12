@@ -29,6 +29,7 @@ class AiSettingsController extends Controller
                 'page_name' => $c->page_name,
                 'enabled' => (bool) $s->enabled,
                 'system_prompt' => $s->system_prompt,
+                'schedule' => $s->schedule ?: ['mode' => 'always', 'from' => '20:00', 'to' => '09:00'],
             ];
         })->values();
 
@@ -39,6 +40,15 @@ class AiSettingsController extends Controller
                 'model' => $global->model ?: 'claude-sonnet-4-6',
                 'debounce_seconds' => $global->debounce_seconds ?? 10,
                 'catalog_mode' => $global->catalog_mode ?: 'all',
+                'operator_pause_hours' => $global->operator_pause_hours ?? 6,
+                'comment_settings' => array_merge([
+                    'enabled' => false,
+                    'facebook' => true,
+                    'instagram' => true,
+                    'mode' => 'keywords',
+                    'keywords' => 'ціна, цена, скільки, сколько, почому, по чому, хочу, замовити, +',
+                    'opener' => 'Доброго дня! 💛 Підкажіть, які саме тапулі вас цікавлять — домашні, вуличні чи дитячі? Підберу варіанти, покажу фото й ціни 🙂',
+                ], $global->comment_settings ?? []),
             ],
             'stores' => $stores,
         ]);
@@ -52,16 +62,32 @@ class AiSettingsController extends Controller
             'model' => ['required', 'string', 'max:100'],
             'debounce_seconds' => ['nullable', 'integer', 'min:0', 'max:60'],
             'catalog_mode' => ['nullable', 'in:all,showcase'],
+            'operator_pause_hours' => ['nullable', 'integer', 'min:0', 'max:48'],
+            'comment_settings' => ['nullable', 'array'],
+            'comment_settings.enabled' => ['nullable', 'boolean'],
+            'comment_settings.facebook' => ['nullable', 'boolean'],
+            'comment_settings.instagram' => ['nullable', 'boolean'],
+            'comment_settings.mode' => ['nullable', 'in:all,keywords'],
+            'comment_settings.keywords' => ['nullable', 'string', 'max:1000'],
+            'comment_settings.opener' => ['nullable', 'string', 'max:1000'],
             'stores' => ['array'],
             'stores.*.meta_connection_id' => ['required', 'integer', 'exists:meta_connections,id'],
             'stores.*.enabled' => ['required', 'boolean'],
             'stores.*.system_prompt' => ['nullable', 'string', 'max:20000'],
+            'stores.*.schedule' => ['nullable', 'array'],
+            'stores.*.schedule.mode' => ['nullable', 'in:always,window'],
+            'stores.*.schedule.from' => ['nullable', 'date_format:H:i'],
+            'stores.*.schedule.to' => ['nullable', 'date_format:H:i'],
         ]);
 
         $global = AiSetting::global();
         $global->model = $data['model'];
         $global->debounce_seconds = $data['debounce_seconds'] ?? 10;
         $global->catalog_mode = $data['catalog_mode'] ?? 'all';
+        $global->operator_pause_hours = $data['operator_pause_hours'] ?? 6;
+        if (array_key_exists('comment_settings', $data)) {
+            $global->comment_settings = $data['comment_settings'];
+        }
         if (!empty($data['api_key'])) {
             $global->api_key = trim($data['api_key']);
         }
@@ -71,6 +97,7 @@ class AiSettingsController extends Controller
             AiSetting::forConnection($row['meta_connection_id'])->update([
                 'enabled' => $row['enabled'],
                 'system_prompt' => $row['system_prompt'] ?? null,
+                'schedule' => $row['schedule'] ?? null,
             ]);
         }
 

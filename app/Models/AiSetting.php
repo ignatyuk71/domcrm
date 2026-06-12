@@ -15,14 +15,18 @@ class AiSetting extends Model
         'api_key',
         'system_prompt',
         'catalog_mode',
+        'operator_pause_hours',
+        'comment_settings',
         'schedule',
     ];
 
     protected $casts = [
         'enabled' => 'boolean',
         'schedule' => 'array',
+        'comment_settings' => 'array',
         'api_key' => 'encrypted',
         'debounce_seconds' => 'integer',
+        'operator_pause_hours' => 'integer',
     ];
 
     protected $hidden = ['api_key'];

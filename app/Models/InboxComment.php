@@ -19,6 +19,8 @@ class InboxComment extends Model
         'from_name',
         'text',
         'status',
+        'dm_message_id',
+        'matched_group_name',
         'commented_at',
     ];
 

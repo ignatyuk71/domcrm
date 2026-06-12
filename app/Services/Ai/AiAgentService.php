@@ -34,6 +34,25 @@ class AiAgentService
      */
     private const INTERNAL_WORDS = ['halluci', 'luxury'];
 
+    /**
+     * Чи дозволяє графік працювати зараз. schedule: null/['mode'=>'always'] —
+     * цілодобово; ['mode'=>'window','from'=>'20:00','to'=>'09:00'] — вікно
+     * активності (через північ підтримується).
+     */
+    public static function scheduleAllows(?array $schedule, ?\Carbon\Carbon $at = null): bool
+    {
+        if (($schedule['mode'] ?? 'always') !== 'window') {
+            return true;
+        }
+        $from = $schedule['from'] ?? '00:00';
+        $to = $schedule['to'] ?? '24:00';
+        $now = ($at ?? now())->format('H:i');
+
+        return $from <= $to
+            ? ($now >= $from && $now < $to)
+            : ($now >= $from || $now < $to); // вікно через північ, напр. 20:00–09:00
+    }
+
     /** Прибрати службові слова з тексту для моделі. */
     private function scrub(?string $text): ?string
     {
@@ -100,6 +119,18 @@ class AiAgentService
             $store = AiSetting::where('meta_connection_id', $conversation->meta_connection_id)->first();
             if (!$store || !$store->enabled) {
                 return $finish('skipped_store_off');
+            }
+
+            // Графік: поза вікном роботи агент мовчить. Такий скіп НЕ вважається
+            // «оброблено» — щойно вікно відкриється, крон-добирач підхопить
+            // невідповіджені повідомлення (якщо людина так і не відповіла).
+            if (!self::scheduleAllows($store->schedule)) {
+                return $finish('skipped_schedule');
+            }
+
+            // Липка пауза: оператор написав у цю розмову → ШІ відступає на N годин.
+            if ($conversation->ai_paused_until && now()->lt($conversation->ai_paused_until)) {
+                return $finish('skipped_operator_pause');
             }
 
             // Актуальність: відповідаємо лише якщо це досі ОСТАННЄ повідомлення і воно вхідне.

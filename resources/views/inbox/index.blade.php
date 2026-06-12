@@ -273,6 +273,7 @@
                     <button class="ib-chip active" data-cf="all" onclick="setCmFilter('all', this)">Усі</button>
                     <button class="ib-chip" data-cf="facebook" onclick="setCmFilter('facebook', this)"><i class="bi bi-messenger"></i> Facebook</button>
                     <button class="ib-chip" data-cf="instagram" onclick="setCmFilter('instagram', this)"><i class="bi bi-instagram"></i> Instagram</button>
+                    <button class="ib-chip" id="cm-only-new" onclick="cmOnlyNew=!cmOnlyNew;this.classList.toggle('active',cmOnlyNew);renderComments()">Без відповіді</button>
                 </div>
             </div>
             <div id="conv-list" class="ib-convs"><div class="ib-empty">Завантаження…</div></div>
@@ -942,6 +943,7 @@
                                 <span class="ib-slider"></span>
                             </label>
                         </div>
+                        ${c.ai_paused_until_human ? `<div class="small mt-2" style="color:#b45309"><i class="bi bi-pause-circle me-1"></i>На паузі до ${esc(c.ai_paused_until_human)} — оператор у розмові. Увімкни тумблер, щоб зняти.</div>` : ''}
                         <button class="btn btn-sm btn-outline-secondary w-100 mt-2" style="font-size:.74rem" onclick="resetAiContext(this)" title="Агент забуде стару переписку цієї розмови і почне з чистого аркуша. Повідомлення в чаті лишаються.">
                             <i class="bi bi-eraser me-1"></i>Скинути памʼять ШІ (почати з нуля)
                         </button>
@@ -1434,7 +1436,34 @@
         });
 
         // --- Вкладка «Коментарі» ---
-        let ibTab = 'msgs', cmFilter = 'all', cmItems = [], cmOpenDm = null;
+        let ibTab = 'msgs', cmFilter = 'all', cmItems = [], cmOpenDm = null, cmOnlyNew = false;
+
+        async function ensureTpl() {
+            if (tplLoaded) return;
+            try {
+                const res = await fetch('{{ route('templates.list') }}', { headers: { 'Accept': 'application/json' } });
+                tplItems = (await res.json()).data || [];
+                tplLoaded = true;
+            } catch (e) {}
+        }
+
+        function cmTplOptions() {
+            return '<option value="">шаблон…</option>' + tplItems.map((t, i) => `<option value="${i}">${esc(t.title)}</option>`).join('');
+        }
+
+        async function openCommentConversation(id) {
+            try {
+                const res = await fetch(`/api/inbox/comments/${id}/conversation`, { headers: { 'Accept': 'application/json' } });
+                const data = await res.json();
+                if (data.conversation_id) {
+                    setTab('msgs');
+                    openConversation(data.conversation_id);
+                } else {
+                    alert('Діалог ще створюється (відповідь у дорозі) — спробуй за хвилинку.');
+                }
+            } catch (e) {}
+            return false;
+        }
 
         function setTab(t) {
             ibTab = t;
@@ -1475,18 +1504,26 @@
                 box.innerHTML = '<div class="ib-empty"><i class="bi bi-chat-square-quote d-block mb-2"></i>Коментарів поки немає</div>';
                 return;
             }
-            box.innerHTML = cmItems.map(c => {
+            const list = cmOnlyNew ? cmItems.filter(c => c.status !== 'dm_sent') : cmItems;
+            box.innerHTML = list.map(c => {
                 const post = (c.post_image || c.post_excerpt)
                     ? `<div class="post">${c.post_image ? `<img src="${esc(c.post_image)}" loading="lazy">` : ''}<span>${esc(c.post_excerpt || 'Пост')}</span></div>`
                     : '';
-                const action = c.status === 'dm_sent'
-                    ? '<span class="ib-cm-sent"><i class="bi bi-check2-all me-1"></i>Надіслано в директ</span>'
-                    : (cmOpenDm === c.id
-                        ? `<form class="dm-form" onsubmit="return sendCmDm(event, ${c.id})">
+                const dmForm = `<form class="dm-form" onsubmit="return sendCmDm(event, ${c.id})">
                                <input id="dm-input-${c.id}" placeholder="Доброго дня! …" autocomplete="off">
+                               <select class="form-select form-select-sm" style="max-width:110px" onchange="if(this.value!==''){document.getElementById('dm-input-${c.id}').value=tplItems[this.value].content;this.value='';}">${cmTplOptions()}</select>
                                <button class="btn btn-sm btn-primary" type="submit"><i class="bi bi-send"></i></button>
-                           </form>`
-                        : `<button class="btn btn-sm btn-outline-primary" onclick="cmOpenDm=${c.id};renderComments();setTimeout(()=>document.getElementById('dm-input-${c.id}')?.focus(),50)"><i class="bi bi-send me-1"></i>Написати в директ</button>`);
+                           </form>`;
+                let action;
+                if (c.status === 'dm_sent') {
+                    action = `<a href="#" class="ib-cm-sent" onclick="return openCommentConversation(${c.id})" title="Відкрити діалог з цією людиною">
+                        <i class="bi bi-check2-all me-1"></i>Надіслано в директ${c.matched_group ? ' · ШІ: ' + esc(c.matched_group) : ''} <i class="bi bi-box-arrow-up-right"></i></a>`;
+                } else if (cmOpenDm === c.id) {
+                    action = dmForm;
+                } else {
+                    const failed = c.status === 'dm_failed' ? '<span class="text-danger small me-2">не надіслалось</span>' : '';
+                    action = `${failed}<button class="btn btn-sm btn-outline-primary" onclick="cmOpenDm=${c.id};ensureTpl().then(renderComments);setTimeout(()=>document.getElementById('dm-input-${c.id}')?.focus(),80)"><i class="bi bi-send me-1"></i>Написати в директ</button>`;
+                }
                 return `<div class="ib-cm">
                     <div class="hd">${chIcon(c.channel)}<span class="nm">${esc(c.from_name)}</span><span class="tm">${esc(c.at_human || '')}</span></div>
                     <div class="tx">${esc(c.text || '')}</div>

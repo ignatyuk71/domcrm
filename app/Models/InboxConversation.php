@@ -20,12 +20,14 @@ class InboxConversation extends Model
         'chat_status_id',
         'ai_enabled',
         'ai_context_after_id',
+        'ai_paused_until',
     ];
 
     protected $casts = [
         'last_message_at' => 'datetime',
         'unread_count' => 'integer',
         'ai_enabled' => 'boolean',
+        'ai_paused_until' => 'datetime',
     ];
 
     protected static function booted(): void

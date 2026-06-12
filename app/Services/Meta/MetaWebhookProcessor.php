@@ -108,7 +108,7 @@ class MetaWebhookProcessor
 
         [$postExcerpt, $postImage] = $this->postPreview($connection, $postId, $channel);
 
-        InboxComment::create([
+        $comment = InboxComment::create([
             'meta_connection_id' => $connection->id,
             'channel' => $channel,
             'post_id' => $postId,
@@ -121,6 +121,9 @@ class MetaWebhookProcessor
             'text' => $text,
             'commented_at' => $at,
         ]);
+
+        // Автоворонка: ШІ відповідає в директ ПІСЛЯ того, як вебхук віддав 200.
+        \App\Jobs\AiReplyToComment::dispatchAfterResponse($comment->id);
 
         return true;
     }
@@ -235,6 +238,9 @@ class MetaWebhookProcessor
 
         $context = $this->extractContext($message);
 
+        // Ехо нашої приватної відповіді на коментар — це ШІ/система, не оператор.
+        $isOurPrivateReply = $isEcho && $mid && InboxComment::where('dm_message_id', $mid)->exists();
+
         $text = $message['text'] ?? null;
         // Таймстемп фб — в UTC; приводимо до зони застосунку, інакше стрічка сортується врозкид.
         $sentAt = isset($event['timestamp'])
@@ -244,7 +250,7 @@ class MetaWebhookProcessor
         $msg = InboxMessage::create([
             'inbox_conversation_id' => $conversation->id,
             'direction' => $isEcho ? 'out' : 'in',
-            'sender' => $isEcho ? 'agent' : 'contact',
+            'sender' => $isEcho ? ($isOurPrivateReply ? 'ai' : 'agent') : 'contact',
             'external_message_id' => $mid,
             'text' => $text,
             'attachments' => $attachments ?: null,
@@ -257,6 +263,15 @@ class MetaWebhookProcessor
             'last_message_text' => $text ? mb_substr($text, 0, 480) : '[вкладення]',
             'last_message_direction' => $isEcho ? 'out' : 'in',
         ]);
+
+        // Оператор відповів прямо у ФБ/IG (не через CRM і не наш бот) → липка пауза ШІ.
+        if ($isEcho && !$isOurPrivateReply) {
+            $hours = (int) (\App\Models\AiSetting::global()->operator_pause_hours ?? 6);
+            if ($hours > 0) {
+                $conversation->update(['ai_paused_until' => now()->addHours($hours)]);
+            }
+        }
+
         if (!$isEcho) {
             $conversation->increment('unread_count');
 

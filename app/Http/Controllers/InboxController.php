@@ -126,6 +126,9 @@ class InboxController extends Controller
                 'channel' => $conversation->channel,
                 'chat_status_id' => $conversation->chat_status_id,
                 'ai_enabled' => (bool) $conversation->ai_enabled,
+                'ai_paused_until_human' => ($conversation->ai_paused_until && now()->lt($conversation->ai_paused_until))
+                    ? $conversation->ai_paused_until->format('H:i')
+                    : null,
                 'contact_name' => $this->contactName($conversation->contact?->name, $conversation->contact?->external_id),
                 'avatar' => $conversation->contact?->profile_pic,
             ],
@@ -166,6 +169,7 @@ class InboxController extends Controller
             'last_message_direction' => 'out',
             'unread_count' => 0,
         ]);
+        $this->pauseAiAfterOperator($conversation);
 
         return response()->json([
             'ok' => true,
@@ -178,6 +182,15 @@ class InboxController extends Controller
                 'sent_at_human' => now()->format('d.m H:i'),
             ],
         ]);
+    }
+
+    /** Оператор написав у розмову → ШІ відступає на N годин (липка пауза). */
+    private function pauseAiAfterOperator(InboxConversation $conversation): void
+    {
+        $hours = (int) (\App\Models\AiSetting::global()->operator_pause_hours ?? 6);
+        if ($hours > 0) {
+            $conversation->update(['ai_paused_until' => now()->addHours($hours)]);
+        }
     }
 
     /** Надіслати щойно завантажений файл (фото/файл) клієнту. */
@@ -240,6 +253,7 @@ class InboxController extends Controller
             'last_message_direction' => 'out',
             'unread_count' => 0,
         ]);
+        $this->pauseAiAfterOperator($conversation);
 
         return response()->json(['ok' => true]);
     }
@@ -379,11 +393,14 @@ class InboxController extends Controller
         return response()->json(['ok' => true]);
     }
 
-    /** Увімкнути/вимкнути AI-агента для цієї розмови. */
+    /** Увімкнути/вимкнути AI-агента для цієї розмови. Увімкнення знімає липку паузу. */
     public function setAi(Request $request, InboxConversation $conversation)
     {
         $data = $request->validate(['enabled' => ['required', 'boolean']]);
-        $conversation->update(['ai_enabled' => $data['enabled']]);
+        $conversation->update([
+            'ai_enabled' => $data['enabled'],
+            'ai_paused_until' => $data['enabled'] ? null : $conversation->ai_paused_until,
+        ]);
 
         return response()->json(['ok' => true]);
     }
@@ -466,6 +483,7 @@ class InboxController extends Controller
                 'post_excerpt' => $c->post_excerpt,
                 'post_image' => $c->post_image ? url($c->post_image) : null,
                 'status' => $c->status,
+                'matched_group' => $c->matched_group_name,
                 'at_human' => ($c->commented_at ?? $c->created_at)?->diffForHumans(),
             ]);
 
@@ -494,9 +512,19 @@ class InboxController extends Controller
             return response()->json(['ok' => false, 'error' => $res['error'] ?? 'Помилка відправки'], 502);
         }
 
-        $comment->update(['status' => 'dm_sent']);
+        $comment->update(['status' => 'dm_sent', 'dm_message_id' => $res['message_id'] ?? null]);
 
         return response()->json(['ok' => true]);
+    }
+
+    /** Розмова, де лежить наша приватна відповідь на цей коментар (по mid з еха). */
+    public function commentConversation(\App\Models\InboxComment $comment)
+    {
+        $conversationId = $comment->dm_message_id
+            ? InboxMessage::where('external_message_id', $comment->dm_message_id)->value('inbox_conversation_id')
+            : null;
+
+        return response()->json(['conversation_id' => $conversationId]);
     }
 
     private function contactName(?string $name, ?string $externalId): string
