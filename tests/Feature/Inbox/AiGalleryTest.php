@@ -333,6 +333,62 @@ class AiGalleryTest extends TestCase
         $this->actingAs($operator)->get('/settings/ai-gallery')->assertForbidden();
     }
 
+    public function test_complete_order_marks_chat_mutes_ai_and_sends_final_text(): void
+    {
+        [, , , $black] = $this->makeGroupWithPhotos();
+
+        $conn = MetaConnection::create(['page_id' => 'P_CO', 'page_name' => 'Shop', 'page_access_token' => 'tok', 'status' => 'active']);
+        \App\Models\AiSetting::global()->update(['api_key' => 'sk-ant-test', 'model' => 'claude-sonnet-4-6']);
+        \App\Models\AiSetting::forConnection($conn->id)->update(['enabled' => true, 'system_prompt' => 'Ти продавець.']);
+        $contact = InboxContact::create(['meta_connection_id' => $conn->id, 'channel' => 'facebook', 'external_id' => 'U_CO']);
+        $conv = InboxConversation::create(['meta_connection_id' => $conn->id, 'inbox_contact_id' => $contact->id, 'channel' => 'facebook']);
+        $incoming = InboxMessage::create([
+            'inbox_conversation_id' => $conv->id, 'direction' => 'in', 'sender' => 'contact',
+            'external_message_id' => 'm_pay', 'text' => 'При отриманні', 'sent_at' => now(),
+        ]);
+
+        Http::fake([
+            'api.anthropic.com/*' => Http::sequence()
+                ->push([
+                    'content' => [[
+                        'type' => 'tool_use', 'id' => 'tu_co',
+                        'name' => 'complete_order',
+                        'input' => ['summary' => 'Вуличні тапки, чорні, 36/37', 'payment' => 'при отриманні', 'product_id' => $black->id],
+                    ]],
+                    'stop_reason' => 'tool_use',
+                    'usage' => ['input_tokens' => 400, 'output_tokens' => 40],
+                ], 200)
+                ->push([
+                    'content' => [['type' => 'text', 'text' => 'Дякуємо! Ваше замовлення прийнято 💛 Вуличні тапки, чорні, 36/37, оплата при отриманні. Зранку оформимо і напишемо вам тут 🙏']],
+                    'stop_reason' => 'end_turn',
+                    'usage' => ['input_tokens' => 450, 'output_tokens' => 45],
+                ], 200),
+            'graph.facebook.com/*' => Http::response(['message_id' => 'm_co_out'], 200),
+        ]);
+
+        (new \App\Jobs\AiRespondToMessage($conv->id, $incoming->id))->handle(app(AiAgentService::class));
+
+        $conv->refresh();
+        // Позначка стоїть, бот у розмові вимкнений
+        $status = \App\Models\ChatStatus::where('code', 'ai_order')->first();
+        $this->assertNotNull($status);
+        $this->assertSame($status->id, $conv->chat_status_id);
+        $this->assertFalse((bool) $conv->ai_enabled);
+        // Фінальне повідомлення пішло
+        $this->assertDatabaseHas('inbox_messages', [
+            'sender' => 'ai',
+            'text' => 'Дякуємо! Ваше замовлення прийнято 💛 Вуличні тапки, чорні, 36/37, оплата при отриманні. Зранку оформимо і напишемо вам тут 🙏',
+        ]);
+
+        // Наступне повідомлення клієнта — бот мовчить (розмова в людей)
+        $next = InboxMessage::create([
+            'inbox_conversation_id' => $conv->id, 'direction' => 'in', 'sender' => 'contact',
+            'external_message_id' => 'm_after_co', 'text' => 'А коли відправите?', 'sent_at' => now(),
+        ]);
+        (new \App\Jobs\AiRespondToMessage($conv->id, $next->id))->handle(app(AiAgentService::class));
+        $this->assertDatabaseHas('ai_runs', ['inbox_message_id' => $next->id, 'status' => 'skipped_conversation_off']);
+    }
+
     public function test_agent_sends_photo_then_final_text_in_tool_loop(): void
     {
         [, $collage] = $this->makeGroupWithPhotos();
