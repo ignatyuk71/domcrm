@@ -72,6 +72,8 @@
         .ib-bub img { max-width: 230px; border-radius: 16px; display: block; }
         .ib-time-mini { font-size: .68rem; color: #8a8d91; margin: 2px 6px 8px; }
         .ib-time-mini.out { text-align: right; }
+        .ib-ctx { max-width: 64%; background: #f5f6f8; border-left: 3px solid #cdd2dc; border-radius: 10px; padding: 6px 10px; margin-bottom: 2px; font-size: .74rem; color: #65676b; display: flex; flex-direction: column; gap: 4px; }
+        .ib-ctx img { max-width: 120px; max-height: 120px; border-radius: 8px; object-fit: cover; display: block; }
 
         .ib-composer { padding: 12px 16px 14px; background: #fff; border-top: 1px solid #ecedf1; position: relative; }
         .ib-box { display: flex; align-items: flex-start; gap: 12px; background: #fff; border: 1px solid #e3e6ea; border-radius: 16px; padding: 10px 14px; }
@@ -1080,6 +1082,15 @@
             renderInfo(currentConv);
         }
 
+        function ctxHtml(c, out) {
+            if (!c) return '';
+            if (c.type === 'reply') {
+                return `<div class="ib-row ${out ? 'out' : ''}"><div class="ib-ctx"><i class="bi bi-reply-fill me-1"></i>У відповідь на: ${esc(c.text || '')}</div></div>`;
+            }
+            const img = c.image ? `<img src="${esc(c.image)}" loading="lazy" onerror="this.remove()">` : '';
+            return `<div class="ib-row ${out ? 'out' : ''}"><div class="ib-ctx">${img}<span><i class="bi bi-pin-angle me-1"></i>${esc(c.label || 'Контекст')}</span></div></div>`;
+        }
+
         function renderMessages(messages) {
             const box = document.getElementById('thread-messages');
             box.innerHTML = messages.map((m, i) => {
@@ -1090,7 +1101,7 @@
                 const showTime = !next || next.direction !== m.direction;
                 const time = showTime ? `<div class="ib-time-mini ${out ? 'out' : ''}">${esc(m.sent_at_human || '')}</div>` : '';
                 const aiMark = m.sender === 'ai' ? '<i class="bi bi-stars me-1" style="font-size:.72rem;opacity:.85" title="Відповів AI-агент"></i>' : '';
-                return `<div class="ib-row ${out ? 'out' : ''}"><div class="ib-bub ${out ? 'out' : 'in'}${media}">${aiMark}${m.text ? esc(m.text) : ''}${atts}</div></div>${time}`;
+                return `${ctxHtml(m.context, out)}<div class="ib-row ${out ? 'out' : ''}"><div class="ib-bub ${out ? 'out' : 'in'}${media}">${aiMark}${m.text ? esc(m.text) : ''}${atts}</div></div>${time}`;
             }).join('');
             appendPending();
             box.scrollTop = box.scrollHeight;

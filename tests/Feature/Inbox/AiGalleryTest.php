@@ -333,6 +333,74 @@ class AiGalleryTest extends TestCase
         $this->actingAs($operator)->get('/settings/ai-gallery')->assertForbidden();
     }
 
+    public function test_story_reply_context_feeds_vision_and_exact_match(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD недоступний');
+        }
+
+        // Наше фото в галереї з товаром (реальний PNG для відбитка)
+        $product = Product::create(['title' => 'Капці для вулиці ЧОРНИЙ', 'sku' => '6026B', 'sale_price' => 530, 'currency' => 'UAH', 'is_active' => true]);
+        $group = AiPhotoGroup::create(['name' => 'Вуличні']);
+        $group->products()->attach($product->id);
+        $img = imagecreatetruecolor(40, 30);
+        imagefilledrectangle($img, 0, 0, 39, 29, imagecolorallocate($img, 20, 20, 25));
+        imagefilledellipse($img, 20, 15, 24, 16, imagecolorallocate($img, 230, 230, 235));
+        $dir = public_path('ai-gallery');
+        if (!is_dir($dir)) { @mkdir($dir, 0755, true); }
+        imagepng($img, $dir . '/test-story-src.png');
+        imagedestroy($img);
+        $photo = AiPhoto::create(['ai_photo_group_id' => $group->id, 'path' => 'ai-gallery/test-story-src.png', 'sort_order' => 1]);
+        $photo->products()->attach($product->id);
+
+        $conn = MetaConnection::create(['page_id' => 'P_ST', 'page_name' => 'Shop', 'page_access_token' => 'tok', 'status' => 'active']);
+        \App\Models\AiSetting::global()->update(['api_key' => 'sk-ant-test']);
+        \App\Models\AiSetting::forConnection($conn->id)->update(['enabled' => true]);
+        $contact = InboxContact::create(['meta_connection_id' => $conn->id, 'channel' => 'instagram', 'external_id' => 'U_ST']);
+        $conv = InboxConversation::create(['meta_connection_id' => $conn->id, 'inbox_contact_id' => $contact->id, 'channel' => 'instagram']);
+
+        // Вхідне: «можна замовити?» як відповідь на сторіс (медіа вже скачане вебхуком)
+        $storyBytes = (string) file_get_contents($dir . '/test-story-src.png');
+        $localDir = public_path('inbox-context');
+        if (!is_dir($localDir)) { @mkdir($localDir, 0755, true); }
+        file_put_contents($localDir . '/test-story-ctx.png', $storyBytes);
+        $msg = InboxMessage::create([
+            'inbox_conversation_id' => $conv->id, 'direction' => 'in', 'sender' => 'contact',
+            'external_message_id' => 'm_story_q', 'text' => 'Доброго ранку, можна замовити?',
+            'context' => ['type' => 'story', 'url' => 'https://cdn.expired/story.jpg', 'local' => 'inbox-context/test-story-ctx.png'],
+            'sent_at' => now(),
+        ]);
+
+        Http::fake(function ($request) use ($storyBytes) {
+            if (str_contains($request->url(), 'inbox-context/test-story-ctx.png')) {
+                return Http::response($storyBytes, 200, ['Content-Type' => 'image/png']);
+            }
+            if (str_contains($request->url(), 'api.anthropic.com')) {
+                return Http::response([
+                    'content' => [['type' => 'text', 'text' => 'Так! Це наші чорні вуличні — 530 грн 🖤']],
+                    'stop_reason' => 'end_turn',
+                    'usage' => ['input_tokens' => 1600, 'output_tokens' => 30],
+                ], 200);
+            }
+            return Http::response(['message_id' => 'm_story_out'], 200);
+        });
+
+        (new \App\Jobs\AiRespondToMessage($conv->id, $msg->id))->handle(app(AiAgentService::class));
+
+        $body = collect(Http::recorded())
+            ->filter(fn ($pair) => str_contains($pair[0]->url(), 'api.anthropic.com'))
+            ->first()[0]->body();
+
+        // Модель отримала: image-блок сторіс + примітку про сторіс + ТОЧНИЙ збіг з товаром
+        $this->assertStringContainsString('"type":"image"', $body);
+        $this->assertStringContainsString(trim((string) json_encode('клієнт відповів на нашу СТОРІС'), '"'), $body);
+        $this->assertStringContainsString(trim((string) json_encode('Капці для вулиці ЧОРНИЙ'), '"'), $body);
+        $this->assertDatabaseHas('inbox_messages', ['text' => 'Так! Це наші чорні вуличні — 530 грн 🖤']);
+
+        @unlink($dir . '/test-story-src.png');
+        @unlink($localDir . '/test-story-ctx.png');
+    }
+
     public function test_complete_order_marks_chat_mutes_ai_and_sends_final_text(): void
     {
         [, , , $black] = $this->makeGroupWithPhotos();

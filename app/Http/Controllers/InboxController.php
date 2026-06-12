@@ -71,19 +71,47 @@ class InboxController extends Controller
     {
         $conversation->loadMissing(['connection:id,page_name', 'contact:id,name,external_id,profile_pic']);
 
-        $messages = $conversation->messages()
+        $items = $conversation->messages()
             ->orderBy('sent_at')
             ->orderBy('id')
             ->limit(500)
-            ->get()
-            ->map(fn (InboxMessage $m) => [
+            ->get();
+
+        // Цитати: mid → процитоване повідомлення (одним запитом по розмові)
+        $quotedMids = $items->pluck('context.mid')->filter()->unique()->values();
+        $quoted = $quotedMids->isEmpty()
+            ? collect()
+            : $conversation->messages()->whereIn('external_message_id', $quotedMids)->get()->keyBy('external_message_id');
+
+        $messages = $items->map(function (InboxMessage $m) use ($quoted) {
+            $ctx = null;
+            $c = $m->context;
+            if ($c) {
+                if (($c['type'] ?? '') === 'reply') {
+                    $q = $quoted[$c['mid'] ?? ''] ?? null;
+                    $ctx = [
+                        'type' => 'reply',
+                        'text' => $q ? mb_substr((string) ($q->text ?: '[фото]'), 0, 120) : 'повідомлення',
+                    ];
+                } else {
+                    $ctx = [
+                        'type' => $c['type'],
+                        'image' => !empty($c['local']) ? url($c['local']) : ($c['url'] ?? null),
+                        'label' => ($c['type'] ?? '') === 'story' ? 'Відповідь на сторіс' : 'Пересланий пост',
+                    ];
+                }
+            }
+
+            return [
                 'id' => $m->id,
                 'direction' => $m->direction,
                 'sender' => $m->sender,
                 'text' => $m->text,
                 'attachments' => $m->attachments ?? [],
+                'context' => $ctx,
                 'sent_at_human' => ($m->sent_at ?? $m->created_at)?->format('d.m H:i'),
-            ]);
+            ];
+        });
 
         $conversation->update(['unread_count' => 0]);
 

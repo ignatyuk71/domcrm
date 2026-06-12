@@ -9,7 +9,9 @@ use App\Models\InboxConversation;
 use App\Models\InboxMessage;
 use App\Models\MetaConnection;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 /**
  * Розбирає вебхук-події Meta (Messenger + Instagram) і складає вхідні
@@ -127,6 +129,8 @@ class MetaWebhookProcessor
             ];
         }
 
+        $context = $this->extractContext($message);
+
         $text = $message['text'] ?? null;
         // Таймстемп фб — в UTC; приводимо до зони застосунку, інакше стрічка сортується врозкид.
         $sentAt = isset($event['timestamp'])
@@ -140,6 +144,7 @@ class MetaWebhookProcessor
             'external_message_id' => $mid,
             'text' => $text,
             'attachments' => $attachments ?: null,
+            'context' => $context,
             'sent_at' => $sentAt,
         ]);
 
@@ -158,5 +163,84 @@ class MetaWebhookProcessor
         }
 
         return true;
+    }
+
+    /**
+     * Контекст повідомлення: на ЩО відповів клієнт.
+     * reply_to.mid → цитата конкретного повідомлення; reply_to.story → відповідь
+     * на сторіс; вкладення share/media_share/story_mention → пересланий пост.
+     * Медіа качаємо собі ОДРАЗУ — посилання Meta живуть недовго.
+     */
+    private function extractContext(array $message): ?array
+    {
+        $replyTo = $message['reply_to'] ?? null;
+
+        if (!empty($replyTo['mid'])) {
+            return ['type' => 'reply', 'mid' => (string) $replyTo['mid']];
+        }
+
+        if (!empty($replyTo['story'])) {
+            $url = $replyTo['story']['url'] ?? null;
+
+            return array_filter([
+                'type' => 'story',
+                'url' => $url,
+                'story_id' => $replyTo['story']['id'] ?? null,
+                'local' => $url ? $this->downloadContextMedia($url) : null,
+            ]);
+        }
+
+        foreach ($message['attachments'] ?? [] as $att) {
+            $type = $att['type'] ?? '';
+            if (!in_array($type, ['share', 'media_share', 'story_mention'], true)) {
+                continue;
+            }
+            $url = $att['payload']['url'] ?? null;
+
+            return array_filter([
+                'type' => $type === 'story_mention' ? 'story' : 'share',
+                'url' => $url,
+                'local' => $url ? $this->downloadContextMedia($url) : null,
+            ]);
+        }
+
+        return null;
+    }
+
+    /** Скачати картинку контексту до себе. Повертає відносний шлях або null. */
+    private function downloadContextMedia(string $url): ?string
+    {
+        try {
+            $r = Http::timeout(10)->get($url);
+            if (!$r->successful()) {
+                return null;
+            }
+            $mime = trim(explode(';', (string) $r->header('Content-Type'))[0]);
+            if (!str_starts_with($mime, 'image/')) {
+                return null; // відео/посилання не качаємо — лишиться віддалений url
+            }
+            $body = $r->body();
+            if (strlen($body) > 8 * 1024 * 1024) {
+                return null;
+            }
+
+            $ext = match ($mime) {
+                'image/png' => 'png',
+                'image/webp' => 'webp',
+                'image/gif' => 'gif',
+                default => 'jpg',
+            };
+            $dir = public_path('inbox-context');
+            if (!is_dir($dir)) {
+                @mkdir($dir, 0755, true);
+            }
+            $name = Str::random(24) . '.' . $ext;
+            file_put_contents($dir . '/' . $name, $body);
+
+            return 'inbox-context/' . $name;
+        } catch (\Throwable $e) {
+            Log::info('Inbox: не вдалося скачати медіа контексту', ['error' => $e->getMessage()]);
+            return null;
+        }
     }
 }

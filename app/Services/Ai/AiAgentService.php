@@ -677,14 +677,20 @@ class AiAgentService
             ->reverse()
             ->values();
 
-        // Vision: 2 НАЙСВІЖІШІ фото клієнта передаємо моделі як картинки —
-        // вона бачить, що на них, і звіряє з каталогом. Старіші — лише текстом.
+        // Vision: 2 НАЙСВІЖІШІ повідомлення з картинками (фото клієнта АБО
+        // сторіс/пост, на які він відповів) ідуть у модель як зображення.
         $visionMessageIds = $items
-            ->filter(fn ($m) => $m->direction === 'in' && $this->clientImageUrls($m) !== [])
+            ->filter(fn ($m) => $m->direction === 'in' && ($this->clientImageUrls($m) !== [] || $this->contextImageUrl($m)))
             ->sortByDesc('id')
             ->take(self::MAX_VISION_IMAGES)
             ->pluck('id')
             ->all();
+
+        // Цитати «у відповідь на повідомлення»: mid → текст (одним запитом).
+        $quotedMids = $items->pluck('context.mid')->filter()->unique()->values();
+        $quotedTexts = $quotedMids->isEmpty()
+            ? collect()
+            : $conversation->messages()->whereIn('external_message_id', $quotedMids)->pluck('text', 'external_message_id');
 
         $messages = [];
         foreach ($items as $m) {
@@ -699,7 +705,12 @@ class AiAgentService
 
             $blocks = [];
             if ($role === 'user' && in_array($m->id, $visionMessageIds, true)) {
-                foreach (array_slice($this->clientImageUrls($m), 0, 2) as $url) {
+                // Контекст (сторіс/пост) — першим: це «про що мова».
+                $urls = array_slice(array_merge(
+                    array_filter([$this->contextImageUrl($m)]),
+                    $this->clientImageUrls($m)
+                ), 0, 2);
+                foreach ($urls as $url) {
                     $img = $this->fetchImage($url);
                     if (!$img) {
                         continue;
@@ -708,7 +719,7 @@ class AiAgentService
                         'type' => 'image',
                         'source' => ['type' => 'base64', 'media_type' => $img['mime'], 'data' => base64_encode($img['bytes'])],
                     ];
-                    // Скрін нашого ж фото → точний товар, без вгадування.
+                    // Скрін нашого ж фото / наш пост → точний товар, без вгадування.
                     if ($match = $this->matchGalleryPhoto($img['bytes'])) {
                         $list = $match->products
                             ->map(fn ($p) => '#' . $p->id . ' ' . $this->scrub($p->title) . ' — ' . round((float) $p->sale_price) . ' грн')
@@ -722,7 +733,22 @@ class AiAgentService
                     }
                 }
                 if ($blocks && $text === '') {
-                    $text = '(фото від клієнта вище — роздивись і знайди відповідник у каталозі)';
+                    $text = '(зображення вище — роздивись і знайди відповідник у каталозі)';
+                }
+            }
+
+            // Примітка про контекст: на ЩО відповів клієнт.
+            if ($role === 'user' && ($c = $m->context)) {
+                $note = match ($c['type'] ?? '') {
+                    'reply' => ($qt = trim((string) ($quotedTexts[$c['mid'] ?? ''] ?? ''))) !== ''
+                        ? '(у відповідь на повідомлення: «' . mb_substr($qt, 0, 140) . '»)'
+                        : '(у відповідь на одне з попередніх повідомлень)',
+                    'story' => '(клієнт відповів на нашу СТОРІС' . (in_array($m->id, $visionMessageIds, true) ? ' — її зображення вище, визнач по ньому товар' : '') . ')',
+                    'share' => '(клієнт переслав наш ПОСТ' . (in_array($m->id, $visionMessageIds, true) ? ' — його зображення вище, визнач по ньому товар' : '') . ')',
+                    default => '',
+                };
+                if ($note !== '') {
+                    $text = trim($note . "\n" . $text);
                 }
             }
 
@@ -804,6 +830,17 @@ class AiAgentService
         return $labels
             ? '(надіслала клієнту фото товарів: ' . implode(' | ', array_unique($labels)) . ')'
             : '';
+    }
+
+    /** Картинка контексту (сторіс/пост, на які відповів клієнт): локальна копія або віддалена. */
+    private function contextImageUrl(InboxMessage $m): ?string
+    {
+        $c = $m->context;
+        if (!$c || !in_array($c['type'] ?? '', ['story', 'share'], true)) {
+            return null;
+        }
+
+        return !empty($c['local']) ? url($c['local']) : ($c['url'] ?? null);
     }
 
     /** URL-и картинок клієнта з повідомлення (лише вхідні зображення). */

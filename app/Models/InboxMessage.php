@@ -14,11 +14,13 @@ class InboxMessage extends Model
         'external_message_id',
         'text',
         'attachments',
+        'context',
         'sent_at',
     ];
 
     protected $casts = [
         'attachments' => 'array',
+        'context' => 'array',
         'sent_at' => 'datetime',
     ];
 

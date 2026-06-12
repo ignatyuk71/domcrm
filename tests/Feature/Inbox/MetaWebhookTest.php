@@ -184,4 +184,67 @@ class MetaWebhookTest extends TestCase
 
         $this->assertDatabaseHas('inbox_messages', ['external_message_id' => 'sig_ok']);
     }
+
+    public function test_quote_reply_context_is_stored(): void
+    {
+        $this->connection();
+
+        $payload = $this->fbPayload('m_ctx_1', 'А ці є в 38?');
+        $payload['entry'][0]['messaging'][0]['message']['reply_to'] = ['mid' => 'm_orig_99'];
+
+        $this->postJson('/api/meta/webhook', $payload)->assertOk();
+
+        $m = InboxMessage::where('external_message_id', 'm_ctx_1')->first();
+        $this->assertSame(['type' => 'reply', 'mid' => 'm_orig_99'], $m->context);
+    }
+
+    public function test_story_reply_downloads_media_and_stores_context(): void
+    {
+        // Скидаємо blanket-fake з setUp: перший зареєстрований стаб виграє.
+        \Illuminate\Support\Facades\Http::swap(new \Illuminate\Http\Client\Factory());
+        \Illuminate\Support\Facades\Http::fake([
+            'cdn.test/*' => \Illuminate\Support\Facades\Http::response('STORY_JPEG_BYTES', 200, ['Content-Type' => 'image/jpeg']),
+            '*' => \Illuminate\Support\Facades\Http::response([], 200),
+        ]);
+        $this->connection();
+
+        $payload = $this->fbPayload('m_ctx_2', 'Можна замовити?');
+        $payload['entry'][0]['messaging'][0]['message']['reply_to'] = [
+            'story' => ['url' => 'https://cdn.test/story123.jpg', 'id' => 'story123'],
+        ];
+
+        $this->postJson('/api/meta/webhook', $payload)->assertOk();
+
+        $m = InboxMessage::where('external_message_id', 'm_ctx_2')->first();
+        $this->assertSame('story', $m->context['type']);
+        $this->assertSame('https://cdn.test/story123.jpg', $m->context['url']);
+        $this->assertNotEmpty($m->context['local']);
+        $local = public_path($m->context['local']);
+        $this->assertFileExists($local);
+        $this->assertSame('STORY_JPEG_BYTES', file_get_contents($local));
+        @unlink($local);
+    }
+
+    public function test_share_attachment_becomes_context(): void
+    {
+        \Illuminate\Support\Facades\Http::swap(new \Illuminate\Http\Client\Factory());
+        \Illuminate\Support\Facades\Http::fake([
+            'cdn.test/*' => \Illuminate\Support\Facades\Http::response('POST_IMG', 200, ['Content-Type' => 'image/png']),
+            '*' => \Illuminate\Support\Facades\Http::response([], 200),
+        ]);
+        $this->connection();
+
+        $payload = $this->fbPayload('m_ctx_3', '');
+        unset($payload['entry'][0]['messaging'][0]['message']['text']);
+        $payload['entry'][0]['messaging'][0]['message']['attachments'] = [
+            ['type' => 'share', 'payload' => ['url' => 'https://cdn.test/post-image.png']],
+        ];
+
+        $this->postJson('/api/meta/webhook', $payload)->assertOk();
+
+        $m = InboxMessage::where('external_message_id', 'm_ctx_3')->first();
+        $this->assertSame('share', $m->context['type']);
+        $this->assertNotEmpty($m->context['local']);
+        @unlink(public_path($m->context['local']));
+    }
 }
