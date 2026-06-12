@@ -1465,8 +1465,6 @@
             } catch (e) {}
         }
 
-        function chIcon(ch) { return ch === 'instagram' ? '<i class="bi bi-instagram" style="color:#d63384"></i>' : '<i class="bi bi-messenger" style="color:#0084ff"></i>'; }
-
         function renderComments() {
             const box = document.getElementById('comments-list');
             if (!cmItems.length) {
