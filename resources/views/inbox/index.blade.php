@@ -1467,6 +1467,10 @@
 
         function renderComments() {
             const box = document.getElementById('comments-list');
+            // Пол перемальовує список кожні 6с — не губимо текст, який людина набирає
+            const prevEl = cmOpenDm !== null ? document.getElementById('dm-input-' + cmOpenDm) : null;
+            const prevVal = prevEl ? prevEl.value : null;
+            const prevFocus = prevEl && document.activeElement === prevEl;
             if (!cmItems.length) {
                 box.innerHTML = '<div class="ib-empty"><i class="bi bi-chat-square-quote d-block mb-2"></i>Коментарів поки немає</div>';
                 return;
@@ -1490,6 +1494,15 @@
                     <div class="actions">${action}</div>
                 </div>`;
             }).join('');
+
+            // Відновлюємо набраний текст і курсор після перемальовки
+            if (cmOpenDm !== null && prevVal !== null) {
+                const el = document.getElementById('dm-input-' + cmOpenDm);
+                if (el) {
+                    el.value = prevVal;
+                    if (prevFocus) { el.focus(); el.setSelectionRange(prevVal.length, prevVal.length); }
+                }
+            }
         }
 
         async function sendCmDm(e, id) {
