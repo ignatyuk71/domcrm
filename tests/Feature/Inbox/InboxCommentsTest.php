@@ -134,6 +134,36 @@ class InboxCommentsTest extends TestCase
         $this->assertSame('є 38?', $res['items'][0]['text']);
     }
 
+    public function test_comment_can_be_deleted_via_endpoint(): void
+    {
+        $conn = $this->connection();
+        $comment = InboxComment::create([
+            'meta_connection_id' => $conn->id, 'channel' => 'instagram', 'post_id' => 'p_del',
+            'comment_id' => 'c_del_1', 'from_id' => 'U1', 'text' => 'тест', 'commented_at' => now(),
+        ]);
+
+        $this->actingAs($this->owner())->deleteJson("/api/inbox/comments/{$comment->id}")
+            ->assertOk()->assertJson(['ok' => true]);
+
+        $this->assertDatabaseMissing('inbox_comments', ['id' => $comment->id]);
+    }
+
+    public function test_fb_comment_remove_webhook_deletes_stored_comment(): void
+    {
+        $conn = $this->connection();
+        InboxComment::create([
+            'meta_connection_id' => $conn->id, 'channel' => 'facebook', 'post_id' => 'PAGE1_post42',
+            'comment_id' => 'c_rm_1', 'from_id' => 'U777', 'text' => 'видали мене', 'commented_at' => now(),
+        ]);
+
+        $payload = $this->fbCommentPayload('c_rm_1', 'U777', '');
+        $payload['entry'][0]['changes'][0]['value']['verb'] = 'remove';
+
+        $this->postJson('/api/meta/webhook', $payload)->assertOk();
+
+        $this->assertDatabaseMissing('inbox_comments', ['comment_id' => 'c_rm_1']);
+    }
+
     public function test_private_reply_sends_dm_and_marks_comment(): void
     {
         $conn = $this->connection();

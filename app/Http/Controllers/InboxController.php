@@ -517,6 +517,14 @@ class InboxController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    /** Видалити коментар з CRM (тестовий/видалений в Instagram вручну тощо). */
+    public function destroyComment(\App\Models\InboxComment $comment)
+    {
+        $comment->delete();
+
+        return response()->json(['ok' => true]);
+    }
+
     /** Розмова, де лежить наша приватна відповідь на цей коментар (по mid з еха). */
     public function commentConversation(\App\Models\InboxComment $comment)
     {

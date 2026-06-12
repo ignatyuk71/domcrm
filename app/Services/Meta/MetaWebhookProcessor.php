@@ -68,6 +68,11 @@ class MetaWebhookProcessor
         $v = $change['value'] ?? [];
 
         if ($channel === 'facebook') {
+            // Видалив коментар у ФБ → прибираємо і в себе.
+            if ($field === 'feed' && ($v['item'] ?? '') === 'comment' && ($v['verb'] ?? '') === 'remove') {
+                InboxComment::where('comment_id', $v['comment_id'] ?? '___')->delete();
+                return false;
+            }
             if ($field !== 'feed' || ($v['item'] ?? '') !== 'comment' || ($v['verb'] ?? 'add') !== 'add') {
                 return false;
             }

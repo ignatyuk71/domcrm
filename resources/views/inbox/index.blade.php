@@ -27,6 +27,8 @@
         .ib-cm .hd { display: flex; align-items: center; gap: 8px; }
         .ib-cm .nm { font-weight: 600; font-size: .85rem; color: #1e293b; flex: 1; min-width: 0; }
         .ib-cm .tm { font-size: .68rem; color: #9aa3b2; white-space: nowrap; }
+        .ib-cm .del { width: 24px; height: 24px; border: none; background: #f1f3f6; border-radius: 6px; color: #94a3b8; font-size: .72rem; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .ib-cm .del:hover { background: #fde8e8; color: #dc3545; }
         .ib-cm .tx { font-size: .82rem; color: #334155; margin: 5px 0 0 0; }
         .ib-cm .post { display: flex; gap: 8px; align-items: center; background: #f6f7f9; border-radius: 9px; padding: 6px 8px; margin-top: 7px; }
         .ib-cm .post img { width: 38px; height: 38px; border-radius: 7px; object-fit: cover; flex-shrink: 0; }
@@ -1525,7 +1527,9 @@
                     action = `${failed}<button class="btn btn-sm btn-outline-primary" onclick="cmOpenDm=${c.id};ensureTpl().then(renderComments);setTimeout(()=>document.getElementById('dm-input-${c.id}')?.focus(),80)"><i class="bi bi-send me-1"></i>Написати в директ</button>`;
                 }
                 return `<div class="ib-cm">
-                    <div class="hd">${chIcon(c.channel)}<span class="nm">${esc(c.from_name)}</span><span class="tm">${esc(c.at_human || '')}</span></div>
+                    <div class="hd">${chIcon(c.channel)}<span class="nm">${esc(c.from_name)}</span><span class="tm">${esc(c.at_human || '')}</span>
+                        <button class="del" title="Видалити коментар з CRM" onclick="deleteComment(${c.id})"><i class="bi bi-trash"></i></button>
+                    </div>
                     <div class="tx">${esc(c.text || '')}</div>
                     ${post}
                     <div class="actions">${action}</div>
@@ -1540,6 +1544,17 @@
                     if (prevFocus) { el.focus(); el.setSelectionRange(prevVal.length, prevVal.length); }
                 }
             }
+        }
+
+        async function deleteComment(id) {
+            if (!confirm('Видалити цей коментар з CRM? (В Instagram/Facebook він залишиться, якщо там не видалений)')) return;
+            try {
+                await fetch(`/api/inbox/comments/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
+                });
+                loadComments();
+            } catch (e) { alert('Не вдалося видалити'); }
         }
 
         async function sendCmDm(e, id) {

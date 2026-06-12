@@ -111,6 +111,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/api/inbox/comments', [InboxController::class, 'comments'])->name('inbox.comments');
         Route::post('/api/inbox/comments/{comment}/dm', [InboxController::class, 'commentDm'])->name('inbox.commentDm');
         Route::get('/api/inbox/comments/{comment}/conversation', [InboxController::class, 'commentConversation'])->name('inbox.commentConversation');
+        Route::delete('/api/inbox/comments/{comment}', [InboxController::class, 'destroyComment'])->name('inbox.commentDestroy');
         Route::post('/api/inbox/conversations/{conversation}/refresh', [InboxController::class, 'refresh'])->name('inbox.refresh');
         Route::get('/api/inbox/conversations/{conversation}/panel', [InboxController::class, 'panel'])->name('inbox.panel');
         Route::post('/api/inbox/conversations/{conversation}/attach-customer', [InboxController::class, 'attachCustomer'])->name('inbox.attachCustomer');
