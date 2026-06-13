@@ -508,7 +508,7 @@
                 img.onload = () => { av.innerHTML = ''; av.appendChild(img); };
                 img.src = '/inbox/page-avatar/' + c.conn_id;
             }
-            renderMessages(data.messages);
+            renderMessages(data.messages, { forceBottom: true });
             if (panelConvId !== id) { resetOrderPanel(c); panelConvId = id; }
             renderInfo(c);
             loadPanel();
@@ -1194,8 +1194,10 @@
             return `<div class="ib-row ${out ? 'out' : ''}"><div class="ib-ctx">${img}<span><i class="bi bi-pin-angle me-1"></i>${esc(c.label || 'Контекст')}</span></div></div>`;
         }
 
-        function renderMessages(messages) {
+        function renderMessages(messages, opts = {}) {
             const box = document.getElementById('thread-messages');
+            // Чи був користувач унизу ПЕРЕД оновленням (міряємо до зміни вмісту).
+            const wasAtBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
             box.innerHTML = messages.map((m, i) => {
                 const out = m.direction === 'out';
                 const atts = (m.attachments || []).map(a => a.url ? `<img src="${esc(a.url)}">` : '').join('');
@@ -1207,7 +1209,10 @@
                 return `${ctxHtml(m.context, out)}<div class="ib-row ${out ? 'out' : ''}"><div class="ib-bub ${out ? 'out' : 'in'}${media}">${aiMark}${m.text ? esc(m.text) : ''}${atts}</div></div>${time}`;
             }).join('');
             appendPending();
-            box.scrollTop = box.scrollHeight;
+            // Скролимо вниз лише при відкритті чату / після відправки, або якщо користувач і так був унизу.
+            if (opts.forceBottom || wasAtBottom) {
+                box.scrollTop = box.scrollHeight;
+            }
         }
 
         function showErr(m) { const e = document.getElementById('reply-error'); e.textContent = m; e.classList.remove('d-none'); }
