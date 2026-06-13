@@ -271,9 +271,9 @@ class MetaWebhookProcessor
 
         // Оператор відповів прямо у ФБ/IG (не через CRM і не наш бот) → липка пауза ШІ.
         if ($isEcho && !$isOurPrivateReply) {
-            $hours = (int) (\App\Models\AiSetting::global()->operator_pause_hours ?? 6);
-            if ($hours > 0) {
-                $conversation->update(['ai_paused_until' => now()->addHours($hours)]);
+            $minutes = (int) (\App\Models\AiSetting::global()->operator_pause_minutes ?? 3);
+            if ($minutes > 0) {
+                $conversation->update(['ai_paused_until' => now()->addMinutes($minutes)]);
             }
         }
 

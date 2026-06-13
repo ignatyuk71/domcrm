@@ -40,7 +40,7 @@ class AiSettingsController extends Controller
                 'model' => $global->model ?: 'claude-sonnet-4-6',
                 'debounce_seconds' => $global->debounce_seconds ?? 10,
                 'catalog_mode' => $global->catalog_mode ?: 'all',
-                'operator_pause_hours' => $global->operator_pause_hours ?? 6,
+                'operator_pause_minutes' => $global->operator_pause_minutes ?? 3,
                 'comment_settings' => array_merge([
                     'enabled' => false,
                     'facebook' => true,
@@ -60,7 +60,7 @@ class AiSettingsController extends Controller
             'model' => ['required', 'string', 'max:100'],
             'debounce_seconds' => ['nullable', 'integer', 'min:0', 'max:60'],
             'catalog_mode' => ['nullable', 'in:all,showcase'],
-            'operator_pause_hours' => ['nullable', 'integer', 'min:0', 'max:48'],
+            'operator_pause_minutes' => ['nullable', 'integer', 'min:0', 'max:1440'],
             'comment_settings' => ['nullable', 'array'],
             'comment_settings.enabled' => ['nullable', 'boolean'],
             'comment_settings.facebook' => ['nullable', 'boolean'],
@@ -80,7 +80,7 @@ class AiSettingsController extends Controller
         $global->model = $data['model'];
         $global->debounce_seconds = $data['debounce_seconds'] ?? 10;
         $global->catalog_mode = $data['catalog_mode'] ?? 'all';
-        $global->operator_pause_hours = $data['operator_pause_hours'] ?? 6;
+        $global->operator_pause_minutes = $data['operator_pause_minutes'] ?? 3;
         if (array_key_exists('comment_settings', $data)) {
             $new = $data['comment_settings'] ?? [];
             $old = $global->comment_settings ?? [];

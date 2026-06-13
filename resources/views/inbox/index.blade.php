@@ -945,7 +945,7 @@
                                 <span class="ib-slider"></span>
                             </label>
                         </div>
-                        ${c.ai_paused_until_human ? `<div class="small mt-2" style="color:#b45309"><i class="bi bi-pause-circle me-1"></i>На паузі до ${esc(c.ai_paused_until_human)} — оператор у розмові. Увімкни тумблер, щоб зняти.</div>` : ''}
+                        ${c.ai_paused_until_human ? `<div class="small mt-2" style="color:#b45309"><i class="bi bi-pause-circle me-1"></i>Бот зачекає до ${esc(c.ai_paused_until_human)} — ти відповів вручну, далі він продовжить сам.</div>` : ''}
 
                         <div class="mt-3">
                             <div class="d-flex align-items-center mb-1">

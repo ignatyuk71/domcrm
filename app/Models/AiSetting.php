@@ -16,6 +16,7 @@ class AiSetting extends Model
         'system_prompt',
         'catalog_mode',
         'operator_pause_hours',
+        'operator_pause_minutes',
         'comment_settings',
         'schedule',
     ];
@@ -27,6 +28,7 @@ class AiSetting extends Model
         'api_key' => 'encrypted',
         'debounce_seconds' => 'integer',
         'operator_pause_hours' => 'integer',
+        'operator_pause_minutes' => 'integer',
     ];
 
     protected $hidden = ['api_key'];

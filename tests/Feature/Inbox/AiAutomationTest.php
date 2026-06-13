@@ -101,7 +101,9 @@ class AiAutomationTest extends TestCase
 
         $this->conv->refresh();
         $this->assertNotNull($this->conv->ai_paused_until);
-        $this->assertTrue($this->conv->ai_paused_until->gt(now()->addHours(5)));
+        // Пауза тепер коротка (хвилини, дефолт 3), а не години.
+        $this->assertTrue($this->conv->ai_paused_until->gt(now()));
+        $this->assertTrue($this->conv->ai_paused_until->lte(now()->addMinutes(5)));
 
         // ШІ мовчить на наступне вхідне
         $next = InboxMessage::create([

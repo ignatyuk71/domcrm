@@ -193,12 +193,12 @@ class InboxController extends Controller
         ]);
     }
 
-    /** Оператор написав у розмову → ШІ відступає на N годин (липка пауза). */
+    /** Оператор написав у розмову → ШІ відступає на N хвилин (липка пауза). */
     private function pauseAiAfterOperator(InboxConversation $conversation): void
     {
-        $hours = (int) (\App\Models\AiSetting::global()->operator_pause_hours ?? 6);
-        if ($hours > 0) {
-            $conversation->update(['ai_paused_until' => now()->addHours($hours)]);
+        $minutes = (int) (\App\Models\AiSetting::global()->operator_pause_minutes ?? 3);
+        if ($minutes > 0) {
+            $conversation->update(['ai_paused_until' => now()->addMinutes($minutes)]);
         }
     }
 
