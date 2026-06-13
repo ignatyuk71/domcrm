@@ -463,4 +463,15 @@ class AiAgentTest extends TestCase
         $this->assertStringContainsString('overloaded', (string) $run->error);
         $this->assertDatabaseMissing('inbox_messages', ['sender' => 'ai']);
     }
+
+    public function test_system_prompt_forbids_dodging_price_question(): void
+    {
+        $this->setUpConversation();
+        $blocks = app(AiAgentService::class)->buildSystemPrompt($this->conv, AiSetting::forConnection($this->conn->id));
+        $text = json_encode($blocks, JSON_UNESCAPED_UNICODE);
+
+        // Правило: на питання про ціну — спершу цифра, не «будете замовляти?».
+        $this->assertStringContainsString('ЗАБОРОНЕНО', $text);
+        $this->assertStringContainsString('будете замовляти', $text);
+    }
 }
