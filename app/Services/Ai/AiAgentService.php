@@ -214,6 +214,11 @@ class AiAgentService
             // Страхувальник: якщо модель усе ж надрукувала плейсхолдер фото —
             // вирізаємо, бо текстом фото не надсилається (його шле send_photos).
             $text = $this->stripPhotoPlaceholder($text);
+            // Після фіксації замовлення завжди шлемо ТОЧНИЙ фінальний текст із конфігу —
+            // не покладаємось на модель (гарантія дослівності + захист від порожньої відповіді).
+            if (collect($toolsCalled)->contains(fn ($t) => ($t['tool'] ?? '') === 'complete_order')) {
+                $text = self::orderTexts()['final_message'];
+            }
             if ($text === '') {
                 return $finish('error', 'Порожня відповідь моделі', $tokensIn, $tokensOut);
             }
@@ -268,6 +273,7 @@ class AiAgentService
         $store ??= AiSetting::where('meta_connection_id', $conversation->meta_connection_id)->first();
         $storePrompt = $store?->system_prompt;
         $pageName = $conversation->connection?->page_name ?? 'магазин';
+        $texts = self::orderTexts();
 
         $rules = trim(($storePrompt ?: "Ти ввічливий співробітник магазину «{$pageName}»."))
             . "\n\nБазові правила (інструкція вище має пріоритет, якщо вони суперечать): "
@@ -309,13 +315,14 @@ class AiAgentService
             . "НЕПРАВИЛЬНО: клієнт «Ціна яка?» → ти «Будете замовляти?». ПРАВИЛЬНО: «Капучино — 530 грн 🙂». "
             . "Максимум ОДНЕ коротке уточнення на тему: клієнт відповів або повторив — покажи конкретні "
             . "варіанти, не перепитуй. "
-            . "\n\nДоведення до замовлення (твоя стоп-лінія): спершу клієнт МАЄ почути ціну вибраного — НЕ проси оформити («оформляємо?» / «будете замовляти?»), поки не назвав йому ціну. Коли клієнт ЧІТКО визначився — модель + колір + "
-            . "розмір — подякуй і спитай ЛИШЕ спосіб оплати: «при отриманні чи на карту?». НІКОЛИ не питай "
-            . "адресу, відділення, місто, ПІБ або телефон — це оформить людина. Коли клієнт назвав оплату — "
-            . "виклич complete_order (підсумок + оплата), після чого надішли ОДНЕ фінальне повідомлення за "
-            . "зразком: «Дякуємо! Ваше замовлення прийнято 💛 Домашні пухнасті, чорні, 36/37, оплата при "
-            . "отриманні. Зранку оформимо і напишемо вам тут 🙏» (якщо зараз день — «найближчим часом "
-            . "оформимо»). Фінальне повідомлення пиши від імені магазину — «оформимо», «напишемо» — БЕЗ слова «менеджер». Після нього нічого не питай і не пиши — розмову веде людина. "
+            . "\n\nОФОРМЛЕННЯ ЗАМОВЛЕННЯ — веди клієнта сам, покроково:\n"
+            . "1) Спершу клієнт МАЄ почути ціну вибраного — не проси оформити, поки не назвав ціну.\n"
+            . "2) Коли клієнт визначився (модель + колір + розмір + кількість) і хоче замовити — стисло ПІДСУМУЙ позиції (1-5 пар, напр. «Чорні 38 ×1, білі 40 ×1 — разом N грн») і виклич ask_delivery_details: він сам надішле клієнту форму з проханням ПІБ, телефон, адресу/відділення. НЕ друкуй цю форму сам.\n"
+            . "3) Коли клієнт надіслав ПІБ + телефон + адресу — подякуй і спитай спосіб оплати дослівно: «" . $texts['payment_question'] . "».\n"
+            . "4) «При отриманні» → одразу крок 6. «На карту» → виклич send_payment_details (він сам надішле клієнту реквізити та номер картки окремими повідомленнями). НІКОЛИ не друкуй номер картки сам. Далі чекай скрін/PDF оплати; коли клієнт надіслав підтвердження — подякуй («Дякую, передаю на обробку 💛») і переходь до кроку 6.\n"
+            . "5) Якщо клієнт просить ПОВНІ банківські реквізити / IBAN / номер рахунку (не картку) — виклич request_iban і напиши, що повні реквізити найближчим часом надішле наш працівник. Сам IBAN НЕ диктуй.\n"
+            . "6) Виклич complete_order з усіма даними: items (кожна пара — модель/колір/розмір/кількість), customer_name (ПІБ), phone (телефон), address (місто/село + № відділення), payment. Після нього система САМА надішле клієнту фінальне підтвердження — ти більше нічого не пиши; далі замовлення оформлює людина.\n"
+            . "Термін доставки, якщо питають: «" . $texts['delivery_time'] . "». Усі повідомлення пиши від імені магазину («ми»), без слова «менеджер». "
             . "Розміри в каталозі діапазонами: клієнт каже «38» → це 38-39, перевір наявність і підтверди "
             . "(«Вам підійде 38-39?»). Довжина стопи в сантиметрах: якщо в описі лінії («Від магазину») є "
             . "розмірна сітка в см — підбирай розмір по ній сам і називай впевнено; якщо сітки немає — "
@@ -369,16 +376,47 @@ class AiAgentService
                 ],
             ],
             [
+                'name' => 'ask_delivery_details',
+                'description' => 'Надіслати клієнту готову форму-шаблон для збору даних доставки (ПІБ, номер телефону, адреса/відділення Нової Пошти). Виклич ОДИН раз, коли клієнт підтвердив, що хоче замовити, і ти вже стисло підсумував позиції (модель/колір/розмір/кількість). Сам форму не друкуй — інструмент надішле її дослівно.',
+                'input_schema' => ['type' => 'object', 'properties' => (object) []],
+            ],
+            [
+                'name' => 'send_payment_details',
+                'description' => 'Надіслати клієнту реквізити для оплати на карту — текстом + номером картки ОКРЕМИМ повідомленням. Виклич ЛИШЕ коли клієнт обрав оплату «на карту». НІКОЛИ не друкуй номер картки сам — лише цей інструмент надсилає його правильно.',
+                'input_schema' => ['type' => 'object', 'properties' => (object) []],
+            ],
+            [
+                'name' => 'request_iban',
+                'description' => 'Виклич, коли клієнт просить ПОВНІ банківські реквізити / IBAN / номер рахунку (не картку). Ставить розмову на паузу й сигналить працівнику надіслати реквізити. IBAN сам НЕ диктуй. Після виклику напиши клієнту, що повні реквізити найближчим часом надішле наш працівник.',
+                'input_schema' => ['type' => 'object', 'properties' => (object) []],
+            ],
+            [
                 'name' => 'complete_order',
-                'description' => 'Зафіксувати замовлення, коли клієнт визначився з моделлю/кольором/розміром І назвав спосіб оплати. Ставить на розмову позначку «Замовлення від ШІ» і передає її людині (далі ти в цій розмові не відповідаєш). Викликай ОДИН раз, після відповіді про оплату.',
+                'description' => 'Зафіксувати замовлення, коли зібрано ВСЕ: позиції, ПІБ, телефон, адресу доставки і спосіб оплати (для оплати на карту — після того, як клієнт надіслав скрін/підтвердження). Ставить позначку «Замовлення від ШІ», показує його менеджеру збоку і передає людині на оформлення/ТТН. Викликай ОДИН раз.',
                 'input_schema' => [
                     'type' => 'object',
                     'properties' => [
-                        'summary' => ['type' => 'string', 'description' => 'Підсумок одним рядком: модель, колір, розмір. Напр.: «Домашні пухнасті, чорні, 36/37»'],
-                        'payment' => ['type' => 'string', 'description' => 'Спосіб оплати зі слів клієнта: «при отриманні» або «на карту»'],
-                        'product_id' => ['type' => 'integer', 'description' => 'id обраного товару з каталогу, якщо визначений'],
+                        'items' => [
+                            'type' => 'array',
+                            'description' => 'Позиції замовлення, 1-5 пар.',
+                            'items' => [
+                                'type' => 'object',
+                                'properties' => [
+                                    'title' => ['type' => 'string', 'description' => 'Модель/назва, напр. «Домашні пухнасті»'],
+                                    'color' => ['type' => 'string', 'description' => 'Колір'],
+                                    'size' => ['type' => 'string', 'description' => 'Розмір, напр. «38» або «36/37»'],
+                                    'qty' => ['type' => 'integer', 'description' => 'Кількість пар'],
+                                    'price' => ['type' => 'number', 'description' => 'Ціна за пару, грн (з каталогу)'],
+                                ],
+                                'required' => ['title', 'size', 'qty'],
+                            ],
+                        ],
+                        'customer_name' => ['type' => 'string', 'description' => 'ПІБ отримувача'],
+                        'phone' => ['type' => 'string', 'description' => 'Номер мобільного'],
+                        'address' => ['type' => 'string', 'description' => 'Місто/село + номер відділення Нової Пошти'],
+                        'payment' => ['type' => 'string', 'description' => '«при отриманні» або «на карту»'],
                     ],
-                    'required' => ['summary', 'payment'],
+                    'required' => ['items', 'customer_name', 'phone', 'address', 'payment'],
                 ],
             ],
             [
@@ -406,6 +444,9 @@ class AiAgentService
             return match ($name) {
                 'get_product' => $this->toolGetProduct((int) ($input['product_id'] ?? 0)),
                 'send_photos' => $this->toolSendPhotos($conversation, (array) ($input['photo_ids'] ?? [])),
+                'ask_delivery_details' => $this->toolAskDeliveryDetails($conversation),
+                'send_payment_details' => $this->toolSendPaymentDetails($conversation),
+                'request_iban' => $this->toolRequestIban($conversation),
                 'complete_order' => $this->toolCompleteOrder($conversation, $input),
                 default => ['помилка' => 'Невідомий інструмент'],
             };
@@ -506,8 +547,111 @@ class AiAgentService
     }
 
     /**
-     * Зафіксувати замовлення: позначка «Замовлення від ШІ» на розмові
-     * і самовимкнення агента — далі добиває людина (адреса, ТТН).
+     * Тексти й реквізити флоу замовлення. Поки в коді (легко редагувати тут);
+     * згодом можна винести в налаштування. Номер картки шлеться ЛИШЕ звідси —
+     * щоб модель випадково не переплутала цифру.
+     */
+    public static function orderTexts(): array
+    {
+        return [
+            'delivery_template' =>
+                "Для оформлення замовлення вкажіть, будь ласка, наступні дані 📝\n"
+                . "🚚 Доставка до вашого відділення пошти!\n\n"
+                . "📌 ПІБ отримувача\n"
+                . "📌 Номер мобільного\n"
+                . "📌 Адреса доставки (місто/село, номер відділення пошти)",
+            'payment_question' =>
+                "Є два варіанти оплати 💰 — оплата при отриманні або оплата на карту. Який спосіб вам буде зручний?",
+            'card_intro' =>
+                "Оплата на картку ПриватБанк (ФОП Ігнатюк Л.В) 💳\n"
+                . "Після оплати надішліть, будь ласка, скрін або PDF файл 🙏",
+            'card_number' => '5169335107343648',
+            'final_message' =>
+                "Дякуємо за замовлення 💛 Відправка протягом 1-2 днів, чекайте на ТТН ♥️",
+            'delivery_time' => '1-2 дні від дати замовлення',
+        ];
+    }
+
+    /** Надіслати клієнту текст від імені бота + зберегти його в історії розмови. */
+    private function sendBotMessage(InboxConversation $conversation, string $text): bool
+    {
+        $conversation->loadMissing(['connection', 'contact']);
+        if (!$conversation->connection || !$conversation->contact) {
+            return false;
+        }
+
+        $sent = $this->send->sendText($conversation->connection, $conversation->contact->external_id, $text);
+        if (!($sent['ok'] ?? false)) {
+            return false;
+        }
+
+        InboxMessage::create([
+            'inbox_conversation_id' => $conversation->id,
+            'direction' => 'out',
+            'sender' => 'ai',
+            'external_message_id' => $sent['message_id'] ?? null,
+            'text' => $text,
+            'sent_at' => now(),
+        ]);
+        $conversation->update([
+            'last_message_at' => now(),
+            'last_message_text' => mb_substr($text, 0, 480),
+            'last_message_direction' => 'out',
+        ]);
+
+        return true;
+    }
+
+    /** Надіслати клієнту форму-шаблон для збору даних доставки. */
+    public function toolAskDeliveryDetails(InboxConversation $conversation): array
+    {
+        $ok = $this->sendBotMessage($conversation, self::orderTexts()['delivery_template']);
+
+        return $ok
+            ? ['готово' => 'Форму даних доставки надіслано клієнту. Дочекайся ПІБ, телефон і адресу, потім спитай спосіб оплати. Не друкуй цю форму ще раз.']
+            : ['помилка' => 'Не вдалося надіслати форму'];
+    }
+
+    /** Надіслати реквізити оплати на карту: текст + номер картки ОКРЕМИМ повідомленням. */
+    public function toolSendPaymentDetails(InboxConversation $conversation): array
+    {
+        $t = self::orderTexts();
+
+        // Захист від повтору: якщо номер картки вже надсилали в цій розмові — не дублюємо.
+        if ($conversation->messages()->where('direction', 'out')->where('text', $t['card_number'])->exists()) {
+            return ['готово' => 'Реквізити цьому клієнту вже надіслані раніше — не дублюй. Чекай скрін/PDF оплати, потім зафіксуй замовлення через complete_order.'];
+        }
+
+        $ok1 = $this->sendBotMessage($conversation, $t['card_intro']);
+        $ok2 = $ok1 && $this->sendBotMessage($conversation, $t['card_number']);
+
+        if (!$ok1 || !$ok2) {
+            return ['помилка' => 'Не вдалося надіслати реквізити'];
+        }
+
+        return ['готово' => 'Реквізити надіслано клієнту двома повідомленнями (текст + номер картки окремо). НЕ дублюй номер картки. Чекай скрін/PDF оплати, потім зафіксуй замовлення через complete_order.'];
+    }
+
+    /** Клієнт просить повні реквізити / IBAN → пауза + бокова позначка для працівника. */
+    public function toolRequestIban(InboxConversation $conversation): array
+    {
+        $status = \App\Models\ChatStatus::firstOrCreate(
+            ['code' => 'iban_needed'],
+            ['name' => 'Потрібен IBAN — у працівника', 'icon' => '🏦', 'color' => '#dc2626', 'sort_order' => 95]
+        );
+
+        $conversation->update([
+            'chat_status_id' => $status->id,
+            'ai_order_needs_iban' => true,
+            'ai_paused_until' => now()->addMinutes(60), // бот мовчить, поки працівник дасть IBAN
+        ]);
+
+        return ['далі' => 'Напиши клієнту, що повні реквізити (IBAN) найближчим часом надішле наш працівник, і більше нічого не питай.'];
+    }
+
+    /**
+     * Зафіксувати замовлення: структуровані позиції + дані доставки + оплата,
+     * позначка «Замовлення від ШІ», самовимкнення агента — далі оформлює людина.
      */
     public function toolCompleteOrder(InboxConversation $conversation, array $input): array
     {
@@ -516,26 +660,52 @@ class AiAgentService
             ['name' => 'Замовлення від ШІ', 'icon' => '🤖', 'color' => '#7c3aed', 'sort_order' => 90]
         );
 
+        // Нормалізуємо позиції (до 5 пар).
+        $items = [];
+        foreach (array_slice((array) ($input['items'] ?? []), 0, 5) as $it) {
+            $title = trim((string) ($it['title'] ?? ''));
+            if ($title === '') {
+                continue;
+            }
+            $items[] = [
+                'title' => $title,
+                'color' => trim((string) ($it['color'] ?? '')) ?: null,
+                'size' => trim((string) ($it['size'] ?? '')) ?: null,
+                'qty' => max(1, (int) ($it['qty'] ?? 1)),
+                'price' => isset($it['price']) ? round((float) $it['price']) : null,
+            ];
+        }
+
+        // Людський підсумок одним рядком (для списку діалогів / сумісності).
+        $summary = implode('; ', array_map(function ($i) {
+            $line = trim(implode(' ', array_filter([$i['title'], $i['color'], $i['size']])));
+            return $line . ($i['qty'] > 1 ? " ×{$i['qty']}" : '');
+        }, $items));
+        $summary = mb_substr($summary, 0, 250); // не впертись у VARCHAR(255)
+
         $conversation->update([
             'chat_status_id' => $status->id,
-            'ai_enabled' => false, // бот у цій розмові замовкає — далі людина
-            // Дані для картки «Замовлення від ШІ» в панелі менеджера.
-            'ai_order_summary' => trim((string) ($input['summary'] ?? '')) ?: null,
+            'ai_enabled' => false, // бот замовкає — далі оформлює людина
+            'ai_order_items' => $items ?: null,
+            'ai_order_summary' => $summary ?: (trim((string) ($input['summary'] ?? '')) ?: null),
+            'ai_order_customer_name' => trim((string) ($input['customer_name'] ?? '')) ?: null,
+            'ai_order_phone' => trim((string) ($input['phone'] ?? '')) ?: null,
+            'ai_order_address' => trim((string) ($input['address'] ?? '')) ?: null,
             'ai_order_payment' => trim((string) ($input['payment'] ?? '')) ?: null,
-            'ai_order_product_id' => $input['product_id'] ?? null,
-            'ai_order_handled_at' => null, // нове замовлення — чекає менеджера
+            'ai_order_needs_iban' => false,
+            'ai_order_handled_at' => null, // нове — чекає менеджера
         ]);
 
         Log::info('AI: замовлення зафіксовано', [
             'conv' => $conversation->id,
-            'summary' => $input['summary'] ?? '',
+            'items' => count($items),
             'payment' => $input['payment'] ?? '',
-            'product_id' => $input['product_id'] ?? null,
+            'phone' => $input['phone'] ?? '',
         ]);
 
         return [
-            'готово' => 'Позначку поставлено, розмову передано людям.',
-            'далі' => 'Надішли клієнту ОДНЕ фінальне повідомлення-підтвердження з підсумком і більше нічого не питай.',
+            'готово' => 'Замовлення зафіксовано і показано менеджеру. Бот вимкнено в цій розмові.',
+            'далі' => 'Система сама надішле клієнту фінальне підтвердження — більше нічого не пиши.',
         ];
     }
 

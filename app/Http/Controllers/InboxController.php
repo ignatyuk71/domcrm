@@ -134,9 +134,14 @@ class InboxController extends Controller
                 'avatar' => $conversation->contact?->profile_pic,
                 'ai_summary' => $conversation->ai_summary,
                 'ai_summary_human' => $conversation->ai_summary_at?->format('d.m H:i'),
-                'ai_order' => $conversation->ai_order_summary ? [
+                'ai_order' => ($conversation->ai_order_summary || $conversation->ai_order_items || $conversation->ai_order_needs_iban) ? [
                     'summary' => $conversation->ai_order_summary,
+                    'items' => $conversation->ai_order_items ?: [],
+                    'customer_name' => $conversation->ai_order_customer_name,
+                    'phone' => $conversation->ai_order_phone,
+                    'address' => $conversation->ai_order_address,
                     'payment' => $conversation->ai_order_payment,
+                    'needs_iban' => (bool) $conversation->ai_order_needs_iban,
                     'handled' => (bool) $conversation->ai_order_handled_at,
                     'handled_human' => $conversation->ai_order_handled_at?->format('d.m H:i'),
                 ] : null,
@@ -196,10 +201,13 @@ class InboxController extends Controller
     /** Оператор написав у розмову → ШІ відступає на N хвилин (липка пауза). */
     private function pauseAiAfterOperator(InboxConversation $conversation): void
     {
+        // Оператор втрутився → прибираємо прапор «потрібен IBAN» (він уже відповідає сам).
+        $data = ['ai_order_needs_iban' => false];
         $minutes = (int) (\App\Models\AiSetting::global()->operator_pause_minutes ?? 3);
         if ($minutes > 0) {
-            $conversation->update(['ai_paused_until' => now()->addMinutes($minutes)]);
+            $data['ai_paused_until'] = now()->addMinutes($minutes);
         }
+        $conversation->update($data);
     }
 
     /** Надіслати щойно завантажений файл (фото/файл) клієнту. */

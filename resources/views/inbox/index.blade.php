@@ -965,8 +965,16 @@
                                     ? `<span class="ms-auto" style="font-size:.66rem;color:#15803d"><i class="bi bi-check-circle-fill me-1"></i>оформлено${c.ai_order.handled_human ? ' · ' + esc(c.ai_order.handled_human) : ''}</span>`
                                     : `<span class="ms-auto ib-ai-badge on" style="font-size:.6rem">нове</span>`}
                             </div>
-                            <div class="d-flex justify-content-between gap-2 py-1" style="font-size:.74rem"><span class="text-muted">Товар</span><span class="text-dark text-end">${esc(c.ai_order.summary || '—')}</span></div>
-                            <div class="d-flex justify-content-between gap-2 py-1" style="font-size:.74rem"><span class="text-muted">Оплата</span><span class="text-dark text-end">${esc(c.ai_order.payment || '—')}</span></div>
+                            ${c.ai_order.needs_iban ? `<div class="d-flex align-items-center mb-2 px-2 py-1" style="background:#fef2f2;border-radius:8px;color:#b91c1c;font-size:.72rem"><i class="bi bi-bank me-1"></i>Клієнт просить реквізити (IBAN) — надішли вручну</div>` : ''}
+                            ${(c.ai_order.items && c.ai_order.items.length)
+                                ? c.ai_order.items.map(it => `<div class="d-flex align-items-center gap-2 py-1" style="font-size:.74rem"><i class="bi bi-bag text-muted"></i><span class="text-dark text-truncate">${esc([it.title, it.color].filter(Boolean).join(' '))}</span>${it.size ? `<span class="ib-sku" style="font-size:.62rem">${esc(it.size)}</span>` : ''}<span class="text-muted ms-auto" style="white-space:nowrap">× ${it.qty || 1}${it.price ? ' · ' + it.price + ' грн' : ''}</span></div>`).join('')
+                                : `<div class="py-1" style="font-size:.74rem"><span class="text-dark">${esc(c.ai_order.summary || '—')}</span></div>`}
+                            <div style="border-top:1px dashed #e9e5fb;margin-top:6px;padding-top:6px">
+                                ${c.ai_order.customer_name ? `<div class="py-1" style="font-size:.73rem"><i class="bi bi-person me-1 text-muted"></i>${esc(c.ai_order.customer_name)}</div>` : ''}
+                                ${c.ai_order.phone ? `<div class="py-1" style="font-size:.73rem"><i class="bi bi-telephone me-1 text-muted"></i>${esc(c.ai_order.phone)}</div>` : ''}
+                                ${c.ai_order.address ? `<div class="py-1" style="font-size:.73rem"><i class="bi bi-geo-alt me-1 text-muted"></i>${esc(c.ai_order.address)}</div>` : ''}
+                                <div class="py-1" style="font-size:.73rem"><i class="bi bi-credit-card me-1 text-muted"></i>${esc(c.ai_order.payment || '—')}</div>
+                            </div>
                             ${c.ai_order.handled ? '' : `<button class="btn btn-sm w-100 mt-2 text-white" style="background:#7c3aed;font-size:.74rem" onclick="markOrderHandled(this)"><i class="bi bi-check-lg me-1"></i>Позначити оформленим</button>`}
                         </div>` : ''}
 

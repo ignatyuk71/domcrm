@@ -40,16 +40,15 @@ class AiPanelTest extends TestCase
     {
         $conv = $this->conversation();
 
+        // Без items, лише summary → ai_order_summary заповнюється через fallback.
         app(AiAgentService::class)->toolCompleteOrder($conv, [
             'summary' => 'Домашні пухнасті, чорні, 36/37',
             'payment' => 'на карту',
-            'product_id' => 42,
         ]);
 
         $conv->refresh();
         $this->assertSame('Домашні пухнасті, чорні, 36/37', $conv->ai_order_summary);
         $this->assertSame('на карту', $conv->ai_order_payment);
-        $this->assertSame(42, (int) $conv->ai_order_product_id);
         $this->assertNull($conv->ai_order_handled_at);
         $this->assertFalse((bool) $conv->ai_enabled); // бот замовкає після замовлення
     }
@@ -139,5 +138,115 @@ class AiPanelTest extends TestCase
         $this->assertSame('Домашні чорні 37', $res['ai_order']['summary']);
         $this->assertSame('при отриманні', $res['ai_order']['payment']);
         $this->assertFalse($res['ai_order']['handled']);
+    }
+
+    public function test_ask_delivery_details_sends_template(): void
+    {
+        $conv = $this->conversation();
+        Http::fake(['graph.facebook.com/*' => Http::response(['message_id' => 'm_d1'], 200)]);
+
+        app(AiAgentService::class)->toolAskDeliveryDetails($conv);
+
+        $msg = InboxMessage::where('inbox_conversation_id', $conv->id)->where('direction', 'out')->latest()->first();
+        $this->assertNotNull($msg);
+        $this->assertStringContainsString('Доставка до вашого відділення', (string) $msg->text);
+        $this->assertStringContainsString('ПІБ', (string) $msg->text);
+    }
+
+    public function test_send_payment_details_sends_card_number_separately(): void
+    {
+        $conv = $this->conversation();
+        Http::fake(['graph.facebook.com/*' => Http::sequence()
+            ->push(['message_id' => 'm_p1'], 200)
+            ->push(['message_id' => 'm_p2'], 200)]);
+
+        app(AiAgentService::class)->toolSendPaymentDetails($conv);
+
+        $out = InboxMessage::where('inbox_conversation_id', $conv->id)->where('direction', 'out')->get();
+        $this->assertCount(2, $out); // інтро + номер окремо
+        // Номер картки — рівно з конфігу, окремим повідомленням (модель його не друкує).
+        $this->assertDatabaseHas('inbox_messages', [
+            'inbox_conversation_id' => $conv->id, 'text' => '5169335107343648',
+        ]);
+        $this->assertTrue($out->contains(fn ($m) => str_contains((string) $m->text, 'ПриватБанк')));
+    }
+
+    public function test_request_iban_pauses_and_flags(): void
+    {
+        $conv = $this->conversation();
+
+        app(AiAgentService::class)->toolRequestIban($conv);
+
+        $conv->refresh();
+        $this->assertTrue((bool) $conv->ai_order_needs_iban);
+        $this->assertNotNull($conv->ai_paused_until);
+        $this->assertTrue($conv->ai_paused_until->gt(now()));
+        $this->assertDatabaseHas('chat_statuses', ['code' => 'iban_needed']);
+    }
+
+    public function test_complete_order_stores_items_and_delivery(): void
+    {
+        $conv = $this->conversation();
+
+        app(AiAgentService::class)->toolCompleteOrder($conv, [
+            'items' => [
+                ['title' => 'Домашні пухнасті', 'color' => 'чорні', 'size' => '38', 'qty' => 1, 'price' => 530],
+                ['title' => 'Вуличні', 'color' => 'білі', 'size' => '40', 'qty' => 2],
+            ],
+            'customer_name' => 'Іваненко Іван Іванович',
+            'phone' => '0961234567',
+            'address' => 'Київ, відділення №5',
+            'payment' => 'на карту',
+        ]);
+
+        $conv->refresh();
+        $this->assertCount(2, $conv->ai_order_items);
+        $this->assertSame('Домашні пухнасті', $conv->ai_order_items[0]['title']);
+        $this->assertSame(2, $conv->ai_order_items[1]['qty']);
+        $this->assertSame('Іваненко Іван Іванович', $conv->ai_order_customer_name);
+        $this->assertSame('0961234567', $conv->ai_order_phone);
+        $this->assertSame('Київ, відділення №5', $conv->ai_order_address);
+        $this->assertSame('на карту', $conv->ai_order_payment);
+        $this->assertFalse((bool) $conv->ai_enabled);
+        $this->assertNotEmpty($conv->ai_order_summary);
+    }
+
+    public function test_messages_exposes_new_ai_order_fields(): void
+    {
+        $conv = $this->conversation();
+        $conv->update([
+            'ai_order_items' => [['title' => 'Домашні', 'color' => 'чорні', 'size' => '38', 'qty' => 1, 'price' => 530]],
+            'ai_order_summary' => 'Домашні чорні 38',
+            'ai_order_customer_name' => 'Іван',
+            'ai_order_phone' => '0961234567',
+            'ai_order_address' => 'Київ №5',
+            'ai_order_payment' => 'на карту',
+        ]);
+        InboxMessage::create([
+            'inbox_conversation_id' => $conv->id, 'direction' => 'in', 'sender' => 'contact',
+            'text' => 'привіт', 'sent_at' => now(),
+        ]);
+
+        $order = $this->actingAs($this->owner())
+            ->getJson("/api/inbox/conversations/{$conv->id}/messages")
+            ->assertOk()->json('conversation.ai_order');
+
+        $this->assertCount(1, $order['items']);
+        $this->assertSame('Іван', $order['customer_name']);
+        $this->assertSame('Київ №5', $order['address']);
+        $this->assertFalse($order['needs_iban']);
+    }
+
+    public function test_operator_reply_clears_iban_flag(): void
+    {
+        $conv = $this->conversation();
+        $conv->update(['ai_order_needs_iban' => true]);
+        Http::fake(['graph.facebook.com/*' => Http::response(['message_id' => 'm_op'], 200)]);
+
+        $this->actingAs($this->owner())
+            ->postJson("/api/inbox/conversations/{$conv->id}/send", ['text' => 'Ось повні реквізити: UA...'])
+            ->assertOk();
+
+        $this->assertFalse((bool) $conv->fresh()->ai_order_needs_iban);
     }
 }

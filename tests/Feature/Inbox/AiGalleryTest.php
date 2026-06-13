@@ -469,7 +469,10 @@ class AiGalleryTest extends TestCase
                     'content' => [[
                         'type' => 'tool_use', 'id' => 'tu_co',
                         'name' => 'complete_order',
-                        'input' => ['summary' => 'Вуличні тапки, чорні, 36/37', 'payment' => 'при отриманні', 'product_id' => $black->id],
+                        'input' => [
+                            'items' => [['title' => 'Вуличні тапки', 'color' => 'чорні', 'size' => '36/37', 'qty' => 1]],
+                            'customer_name' => 'Тест Клієнт', 'phone' => '0961112233', 'address' => 'Київ, №1', 'payment' => 'при отриманні',
+                        ],
                     ]],
                     'stop_reason' => 'tool_use',
                     'usage' => ['input_tokens' => 400, 'output_tokens' => 40],
@@ -490,10 +493,10 @@ class AiGalleryTest extends TestCase
         $this->assertNotNull($status);
         $this->assertSame($status->id, $conv->chat_status_id);
         $this->assertFalse((bool) $conv->ai_enabled);
-        // Фінальне повідомлення пішло
+        // Фінальне повідомлення пішло — РІВНО текст із конфігу (не від моделі)
         $this->assertDatabaseHas('inbox_messages', [
             'sender' => 'ai',
-            'text' => 'Дякуємо! Ваше замовлення прийнято 💛 Вуличні тапки, чорні, 36/37, оплата при отриманні. Зранку оформимо і напишемо вам тут 🙏',
+            'text' => AiAgentService::orderTexts()['final_message'],
         ]);
 
         // Наступне повідомлення клієнта — бот мовчить (розмова в людей)

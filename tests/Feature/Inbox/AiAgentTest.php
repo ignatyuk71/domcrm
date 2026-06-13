@@ -474,4 +474,29 @@ class AiAgentTest extends TestCase
         $this->assertStringContainsString('ЗАБОРОНЕНО', $text);
         $this->assertStringContainsString('будете замовляти', $text);
     }
+
+    public function test_complete_order_sends_exact_final_message(): void
+    {
+        $this->setUpConversation();
+
+        Http::fake([
+            'api.anthropic.com/*' => Http::sequence()
+                ->push(['content' => [['type' => 'tool_use', 'id' => 't1', 'name' => 'complete_order', 'input' => [
+                    'items' => [['title' => 'Домашні', 'color' => 'чорні', 'size' => '38', 'qty' => 1]],
+                    'customer_name' => 'Іван', 'phone' => '0961234567', 'address' => 'Київ №5', 'payment' => 'при отриманні',
+                ]]], 'stop_reason' => 'tool_use', 'usage' => ['input_tokens' => 10, 'output_tokens' => 5]], 200)
+                ->push(['content' => [['type' => 'text', 'text' => 'вільний текст моделі']], 'stop_reason' => 'end_turn', 'usage' => ['input_tokens' => 5, 'output_tokens' => 3]], 200),
+            'graph.facebook.com/*' => Http::response(['message_id' => 'm_final'], 200),
+        ]);
+
+        $this->runJob();
+
+        // Незалежно від тексту моделі — клієнту йде ТОЧНИЙ фінальний текст із конфігу.
+        $final = AiAgentService::orderTexts()['final_message'];
+        $this->assertDatabaseHas('inbox_messages', [
+            'inbox_conversation_id' => $this->conv->id, 'sender' => 'ai', 'text' => $final,
+        ]);
+        $this->assertFalse((bool) $this->conv->fresh()->ai_enabled);
+        $this->assertSame('Іван', $this->conv->fresh()->ai_order_customer_name);
+    }
 }

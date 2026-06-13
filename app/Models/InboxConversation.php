@@ -27,6 +27,11 @@ class InboxConversation extends Model
         'ai_order_payment',
         'ai_order_product_id',
         'ai_order_handled_at',
+        'ai_order_items',
+        'ai_order_customer_name',
+        'ai_order_phone',
+        'ai_order_address',
+        'ai_order_needs_iban',
     ];
 
     protected $casts = [
@@ -36,6 +41,8 @@ class InboxConversation extends Model
         'ai_paused_until' => 'datetime',
         'ai_summary_at' => 'datetime',
         'ai_order_handled_at' => 'datetime',
+        'ai_order_items' => 'array',
+        'ai_order_needs_iban' => 'boolean',
     ];
 
     protected static function booted(): void

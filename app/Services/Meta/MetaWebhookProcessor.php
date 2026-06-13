@@ -269,12 +269,15 @@ class MetaWebhookProcessor
             'last_message_direction' => $isEcho ? 'out' : 'in',
         ]);
 
-        // Оператор відповів прямо у ФБ/IG (не через CRM і не наш бот) → липка пауза ШІ.
+        // Оператор відповів прямо у ФБ/IG (не через CRM і не наш бот) → липка пауза ШІ
+        // + прибираємо прапор «потрібен IBAN» (працівник уже в розмові).
         if ($isEcho && !$isOurPrivateReply) {
+            $data = ['ai_order_needs_iban' => false];
             $minutes = (int) (\App\Models\AiSetting::global()->operator_pause_minutes ?? 3);
             if ($minutes > 0) {
-                $conversation->update(['ai_paused_until' => now()->addMinutes($minutes)]);
+                $data['ai_paused_until'] = now()->addMinutes($minutes);
             }
+            $conversation->update($data);
         }
 
         if (!$isEcho) {
