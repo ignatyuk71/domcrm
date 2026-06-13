@@ -9,6 +9,7 @@ use App\Models\InboxMessage;
 use App\Models\MetaConnection;
 use App\Models\Order;
 use App\Models\SavedFile;
+use App\Services\Ai\AiAgentService;
 use App\Services\Meta\MetaSendService;
 use App\Services\Meta\MetaSyncService;
 use Illuminate\Http\Request;
@@ -131,6 +132,14 @@ class InboxController extends Controller
                     : null,
                 'contact_name' => $this->contactName($conversation->contact?->name, $conversation->contact?->external_id),
                 'avatar' => $conversation->contact?->profile_pic,
+                'ai_summary' => $conversation->ai_summary,
+                'ai_summary_human' => $conversation->ai_summary_at?->format('d.m H:i'),
+                'ai_order' => $conversation->ai_order_summary ? [
+                    'summary' => $conversation->ai_order_summary,
+                    'payment' => $conversation->ai_order_payment,
+                    'handled' => (bool) $conversation->ai_order_handled_at,
+                    'handled_human' => $conversation->ai_order_handled_at?->format('d.m H:i'),
+                ] : null,
             ],
             'messages' => $messages,
         ]);
@@ -412,6 +421,31 @@ class InboxController extends Controller
         $conversation->update(['ai_context_after_id' => $lastId ?: null]);
 
         return response()->json(['ok' => true]);
+    }
+
+    /** Скласти/оновити підсумок розмови для панелі («Про що тут»). */
+    public function aiSummary(InboxConversation $conversation, AiAgentService $agent)
+    {
+        $summary = $agent->summarizeConversation($conversation);
+        if ($summary === null) {
+            return response()->json(['ok' => false, 'error' => 'Не вдалося скласти підсумок'], 422);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'summary' => $summary,
+            'summary_human' => $conversation->ai_summary_at?->format('d.m H:i'),
+        ]);
+    }
+
+    /** Менеджер обробив замовлення від ШІ — прибрати позначку «нове». */
+    public function markAiOrderHandled(InboxConversation $conversation)
+    {
+        if (!$conversation->ai_order_handled_at) {
+            $conversation->update(['ai_order_handled_at' => now()]);
+        }
+
+        return response()->json(['ok' => true, 'handled_human' => $conversation->ai_order_handled_at?->format('d.m H:i')]);
     }
 
     /** Змінити статус чату для розмови. */

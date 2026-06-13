@@ -21,6 +21,12 @@ class InboxConversation extends Model
         'ai_enabled',
         'ai_context_after_id',
         'ai_paused_until',
+        'ai_summary',
+        'ai_summary_at',
+        'ai_order_summary',
+        'ai_order_payment',
+        'ai_order_product_id',
+        'ai_order_handled_at',
     ];
 
     protected $casts = [
@@ -28,6 +34,8 @@ class InboxConversation extends Model
         'unread_count' => 'integer',
         'ai_enabled' => 'boolean',
         'ai_paused_until' => 'datetime',
+        'ai_summary_at' => 'datetime',
+        'ai_order_handled_at' => 'datetime',
     ];
 
     protected static function booted(): void

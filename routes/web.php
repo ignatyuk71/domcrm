@@ -108,6 +108,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/api/inbox/conversations/{conversation}/status', [InboxController::class, 'setStatus'])->name('inbox.setStatus');
         Route::post('/api/inbox/conversations/{conversation}/ai', [InboxController::class, 'setAi'])->name('inbox.setAi');
         Route::post('/api/inbox/conversations/{conversation}/ai-reset', [InboxController::class, 'resetAiContext'])->name('inbox.aiReset');
+        Route::post('/api/inbox/conversations/{conversation}/ai-summary', [InboxController::class, 'aiSummary'])->name('inbox.aiSummary');
+        Route::post('/api/inbox/conversations/{conversation}/ai-order-handled', [InboxController::class, 'markAiOrderHandled'])->name('inbox.aiOrderHandled');
         Route::get('/api/inbox/comments', [InboxController::class, 'comments'])->name('inbox.comments');
         Route::post('/api/inbox/comments/{comment}/dm', [InboxController::class, 'commentDm'])->name('inbox.commentDm');
         Route::get('/api/inbox/comments/{comment}/conversation', [InboxController::class, 'commentConversation'])->name('inbox.commentConversation');

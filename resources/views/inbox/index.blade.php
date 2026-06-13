@@ -946,6 +946,30 @@
                             </label>
                         </div>
                         ${c.ai_paused_until_human ? `<div class="small mt-2" style="color:#b45309"><i class="bi bi-pause-circle me-1"></i>На паузі до ${esc(c.ai_paused_until_human)} — оператор у розмові. Увімкни тумблер, щоб зняти.</div>` : ''}
+
+                        <div class="mt-3">
+                            <div class="d-flex align-items-center mb-1">
+                                <span class="fw-semibold" style="font-size:.74rem;color:#6d28d9"><i class="bi bi-stars me-1"></i>Про що тут</span>
+                                <button class="btn btn-link p-0 ms-auto text-decoration-none" style="font-size:.7rem;color:#7c3aed" onclick="refreshAiSummary(this)"><i class="bi bi-arrow-clockwise me-1"></i>${c.ai_summary ? 'оновити' : 'скласти'}</button>
+                            </div>
+                            ${c.ai_summary
+                                ? `<div style="background:#f5f3ff;border-radius:9px;padding:8px 10px;font-size:.76rem;line-height:1.5;color:#4c1d95">${esc(c.ai_summary)}</div>`
+                                : `<div class="text-muted" style="font-size:.72rem">Підсумку ще нема — натисни «скласти».</div>`}
+                        </div>
+
+                        ${c.ai_order ? `
+                        <div class="mt-3" style="border:1px solid #e9e5fb;border-radius:11px;padding:10px 12px">
+                            <div class="d-flex align-items-center mb-2">
+                                <span class="fw-semibold text-dark" style="font-size:.76rem"><i class="bi bi-robot me-1 text-purple"></i>Замовлення від ШІ</span>
+                                ${c.ai_order.handled
+                                    ? `<span class="ms-auto" style="font-size:.66rem;color:#15803d"><i class="bi bi-check-circle-fill me-1"></i>оформлено${c.ai_order.handled_human ? ' · ' + esc(c.ai_order.handled_human) : ''}</span>`
+                                    : `<span class="ms-auto ib-ai-badge on" style="font-size:.6rem">нове</span>`}
+                            </div>
+                            <div class="d-flex justify-content-between gap-2 py-1" style="font-size:.74rem"><span class="text-muted">Товар</span><span class="text-dark text-end">${esc(c.ai_order.summary || '—')}</span></div>
+                            <div class="d-flex justify-content-between gap-2 py-1" style="font-size:.74rem"><span class="text-muted">Оплата</span><span class="text-dark text-end">${esc(c.ai_order.payment || '—')}</span></div>
+                            ${c.ai_order.handled ? '' : `<button class="btn btn-sm w-100 mt-2 text-white" style="background:#7c3aed;font-size:.74rem" onclick="markOrderHandled(this)"><i class="bi bi-check-lg me-1"></i>Позначити оформленим</button>`}
+                        </div>` : ''}
+
                         <button class="btn btn-sm btn-outline-secondary w-100 mt-2" style="font-size:.74rem" onclick="resetAiContext(this)" title="Агент забуде стару переписку цієї розмови і почне з чистого аркуша. Повідомлення в чаті лишаються.">
                             <i class="bi bi-eraser me-1"></i>Скинути памʼять ШІ (почати з нуля)
                         </button>
@@ -967,6 +991,51 @@
             } catch (e) {
                 btn.disabled = false;
                 alert('Не вдалося скинути памʼять');
+            }
+        }
+
+        async function refreshAiSummary(btn) {
+            if (!activeId) return;
+            const orig = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>думаю…';
+            try {
+                const res = await fetch(`/api/inbox/conversations/${activeId}/ai-summary`, {
+                    method: 'POST',
+                    headers: { 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
+                });
+                const data = await res.json();
+                if (!res.ok || !data.ok) throw new Error();
+                if (currentConv) {
+                    currentConv.ai_summary = data.summary;
+                    currentConv.ai_summary_human = data.summary_human;
+                    renderInfo(currentConv);
+                }
+            } catch (e) {
+                btn.disabled = false;
+                btn.innerHTML = orig;
+                alert('Не вдалося скласти підсумок (перевір баланс ШІ).');
+            }
+        }
+
+        async function markOrderHandled(btn) {
+            if (!activeId) return;
+            btn.disabled = true;
+            try {
+                const res = await fetch(`/api/inbox/conversations/${activeId}/ai-order-handled`, {
+                    method: 'POST',
+                    headers: { 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
+                });
+                const data = await res.json();
+                if (!res.ok || !data.ok) throw new Error();
+                if (currentConv && currentConv.ai_order) {
+                    currentConv.ai_order.handled = true;
+                    currentConv.ai_order.handled_human = data.handled_human;
+                    renderInfo(currentConv);
+                }
+            } catch (e) {
+                btn.disabled = false;
+                alert('Не вдалося позначити');
             }
         }
 

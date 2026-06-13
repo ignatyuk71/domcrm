@@ -516,6 +516,11 @@ class AiAgentService
         $conversation->update([
             'chat_status_id' => $status->id,
             'ai_enabled' => false, // бот у цій розмові замовкає — далі людина
+            // Дані для картки «Замовлення від ШІ» в панелі менеджера.
+            'ai_order_summary' => trim((string) ($input['summary'] ?? '')) ?: null,
+            'ai_order_payment' => trim((string) ($input['payment'] ?? '')) ?: null,
+            'ai_order_product_id' => $input['product_id'] ?? null,
+            'ai_order_handled_at' => null, // нове замовлення — чекає менеджера
         ]);
 
         Log::info('AI: замовлення зафіксовано', [
@@ -529,6 +534,68 @@ class AiAgentService
             'готово' => 'Позначку поставлено, розмову передано людям.',
             'далі' => 'Надішли клієнту ОДНЕ фінальне повідомлення-підтвердження з підсумком і більше нічого не питай.',
         ];
+    }
+
+    /**
+     * Стислий підсумок розмови для панелі менеджера («Про що тут»).
+     * Окремий легкий виклик (без інструментів і каталогу), результат
+     * кешуємо в розмові — генеруємо лише на вимогу (кнопка), не автоматично.
+     */
+    public function summarizeConversation(InboxConversation $conversation): ?string
+    {
+        $apiKey = AiSetting::global()->api_key;
+        if (!$apiKey) {
+            return null;
+        }
+
+        $transcript = $conversation->messages()
+            ->orderBy('id')
+            ->get(['direction', 'text'])
+            ->map(function ($m) {
+                $text = trim((string) $m->text);
+                return $text === '' ? null : (($m->direction === 'in' ? 'Клієнт' : 'Магазин') . ': ' . $text);
+            })
+            ->filter()
+            ->take(-40)
+            ->implode("\n");
+
+        if ($transcript === '') {
+            return null;
+        }
+
+        $system = 'Ти помічник продавця тапочок. Стисло, 1–2 короткі речення українською, підсумуй цей чат: '
+            . 'що клієнт хоче (модель/колір/розмір) і про що домовились (оплата, статус). '
+            . 'Лише суть, без вступів і звертань. Якщо конкретики ще нема — напиши, що саме питав клієнт.';
+
+        $r = Http::timeout(30)->withHeaders([
+            'x-api-key' => $apiKey,
+            'anthropic-version' => '2023-06-01',
+        ])->post('https://api.anthropic.com/v1/messages', [
+            'model' => AiSetting::global()->model ?: 'claude-sonnet-4-6',
+            'max_tokens' => 200,
+            'system' => $system,
+            'messages' => [['role' => 'user', 'content' => $transcript]],
+        ]);
+
+        if (!$r->successful()) {
+            Log::warning('AI summary failed', ['conv' => $conversation->id, 'body' => mb_substr($r->body(), 0, 200)]);
+            return null;
+        }
+
+        $text = '';
+        foreach ($r->json('content') ?? [] as $block) {
+            if (($block['type'] ?? '') === 'text') {
+                $text .= $block['text'];
+            }
+        }
+        $text = trim((string) $this->scrub(trim($text)));
+        if ($text === '') {
+            return null;
+        }
+
+        $conversation->update(['ai_summary' => $text, 'ai_summary_at' => now()]);
+
+        return $text;
     }
 
     /**
