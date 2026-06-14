@@ -188,8 +188,8 @@ class AiAgentTest extends TestCase
         $this->assertStringNotContainsString('777', $body);
         // Розмір з нульовим залишком не у списку наявних
         $this->assertStringContainsString(trim((string) json_encode('розміри: 36-37'), '"'), $body);
-        // Правило про подвійну розмірну сітку присутнє
-        $this->assertStringContainsString(trim((string) json_encode('38-39?'), '"'), $body);
+        // Правило про подвійну розмірну сітку присутнє (формат через слеш)
+        $this->assertStringContainsString(trim((string) json_encode('38/39?'), '"'), $body);
         // Каталог кешується (cache_control на блоці)
         $this->assertStringContainsString('cache_control', $body);
     }
@@ -473,6 +473,8 @@ class AiAgentTest extends TestCase
         // Правило: на питання про ціну — спершу цифра, не «будете замовляти?».
         $this->assertStringContainsString('ЗАБОРОНЕНО', $text);
         $this->assertStringContainsString('будете замовляти', $text);
+        // Правило привітання на першу відповідь.
+        $this->assertStringContainsString('привітання', $text);
     }
 
     public function test_complete_order_sends_exact_final_message(): void
