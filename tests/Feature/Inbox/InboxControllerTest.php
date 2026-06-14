@@ -99,4 +99,78 @@ class InboxControllerTest extends TestCase
             ->postJson("/api/inbox/conversations/{$conv->id}/send", ['text' => ''])
             ->assertStatus(422);
     }
+
+    // --- Дошка замовлень ---
+
+    public function test_guest_cannot_access_board(): void
+    {
+        $this->get('/orders-board')->assertRedirect();
+    }
+
+    public function test_board_page_renders(): void
+    {
+        $this->actingAs($this->operator())
+            ->get('/orders-board')
+            ->assertOk()
+            ->assertSee('Дошка замовлень');
+    }
+
+    public function test_board_data_groups_conversations_by_status(): void
+    {
+        // Статуси new/order вже засіяні міграцією.
+        $new = \App\Models\ChatStatus::where('code', 'new')->firstOrFail();
+        $order = \App\Models\ChatStatus::where('code', 'order')->firstOrFail();
+
+        $conn = MetaConnection::create(['page_id' => 'PG', 'page_name' => 'P', 'page_access_token' => 't', 'status' => 'active']);
+        $mk = function (?int $statusId, string $name) use ($conn, $new) {
+            $contact = InboxContact::create(['meta_connection_id' => $conn->id, 'channel' => 'facebook', 'external_id' => 'u' . $name, 'name' => $name]);
+            $conv = InboxConversation::create([
+                'meta_connection_id' => $conn->id, 'inbox_contact_id' => $contact->id, 'channel' => 'facebook',
+                'last_message_at' => now(), 'last_message_text' => 'msg ' . $name, 'last_message_direction' => 'in',
+                'chat_status_id' => $statusId ?? $new->id,
+            ]);
+            // «без статусу» — лише через update, бо хук creating ставить дефолт
+            if ($statusId === null) {
+                $conv->update(['chat_status_id' => null]);
+            }
+            return $conv;
+        };
+        $mk($new->id, 'Анна');
+        $mk($order->id, 'Богдан');
+        $mk(null, 'Без'); // без статусу
+
+        $res = $this->actingAs($this->operator())->getJson('/api/inbox/board')->assertOk();
+        $columns = collect($res->json('columns'));
+
+        $this->assertSame(1, $columns->firstWhere('id', $new->id)['count']);
+        $this->assertSame(1, $columns->firstWhere('id', $order->id)['count']);
+        $this->assertSame(1, $columns->firstWhere('id', null)['count']);
+        $this->assertSame('Анна', $columns->firstWhere('id', $new->id)['cards'][0]['name']);
+
+        // «Без статусу» завжди остання колонка
+        $this->assertSame('Без статусу', $columns->last()['name']);
+    }
+
+    public function test_board_card_shows_ai_order_details(): void
+    {
+        $aiStatus = \App\Models\ChatStatus::firstOrCreate(['code' => 'ai_order'], ['name' => 'Замовлення від ШІ', 'color' => '#7c3aed', 'sort_order' => 5]);
+
+        $conn = MetaConnection::create(['page_id' => 'PG2', 'page_name' => 'P2', 'page_access_token' => 't', 'status' => 'active']);
+        $contact = InboxContact::create(['meta_connection_id' => $conn->id, 'channel' => 'instagram', 'external_id' => 'ux', 'name' => 'Раіса']);
+        InboxConversation::create([
+            'meta_connection_id' => $conn->id, 'inbox_contact_id' => $contact->id, 'channel' => 'instagram',
+            'last_message_at' => now(), 'last_message_text' => 'дякую', 'last_message_direction' => 'in',
+            'chat_status_id' => $aiStatus->id,
+            'ai_order_summary' => 'Вуличні чорні 38/39 — 530 грн', 'ai_order_phone' => '0966070141',
+            'ai_order_needs_iban' => true,
+        ]);
+
+        $res = $this->actingAs($this->operator())->getJson('/api/inbox/board')->assertOk();
+        $card = collect($res->json('columns'))->firstWhere('name', 'Замовлення від ШІ')['cards'][0];
+
+        $this->assertTrue($card['is_ai_order']);
+        $this->assertTrue($card['needs_iban']);
+        $this->assertSame('0966070141', $card['phone']);
+        $this->assertStringContainsString('Вуличні чорні', $card['snippet']);
+    }
 }

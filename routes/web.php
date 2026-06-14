@@ -97,6 +97,8 @@ Route::middleware('auth')->group(function () {
     // --- ЧАТ / ІНБОКС (Messenger + Instagram) ---
     Route::middleware('role:owner,operator')->group(function () {
         Route::get('/inbox', [InboxController::class, 'index'])->name('inbox.index');
+        Route::get('/orders-board', [InboxController::class, 'board'])->name('inbox.board');
+        Route::get('/api/inbox/board', [InboxController::class, 'boardData'])->name('inbox.boardData');
         Route::get('/api/inbox/conversations', [InboxController::class, 'conversations'])->name('inbox.conversations');
         Route::get('/api/inbox/conversations/{conversation}/messages', [InboxController::class, 'messages'])->name('inbox.messages');
         Route::post('/api/inbox/conversations/{conversation}/send', [InboxController::class, 'send'])->name('inbox.send');

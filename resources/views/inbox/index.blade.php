@@ -1665,7 +1665,10 @@
             return false;
         }
 
-        loadChatStatuses().then(loadConversations);
+        loadChatStatuses().then(loadConversations).then(() => {
+            const cid = new URLSearchParams(location.search).get('conv');
+            if (cid) openConversation(parseInt(cid, 10));
+        });
         loadComments();
         setInterval(() => {
             loadConversations();

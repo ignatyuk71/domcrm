@@ -449,6 +449,11 @@
                 @endif
             </a>
 
+            <a href="{{ route('inbox.board') }}" class="sidebar-link {{ request()->is('orders-board*') ? 'active' : '' }}">
+                <span class="icon-frame"><i class="bi bi-kanban-fill"></i></span>
+                <span class="item-text">Дошка замовлень</span>
+            </a>
+
             <a href="{{ url('/customers') }}" class="sidebar-link {{ request()->is('customers*') ? 'active' : '' }}">
                 <span class="icon-frame"><i class="bi bi-people-fill"></i></span>
                 <span class="item-text">Клієнти</span>

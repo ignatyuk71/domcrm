@@ -24,6 +24,12 @@ class InboxController extends Controller
         return view('inbox.index');
     }
 
+    /** Сторінка-дошка: усі розмови по колонках-статусах. */
+    public function board()
+    {
+        return view('inbox.board');
+    }
+
     /** Імпорт історії розмов з Meta (Graph API) для всіх активних підключень. */
     public function sync(MetaSyncService $sync)
     {
@@ -470,6 +476,80 @@ class InboxController extends Controller
         $conversation->update(['chat_status_id' => $data['chat_status_id'] ?? null]);
 
         return response()->json(['ok' => true]);
+    }
+
+    /** Дані для дошки замовлень: колонки-статуси з картками розмов. */
+    public function boardData()
+    {
+        $statuses = ChatStatus::orderBy('sort_order')->orderBy('id')
+            ->get(['id', 'code', 'name', 'color']);
+
+        // Точні лічильники по кожному статусу (включно з «без статусу» = 0).
+        $counts = [];
+        foreach (
+            InboxConversation::selectRaw('COALESCE(chat_status_id, 0) as sid, COUNT(*) as n')
+                ->groupBy('sid')->get() as $row
+        ) {
+            $counts[(int) $row->sid] = (int) $row->n;
+        }
+
+        $convs = InboxConversation::query()
+            ->with(['connection:id,page_name', 'contact:id,name,external_id,profile_pic'])
+            ->orderByDesc('last_message_at')
+            ->limit(800)
+            ->get();
+
+        $perColumn = 80;
+        $grouped = [];
+        foreach ($convs as $c) {
+            $key = (int) ($c->chat_status_id ?? 0);
+            if (count($grouped[$key] ?? []) >= $perColumn) {
+                continue;
+            }
+            $grouped[$key][] = $this->boardCard($c);
+        }
+
+        $columns = $statuses->map(fn (ChatStatus $s) => [
+            'id' => $s->id,
+            'name' => $s->name,
+            'color' => $s->color ?: '#94a3b8',
+            'count' => $counts[$s->id] ?? 0,
+            'cards' => $grouped[$s->id] ?? [],
+        ])->values()->all();
+
+        // Колонка «Без статусу» — в кінці.
+        $columns[] = [
+            'id' => null,
+            'name' => 'Без статусу',
+            'color' => '#9aa0a6',
+            'count' => $counts[0] ?? 0,
+            'cards' => $grouped[0] ?? [],
+        ];
+
+        return response()->json(['columns' => $columns]);
+    }
+
+    /** Одна картка для дошки. */
+    private function boardCard(InboxConversation $c): array
+    {
+        $isAiOrder = filled($c->ai_order_summary);
+        $snippet = $isAiOrder
+            ? (string) $c->ai_order_summary
+            : (string) ($c->last_message_text ?? '');
+
+        return [
+            'id' => $c->id,
+            'status_id' => $c->chat_status_id,
+            'name' => $this->contactName($c->contact?->name, $c->contact?->external_id),
+            'avatar' => $c->contact?->profile_pic,
+            'channel' => $c->channel,
+            'phone' => $isAiOrder ? $c->ai_order_phone : null,
+            'snippet' => Str::limit(trim($snippet), 90),
+            'is_ai_order' => $isAiOrder,
+            'needs_iban' => (bool) $c->ai_order_needs_iban,
+            'handled' => (bool) $c->ai_order_handled_at,
+            'time' => $this->shortTime($c->last_message_at),
+        ];
     }
 
     /** Проксі аватара сторінки (Graph picture) — фб не віддає картинку без токена, тому тягнемо з токеном на сервері. */
