@@ -118,6 +118,11 @@ class InboxController extends Controller
 
         $conversation->update(['unread_count' => 0]);
 
+        // «Переглянуто»: останнє повідомлення в чаті — вихідне, і клієнт його прочитав.
+        $lastMsg = $conversation->messages()->latest('id')->first();
+        $seen = $lastMsg && $lastMsg->direction === 'out' && $conversation->last_read_at
+            && $conversation->last_read_at->gte($lastMsg->sent_at ?? $lastMsg->created_at);
+
         return response()->json([
             'conversation' => [
                 'id' => $conversation->id,
@@ -132,6 +137,8 @@ class InboxController extends Controller
                     : null,
                 'contact_name' => $this->contactName($conversation->contact?->name, $conversation->contact?->external_id),
                 'avatar' => $conversation->contact?->profile_pic,
+                'read_human' => $conversation->last_read_at?->format('d.m H:i'),
+                'seen' => (bool) $seen,
                 'ai_summary' => $conversation->ai_summary,
                 'ai_summary_human' => $conversation->ai_summary_at?->format('d.m H:i'),
                 'ai_order' => ($conversation->ai_order_summary || $conversation->ai_order_items || $conversation->ai_order_needs_iban) ? [

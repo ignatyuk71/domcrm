@@ -249,4 +249,61 @@ class AiPanelTest extends TestCase
 
         $this->assertFalse((bool) $conv->fresh()->ai_order_needs_iban);
     }
+
+    public function test_webhook_read_event_sets_last_read_at(): void
+    {
+        config(['services.meta.app_secret' => '']); // вимкнути перевірку підпису в тесті
+        $conv = $this->conversation();
+        $ts = (int) (now()->valueOf()); // мс
+
+        $payload = [
+            'object' => 'page',
+            'entry' => [[
+                'id' => 'PAGE1',
+                'messaging' => [[
+                    'sender' => ['id' => 'USER1'],     // клієнт, що прочитав
+                    'recipient' => ['id' => 'PAGE1'],  // наша сторінка
+                    'timestamp' => $ts,
+                    'read' => ['watermark' => $ts],
+                ]],
+            ]],
+        ];
+
+        $this->postJson('/api/meta/webhook', $payload)->assertOk();
+
+        $this->assertNotNull($conv->fresh()->last_read_at);
+    }
+
+    public function test_messages_marks_seen_when_last_out_message_read(): void
+    {
+        $conv = $this->conversation();
+        InboxMessage::create([
+            'inbox_conversation_id' => $conv->id, 'direction' => 'out', 'sender' => 'ai',
+            'text' => 'Вітаю!', 'sent_at' => now()->subMinutes(5),
+        ]);
+        $conv->update(['last_read_at' => now()->subMinute()]); // прочитано пізніше, ніж відправлено
+
+        $res = $this->actingAs($this->owner())
+            ->getJson("/api/inbox/conversations/{$conv->id}/messages")
+            ->assertOk()->json('conversation');
+
+        $this->assertTrue($res['seen']);
+        $this->assertNotNull($res['read_human']);
+    }
+
+    public function test_messages_not_seen_when_out_message_after_read(): void
+    {
+        $conv = $this->conversation();
+        $conv->update(['last_read_at' => now()->subMinutes(5)]);
+        InboxMessage::create([
+            'inbox_conversation_id' => $conv->id, 'direction' => 'out', 'sender' => 'ai',
+            'text' => 'Нове повідомлення', 'sent_at' => now(), // після прочитання
+        ]);
+
+        $res = $this->actingAs($this->owner())
+            ->getJson("/api/inbox/conversations/{$conv->id}/messages")
+            ->assertOk()->json('conversation');
+
+        $this->assertFalse($res['seen']);
+    }
 }

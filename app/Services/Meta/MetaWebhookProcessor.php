@@ -61,6 +61,43 @@ class MetaWebhookProcessor
         return $stored;
     }
 
+    /**
+     * Подія «прочитано»: клієнт відкрив чат. Ставимо watermark (last_read_at)
+     * на розмову — усі вихідні з sent_at <= цього часу вважаємо переглянутими.
+     */
+    private function handleReadEvent(array $entry, array $event, string $channel): void
+    {
+        $userId = (string) ($event['sender']['id'] ?? '');     // хто прочитав = клієнт
+        $pageSideId = $event['recipient']['id'] ?? null;        // наша сторінка/IG
+        if ($userId === '' || !$pageSideId) {
+            return;
+        }
+
+        $connection = $channel === 'instagram'
+            ? MetaConnection::query()->where('ig_account_id', $pageSideId)->orWhere('ig_account_id', $entry['id'] ?? '___')->first()
+            : MetaConnection::query()->where('page_id', $pageSideId)->first();
+        if (!$connection) {
+            return;
+        }
+
+        $contact = InboxContact::where('meta_connection_id', $connection->id)
+            ->where('channel', $channel)->where('external_id', $userId)->first();
+        $conversation = $contact ? InboxConversation::where('inbox_contact_id', $contact->id)->first() : null;
+        if (!$conversation) {
+            return;
+        }
+
+        $wmMs = $event['read']['watermark'] ?? ($event['timestamp'] ?? null);
+        $readAt = $wmMs
+            ? Carbon::createFromTimestampMs((int) $wmMs)->setTimezone(config('app.timezone'))
+            : now();
+
+        // Watermark лише вперед.
+        if (!$conversation->last_read_at || $readAt->gt($conversation->last_read_at)) {
+            $conversation->update(['last_read_at' => $readAt]);
+        }
+    }
+
     /** Коментар з вебхука (FB field=feed item=comment / IG field=comments). */
     private function handleCommentChange(array $entry, array $change, string $channel): bool
     {
@@ -167,6 +204,13 @@ class MetaWebhookProcessor
 
     private function handleEvent(array $entry, array $event, string $channel): bool
     {
+        // Подія «прочитано» (FB message_reads / IG seen): клієнт відкрив чат.
+        if (isset($event['read'])) {
+            $this->handleReadEvent($entry, $event, $channel);
+
+            return false; // це не збережене повідомлення
+        }
+
         $message = $event['message'] ?? null;
         if (!$message) {
             return false;
