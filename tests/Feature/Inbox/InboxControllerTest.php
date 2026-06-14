@@ -115,40 +115,38 @@ class InboxControllerTest extends TestCase
             ->assertSee('Дошка замовлень');
     }
 
-    public function test_board_data_groups_conversations_by_status(): void
+    public function test_board_shows_only_work_statuses(): void
     {
-        // Статуси new/order вже засіяні міграцією.
-        $new = \App\Models\ChatStatus::where('code', 'new')->firstOrFail();
+        $inProgress = \App\Models\ChatStatus::where('code', 'in_progress')->firstOrFail();
         $order = \App\Models\ChatStatus::where('code', 'order')->firstOrFail();
+        $ai = \App\Models\ChatStatus::firstOrCreate(['code' => 'ai_order'], ['name' => 'Замовлення від ШІ', 'color' => '#7c3aed', 'sort_order' => 5]);
+        $new = \App\Models\ChatStatus::where('code', 'new')->firstOrFail();
 
         $conn = MetaConnection::create(['page_id' => 'PG', 'page_name' => 'P', 'page_access_token' => 't', 'status' => 'active']);
-        $mk = function (?int $statusId, string $name) use ($conn, $new) {
+        $mk = function (int $statusId, string $name) use ($conn) {
             $contact = InboxContact::create(['meta_connection_id' => $conn->id, 'channel' => 'facebook', 'external_id' => 'u' . $name, 'name' => $name]);
-            $conv = InboxConversation::create([
+            return InboxConversation::create([
                 'meta_connection_id' => $conn->id, 'inbox_contact_id' => $contact->id, 'channel' => 'facebook',
                 'last_message_at' => now(), 'last_message_text' => 'msg ' . $name, 'last_message_direction' => 'in',
-                'chat_status_id' => $statusId ?? $new->id,
+                'chat_status_id' => $statusId,
             ]);
-            // «без статусу» — лише через update, бо хук creating ставить дефолт
-            if ($statusId === null) {
-                $conv->update(['chat_status_id' => null]);
-            }
-            return $conv;
         };
-        $mk($new->id, 'Анна');
+        $mk($inProgress->id, 'Анна');
         $mk($order->id, 'Богдан');
-        $mk(null, 'Без'); // без статусу
+        $mk($ai->id, 'Віра');
+        $mk($new->id, 'Гнат'); // «Новий» НЕ має зʼявитись на дошці
 
         $res = $this->actingAs($this->operator())->getJson('/api/inbox/board')->assertOk();
-        $columns = collect($res->json('columns'));
+        $names = collect($res->json('columns'))->pluck('name');
 
-        $this->assertSame(1, $columns->firstWhere('id', $new->id)['count']);
-        $this->assertSame(1, $columns->firstWhere('id', $order->id)['count']);
-        $this->assertSame(1, $columns->firstWhere('id', null)['count']);
-        $this->assertSame('Анна', $columns->firstWhere('id', $new->id)['cards'][0]['name']);
+        // Рівно 3 робочі колонки, у порядку sort_order
+        $this->assertSame(['В роботі', 'Замовлення', 'Замовлення від ШІ'], $names->all());
+        $this->assertFalse($names->contains('Новий'));
+        $this->assertFalse($names->contains('Без статусу'));
 
-        // «Без статусу» завжди остання колонка
-        $this->assertSame('Без статусу', $columns->last()['name']);
+        $cols = collect($res->json('columns'))->keyBy('name');
+        $this->assertSame(1, $cols['В роботі']['count']);
+        $this->assertSame('Анна', $cols['В роботі']['cards'][0]['name']);
     }
 
     public function test_board_card_shows_ai_order_details(): void

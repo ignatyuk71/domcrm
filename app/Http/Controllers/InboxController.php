@@ -478,22 +478,29 @@ class InboxController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    /** Статуси, що показуються на дошці замовлень (лише робочі). */
+    private const BOARD_STATUS_CODES = ['in_progress', 'order', 'ai_order'];
+
     /** Дані для дошки замовлень: колонки-статуси з картками розмов. */
     public function boardData()
     {
-        $statuses = ChatStatus::orderBy('sort_order')->orderBy('id')
+        $statuses = ChatStatus::whereIn('code', self::BOARD_STATUS_CODES)
+            ->orderBy('sort_order')->orderBy('id')
             ->get(['id', 'code', 'name', 'color']);
+        $statusIds = $statuses->pluck('id')->all();
 
-        // Точні лічильники по кожному статусу (включно з «без статусу» = 0).
+        // Точні лічильники по кожній колонці.
         $counts = [];
         foreach (
-            InboxConversation::selectRaw('COALESCE(chat_status_id, 0) as sid, COUNT(*) as n')
+            InboxConversation::selectRaw('chat_status_id as sid, COUNT(*) as n')
+                ->whereIn('chat_status_id', $statusIds)
                 ->groupBy('sid')->get() as $row
         ) {
             $counts[(int) $row->sid] = (int) $row->n;
         }
 
         $convs = InboxConversation::query()
+            ->whereIn('chat_status_id', $statusIds)
             ->with(['connection:id,page_name', 'contact:id,name,external_id,profile_pic'])
             ->orderByDesc('last_message_at')
             ->limit(800)
@@ -502,7 +509,7 @@ class InboxController extends Controller
         $perColumn = 80;
         $grouped = [];
         foreach ($convs as $c) {
-            $key = (int) ($c->chat_status_id ?? 0);
+            $key = (int) $c->chat_status_id;
             if (count($grouped[$key] ?? []) >= $perColumn) {
                 continue;
             }
@@ -516,15 +523,6 @@ class InboxController extends Controller
             'count' => $counts[$s->id] ?? 0,
             'cards' => $grouped[$s->id] ?? [],
         ])->values()->all();
-
-        // Колонка «Без статусу» — в кінці.
-        $columns[] = [
-            'id' => null,
-            'name' => 'Без статусу',
-            'color' => '#9aa0a6',
-            'count' => $counts[0] ?? 0,
-            'cards' => $grouped[0] ?? [],
-        ];
 
         return response()->json(['columns' => $columns]);
     }
