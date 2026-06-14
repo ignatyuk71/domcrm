@@ -508,7 +508,7 @@
                 img.onload = () => { av.innerHTML = ''; av.appendChild(img); };
                 img.src = '/inbox/page-avatar/' + c.conn_id;
             }
-            renderMessages(data.messages, { forceBottom: true, seen: c.seen, readHuman: c.read_human });
+            renderMessages(data.messages, { forceBottom: true, seenMsgId: c.seen_msg_id, readHuman: c.read_human });
             if (panelConvId !== id) { resetOrderPanel(c); panelConvId = id; }
             renderInfo(c);
             loadPanel();
@@ -1214,13 +1214,13 @@
                 const showTime = !next || next.direction !== m.direction;
                 const time = showTime ? `<div class="ib-time-mini ${out ? 'out' : ''}">${esc(m.sent_at_human || '')}</div>` : '';
                 const aiMark = m.sender === 'ai' ? '<i class="bi bi-stars me-1" style="font-size:.72rem;opacity:.85" title="Відповів AI-агент"></i>' : '';
-                return `${ctxHtml(m.context, out)}<div class="ib-row ${out ? 'out' : ''}"><div class="ib-bub ${out ? 'out' : 'in'}${media}">${aiMark}${m.text ? esc(m.text) : ''}${atts}</div></div>${time}`;
+                // «Переглянуто» під останнім нашим повідомленням, яке клієнт прочитав.
+                const seen = m.id === opts.seenMsgId
+                    ? `<div class="ib-time-mini out" style="opacity:.6"><i class="bi bi-check2-all me-1"></i>Переглянуто${opts.readHuman ? ' · ' + esc(opts.readHuman) : ''}</div>`
+                    : '';
+                return `${ctxHtml(m.context, out)}<div class="ib-row ${out ? 'out' : ''}"><div class="ib-bub ${out ? 'out' : 'in'}${media}">${aiMark}${m.text ? esc(m.text) : ''}${atts}</div></div>${time}${seen}`;
             }).join('');
             appendPending();
-            // «Переглянуто» — під останнім вихідним, якщо клієнт його прочитав.
-            if (opts.seen) {
-                box.insertAdjacentHTML('beforeend', `<div class="ib-time-mini out" style="opacity:.65"><i class="bi bi-check2-all me-1"></i>Переглянуто${opts.readHuman ? ' · ' + esc(opts.readHuman) : ''}</div>`);
-            }
             // Скролимо вниз лише при відкритті чату / після відправки, або якщо користувач і так був унизу.
             if (opts.forceBottom || wasAtBottom) {
                 box.scrollTop = box.scrollHeight;
@@ -1673,7 +1673,7 @@
             loadComments();
             if (activeId) {
                 fetch(`/api/inbox/conversations/${activeId}/messages`, { headers: { 'Accept': 'application/json' } })
-                    .then(r => r.json()).then(d => renderMessages(d.messages, { seen: d.conversation?.seen, readHuman: d.conversation?.read_human })).catch(() => {});
+                    .then(r => r.json()).then(d => renderMessages(d.messages, { seenMsgId: d.conversation?.seen_msg_id, readHuman: d.conversation?.read_human })).catch(() => {});
             }
         }, 6000);
     </script>

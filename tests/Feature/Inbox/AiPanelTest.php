@@ -277,7 +277,7 @@ class AiPanelTest extends TestCase
     public function test_messages_marks_seen_when_last_out_message_read(): void
     {
         $conv = $this->conversation();
-        InboxMessage::create([
+        $msg = InboxMessage::create([
             'inbox_conversation_id' => $conv->id, 'direction' => 'out', 'sender' => 'ai',
             'text' => 'Вітаю!', 'sent_at' => now()->subMinutes(5),
         ]);
@@ -287,7 +287,7 @@ class AiPanelTest extends TestCase
             ->getJson("/api/inbox/conversations/{$conv->id}/messages")
             ->assertOk()->json('conversation');
 
-        $this->assertTrue($res['seen']);
+        $this->assertSame($msg->id, $res['seen_msg_id']); // індикатор під цим повідомленням
         $this->assertNotNull($res['read_human']);
     }
 
@@ -304,7 +304,7 @@ class AiPanelTest extends TestCase
             ->getJson("/api/inbox/conversations/{$conv->id}/messages")
             ->assertOk()->json('conversation');
 
-        $this->assertFalse($res['seen']);
+        $this->assertNull($res['seen_msg_id']); // останнє повідомлення новіше за прочитане
     }
 
     public function test_sweep_sends_follow_up_to_silent_lead(): void
