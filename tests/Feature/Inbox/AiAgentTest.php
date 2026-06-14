@@ -504,4 +504,61 @@ class AiAgentTest extends TestCase
         $this->assertFalse((bool) $this->conv->fresh()->ai_enabled);
         $this->assertSame('Іван', $this->conv->fresh()->ai_order_customer_name);
     }
+
+    public function test_voice_message_gets_polite_reply_and_skips_model(): void
+    {
+        $this->setUpConversation();
+
+        $voice = InboxMessage::create([
+            'inbox_conversation_id' => $this->conv->id, 'direction' => 'in', 'sender' => 'contact',
+            'external_message_id' => 'm_voice_1', 'text' => null,
+            'attachments' => [['type' => 'audio', 'url' => 'https://cdn.meta/voice.mp4']],
+            'sent_at' => now(),
+        ]);
+
+        Http::fake([
+            'api.anthropic.com/*' => Http::response(['content' => [['type' => 'text', 'text' => 'НЕ МАЄ ВИКЛИКАТИСЯ']], 'usage' => ['input_tokens' => 1, 'output_tokens' => 1]], 200),
+            'graph.facebook.com/*' => Http::response(['message_id' => 'm_vr_out'], 200),
+        ]);
+
+        (new AiRespondToMessage($this->conv->id, $voice->id))->handle(app(AiAgentService::class));
+
+        // Бот відповів фіксованим текстом про голосові
+        $this->assertDatabaseHas('inbox_messages', [
+            'inbox_conversation_id' => $this->conv->id, 'direction' => 'out', 'sender' => 'ai',
+            'text' => AiAgentService::orderTexts()['voice_reject'],
+        ]);
+        // Claude НЕ викликався
+        Http::assertNotSent(fn ($req) => str_contains($req->url(), 'api.anthropic.com'));
+        // Прогін позначено окремим статусом
+        $this->assertDatabaseHas('ai_runs', [
+            'inbox_conversation_id' => $this->conv->id, 'status' => 'replied_voice',
+        ]);
+    }
+
+    public function test_voice_with_text_caption_still_goes_to_model(): void
+    {
+        $this->setUpConversation();
+
+        $msg = InboxMessage::create([
+            'inbox_conversation_id' => $this->conv->id, 'direction' => 'in', 'sender' => 'contact',
+            'external_message_id' => 'm_voice_2', 'text' => 'Скільки коштує?',
+            'attachments' => [['type' => 'audio', 'url' => 'https://cdn.meta/voice2.mp4']],
+            'sent_at' => now(),
+        ]);
+
+        Http::fake([
+            'api.anthropic.com/*' => Http::response(['content' => [['type' => 'text', 'text' => 'Вітаю! 530 грн.']], 'usage' => ['input_tokens' => 50, 'output_tokens' => 10]], 200),
+            'graph.facebook.com/*' => Http::response(['message_id' => 'm_ok'], 200),
+        ]);
+
+        (new AiRespondToMessage($this->conv->id, $msg->id))->handle(app(AiAgentService::class));
+
+        // Є текст → коротке замикання НЕ спрацьовує, модель викликана
+        Http::assertSent(fn ($req) => str_contains($req->url(), 'api.anthropic.com'));
+        $this->assertDatabaseMissing('inbox_messages', [
+            'inbox_conversation_id' => $this->conv->id,
+            'text' => AiAgentService::orderTexts()['voice_reject'],
+        ]);
+    }
 }

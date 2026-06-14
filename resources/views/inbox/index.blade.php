@@ -1208,8 +1208,15 @@
             const wasAtBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
             box.innerHTML = messages.map((m, i) => {
                 const out = m.direction === 'out';
-                const atts = (m.attachments || []).map(a => a.url ? `<img src="${esc(a.url)}">` : '').join('');
-                const media = atts && !m.text ? ' media' : '';
+                const atts = (m.attachments || []).map(a => {
+                    const t = (a.type || '');
+                    if (t.includes('image') || (!t && a.url)) return a.url ? `<img src="${esc(a.url)}">` : '';
+                    if (t.includes('audio')) return `<div style="display:flex;flex-direction:column;gap:6px"><span style="font-size:.82rem;opacity:.85"><i class="bi bi-mic-fill me-1"></i>Голосове повідомлення</span>${a.url ? `<audio controls preload="none" src="${esc(a.url)}" style="max-width:240px;height:36px"></audio>` : ''}</div>`;
+                    if (t.includes('video')) return a.url ? `<video src="${esc(a.url)}" controls style="max-width:240px;border-radius:10px"></video>` : '';
+                    return `<span style="font-size:.82rem;opacity:.85"><i class="bi bi-paperclip me-1"></i>Вкладення${a.url ? ` · <a href="${esc(a.url)}" target="_blank" rel="noopener">відкрити</a>` : ''}</span>`;
+                }).join('');
+                const hasImg = (m.attachments || []).some(a => (a.type || '').includes('image') || (!a.type && a.url));
+                const media = hasImg && !m.text ? ' media' : '';
                 const next = messages[i + 1];
                 // Галочки ✓✓ ЗАВЖДИ на останньому нашому повідомленні: сині — прочитано, сірі — ні.
                 const isLastOut = out && m.id === opts.lastOutId;

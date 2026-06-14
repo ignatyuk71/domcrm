@@ -141,6 +141,13 @@ class AiAgentService
                 return $finish('skipped_stale');
             }
 
+            // Голосові/аудіо ми не опрацьовуємо — одразу чемна відповідь, без виклику моделі.
+            if ($this->isVoiceOnly($last)) {
+                $this->sendBotMessage($conversation, self::orderTexts()['voice_reject']);
+
+                return $finish('replied_voice');
+            }
+
             $messages = $this->buildHistory($conversation);
             if (empty($messages)) {
                 return $finish('skipped_empty_history');
@@ -575,6 +582,9 @@ class AiAgentService
             'delivery_time' => '1-2 дні від дати замовлення',
             'follow_up' =>
                 "Доброго дня ще раз 🙂 Підкажіть, чи вдалося визначитися з вибором? Радо допоможу з розміром чи кольором 💛",
+            'voice_reject' =>
+                "Дякую за повідомлення 🙂\n"
+                . "На жаль, голосові я не можу прослухати — напишіть, будь ласка, текстом, і я залюбки допоможу 💛",
         ];
     }
 
@@ -1057,7 +1067,7 @@ class AiAgentService
                 // Фото в історії НЕ позначаємо токеном-плейсхолдером: модель починала
                 // друкувати його як текст замість виклику send_photos.
                 if ($role === 'user') {
-                    $text = '(клієнт надіслав фото)';
+                    $text = $this->clientAttachmentNote($m);
                 } else {
                     // Власні надіслані фото — службова примітка З ТОВАРАМИ:
                     // інакше бот не памʼятає, що показував, і «ціна цих?» губиться.
@@ -1155,6 +1165,40 @@ class AiAgentService
             ->pluck('url')
             ->values()
             ->all();
+    }
+
+    /** Чи повідомлення — лише голосове/аудіо (без тексту й без картинки). */
+    private function isVoiceOnly(InboxMessage $m): bool
+    {
+        if (trim((string) $m->text) !== '') {
+            return false;
+        }
+        $atts = collect($m->attachments ?? []);
+        if ($atts->isEmpty()) {
+            return false;
+        }
+        $hasAudio = $atts->contains(fn ($a) => str_contains((string) ($a['type'] ?? ''), 'audio'));
+        $hasImage = $atts->contains(fn ($a) => str_contains((string) ($a['type'] ?? ''), 'image'));
+
+        return $hasAudio && !$hasImage;
+    }
+
+    /** Підпис вкладення клієнта в історії — за типом, щоб аудіо/відео не звати «фото». */
+    private function clientAttachmentNote(InboxMessage $m): string
+    {
+        $types = collect($m->attachments ?? [])->map(fn ($a) => (string) ($a['type'] ?? ''));
+
+        if ($types->contains(fn ($t) => str_contains($t, 'image'))) {
+            return '(клієнт надіслав фото)';
+        }
+        if ($types->contains(fn ($t) => str_contains($t, 'audio'))) {
+            return '(клієнт надіслав голосове повідомлення — прослухати його неможливо)';
+        }
+        if ($types->contains(fn ($t) => str_contains($t, 'video'))) {
+            return '(клієнт надіслав відео — переглянути його неможливо)';
+        }
+
+        return '(клієнт надіслав файл)';
     }
 
     /**
