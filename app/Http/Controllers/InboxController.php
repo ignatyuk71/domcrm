@@ -118,14 +118,10 @@ class InboxController extends Controller
 
         $conversation->update(['unread_count' => 0]);
 
-        // «Переглянуто»: id останнього НАШОГО повідомлення, яке клієнт уже прочитав
-        // (watermark). Показуємо індикатор під ним — навіть якщо після нього є новіше.
-        $seenMsgId = $conversation->last_read_at
-            ? $conversation->messages()
-                ->where('direction', 'out')
-                ->whereRaw('COALESCE(sent_at, created_at) <= ?', [$conversation->last_read_at])
-                ->latest('id')->value('id')
-            : null;
+        // Галочки на ОСТАННЬОМУ нашому повідомленні: прочитане клієнтом (синє) чи ні (сіре).
+        $lastOut = $conversation->messages()->where('direction', 'out')->latest('id')->first();
+        $lastOutRead = $lastOut && $conversation->last_read_at
+            && $conversation->last_read_at->gte($lastOut->sent_at ?? $lastOut->created_at);
 
         return response()->json([
             'conversation' => [
@@ -141,8 +137,8 @@ class InboxController extends Controller
                     : null,
                 'contact_name' => $this->contactName($conversation->contact?->name, $conversation->contact?->external_id),
                 'avatar' => $conversation->contact?->profile_pic,
-                'read_human' => $conversation->last_read_at?->format('d.m H:i'),
-                'seen_msg_id' => $seenMsgId,
+                'last_out_id' => $lastOut?->id,
+                'last_out_read' => (bool) $lastOutRead,
                 'ai_summary' => $conversation->ai_summary,
                 'ai_summary_human' => $conversation->ai_summary_at?->format('d.m H:i'),
                 'ai_order' => ($conversation->ai_order_summary || $conversation->ai_order_items || $conversation->ai_order_needs_iban) ? [

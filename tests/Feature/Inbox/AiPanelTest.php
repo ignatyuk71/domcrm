@@ -287,8 +287,8 @@ class AiPanelTest extends TestCase
             ->getJson("/api/inbox/conversations/{$conv->id}/messages")
             ->assertOk()->json('conversation');
 
-        $this->assertSame($msg->id, $res['seen_msg_id']); // індикатор під цим повідомленням
-        $this->assertNotNull($res['read_human']);
+        $this->assertSame($msg->id, $res['last_out_id']); // галочки на цьому повідомленні
+        $this->assertTrue($res['last_out_read']);         // прочитане → сині
     }
 
     public function test_messages_not_seen_when_out_message_after_read(): void
@@ -304,7 +304,7 @@ class AiPanelTest extends TestCase
             ->getJson("/api/inbox/conversations/{$conv->id}/messages")
             ->assertOk()->json('conversation');
 
-        $this->assertNull($res['seen_msg_id']); // останнє повідомлення новіше за прочитане
+        $this->assertFalse($res['last_out_read']); // останнє новіше за прочитане → сірі
     }
 
     public function test_sweep_sends_follow_up_to_silent_lead(): void

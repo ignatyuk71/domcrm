@@ -88,7 +88,7 @@
         .ib-bub.out { background: #0084ff; color: #fff; border-radius: 18px; }
         .ib-bub.media { background: transparent; padding: 0; }
         .ib-bub img { max-width: 230px; border-radius: 16px; display: block; }
-        .ib-time-mini { font-size: .68rem; color: #8a8d91; margin: 2px 6px 8px; }
+        .ib-time-mini { font-size: .58rem; color: #8a8d91; margin: 2px 6px 8px; }
         .ib-time-mini.out { text-align: right; }
         .ib-ctx { max-width: 64%; background: #f5f6f8; border-left: 3px solid #cdd2dc; border-radius: 10px; padding: 6px 10px; margin-bottom: 2px; font-size: .74rem; color: #65676b; display: flex; flex-direction: column; gap: 4px; }
         .ib-ctx img { max-width: 120px; max-height: 120px; border-radius: 8px; object-fit: cover; display: block; }
@@ -508,7 +508,7 @@
                 img.onload = () => { av.innerHTML = ''; av.appendChild(img); };
                 img.src = '/inbox/page-avatar/' + c.conn_id;
             }
-            renderMessages(data.messages, { forceBottom: true, seenMsgId: c.seen_msg_id, readHuman: c.read_human });
+            renderMessages(data.messages, { forceBottom: true, lastOutId: c.last_out_id, lastOutRead: c.last_out_read });
             if (panelConvId !== id) { resetOrderPanel(c); panelConvId = id; }
             renderInfo(c);
             loadPanel();
@@ -1211,14 +1211,13 @@
                 const atts = (m.attachments || []).map(a => a.url ? `<img src="${esc(a.url)}">` : '').join('');
                 const media = atts && !m.text ? ' media' : '';
                 const next = messages[i + 1];
-                const showTime = !next || next.direction !== m.direction;
-                const time = showTime ? `<div class="ib-time-mini ${out ? 'out' : ''}">${esc(m.sent_at_human || '')}</div>` : '';
+                // Галочки ✓✓ ЗАВЖДИ на останньому нашому повідомленні: сині — прочитано, сірі — ні.
+                const isLastOut = out && m.id === opts.lastOutId;
+                const ticks = isLastOut ? ` <i class="bi bi-check2-all" style="color:${opts.lastOutRead ? '#2563eb' : '#9aa0a6'}" title="${opts.lastOutRead ? 'Переглянуто' : 'Доставлено'}"></i>` : '';
+                const showTime = !next || next.direction !== m.direction || isLastOut;
+                const time = showTime ? `<div class="ib-time-mini ${out ? 'out' : ''}">${esc(m.sent_at_human || '')}${ticks}</div>` : '';
                 const aiMark = m.sender === 'ai' ? '<i class="bi bi-stars me-1" style="font-size:.72rem;opacity:.85" title="Відповів AI-агент"></i>' : '';
-                // «Переглянуто» під останнім нашим повідомленням, яке клієнт прочитав.
-                const seen = m.id === opts.seenMsgId
-                    ? `<div class="ib-time-mini out" style="opacity:.6"><i class="bi bi-check2-all me-1"></i>Переглянуто${opts.readHuman ? ' · ' + esc(opts.readHuman) : ''}</div>`
-                    : '';
-                return `${ctxHtml(m.context, out)}<div class="ib-row ${out ? 'out' : ''}"><div class="ib-bub ${out ? 'out' : 'in'}${media}">${aiMark}${m.text ? esc(m.text) : ''}${atts}</div></div>${time}${seen}`;
+                return `${ctxHtml(m.context, out)}<div class="ib-row ${out ? 'out' : ''}"><div class="ib-bub ${out ? 'out' : 'in'}${media}">${aiMark}${m.text ? esc(m.text) : ''}${atts}</div></div>${time}`;
             }).join('');
             appendPending();
             // Скролимо вниз лише при відкритті чату / після відправки, або якщо користувач і так був унизу.
@@ -1673,7 +1672,7 @@
             loadComments();
             if (activeId) {
                 fetch(`/api/inbox/conversations/${activeId}/messages`, { headers: { 'Accept': 'application/json' } })
-                    .then(r => r.json()).then(d => renderMessages(d.messages, { seenMsgId: d.conversation?.seen_msg_id, readHuman: d.conversation?.read_human })).catch(() => {});
+                    .then(r => r.json()).then(d => renderMessages(d.messages, { lastOutId: d.conversation?.last_out_id, lastOutRead: d.conversation?.last_out_read })).catch(() => {});
             }
         }, 6000);
     </script>
