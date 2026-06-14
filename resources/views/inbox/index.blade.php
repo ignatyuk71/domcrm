@@ -1213,7 +1213,7 @@
                 const next = messages[i + 1];
                 // Галочки ✓✓ ЗАВЖДИ на останньому нашому повідомленні: сині — прочитано, сірі — ні.
                 const isLastOut = out && m.id === opts.lastOutId;
-                const ticks = isLastOut ? ` <i class="bi bi-check2-all" style="color:${opts.lastOutRead ? '#2563eb' : '#9aa0a6'}" title="${opts.lastOutRead ? 'Переглянуто' : 'Доставлено'}"></i>` : '';
+                const ticks = isLastOut ? ` <i class="bi bi-check2-all" style="font-size:1rem;vertical-align:-2px;color:${opts.lastOutRead ? '#2563eb' : '#9aa0a6'}" title="${opts.lastOutRead ? 'Переглянуто' : 'Доставлено'}"></i>` : '';
                 const showTime = !next || next.direction !== m.direction || isLastOut;
                 const time = showTime ? `<div class="ib-time-mini ${out ? 'out' : ''}">${esc(m.sent_at_human || '')}${ticks}</div>` : '';
                 const aiMark = m.sender === 'ai' ? '<i class="bi bi-stars me-1" style="font-size:.72rem;opacity:.85" title="Відповів AI-агент"></i>' : '';
