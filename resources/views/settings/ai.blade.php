@@ -46,6 +46,11 @@
                         <input id="ai-op-pause" type="number" class="form-control" min="0" max="1440" value="3">
                         <div class="form-text">Людина написала в розмову → ШІ мовчить у ній стільки хвилин і продовжує сам. 0 — вимкнено.</div>
                     </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label small text-secondary mb-1">Нагадування мовчазним, год</label>
+                        <input id="ai-followup" type="number" class="form-control" min="0" max="48" value="3">
+                        <div class="form-text">Клієнт написав, але замовк → через стільки годин ШІ шле ОДИН теплий пінг. 0 — вимкнено.</div>
+                    </div>
                 </div>
                 <div id="test-result" class="small mt-2 d-none"></div>
             </div>
@@ -98,6 +103,7 @@
             document.getElementById('ai-debounce').value = data.global.debounce_seconds ?? 10;
             document.getElementById('ai-catalog-mode').value = data.global.catalog_mode || 'all';
             document.getElementById('ai-op-pause').value = data.global.operator_pause_minutes ?? 3;
+            document.getElementById('ai-followup').value = data.global.follow_up_hours ?? 3;
             const cm = data.global.comment_settings || {};
             document.getElementById('cm-enabled').checked = !!cm.enabled;
             document.getElementById('cm-fb').checked = cm.facebook !== false;
@@ -165,6 +171,7 @@
                         debounce_seconds: parseInt(document.getElementById('ai-debounce').value || '10', 10),
                         catalog_mode: document.getElementById('ai-catalog-mode').value,
                         operator_pause_minutes: parseInt(document.getElementById('ai-op-pause').value || '3', 10),
+                        follow_up_hours: parseInt(document.getElementById('ai-followup').value || '3', 10),
                         comment_settings: {
                             enabled: document.getElementById('cm-enabled').checked,
                             facebook: document.getElementById('cm-fb').checked,

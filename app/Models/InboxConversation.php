@@ -16,6 +16,7 @@ class InboxConversation extends Model
         'last_message_text',
         'last_message_direction',
         'last_read_at',
+        'follow_up_sent_at',
         'unread_count',
         'status',
         'chat_status_id',
@@ -38,6 +39,7 @@ class InboxConversation extends Model
     protected $casts = [
         'last_message_at' => 'datetime',
         'last_read_at' => 'datetime',
+        'follow_up_sent_at' => 'datetime',
         'unread_count' => 'integer',
         'ai_enabled' => 'boolean',
         'ai_paused_until' => 'datetime',

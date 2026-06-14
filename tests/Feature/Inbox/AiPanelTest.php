@@ -306,4 +306,49 @@ class AiPanelTest extends TestCase
 
         $this->assertFalse($res['seen']);
     }
+
+    public function test_sweep_sends_follow_up_to_silent_lead(): void
+    {
+        AiSetting::global()->update(['follow_up_hours' => 3]);
+        $conn = MetaConnection::create(['page_id' => 'PAGE1', 'page_name' => 'Shop', 'page_access_token' => 'tok', 'status' => 'active']);
+        AiSetting::forConnection($conn->id)->update(['enabled' => true]);
+        $contact = InboxContact::create(['meta_connection_id' => $conn->id, 'channel' => 'facebook', 'external_id' => 'USER1', 'name' => 'Ліда']);
+        $conv = InboxConversation::create([
+            'meta_connection_id' => $conn->id, 'inbox_contact_id' => $contact->id, 'channel' => 'facebook',
+            'ai_enabled' => true, 'last_message_direction' => 'out', 'last_message_at' => now()->subHours(4),
+        ]);
+        // Клієнт писав у DM (вікно 24г відкрите), ми відповіли, клієнт замовк.
+        InboxMessage::create(['inbox_conversation_id' => $conv->id, 'direction' => 'in', 'sender' => 'contact', 'text' => 'ціна?', 'sent_at' => now()->subHours(13)]);
+        InboxMessage::create(['inbox_conversation_id' => $conv->id, 'direction' => 'out', 'sender' => 'ai', 'text' => '380 грн', 'sent_at' => now()->subHours(4)]);
+
+        Http::fake(['graph.facebook.com/*' => Http::response(['message_id' => 'm_fu'], 200)]);
+
+        $this->artisan('ai:sweep')->assertExitCode(0);
+
+        $this->assertNotNull($conv->fresh()->follow_up_sent_at);
+        $this->assertDatabaseHas('inbox_messages', [
+            'inbox_conversation_id' => $conv->id, 'sender' => 'ai',
+            'text' => AiAgentService::orderTexts()['follow_up'],
+        ]);
+    }
+
+    public function test_sweep_skips_follow_up_without_client_dm(): void
+    {
+        AiSetting::global()->update(['follow_up_hours' => 3]);
+        $conn = MetaConnection::create(['page_id' => 'PAGE2', 'page_name' => 'Shop', 'page_access_token' => 'tok', 'status' => 'active']);
+        AiSetting::forConnection($conn->id)->update(['enabled' => true]);
+        $contact = InboxContact::create(['meta_connection_id' => $conn->id, 'channel' => 'facebook', 'external_id' => 'USER2']);
+        $conv = InboxConversation::create([
+            'meta_connection_id' => $conn->id, 'inbox_contact_id' => $contact->id, 'channel' => 'facebook',
+            'ai_enabled' => true, 'last_message_direction' => 'out', 'last_message_at' => now()->subHours(4),
+        ]);
+        // Лише наш опенер — клієнт у DM не писав (вікно для повторного DM закрите).
+        InboxMessage::create(['inbox_conversation_id' => $conv->id, 'direction' => 'out', 'sender' => 'ai', 'text' => 'опенер', 'sent_at' => now()->subHours(4)]);
+
+        Http::fake(['graph.facebook.com/*' => Http::response(['message_id' => 'm_x'], 200)]);
+
+        $this->artisan('ai:sweep')->assertExitCode(0);
+
+        $this->assertNull($conv->fresh()->follow_up_sent_at);
+    }
 }

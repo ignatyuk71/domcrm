@@ -17,6 +17,7 @@ class AiSetting extends Model
         'catalog_mode',
         'operator_pause_hours',
         'operator_pause_minutes',
+        'follow_up_hours',
         'comment_settings',
         'schedule',
     ];
@@ -29,6 +30,7 @@ class AiSetting extends Model
         'debounce_seconds' => 'integer',
         'operator_pause_hours' => 'integer',
         'operator_pause_minutes' => 'integer',
+        'follow_up_hours' => 'integer',
     ];
 
     protected $hidden = ['api_key'];

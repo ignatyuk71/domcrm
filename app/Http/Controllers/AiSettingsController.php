@@ -41,6 +41,7 @@ class AiSettingsController extends Controller
                 'debounce_seconds' => $global->debounce_seconds ?? 10,
                 'catalog_mode' => $global->catalog_mode ?: 'all',
                 'operator_pause_minutes' => $global->operator_pause_minutes ?? 3,
+                'follow_up_hours' => $global->follow_up_hours ?? 3,
                 'comment_settings' => array_merge([
                     'enabled' => false,
                     'facebook' => true,
@@ -61,6 +62,7 @@ class AiSettingsController extends Controller
             'debounce_seconds' => ['nullable', 'integer', 'min:0', 'max:60'],
             'catalog_mode' => ['nullable', 'in:all,showcase'],
             'operator_pause_minutes' => ['nullable', 'integer', 'min:0', 'max:1440'],
+            'follow_up_hours' => ['nullable', 'integer', 'min:0', 'max:48'],
             'comment_settings' => ['nullable', 'array'],
             'comment_settings.enabled' => ['nullable', 'boolean'],
             'comment_settings.facebook' => ['nullable', 'boolean'],
@@ -81,6 +83,7 @@ class AiSettingsController extends Controller
         $global->debounce_seconds = $data['debounce_seconds'] ?? 10;
         $global->catalog_mode = $data['catalog_mode'] ?? 'all';
         $global->operator_pause_minutes = $data['operator_pause_minutes'] ?? 3;
+        $global->follow_up_hours = $data['follow_up_hours'] ?? 3;
         if (array_key_exists('comment_settings', $data)) {
             $new = $data['comment_settings'] ?? [];
             $old = $global->comment_settings ?? [];

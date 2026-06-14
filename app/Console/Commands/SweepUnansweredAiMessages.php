@@ -2,6 +2,8 @@
 
 namespace App\Console\Commands;
 
+use App\Models\AiSetting;
+use App\Models\InboxConversation;
 use App\Models\InboxMessage;
 use App\Services\Ai\AiAgentService;
 use Illuminate\Console\Command;
@@ -64,7 +66,34 @@ class SweepUnansweredAiMessages extends Command
             $this->line("comment #{$comment->id}: " . $comment->fresh()->status);
         }
 
-        $this->info('Оброблено: ' . $messages->count() . ' повідомлень, ' . $comments->count() . ' коментарів');
+        // Фоллоу-ап мовчазним лідам: ми відповіли, клієнт мовчить — ОДИН теплий пінг.
+        $followed = 0;
+        $fuHours = (int) (AiSetting::global()->follow_up_hours ?? 0);
+        if ($fuHours > 0) {
+            $leads = InboxConversation::query()
+                ->whereNull('follow_up_sent_at')
+                ->where('ai_enabled', true)
+                ->where('last_message_direction', 'out')              // ми написали останні
+                ->where(fn ($q) => $q->whereNull('ai_paused_until')->orWhere('ai_paused_until', '<=', now()))
+                ->whereBetween('last_message_at', [now()->subHours(20), now()->subHours($fuHours)])
+                ->whereHas('messages', fn ($q) => $q->where('direction', 'in')) // клієнт писав у DM → вікно 24г відкрите
+                ->orderBy('last_message_at')
+                ->limit((int) $this->option('max'))
+                ->get();
+
+            foreach ($leads as $conv) {
+                // Поза робочим вікном магазину / магазин вимкнено — без нічних пінгів.
+                $store = AiSetting::where('meta_connection_id', $conv->meta_connection_id)->first();
+                if (!$store || !$store->enabled || !AiAgentService::scheduleAllows($store->schedule)) {
+                    continue;
+                }
+                $ai->sendFollowUp($conv);
+                $followed++;
+                $this->line("follow-up conv #{$conv->id}");
+            }
+        }
+
+        $this->info('Оброблено: ' . $messages->count() . ' повідомлень, ' . $comments->count() . ' коментарів, ' . $followed . ' фоллоу-апів');
 
         return self::SUCCESS;
     }

@@ -572,7 +572,19 @@ class AiAgentService
             'final_message' =>
                 "Дякуємо за замовлення 💛 Відправка протягом 1-2 днів, чекайте на ТТН ♥️",
             'delivery_time' => '1-2 дні від дати замовлення',
+            'follow_up' =>
+                "Доброго дня ще раз 🙂 Підкажіть, чи вдалося визначитися з вибором? Радо допоможу з розміром чи кольором 💛",
         ];
+    }
+
+    /** Один теплий пінг мовчазному ліду (ставить прапор, щоб не повторювати). */
+    public function sendFollowUp(InboxConversation $conversation): bool
+    {
+        $ok = $this->sendBotMessage($conversation, self::orderTexts()['follow_up']);
+        // Позначаємо ЗАВЖДИ (навіть при невдачі) — щоб не довбити повторно.
+        $conversation->update(['follow_up_sent_at' => now()]);
+
+        return $ok;
     }
 
     /** Надіслати клієнту текст від імені бота + зберегти його в історії розмови. */
