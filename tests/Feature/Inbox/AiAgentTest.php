@@ -475,6 +475,9 @@ class AiAgentTest extends TestCase
         $this->assertStringContainsString('будете замовляти', $text);
         // Правило привітання на першу відповідь.
         $this->assertStringContainsString('привітання', $text);
+        // Ввічливий заклик + форматування рядками.
+        $this->assertStringContainsString('Бажаєте замовити', $text);
+        $this->assertStringContainsString('ФОРМАТУВАННЯ', $text);
     }
 
     public function test_complete_order_sends_exact_final_message(): void
