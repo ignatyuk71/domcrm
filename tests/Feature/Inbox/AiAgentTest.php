@@ -503,6 +503,9 @@ class AiAgentTest extends TestCase
         $this->assertStringContainsString('ЗАЛІЗНЕ ПРАВИЛО ПРО ОПИС', $text);
         $this->assertStringContainsString('пружинить', $text);          // явна заборона вигадки
         $this->assertStringContainsString('Не змішуй лінії', $text);    // домашні != вуличні
+        // Примусове grounding: деталі — лише після get_product.
+        $this->assertStringContainsString("ОБОВ'ЯЗКОВЕ ПРАВИЛО", $text);
+        $this->assertStringContainsString('уточню цей момент у менеджера', $text);
     }
 
     public function test_complete_order_sends_exact_final_message(): void
