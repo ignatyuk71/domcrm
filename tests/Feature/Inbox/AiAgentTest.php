@@ -522,6 +522,9 @@ class AiAgentTest extends TestCase
         $this->assertStringContainsString('ДЕТАЛІ ТОВАРУ', $text);
         $this->assertStringContainsString('пружинить', $text);          // явна заборона вигадки
         $this->assertStringContainsString('НЕ ЗМІШУЙ ЛІНІЇ', $text);     // домашні != вуличні
+        // Кейс «літні»: бот має знати, що літні = вуличні (не перепитувати).
+        $this->assertStringContainsString('СИНОНІМИ КАТЕГОРІЙ', $text);
+        $this->assertStringContainsString('літні', $text);
         // Примусове grounding: деталі — лише після get_product.
         $this->assertStringContainsString("ОБОВ'ЯЗКОВЕ ПРАВИЛО", $text);
         $this->assertStringContainsString('уточню цей момент у менеджера', $text);
