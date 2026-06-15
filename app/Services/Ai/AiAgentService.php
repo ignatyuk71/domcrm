@@ -236,7 +236,18 @@ class AiAgentService
             // Після фіксації замовлення завжди шлемо ТОЧНИЙ фінальний текст із конфігу —
             // не покладаємось на модель (гарантія дослівності + захист від порожньої відповіді).
             if (collect($toolsCalled)->contains(fn ($t) => ($t['tool'] ?? '') === 'complete_order')) {
-                $text = self::orderTexts()['final_message'];
+                // Фінальний текст гарантуємо завжди. Але якщо модель ще й коротко
+                // ВІДПОВІЛА клієнту (напр. підтвердила «так, оплата при отриманні») —
+                // лишаємо цю відповідь ПЕРЕД фіналом, а не з'їдаємо її.
+                $final = self::orderTexts()['final_message'];
+                $reply = trim($text);
+                $lc = mb_strtolower($reply);
+                $looksLikeFinal = $reply === ''
+                    || str_contains($lc, 'ттн')
+                    || str_contains($lc, 'дякуємо за замовлення')
+                    || str_contains($lc, 'замовлення прийнят')
+                    || str_contains($lc, 'відправка протягом');
+                $text = $looksLikeFinal ? $final : (mb_substr($reply, 0, 280) . "\n\n" . $final);
             } elseif (collect($toolsCalled)->contains(fn ($t) => ($t['tool'] ?? '') === 'escalate_to_manager')) {
                 $text = self::orderTexts()['handover'];
             }
