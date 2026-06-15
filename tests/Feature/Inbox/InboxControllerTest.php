@@ -149,6 +149,25 @@ class InboxControllerTest extends TestCase
         $this->assertSame('Анна', $cols['В роботі']['cards'][0]['name']);
     }
 
+    public function test_board_includes_needs_human_first(): void
+    {
+        $nh = \App\Models\ChatStatus::firstOrCreate(['code' => 'needs_human'], ['name' => 'Потрібна увага', 'color' => '#dc2626', 'sort_order' => 0]);
+
+        $conn = MetaConnection::create(['page_id' => 'PGN', 'page_name' => 'PN', 'page_access_token' => 't', 'status' => 'active']);
+        $contact = InboxContact::create(['meta_connection_id' => $conn->id, 'channel' => 'facebook', 'external_id' => 'unh', 'name' => 'Клієнт']);
+        InboxConversation::create([
+            'meta_connection_id' => $conn->id, 'inbox_contact_id' => $contact->id, 'channel' => 'facebook',
+            'last_message_at' => now(), 'last_message_text' => 'не зрозуміло', 'last_message_direction' => 'in',
+            'chat_status_id' => $nh->id,
+        ]);
+
+        $res = $this->actingAs($this->operator())->getJson('/api/inbox/board')->assertOk();
+        $names = collect($res->json('columns'))->pluck('name');
+
+        // «Потрібна увага» є на дошці й стоїть ПЕРШОЮ (sort_order 0)
+        $this->assertSame('Потрібна увага', $names->first());
+    }
+
     public function test_board_card_shows_ai_order_details(): void
     {
         $aiStatus = \App\Models\ChatStatus::firstOrCreate(['code' => 'ai_order'], ['name' => 'Замовлення від ШІ', 'color' => '#7c3aed', 'sort_order' => 5]);

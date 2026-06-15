@@ -479,7 +479,7 @@ class InboxController extends Controller
     }
 
     /** Статуси, що показуються на дошці замовлень (лише робочі). */
-    private const BOARD_STATUS_CODES = ['in_progress', 'order', 'ai_order'];
+    private const BOARD_STATUS_CODES = ['needs_human', 'in_progress', 'order', 'ai_order'];
 
     /** Дані для дошки замовлень: колонки-статуси з картками розмов. */
     public function boardData()

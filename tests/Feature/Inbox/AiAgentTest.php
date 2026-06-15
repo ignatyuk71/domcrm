@@ -670,6 +670,38 @@ class AiAgentTest extends TestCase
         $this->assertSame($new->id, $this->conv->fresh()->chat_status_id);
     }
 
+    public function test_escalate_to_manager_pauses_and_marks(): void
+    {
+        $this->setUpConversation();
+        $msg = InboxMessage::create([
+            'inbox_conversation_id' => $this->conv->id, 'direction' => 'in', 'sender' => 'contact',
+            'external_message_id' => 'm_esc_in', 'text' => 'а воно мені точно підійде під ортопедичну устілку?', 'sent_at' => now(),
+        ]);
+
+        Http::fake([
+            'api.anthropic.com/*' => Http::sequence()
+                ->push(['content' => [['type' => 'tool_use', 'id' => 'tu_esc', 'name' => 'escalate_to_manager', 'input' => (object) []]], 'stop_reason' => 'tool_use', 'usage' => ['input_tokens' => 10, 'output_tokens' => 5]], 200)
+                ->push(['content' => [['type' => 'text', 'text' => '(модель щось вигадує)']], 'stop_reason' => 'end_turn', 'usage' => ['input_tokens' => 12, 'output_tokens' => 6]], 200),
+            'graph.facebook.com/*' => Http::response(['message_id' => 'm_esc_out'], 200),
+        ]);
+
+        (new AiRespondToMessage($this->conv->id, $msg->id))->handle(app(AiAgentService::class));
+        $this->conv->refresh();
+
+        // Червона мітка «Потрібна увага»
+        $status = \App\Models\ChatStatus::where('code', 'needs_human')->first();
+        $this->assertNotNull($status);
+        $this->assertSame($status->id, $this->conv->chat_status_id);
+        // Чат на паузі
+        $this->assertNotNull($this->conv->ai_paused_until);
+        $this->assertTrue($this->conv->ai_paused_until->isFuture());
+        // Клієнту пішов САМЕ handover-текст (не вигадка моделі)
+        $this->assertDatabaseHas('inbox_messages', [
+            'inbox_conversation_id' => $this->conv->id, 'sender' => 'ai',
+            'text' => AiAgentService::orderTexts()['handover'],
+        ]);
+    }
+
     public function test_empty_tool_input_serialized_as_object(): void
     {
         $this->setUpConversation();
