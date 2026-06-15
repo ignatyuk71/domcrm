@@ -165,6 +165,9 @@ class AiAgentService
                 $payload = [
                     'model' => $model,
                     'max_tokens' => 700,
+                    // Низька «креативність»: бот тримається фактів з каталогу/опису
+                    // і майже не вигадує (кейс Інни — «пружинить» на дефолтній температурі).
+                    'temperature' => 0.3,
                     'system' => $systemBlocks,
                     'messages' => $messages,
                     'tools' => $this->toolDefinitions(),

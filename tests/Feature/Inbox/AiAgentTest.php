@@ -480,6 +480,19 @@ class AiAgentTest extends TestCase
         $this->assertStringContainsString('ФОРМАТУВАННЯ', $text);
     }
 
+    public function test_low_temperature_keeps_bot_factual(): void
+    {
+        $this->setUpConversation();
+        Http::fake([
+            'api.anthropic.com/*' => Http::response(['content' => [['type' => 'text', 'text' => 'Вітаю!']], 'usage' => ['input_tokens' => 5, 'output_tokens' => 3]], 200),
+            'graph.facebook.com/*' => Http::response(['message_id' => 'm1'], 200),
+        ]);
+
+        $this->runJob();
+
+        Http::assertSent(fn ($req) => str_contains($req->url(), 'api.anthropic.com') && ($req->data()['temperature'] ?? null) === 0.3);
+    }
+
     public function test_system_prompt_forbids_inventing_product_traits(): void
     {
         $this->setUpConversation();
