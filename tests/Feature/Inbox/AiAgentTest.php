@@ -393,6 +393,27 @@ class AiAgentTest extends TestCase
         $this->assertStringNotContainsString('[зображення]', $msg->text);
     }
 
+    public function test_internal_photo_memory_note_is_stripped(): void
+    {
+        $this->setUpConversation();
+
+        Http::fake([
+            'api.anthropic.com/*' => Http::response([
+                'content' => [['type' => 'text', 'text' => '(надіслала клієнту фото товарів: #247 Капці для вулиці Бежевий — 530 грн)Бежеві вуличні — 530 грн 🙂']],
+                'stop_reason' => 'end_turn',
+                'usage' => ['input_tokens' => 100, 'output_tokens' => 20],
+            ], 200),
+            'graph.facebook.com/*' => Http::response(['message_id' => 'm_note'], 200),
+        ]);
+
+        $this->runJob();
+
+        // Службова примітка памʼяті НЕ має потрапити клієнту.
+        $msg = InboxMessage::where('sender', 'ai')->latest('id')->first();
+        $this->assertStringNotContainsString('надіслала клієнту фото товарів', (string) $msg->text);
+        $this->assertStringContainsString('Бежеві вуличні — 530 грн', (string) $msg->text);
+    }
+
     public function test_agent_reads_description_via_get_product(): void
     {
         $this->setUpConversation();
