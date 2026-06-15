@@ -529,6 +529,11 @@ class AiAgentTest extends TestCase
         $this->assertStringContainsString('КОЛІР У КІЛЬКОХ ЛІНІЯХ', $text);
         // Кейс #296: службові id з каталогу НЕ показувати клієнту.
         $this->assertStringContainsString('НІКОЛИ не пиши клієнту номери #id', $text);
+        // Кейс «червоні, маєте?»: конкретний колір → фото ОДРАЗУ, новий колір завжди.
+        $this->assertStringContainsString('один конкретний колір', $text);
+        $this->assertStringContainsString('Для НОВОГО кольору фото показуй ЗАВЖДИ', $text);
+        // Кейс білі: на фото — головна пара, не перелічувати фон.
+        $this->assertStringContainsString('Відповідай про ГОЛОВНУ пару', $text);
         // Примусове grounding: деталі — лише після get_product.
         $this->assertStringContainsString("ОБОВ'ЯЗКОВЕ ПРАВИЛО", $text);
         $this->assertStringContainsString('уточню цей момент у менеджера', $text);
