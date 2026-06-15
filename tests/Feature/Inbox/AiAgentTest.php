@@ -513,6 +513,9 @@ class AiAgentTest extends TestCase
         // Кейс Ірини: відсутній колір — чесно сказати, не підставляти мовчки.
         $this->assertStringContainsString('КОЛІР, ЯКОГО НЕМАЄ', $text);
         $this->assertStringContainsString('видаючи молочний за бежевий', $text);
+        // Кейс Михайла: «Укрпоштою?» → чітке «ні», і не перепитувати дану адресу.
+        $this->assertStringContainsString('Ні, Укрпоштою не відправляємо', $text);
+        $this->assertStringContainsString('НЕ ПЕРЕПИТУЙ те, що клієнт уже дав', $text);
     }
 
     public function test_complete_order_sends_exact_final_message(): void
