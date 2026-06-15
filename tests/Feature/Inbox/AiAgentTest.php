@@ -506,6 +506,9 @@ class AiAgentTest extends TestCase
         // Примусове grounding: деталі — лише після get_product.
         $this->assertStringContainsString("ОБОВ'ЯЗКОВЕ ПРАВИЛО", $text);
         $this->assertStringContainsString('уточню цей момент у менеджера', $text);
+        // Кейс Ірини: відсутній колір — чесно сказати, не підставляти мовчки.
+        $this->assertStringContainsString('КОЛІР, ЯКОГО НЕМАЄ', $text);
+        $this->assertStringContainsString('видаючи молочний за бежевий', $text);
     }
 
     public function test_complete_order_sends_exact_final_message(): void
