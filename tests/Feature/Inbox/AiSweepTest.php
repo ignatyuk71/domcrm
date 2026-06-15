@@ -119,4 +119,44 @@ class AiSweepTest extends TestCase
         $this->assertDatabaseHas('ai_runs', ['inbox_message_id' => $msg->id, 'status' => 'skipped_in_progress']);
         Http::assertNothingSent();
     }
+
+    public function test_sweep_retries_message_that_errored(): void
+    {
+        $this->setUpConversation();
+        $msg = $this->oldIncoming('Привіт');
+        // Попередня спроба впала з помилкою (раніше таке зависало назавжди)
+        AiRun::create(['inbox_conversation_id' => $this->conv->id, 'inbox_message_id' => $msg->id, 'status' => 'error', 'error' => 'Claude: temperature ...']);
+
+        Http::fake([
+            'api.anthropic.com/*' => Http::response([
+                'content' => [['type' => 'text', 'text' => 'Вітаю! 🙂']],
+                'stop_reason' => 'end_turn', 'usage' => ['input_tokens' => 100, 'output_tokens' => 10],
+            ], 200),
+            'graph.facebook.com/*' => Http::response(['message_id' => 'm_retry'], 200),
+        ]);
+
+        $this->artisan('ai:sweep')->assertSuccessful();
+
+        // Крон добрав повідомлення, що раніше впало, і відповів
+        $this->assertDatabaseHas('ai_runs', ['inbox_message_id' => $msg->id, 'status' => 'replied']);
+    }
+
+    public function test_sweep_gives_up_after_three_errors(): void
+    {
+        $this->setUpConversation();
+        $msg = $this->oldIncoming('Привіт');
+        for ($i = 0; $i < 3; $i++) {
+            AiRun::create(['inbox_conversation_id' => $this->conv->id, 'inbox_message_id' => $msg->id, 'status' => 'error', 'error' => 'x']);
+        }
+
+        Http::fake([
+            'api.anthropic.com/*' => Http::response(['content' => [['type' => 'text', 'text' => 'hi']], 'stop_reason' => 'end_turn', 'usage' => ['input_tokens' => 1, 'output_tokens' => 1]], 200),
+            'graph.facebook.com/*' => Http::response(['message_id' => 'x'], 200),
+        ]);
+
+        $this->artisan('ai:sweep')->assertSuccessful();
+
+        // 3 невдалі спроби вже були — більше не довбимо (Claude не викликається)
+        Http::assertNotSent(fn ($req) => str_contains($req->url(), 'api.anthropic.com'));
+    }
 }

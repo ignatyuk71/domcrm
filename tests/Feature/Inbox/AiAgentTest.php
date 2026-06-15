@@ -236,18 +236,29 @@ class AiAgentTest extends TestCase
 
     public function test_client_photo_goes_to_model_as_image_block(): void
     {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD недоступний');
+        }
         $this->setUpConversation();
 
-        // Клієнт надсилає фото з питанням ціни
+        // Реальний PNG, а сервер у заголовку БРЕШЕ, що це jpeg — тип маємо
+        // визначити з самих байтів (кейс Михайла: PNG-скрін падав як jpeg).
+        $im = imagecreatetruecolor(20, 20);
+        imagefilledrectangle($im, 0, 0, 19, 19, imagecolorallocate($im, 120, 90, 60));
+        ob_start();
+        imagepng($im);
+        $pngBytes = (string) ob_get_clean();
+        imagedestroy($im);
+
         $photoMsg = InboxMessage::create([
             'inbox_conversation_id' => $this->conv->id, 'direction' => 'in', 'sender' => 'contact',
             'external_message_id' => 'm_img_1', 'text' => 'Яка ціна на такі?',
-            'attachments' => [['type' => 'image', 'url' => 'https://scontent.test/client-photo.jpg']],
+            'attachments' => [['type' => 'image', 'url' => 'https://scontent.test/client-photo.png']],
             'sent_at' => now(),
         ]);
 
         Http::fake([
-            'scontent.test/*' => Http::response('FAKE_JPEG_BYTES', 200, ['Content-Type' => 'image/jpeg']),
+            'scontent.test/*' => Http::response($pngBytes, 200, ['Content-Type' => 'image/jpeg']), // заголовок бреше
             'api.anthropic.com/*' => Http::response([
                 'content' => [['type' => 'text', 'text' => 'Це наші домашні пухнасті — 380 грн 🙂']],
                 'stop_reason' => 'end_turn',
@@ -262,9 +273,13 @@ class AiAgentTest extends TestCase
             ->filter(fn ($pair) => str_contains($pair[0]->url(), 'api.anthropic.com'))
             ->first()[0]->body();
 
-        // Картинка пішла image-блоком (base64 від байтів фото), текст питання поруч
+        // Картинка пішла image-блоком; media_type визначено з БАЙТІВ (png), не з брехливого заголовка (jpeg)
         $this->assertStringContainsString('"type":"image"', $body);
-        $this->assertStringContainsString(base64_encode('FAKE_JPEG_BYTES'), $body);
+        $this->assertTrue(
+            str_contains($body, '"media_type":"image\/png"') || str_contains($body, '"media_type":"image/png"'),
+            'media_type має бути image/png (з байтів), а не jpeg із заголовка'
+        );
+        $this->assertStringContainsString(base64_encode($pngBytes), $body);
         $this->assertStringContainsString(trim((string) json_encode('Яка ціна на такі?'), '"'), $body);
         $this->assertDatabaseHas('inbox_messages', ['text' => 'Це наші домашні пухнасті — 380 грн 🙂']);
     }
@@ -653,5 +668,28 @@ class AiAgentTest extends TestCase
 
         // Просто відповів без зацікавленості → лишається «Новий»
         $this->assertSame($new->id, $this->conv->fresh()->chat_status_id);
+    }
+
+    public function test_empty_tool_input_serialized_as_object(): void
+    {
+        $this->setUpConversation();
+
+        // Модель кличе інструмент БЕЗ параметрів (порожній вхід), далі — текст.
+        Http::fake([
+            'api.anthropic.com/*' => Http::sequence()
+                ->push(['content' => [['type' => 'tool_use', 'id' => 'tu_e', 'name' => 'ask_delivery_details', 'input' => (object) []]], 'stop_reason' => 'tool_use', 'usage' => ['input_tokens' => 10, 'output_tokens' => 5]], 200)
+                ->push(['content' => [['type' => 'text', 'text' => 'Чекаю дані 🙂']], 'stop_reason' => 'end_turn', 'usage' => ['input_tokens' => 12, 'output_tokens' => 6]], 200),
+            'graph.facebook.com/*' => Http::sequence()->push(['message_id' => 'm_t'], 200)->push(['message_id' => 'm_f'], 200),
+        ]);
+
+        $this->runJob();
+
+        $sent = collect(Http::recorded())
+            ->filter(fn ($p) => str_contains($p[0]->url(), 'api.anthropic.com'))
+            ->map(fn ($p) => $p[0]->body());
+
+        // Порожній вхід інструмента при повторній відправці — об'єкт {}, а не масив []
+        $this->assertTrue($sent->contains(fn ($b) => str_contains($b, '"input":{}')), 'порожній вхід має йти як {}');
+        $this->assertFalse($sent->contains(fn ($b) => str_contains($b, '"input":[]')), 'порожній вхід НЕ має бути []');
     }
 }

@@ -199,6 +199,15 @@ class AiAgentService
                     break;
                 }
 
+                // Порожній вхід інструмента {} декодується PHP як [] — Claude
+                // відхиляє його при повторній відправці («Input should be an object»).
+                // Приводимо input КОЖНОГО tool_use до обʼєкта → серіалізується як {}.
+                foreach ($content as $ci => $blk) {
+                    if (($blk['type'] ?? '') === 'tool_use') {
+                        $content[$ci]['input'] = (object) ($blk['input'] ?? []);
+                    }
+                }
+
                 // Виконуємо всі запити в базу з цього кроку і віддаємо результати назад.
                 $messages[] = ['role' => 'assistant', 'content' => $content];
                 $results = [];
@@ -1349,13 +1358,16 @@ class AiAgentService
             if (!$r->successful()) {
                 return null;
             }
-            $mime = trim(explode(';', (string) $r->header('Content-Type'))[0]) ?: 'image/jpeg';
-            if (!str_starts_with($mime, 'image/')) {
-                return null;
-            }
             $body = $r->body();
             if (strlen($body) > 4 * 1024 * 1024) { // ліміт API ~5MB на картинку, з запасом
                 return null;
+            }
+            // Тип визначаємо з САМИХ байтів — заголовок сервера часто бреше
+            // (PNG-скрін приходив як image/jpeg, і Claude його відхиляв).
+            $info = @getimagesizefromstring($body);
+            $mime = $info['mime'] ?? '';
+            if (!in_array($mime, ['image/jpeg', 'image/png', 'image/gif', 'image/webp'], true)) {
+                return null; // невідомий/непідтримуваний формат — краще не слати
             }
 
             return ['mime' => $mime, 'bytes' => $body];

@@ -30,12 +30,16 @@ class SweepUnansweredAiMessages extends Command
             // даємо швидкому шляху 90с дожити; старше 12 год не воскрешаємо
             ->whereBetween('created_at', [now()->subHours(12), now()->subSeconds(90)])
             ->whereNotExists(function ($q) {
-                // skipped_schedule ≠ оброблено: вікно відкрилось → добираємо.
+                // Термінальний результат (відповіли / свідомо пропустили) — не чіпаємо.
+                // skipped_schedule (вікно ще закрите) і error (збій) НЕ термінальні:
+                // schedule добираємо коли відкриється вікно, error — повторюємо.
                 $q->select(DB::raw(1))
                     ->from('ai_runs')
                     ->whereColumn('ai_runs.inbox_message_id', 'inbox_messages.id')
-                    ->where('ai_runs.status', '!=', 'skipped_schedule');
+                    ->whereNotIn('ai_runs.status', ['skipped_schedule', 'error']);
             })
+            // але не довбимо вічно: максимум 3 невдалі (error) спроби на повідомлення
+            ->whereRaw('(select count(*) from ai_runs r where r.inbox_message_id = inbox_messages.id and r.status = ?) < ?', ['error', 3])
             ->whereHas('conversation', fn ($q) => $q->where('ai_enabled', true))
             ->orderBy('id')
             ->limit((int) $this->option('max'))
