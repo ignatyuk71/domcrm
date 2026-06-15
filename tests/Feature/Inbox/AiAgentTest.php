@@ -525,6 +525,8 @@ class AiAgentTest extends TestCase
         // Кейс «літні»: бот має знати, що літні = вуличні (не перепитувати).
         $this->assertStringContainsString('СИНОНІМИ КАТЕГОРІЙ', $text);
         $this->assertStringContainsString('літні', $text);
+        // Кейс малинові: колір у кількох лініях → показати ВСІ (домашні + вуличні).
+        $this->assertStringContainsString('КОЛІР У КІЛЬКОХ ЛІНІЯХ', $text);
         // Примусове grounding: деталі — лише після get_product.
         $this->assertStringContainsString("ОБОВ'ЯЗКОВЕ ПРАВИЛО", $text);
         $this->assertStringContainsString('уточню цей момент у менеджера', $text);
