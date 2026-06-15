@@ -519,9 +519,9 @@ class AiAgentTest extends TestCase
         $text = json_encode($blocks, JSON_UNESCAPED_UNICODE);
 
         // Кейс Інни: бот вигадав «пружинить / ширша нога» і змішав лінії.
-        $this->assertStringContainsString('ЗАЛІЗНЕ ПРАВИЛО ПРО ОПИС', $text);
+        $this->assertStringContainsString('ДЕТАЛІ ТОВАРУ', $text);
         $this->assertStringContainsString('пружинить', $text);          // явна заборона вигадки
-        $this->assertStringContainsString('Не змішуй лінії', $text);    // домашні != вуличні
+        $this->assertStringContainsString('НЕ ЗМІШУЙ ЛІНІЇ', $text);     // домашні != вуличні
         // Примусове grounding: деталі — лише після get_product.
         $this->assertStringContainsString("ОБОВ'ЯЗКОВЕ ПРАВИЛО", $text);
         $this->assertStringContainsString('уточню цей момент у менеджера', $text);
