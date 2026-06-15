@@ -561,4 +561,59 @@ class AiAgentTest extends TestCase
             'text' => AiAgentService::orderTexts()['voice_reject'],
         ]);
     }
+
+    // --- Авто-статус «В роботі» для зацікавлених ---
+
+    private function fakeEngagedTurn(): void
+    {
+        // Claude кличе ask_delivery_details (ознака зацікавленості), далі — текст.
+        Http::fake([
+            'api.anthropic.com/*' => Http::sequence()
+                ->push(['content' => [['type' => 'tool_use', 'id' => 'tu_d', 'name' => 'ask_delivery_details', 'input' => []]], 'stop_reason' => 'tool_use', 'usage' => ['input_tokens' => 10, 'output_tokens' => 5]], 200)
+                ->push(['content' => [['type' => 'text', 'text' => 'Чекаю ваші дані 🙂']], 'stop_reason' => 'end_turn', 'usage' => ['input_tokens' => 12, 'output_tokens' => 6]], 200),
+            'graph.facebook.com/*' => Http::sequence()
+                ->push(['message_id' => 'm_tmpl'], 200)
+                ->push(['message_id' => 'm_fin'], 200),
+        ]);
+    }
+
+    public function test_engaged_client_moves_to_in_progress(): void
+    {
+        $this->setUpConversation(); // стартує у «Новий» (дефолт)
+        $this->fakeEngagedTurn();
+
+        $this->runJob();
+
+        $inProgress = \App\Models\ChatStatus::where('code', 'in_progress')->firstOrFail();
+        $this->assertSame($inProgress->id, $this->conv->fresh()->chat_status_id);
+    }
+
+    public function test_engagement_does_not_override_manual_status(): void
+    {
+        $this->setUpConversation();
+        $closed = \App\Models\ChatStatus::where('code', 'closed')->firstOrFail();
+        $this->conv->update(['chat_status_id' => $closed->id]);
+
+        $this->fakeEngagedTurn();
+        $this->runJob();
+
+        // Ручний статус оператора не перетирається
+        $this->assertSame($closed->id, $this->conv->fresh()->chat_status_id);
+    }
+
+    public function test_plain_reply_keeps_new_status(): void
+    {
+        $this->setUpConversation();
+        $new = \App\Models\ChatStatus::where('code', 'new')->firstOrFail();
+
+        Http::fake([
+            'api.anthropic.com/*' => Http::response(['content' => [['type' => 'text', 'text' => 'Вітаю!']], 'usage' => ['input_tokens' => 5, 'output_tokens' => 3]], 200),
+            'graph.facebook.com/*' => Http::response(['message_id' => 'm1'], 200),
+        ]);
+
+        $this->runJob();
+
+        // Просто відповів без зацікавленості → лишається «Новий»
+        $this->assertSame($new->id, $this->conv->fresh()->chat_status_id);
+    }
 }
