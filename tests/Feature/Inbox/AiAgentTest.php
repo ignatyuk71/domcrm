@@ -483,7 +483,7 @@ class AiAgentTest extends TestCase
         $this->assertStringContainsString('ФОРМАТУВАННЯ', $text);
     }
 
-    public function test_low_temperature_keeps_bot_factual(): void
+    public function test_temperature_not_sent_opus_rejects_it(): void
     {
         $this->setUpConversation();
         Http::fake([
@@ -493,7 +493,8 @@ class AiAgentTest extends TestCase
 
         $this->runJob();
 
-        Http::assertSent(fn ($req) => str_contains($req->url(), 'api.anthropic.com') && ($req->data()['temperature'] ?? null) === 0.3);
+        // Opus 4.8 не приймає temperature — параметр НЕ має йти в запит.
+        Http::assertSent(fn ($req) => str_contains($req->url(), 'api.anthropic.com') && !array_key_exists('temperature', $req->data()));
     }
 
     public function test_system_prompt_forbids_inventing_product_traits(): void

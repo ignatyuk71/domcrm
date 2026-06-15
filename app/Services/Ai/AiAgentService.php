@@ -165,9 +165,9 @@ class AiAgentService
                 $payload = [
                     'model' => $model,
                     'max_tokens' => 700,
-                    // Низька «креативність»: бот тримається фактів з каталогу/опису
-                    // і майже не вигадує (кейс Інни — «пружинить» на дефолтній температурі).
-                    'temperature' => 0.3,
+                    // NB: параметр temperature НЕ передаємо — Opus 4.8 його не приймає
+                    // («temperature is deprecated for this model» → відповідь падала).
+                    // Проти вигадок працюють промпт-правила (forced grounding, анти-вигадка).
                     'system' => $systemBlocks,
                     'messages' => $messages,
                     'tools' => $this->toolDefinitions(),
