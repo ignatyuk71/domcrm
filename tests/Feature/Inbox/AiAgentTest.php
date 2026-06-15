@@ -480,6 +480,18 @@ class AiAgentTest extends TestCase
         $this->assertStringContainsString('ФОРМАТУВАННЯ', $text);
     }
 
+    public function test_system_prompt_forbids_inventing_product_traits(): void
+    {
+        $this->setUpConversation();
+        $blocks = app(AiAgentService::class)->buildSystemPrompt($this->conv, AiSetting::forConnection($this->conn->id));
+        $text = json_encode($blocks, JSON_UNESCAPED_UNICODE);
+
+        // Кейс Інни: бот вигадав «пружинить / ширша нога» і змішав лінії.
+        $this->assertStringContainsString('ЗАЛІЗНЕ ПРАВИЛО ПРО ОПИС', $text);
+        $this->assertStringContainsString('пружинить', $text);          // явна заборона вигадки
+        $this->assertStringContainsString('Не змішуй лінії', $text);    // домашні != вуличні
+    }
+
     public function test_complete_order_sends_exact_final_message(): void
     {
         $this->setUpConversation();
