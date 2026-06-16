@@ -517,6 +517,8 @@ class AiAgentTest extends TestCase
         // Ввічливий заклик + форматування рядками.
         $this->assertStringContainsString('Бажаєте замовити', $text);
         $this->assertStringContainsString('ФОРМАТУВАННЯ', $text);
+        // Кейс «Нова пошта 344»: число біля пошти = вже відділення, не перепитувати.
+        $this->assertStringContainsString('Нова пошта 344', $text);
     }
 
     public function test_temperature_not_sent_opus_rejects_it(): void
