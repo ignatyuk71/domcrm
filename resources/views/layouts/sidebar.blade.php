@@ -202,6 +202,29 @@
             transition-delay: 0.05s;
         }
 
+        /* Бейдж непрочитаних чатів: згорнутий сайдбар → маленький індикатор на іконці */
+        .pro-sidebar .sidebar-link .unread-dot {
+            position: absolute;
+            top: 8px;
+            left: 32px;
+            margin: 0 !important;
+            padding: 2px 6px !important;
+            min-width: 17px;
+            font-size: 0.6rem !important;
+            line-height: 1.15;
+            box-shadow: 0 0 0 2px var(--sidebar-bg);
+        }
+        /* Розкритий (наведення) → повертаємо повний бейдж справа від тексту */
+        .pro-sidebar:hover:not(:has(.sidebar-footer:hover)) .sidebar-link .unread-dot {
+            position: static;
+            top: auto; left: auto;
+            margin-left: auto !important;
+            margin-right: 8px !important;
+            padding: 5px 10px !important;
+            font-size: 0.75rem !important;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+
         .mobile-arrow { display: none; }
         .sidebar-footer > .sidebar-link > .item-text { display: none !important; }
 
@@ -445,7 +468,7 @@
                 <span class="icon-frame"><i class="bi bi-chat-dots-fill"></i></span>
                 <span class="item-text">Чат</span>
                 @if($inboxUnread > 0)
-                    <span class="badge rounded-pill ms-auto me-2 shadow-sm" style="background:#ef4444; font-size:0.75rem; padding:5px 10px;">{{ $inboxUnread }}</span>
+                    <span class="badge rounded-pill ms-auto me-2 shadow-sm unread-dot" style="background:#ef4444; font-size:0.75rem; padding:5px 10px;">{{ $inboxUnread }}</span>
                 @endif
             </a>
 
