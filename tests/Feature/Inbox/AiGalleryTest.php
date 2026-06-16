@@ -303,6 +303,35 @@ class AiGalleryTest extends TestCase
         $this->assertSame(1, InboxMessage::where('sender', 'ai')->count());
     }
 
+    public function test_outgoing_save_is_idempotent_when_echo_won_the_race(): void
+    {
+        [, $collage] = $this->makeGroupWithPhotos();
+
+        $conn = MetaConnection::create(['page_id' => 'P3', 'page_name' => 'Shop', 'page_access_token' => 'tok', 'status' => 'active']);
+        $contact = InboxContact::create(['meta_connection_id' => $conn->id, 'channel' => 'facebook', 'external_id' => 'U3']);
+        $conv = InboxConversation::create(['meta_connection_id' => $conn->id, 'inbox_contact_id' => $contact->id, 'channel' => 'facebook']);
+
+        // Echo-вебхук випередив наш send і вже записав це повідомлення як 'agent'
+        // (інший url, щоб не спрацював url-дедуп і фото реально «відправилось»).
+        InboxMessage::create([
+            'inbox_conversation_id' => $conv->id,
+            'direction' => 'out',
+            'sender' => 'agent',
+            'external_message_id' => 'm_echo_first',
+            'attachments' => [['type' => 'image', 'url' => 'https://x/echo.jpg']],
+            'sent_at' => now(),
+        ]);
+
+        Http::fake(['graph.facebook.com/*' => Http::response(['message_id' => 'm_echo_first'], 200)]);
+
+        $res = app(AiAgentService::class)->toolSendPhotos($conv, [$collage->id]);
+
+        // Не впало, фото надіслане, дубля немає, відправника виправлено на 'ai'.
+        $this->assertSame('надіслано', $res["фото №{$collage->id}"]);
+        $this->assertSame(1, InboxMessage::where('external_message_id', 'm_echo_first')->count());
+        $this->assertSame('ai', InboxMessage::where('external_message_id', 'm_echo_first')->first()->sender);
+    }
+
     public function test_send_photos_caps_at_three(): void
     {
         [$group] = $this->makeGroupWithPhotos();
