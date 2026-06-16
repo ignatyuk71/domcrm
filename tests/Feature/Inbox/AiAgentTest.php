@@ -554,6 +554,8 @@ class AiAgentTest extends TestCase
         $this->assertStringContainsString('спершу ПОКАЖИ', $text);
         $this->assertStringContainsString('ЛИШЕ колаж(і) групи', $text);
         $this->assertStringContainsString('ОДИН конкретний колір', $text);
+        // Кейс «Вуличні»: назвав тип → колаж обовʼязково, навіть у відповіді про ціну.
+        $this->assertStringContainsString('ЗАЛІЗНЕ ПРАВИЛО ПРО КОЛАЖ', $text);
         // Примусове grounding: деталі — лише після get_product.
         $this->assertStringContainsString("ОБОВ'ЯЗКОВЕ ПРАВИЛО", $text);
         $this->assertStringContainsString('уточню цей момент у менеджера', $text);
