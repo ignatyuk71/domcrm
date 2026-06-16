@@ -511,6 +511,8 @@ class AiAgentTest extends TestCase
         $this->assertStringContainsString('Питання про ціну завжди потребує відповіді ціною', $text);
         // Кейс «Ціна?» без товару: назвати всі ціни, не перепитувати тип.
         $this->assertStringContainsString('Домашні чи вуличні?', $text);
+        // Кейс пачки повідомлень: привітання + ціна не пропускати навіть з колажем.
+        $this->assertStringContainsString('кілька повідомлень підряд', $text);
         // Бюджетний запит: перелік + «Бажаєте подивитися фото?», не спам фото.
         $this->assertStringContainsString('Бажаєте подивитися фото?', $text);
         $this->assertStringContainsString('сам НЕ починай', $text);
