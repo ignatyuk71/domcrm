@@ -511,6 +511,8 @@ class AiAgentTest extends TestCase
         $this->assertStringContainsString('будете замовляти', $text);
         // Кейс 40/41: на ціну — лише ціна, без оплати/доставки/«Бажаєте замовити?».
         $this->assertStringContainsString('ЦІНИ НЕМА, вивалюєш оплату', $text);
+        // Кейс «Ціна?» без товару: назвати всі ціни, не перепитувати тип.
+        $this->assertStringContainsString('перепитав тип замість цін', $text);
         $this->assertStringContainsString('сам НЕ починай', $text);
         // Правило привітання на першу відповідь.
         $this->assertStringContainsString('привітання', $text);
