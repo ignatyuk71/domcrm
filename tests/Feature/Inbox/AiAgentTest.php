@@ -551,7 +551,7 @@ class AiAgentTest extends TestCase
         $this->assertStringContainsString('СИНОНІМИ КАТЕГОРІЙ', $text);
         $this->assertStringContainsString('літні', $text);
         // Кейс малинові: колір у кількох лініях → показати ВСІ (домашні + вуличні).
-        $this->assertStringContainsString('КОЛІР У КІЛЬКОХ ЛІНІЯХ', $text);
+        $this->assertStringContainsString('КОЛІР У КІЛЬКОХ КАТЕГОРІЯХ', $text);
         // Кейс #296: службові id з каталогу НЕ показувати клієнту.
         $this->assertStringContainsString('НІКОЛИ не пиши клієнту номери #id', $text);
         // Стара логіка фото: показуй сам, група → колаж, один колір → ракурси.
