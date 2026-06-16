@@ -560,7 +560,7 @@ class AiAgentTest extends TestCase
         $this->assertStringContainsString('ГОЛОВНЕ ПРО КОЛАЖ', $text);
         // Примусове grounding: деталі — лише після get_product.
         $this->assertStringContainsString("ОБОВ'ЯЗКОВЕ ПРАВИЛО", $text);
-        $this->assertStringContainsString('уточню цей момент у менеджера', $text);
+        $this->assertStringContainsString('уточню цей момент і повернусь', $text);
         // Кейс Ірини: відсутній колір — чесно сказати, не підставляти мовчки.
         $this->assertStringContainsString('КОЛІР, ЯКОГО НЕМАЄ', $text);
         $this->assertStringContainsString('видаючи молочний за бежевий', $text);
