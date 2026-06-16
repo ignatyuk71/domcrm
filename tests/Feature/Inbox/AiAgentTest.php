@@ -556,8 +556,9 @@ class AiAgentTest extends TestCase
         // Кейс білі: на фото — головна пара, не перелічувати фон.
         $this->assertStringContainsString('Відповідай про ГОЛОВНУ пару', $text);
         // Кейс #129: не повторювати номер фото/колажу з попередніх повідомлень.
-        $this->assertStringContainsString('КРИТИЧНО про НОМЕРИ ФОТО', $text);
-        $this->assertStringContainsString('НІКОЛИ не повторюй номер', $text);
+        $this->assertStringContainsString('не повторюй номер з попередніх', $text);
+        // Кейс Алли: обіцяв показати → мусить викликати send_photos.
+        $this->assertStringContainsString('Обіцянка показати БЕЗ виклику send_photos', $text);
         // Примусове grounding: деталі — лише після get_product.
         $this->assertStringContainsString("ОБОВ'ЯЗКОВЕ ПРАВИЛО", $text);
         $this->assertStringContainsString('уточню цей момент у менеджера', $text);
