@@ -506,13 +506,13 @@ class AiAgentTest extends TestCase
         $blocks = app(AiAgentService::class)->buildSystemPrompt($this->conv, AiSetting::forConnection($this->conn->id));
         $text = json_encode($blocks, JSON_UNESCAPED_UNICODE);
 
-        // Правило: на питання про ціну — спершу цифра, не «будете замовляти?».
-        $this->assertStringContainsString('ЗАБОРОНЕНО', $text);
-        $this->assertStringContainsString('будете замовляти', $text);
-        // Кейс 40/41: на ціну — лише ціна, без оплати/доставки/«Бажаєте замовити?».
-        $this->assertStringContainsString('ЦІНИ НЕМА, вивалюєш оплату', $text);
+        // Правило: на питання про ціну — спершу цифра, не питання у відповідь.
+        $this->assertStringContainsString('Заборонено відповідати запитанням на запитання', $text);
+        $this->assertStringContainsString('Питання про ціну завжди потребує відповіді ціною', $text);
         // Кейс «Ціна?» без товару: назвати всі ціни, не перепитувати тип.
-        $this->assertStringContainsString('перепитав тип замість цін', $text);
+        $this->assertStringContainsString('Домашні чи вуличні?', $text);
+        // Бюджетний запит: перелік + «Бажаєте подивитися фото?», не спам фото.
+        $this->assertStringContainsString('Бажаєте подивитися фото?', $text);
         $this->assertStringContainsString('сам НЕ починай', $text);
         // Правило привітання на першу відповідь.
         $this->assertStringContainsString('привітання', $text);
