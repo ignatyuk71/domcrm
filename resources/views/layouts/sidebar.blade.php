@@ -368,7 +368,7 @@
         $canSeePacking = $isOwner || $isOperator || $isPacker;
         $canSeeCommunication = $isOwner || $isOperator;
         $canSeeContent = $isOwner || $isOperator;
-        $inboxUnread = $canSeeCommunication ? (int) \App\Models\InboxConversation::sum('unread_count') : 0;
+        $inboxUnread = $canSeeCommunication ? \App\Models\InboxConversation::where('unread_count', '>', 0)->count() : 0;
     @endphp
 
     <nav class="sidebar-nav">
