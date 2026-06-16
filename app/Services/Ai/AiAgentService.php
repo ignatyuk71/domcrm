@@ -162,6 +162,7 @@ class AiAgentService
             $tokensIn = 0;
             $tokensOut = 0;
             $content = [];
+            $turnTexts = [];
 
             // Цикл tool-ів: Claude може кілька разів заглянути в базу, потім відповідає.
             for ($loop = 0; $loop <= self::MAX_TOOL_LOOPS; $loop++) {
@@ -198,6 +199,14 @@ class AiAgentService
 
                 $content = $r->json('content') ?? [];
 
+                // Текст КОЖНОГО кроку (а не лише останнього). Коли модель пише
+                // привітання+ціну РАЗОМ із викликом send_photos — цей текст на кроці
+                // tool_use, і раніше ГУБИВСЯ: слався лише фінальний куций рядок.
+                $tt = trim($this->stripPhotoPlaceholder(collect($content)->where('type', 'text')->pluck('text')->implode("\n")));
+                if ($tt !== '') {
+                    $turnTexts[] = $tt;
+                }
+
                 if ($r->json('stop_reason') !== 'tool_use') {
                     break;
                 }
@@ -229,13 +238,9 @@ class AiAgentService
                 $messages[] = ['role' => 'user', 'content' => $results];
             }
 
-            $text = collect($content)
-                ->where('type', 'text')
-                ->pluck('text')
-                ->implode("\n");
-            // Страхувальник: якщо модель усе ж надрукувала плейсхолдер фото —
-            // вирізаємо, бо текстом фото не надсилається (його шле send_photos).
-            $text = $this->stripPhotoPlaceholder($text);
+            // Текст УСІХ кроків разом (привітання+ціна з кроку tool_use + фінал),
+            // без точних повторів. Плейсхолдери фото вже вирізані покроково вище.
+            $text = implode("\n\n", array_values(array_unique($turnTexts)));
             // Після фіксації замовлення завжди шлемо ТОЧНИЙ фінальний текст із конфігу —
             // не покладаємось на модель (гарантія дослівності + захист від порожньої відповіді).
             if (collect($toolsCalled)->contains(fn ($t) => ($t['tool'] ?? '') === 'complete_order')) {
