@@ -566,7 +566,7 @@ class AiAgentTest extends TestCase
         $this->assertStringContainsString('видаючи молочний за бежевий', $text);
         // Кейс Михайла: «Укрпоштою?» → чітке «ні», і не перепитувати дану адресу.
         $this->assertStringContainsString('Ні, Укрпоштою не відправляємо', $text);
-        $this->assertStringContainsString('НЕ ПЕРЕПИТУЙ те, що клієнт уже дав', $text);
+        $this->assertStringContainsString('Не запитуй повторно ПІБ, телефон або адресу', $text);
     }
 
     public function test_complete_order_keeps_reply_and_appends_final(): void
