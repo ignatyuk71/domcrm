@@ -40,6 +40,7 @@ class DashboardController extends Controller
         $recent = $this->recentOrders();
         $topProducts = $this->topProducts($rangeStart, $rangeEnd);
         $sourceBreakdown = $this->sourceBreakdown($rangeStart, $rangeEnd);
+        $losses = $this->deliveryLosses($rangeStart, $rangeEnd);
 
         return response()->json([
             'days' => $days,
@@ -48,8 +49,110 @@ class DashboardController extends Controller
             'recent_orders' => $recent,
             'top_products' => $topProducts,
             'source_breakdown' => $sourceBreakdown,
+            'losses' => $losses,
             'generated_at' => Carbon::now($tz)->toDateTimeString(),
         ]);
+    }
+
+    /**
+     * Оцінка витрат на Нову Пошту за період (тарифи за вагою з config/delivery_costs.php):
+     * - доставка: тільки де платник = відправник (накладений платіж платить клієнт);
+     * - повернення: завжди, одна сторона за вагою.
+     */
+    private function deliveryLosses(Carbon $rangeStart, Carbon $rangeEnd): array
+    {
+        // Відправлені у періоді (перший in_transit) + хто платник доставки.
+        $shipped = DB::table(DB::raw('(
+                SELECT order_delivery_id, MIN(entered_at) as first_shipped
+                FROM order_delivery_status_histories
+                WHERE status_code = "in_transit"
+                GROUP BY order_delivery_id
+            ) as t'))
+            ->join('order_deliveries as od', 'od.id', '=', 't.order_delivery_id')
+            ->whereBetween('t.first_shipped', [$rangeStart, $rangeEnd])
+            ->get(['od.order_id', 'od.delivery_payer']);
+
+        // Повернені у періоді (перший refusal).
+        $returned = DB::table(DB::raw('(
+                SELECT order_delivery_id, MIN(entered_at) as first_ref
+                FROM order_delivery_status_histories
+                WHERE status_code = "refusal"
+                GROUP BY order_delivery_id
+            ) as t'))
+            ->join('order_deliveries as od', 'od.id', '=', 't.order_delivery_id')
+            ->whereBetween('t.first_ref', [$rangeStart, $rangeEnd])
+            ->pluck('od.order_id')
+            ->all();
+
+        $orderIds = array_values(array_unique(array_merge(
+            $shipped->pluck('order_id')->all(),
+            $returned
+        )));
+        $weights = $this->orderWeightsKg($orderIds);
+
+        $deliveryCost = 0.0;
+        $deliveryPaidOrders = 0;
+        foreach ($shipped as $row) {
+            if ($row->delivery_payer === 'sender') {
+                $deliveryCost += $this->tariffByWeight($weights[(int) $row->order_id] ?? 0.0);
+                $deliveryPaidOrders++;
+            }
+        }
+
+        $returnMultiplier = (float) config('delivery_costs.return_multiplier', 1.0);
+        $returnCost = 0.0;
+        foreach ($returned as $oid) {
+            $returnCost += $this->tariffByWeight($weights[(int) $oid] ?? 0.0) * $returnMultiplier;
+        }
+
+        return [
+            'delivery_cost' => round($deliveryCost, 2),
+            'delivery_paid_orders' => $deliveryPaidOrders,
+            'return_cost' => round($returnCost, 2),
+            'return_orders' => count($returned),
+            'total' => round($deliveryCost + $returnCost, 2),
+        ];
+    }
+
+    /**
+     * Вага замовлень у кг: [order_id => kg]. Вага товару з products.weight_g,
+     * якщо немає — config default.
+     */
+    private function orderWeightsKg(array $orderIds): array
+    {
+        if ($orderIds === []) {
+            return [];
+        }
+
+        $default = (int) config('delivery_costs.default_item_weight_g', 350);
+
+        $rows = DB::table('order_items as oi')
+            ->leftJoin('products as p', 'p.id', '=', 'oi.product_id')
+            ->whereIn('oi.order_id', $orderIds)
+            ->selectRaw('oi.order_id, SUM(oi.qty * COALESCE(NULLIF(p.weight_g, 0), ?)) as weight_g', [$default])
+            ->groupBy('oi.order_id')
+            ->pluck('weight_g', 'order_id');
+
+        $out = [];
+        foreach ($rows as $oid => $grams) {
+            $out[(int) $oid] = (float) $grams / 1000.0;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Тариф НП за вагою (кг) з config-band-ів.
+     */
+    private function tariffByWeight(float $weightKg): float
+    {
+        foreach ((array) config('delivery_costs.bands', []) as $band) {
+            if ($weightKg <= (float) ($band['max_kg'] ?? 0)) {
+                return (float) ($band['cost'] ?? 0);
+            }
+        }
+
+        return (float) config('delivery_costs.over_max_cost', 200);
     }
 
     /**

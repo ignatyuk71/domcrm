@@ -209,13 +209,33 @@
           <div class="returns-grid">
             <div class="returns-cell">
               <div class="rc-val">{{ formatMoney(kpis.returns?.value) }}</div>
-              <div class="rc-label">сума повернень</div>
+              <div class="rc-label">сума повернень (товар)</div>
             </div>
             <div class="returns-cell">
               <div class="rc-val rc-rate">{{ kpis.returns?.rate ?? 0 }}%</div>
               <div class="rc-label">від відправлених</div>
             </div>
           </div>
+
+          <div class="losses-box">
+            <div class="losses-title">
+              <i class="bi bi-cash-coin"></i> Витрати на Нову Пошту
+              <span class="losses-hint" title="Оцінка за тарифами НП за вагою. Доставку рахуємо лише там, де платник — відправник (накладений платіж платить клієнт).">?</span>
+            </div>
+            <div class="losses-row">
+              <span><i class="bi bi-arrow-return-left text-danger"></i> Повернення</span>
+              <b class="loss-red">{{ formatMoney(losses.return_cost) }}</b>
+            </div>
+            <div class="losses-row">
+              <span><i class="bi bi-truck"></i> Доставка (де платиш ти)</span>
+              <b>{{ formatMoney(losses.delivery_cost) }}</b>
+            </div>
+            <div class="losses-row losses-total">
+              <span>Разом</span>
+              <b>{{ formatMoney(losses.total) }}</b>
+            </div>
+          </div>
+
           <div class="returns-today">Сьогодні: <b>{{ formatNumber(kpis.returns?.today) }}</b></div>
         </div>
       </div>
@@ -282,6 +302,7 @@ const kpis = ref({});
 const recentOrders = ref([]);
 const topProducts = ref([]);
 const sources = ref([]);
+const losses = ref({});
 
 const palette = ['#6366f1', '#22c55e', '#f59e0b', '#06b6d4', '#a855f7', '#ef4444', '#ec4899', '#14b8a6'];
 
@@ -465,6 +486,7 @@ const load = async () => {
     recentOrders.value = data.recent_orders || [];
     topProducts.value = data.top_products || [];
     sources.value = data.source_breakdown || [];
+    losses.value = data.losses || {};
   } catch (e) {
     console.error('Не вдалося завантажити дашборд', e);
   } finally {
@@ -540,6 +562,18 @@ onMounted(load);
 .rc-label { font-size: .68rem; color: #9ca3af; font-weight: 600; margin-top: 2px; }
 .returns-today { font-size: .78rem; color: #9ca3af; margin-top: 1rem; }
 .returns-today b { color: #dc2626; }
+
+/* Losses box */
+.losses-box { margin-top: 1.1rem; padding: .85rem 1rem; background: #fafafe; border: 1px solid #f1f2f6; border-radius: 14px; }
+.losses-title { font-size: .74rem; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: .3px; margin-bottom: .6rem; display: flex; align-items: center; gap: 6px; }
+.losses-hint { width: 15px; height: 15px; border-radius: 50%; background: #e5e7eb; color: #6b7280; font-size: .65rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; cursor: help; margin-left: auto; }
+.losses-row { display: flex; align-items: center; justify-content: space-between; font-size: .82rem; color: #4b5563; padding: .32rem 0; }
+.losses-row span { display: inline-flex; align-items: center; gap: 7px; }
+.losses-row b { font-weight: 700; color: #111827; }
+.losses-row .loss-red { color: #dc2626; }
+.losses-total { border-top: 1px dashed #e5e7eb; margin-top: .25rem; padding-top: .5rem; font-weight: 700; }
+.losses-total span { color: #111827; font-weight: 700; }
+.losses-total b { font-size: .95rem; }
 
 .empty-block { display: flex; align-items: center; justify-content: center; height: 260px; color: #9ca3af; font-size: .9rem; }
 
