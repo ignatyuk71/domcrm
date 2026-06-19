@@ -72,7 +72,7 @@ class DashboardController extends Controller
             ->whereBetween('t.first_shipped', [$rangeStart, $rangeEnd])
             ->get(['od.order_id', 'od.delivery_payer']);
 
-        // Повернені у періоді (перший refusal).
+        // Повернені у періоді (перший refusal) + хто платник доставки.
         $returned = DB::table(DB::raw('(
                 SELECT order_delivery_id, MIN(entered_at) as first_ref
                 FROM order_delivery_status_histories
@@ -81,15 +81,15 @@ class DashboardController extends Controller
             ) as t'))
             ->join('order_deliveries as od', 'od.id', '=', 't.order_delivery_id')
             ->whereBetween('t.first_ref', [$rangeStart, $rangeEnd])
-            ->pluck('od.order_id')
-            ->all();
+            ->get(['od.order_id', 'od.delivery_payer']);
 
         $orderIds = array_values(array_unique(array_merge(
             $shipped->pluck('order_id')->all(),
-            $returned
+            $returned->pluck('order_id')->all()
         )));
         $weights = $this->orderWeightsKg($orderIds);
 
+        // Доставка — твої безкоштовні відправлення (платник = відправник): ти заплатив пряму.
         $deliveryCost = 0.0;
         $deliveryPaidOrders = 0;
         foreach ($shipped as $row) {
@@ -99,17 +99,25 @@ class DashboardController extends Controller
             }
         }
 
+        // Повернення — зворот рахуємо ЛИШЕ де доставку платив клієнт (накладений платіж).
+        // Безкоштовні (payer=sender) виключаємо: пряму ти вже заплатив (вона в "Доставці"),
+        // а зворот оплаченої посилки безкоштовний → не рахуємо двічі.
         $returnMultiplier = (float) config('delivery_costs.return_multiplier', 1.0);
         $returnCost = 0.0;
-        foreach ($returned as $oid) {
-            $returnCost += $this->tariffByWeight($weights[(int) $oid] ?? 0.0) * $returnMultiplier;
+        $returnPaidOrders = 0;
+        foreach ($returned as $row) {
+            if ($row->delivery_payer === 'sender') {
+                continue;
+            }
+            $returnCost += $this->tariffByWeight($weights[(int) $row->order_id] ?? 0.0) * $returnMultiplier;
+            $returnPaidOrders++;
         }
 
         return [
             'delivery_cost' => round($deliveryCost, 2),
             'delivery_paid_orders' => $deliveryPaidOrders,
             'return_cost' => round($returnCost, 2),
-            'return_orders' => count($returned),
+            'return_orders' => $returnPaidOrders,
             'total' => round($deliveryCost + $returnCost, 2),
         ];
     }
