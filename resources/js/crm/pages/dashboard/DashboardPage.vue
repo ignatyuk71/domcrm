@@ -196,7 +196,7 @@
         </div>
       </div>
       <div class="col-lg-4">
-        <div class="panel h-100">
+        <div class="panel h-100 returns-panel">
           <div class="panel-head">
             <div>
               <h5 class="panel-title">Повернення</h5>
@@ -204,23 +204,19 @@
             </div>
             <span class="returns-icon"><i class="bi bi-arrow-return-left"></i></span>
           </div>
-          <div class="returns-big">{{ formatNumber(kpis.returns?.period) }}</div>
-          <div class="returns-label">повернень / відмов</div>
-          <div class="returns-grid">
-            <div class="returns-cell">
-              <div class="rc-val">{{ formatMoney(kpis.returns?.value) }}</div>
-              <div class="rc-label">сума повернень (товар)</div>
-            </div>
-            <div class="returns-cell">
-              <div class="rc-val rc-rate">{{ kpis.returns?.rate ?? 0 }}%</div>
-              <div class="rc-label">від відправлених</div>
-            </div>
+
+          <div class="returns-headline">
+            <span class="returns-big">{{ formatNumber(kpis.returns?.period) }}</span>
+            <span class="returns-rate">{{ kpis.returns?.rate ?? 0 }}%<small>від відправлених</small></span>
+          </div>
+          <div class="returns-subline">
+            повернень · товару на <b>{{ formatMoney(kpis.returns?.value) }}</b> · сьогодні <b>{{ formatNumber(kpis.returns?.today) }}</b>
           </div>
 
           <div class="losses-box">
             <div class="losses-title">
-              <i class="bi bi-cash-coin"></i> Витрати на Нову Пошту
-              <span class="losses-hint" title="Оцінка за тарифами НП за вагою. Доставку рахуємо лише там, де платник — відправник (накладений платіж платить клієнт).">?</span>
+              Витрати на Нову Пошту
+              <span class="losses-hint" title="Оцінка за тарифами НП за вагою. Повернення рахуємо лише де доставку платив клієнт (накладений платіж); доставку — де платник відправник (безкоштовна для клієнта).">?</span>
             </div>
             <div class="losses-row">
               <span><i class="bi bi-arrow-return-left text-danger"></i> Повернення</span>
@@ -231,12 +227,10 @@
               <b>{{ formatMoney(losses.delivery_cost) }}</b>
             </div>
             <div class="losses-row losses-total">
-              <span>Разом</span>
+              <span>Разом збитки</span>
               <b>{{ formatMoney(losses.total) }}</b>
             </div>
           </div>
-
-          <div class="returns-today">Сьогодні: <b>{{ formatNumber(kpis.returns?.today) }}</b></div>
         </div>
       </div>
     </div>
@@ -551,29 +545,27 @@ onMounted(load);
 .dot-green { background: #22c55e; }
 .dot-red { background: #ef4444; }
 
-/* Returns card */
-.returns-icon { width: 44px; height: 44px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; color: #fff; background: linear-gradient(135deg,#ef4444,#dc2626); box-shadow: 0 4px 12px rgba(239,68,68,.3); }
-.returns-big { font-size: 2.4rem; font-weight: 800; color: #dc2626; line-height: 1; letter-spacing: -0.02em; margin-top: .4rem; }
-.returns-label { font-size: .8rem; color: #9ca3af; font-weight: 600; margin-top: .3rem; }
-.returns-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; margin-top: 1.1rem; }
-.returns-cell { background: #fef2f2; border-radius: 12px; padding: .7rem .8rem; }
-.rc-val { font-weight: 800; color: #111827; font-size: 1rem; }
-.rc-rate { color: #dc2626; }
-.rc-label { font-size: .68rem; color: #9ca3af; font-weight: 600; margin-top: 2px; }
-.returns-today { font-size: .78rem; color: #9ca3af; margin-top: 1rem; }
-.returns-today b { color: #dc2626; }
+/* Returns card (compact) */
+.returns-panel { display: flex; flex-direction: column; }
+.returns-icon { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; color: #fff; background: linear-gradient(135deg,#ef4444,#dc2626); box-shadow: 0 4px 12px rgba(239,68,68,.3); }
+.returns-headline { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; margin-top: .3rem; }
+.returns-big { font-size: 2rem; font-weight: 800; color: #dc2626; line-height: 1; letter-spacing: -0.02em; }
+.returns-rate { font-size: 1.05rem; font-weight: 800; color: #dc2626; display: inline-flex; flex-direction: column; align-items: flex-end; line-height: 1.1; }
+.returns-rate small { font-size: .62rem; font-weight: 600; color: #9ca3af; letter-spacing: .2px; }
+.returns-subline { font-size: .76rem; color: #9ca3af; font-weight: 500; margin-top: .35rem; }
+.returns-subline b { color: #4b5563; font-weight: 700; }
 
-/* Losses box */
-.losses-box { margin-top: 1.1rem; padding: .85rem 1rem; background: #fafafe; border: 1px solid #f1f2f6; border-radius: 14px; }
-.losses-title { font-size: .74rem; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: .3px; margin-bottom: .6rem; display: flex; align-items: center; gap: 6px; }
-.losses-hint { width: 15px; height: 15px; border-radius: 50%; background: #e5e7eb; color: #6b7280; font-size: .65rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; cursor: help; margin-left: auto; }
-.losses-row { display: flex; align-items: center; justify-content: space-between; font-size: .82rem; color: #4b5563; padding: .32rem 0; }
+/* Losses box (compact) */
+.losses-box { margin-top: .85rem; padding: .7rem .85rem; background: #fafafe; border: 1px solid #f1f2f6; border-radius: 12px; }
+.losses-title { font-size: .7rem; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: .3px; margin-bottom: .45rem; display: flex; align-items: center; gap: 6px; }
+.losses-hint { width: 14px; height: 14px; border-radius: 50%; background: #e5e7eb; color: #6b7280; font-size: .62rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; cursor: help; margin-left: auto; }
+.losses-row { display: flex; align-items: center; justify-content: space-between; font-size: .82rem; color: #4b5563; padding: .26rem 0; }
 .losses-row span { display: inline-flex; align-items: center; gap: 7px; }
 .losses-row b { font-weight: 700; color: #111827; }
 .losses-row .loss-red { color: #dc2626; }
-.losses-total { border-top: 1px dashed #e5e7eb; margin-top: .25rem; padding-top: .5rem; font-weight: 700; }
+.losses-total { border-top: 1px dashed #e5e7eb; margin-top: .2rem; padding-top: .45rem; }
 .losses-total span { color: #111827; font-weight: 700; }
-.losses-total b { font-size: .95rem; }
+.losses-total b { font-size: 1rem; color: #dc2626; }
 
 .empty-block { display: flex; align-items: center; justify-content: center; height: 260px; color: #9ca3af; font-size: .9rem; }
 
