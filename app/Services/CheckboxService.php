@@ -239,7 +239,38 @@ class CheckboxService
             duration: $durationMs
         );
 
-        return $isSuccess ? $body : null;
+        // На помилці кидаємо РЕАЛЬНИЙ текст Checkbox (а не загальне "Empty response"),
+        // щоб у fiscal_receipts.error_message і в UI було видно справжню причину.
+        if (!$isSuccess) {
+            throw new \RuntimeException($this->formatCheckboxError($response->status(), is_array($body) ? $body : []));
+        }
+
+        return $body;
+    }
+
+    /**
+     * Перетворює відповідь Checkbox (422/400 тощо) у читабельний текст помилки.
+     */
+    private function formatCheckboxError(int $status, array $body): string
+    {
+        $message = (string) ($body['message'] ?? 'Помилка Checkbox');
+
+        $details = [];
+        foreach (($body['detail'] ?? []) as $d) {
+            if (is_array($d)) {
+                $loc = implode('.', array_filter(
+                    (array) ($d['loc'] ?? []),
+                    static fn ($x) => $x !== 'body' && $x !== null && $x !== ''
+                ));
+                $details[] = trim(($loc !== '' ? "{$loc}: " : '') . (string) ($d['msg'] ?? ''));
+            } elseif (is_string($d) && $d !== '') {
+                $details[] = $d;
+            }
+        }
+
+        $detailStr = $details !== [] ? ' — ' . implode('; ', $details) : '';
+
+        return "Checkbox HTTP {$status}: {$message}{$detailStr}";
     }
 
     /**
@@ -293,6 +324,16 @@ class CheckboxService
         // 2. Визначення типу оплати
         $paymentDetails = $this->determinePaymentDetails($order);
 
+        // Checkbox приймає телефон лише у форматі 380XXXXXXXXX (регекс \+?380\d{9}$).
+        // Нормалізуємо; якщо телефон кривий — НЕ додаємо поле, щоб чек не падав з 422.
+        $delivery = [
+            'email' => $order->customer?->email ?? 'no-email@example.com',
+        ];
+        $deliveryPhone = \App\Support\PhoneNormalizer::normalize($order->customer?->phone);
+        if ($deliveryPhone !== null && preg_match('/^380\d{9}$/', $deliveryPhone) === 1) {
+            $delivery['phone'] = $deliveryPhone;
+        }
+
         return [
             'goods' => $goods,
             'payments' => [[
@@ -300,10 +341,7 @@ class CheckboxService
                 'value' => (int) $totalSum,
                 'label' => $paymentDetails['label'],
             ]],
-            'delivery' => [
-                'email' => $order->customer?->email ?? 'no-email@example.com',
-                'phone' => $order->customer?->phone ?? null,
-            ],
+            'delivery' => $delivery,
         ];
     }
 
