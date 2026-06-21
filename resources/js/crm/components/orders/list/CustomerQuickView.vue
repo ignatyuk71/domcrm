@@ -161,7 +161,7 @@
                       {{ order.delivery?.city_name || 'Самовивіз' }}
                     </div>
                     <span class="status-badge">
-                       {{ order.statusRef?.name || order.status }}
+                       {{ (order.status_ref || order.statusRef)?.name || order.status }}
                     </span>
                   </div>
                 </a>
@@ -298,7 +298,7 @@ const processedTemplates = computed(() => {
     || templateOrder?.delivery?.delivery_status
     || templateOrder?.delivery?.status
     || 'немає даних';
-  const orderStatus = templateOrder?.statusRef?.name || templateOrder?.status || 'немає даних';
+  const orderStatus = (templateOrder?.status_ref || templateOrder?.statusRef)?.name || templateOrder?.status || 'немає даних';
   const orderDate = templateOrder?.created_at ? formatDate(templateOrder.created_at) : 'немає даних';
 
   const replacements = {
