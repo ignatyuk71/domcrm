@@ -144,6 +144,31 @@ class AiAgentTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_own_photo_after_question_does_not_make_stale(): void
+    {
+        $this->setUpConversation();
+        // Реальний кейс (Виктория): бот надіслав ВЛАСНЕ фото вже ПІСЛЯ питання клієнта,
+        // поки слав колаж. Власне фото бота НЕ має робити питання застарілим — бот має відповісти.
+        InboxMessage::create([
+            'inbox_conversation_id' => $this->conv->id, 'direction' => 'out', 'sender' => 'ai',
+            'external_message_id' => 'm_photo_1', 'attachments' => [['type' => 'image', 'url' => 'http://x/p.jpg']],
+            'sent_at' => now(),
+        ]);
+        Http::fake([
+            'api.anthropic.com/*' => Http::response([
+                'content' => [['type' => 'text', 'text' => 'Капці повномірні 🙂']],
+                'usage' => ['input_tokens' => 50, 'output_tokens' => 10],
+            ], 200),
+            'graph.facebook.com/*' => Http::response(['message_id' => 'm_ai_x'], 200),
+        ]);
+
+        $this->runJob();
+
+        // Бот ВІДПОВІВ, а не змовчав через власне фото.
+        $this->assertDatabaseHas('ai_runs', ['inbox_conversation_id' => $this->conv->id, 'status' => 'replied']);
+        $this->assertDatabaseMissing('ai_runs', ['status' => 'skipped_stale']);
+    }
+
     public function test_catalog_in_prompt_carries_facts_and_hides_cost(): void
     {
         $this->setUpConversation();
