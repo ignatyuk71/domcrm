@@ -35,13 +35,22 @@ class FiscalQueueService
         ]);
     }
 
+    /** Скільки разів повторюємо помилковий елемент, перш ніж лишити його в ERROR. */
+    public const MAX_ATTEMPTS = 3;
+
     public function processAvailable(int $limit = 25): int
     {
         $processed = 0;
 
+        // Беремо нові (waiting) і помилкові з невичерпаними спробами (авторетрай) —
+        // транзієнтні збої («зміна ще відкривається») самовідновлюються, без накопичення сміття.
         $items = FiscalQueue::query()
-            ->where('status', FiscalQueue::STATUS_WAITING)
             ->where('available_at', '<=', now())
+            ->where(function ($q) {
+                $q->where('status', FiscalQueue::STATUS_WAITING)
+                    ->orWhere(fn ($e) => $e->where('status', FiscalQueue::STATUS_ERROR)
+                        ->where('attempts', '<', self::MAX_ATTEMPTS));
+            })
             ->orderBy('available_at')
             ->limit($limit)
             ->get();
