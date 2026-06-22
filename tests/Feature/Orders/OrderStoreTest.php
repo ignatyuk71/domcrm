@@ -64,6 +64,17 @@ class OrderStoreTest extends TestCase
         $this->assertSame('+380991112233', $order->customer->phone);
     }
 
+    public function test_creates_postomat_delivery(): void
+    {
+        $payload = $this->validPayload(['delivery' => ['delivery_type' => 'postomat']]);
+
+        $this->actingAs($this->operator())->postJson('/orders', $payload)->assertCreated();
+
+        $delivery = Order::latest('id')->first()->delivery;
+        $this->assertSame('postomat', $delivery->delivery_type);
+        $this->assertSame(\App\Models\OrderDelivery::SERVICE_POSTOMAT, $delivery->service_type);
+    }
+
     public function test_reuses_existing_customer_by_phone(): void
     {
         $existing = Customer::create([
