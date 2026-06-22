@@ -283,7 +283,12 @@ class FiscalizeOrderJob implements ShouldQueue, ShouldBeUnique
                 ->where('code', $fiscalizedCode)
                 ->value('id') ?? config('fiscal.status_ids.fiscalized');
 
-            if ($fiscalizedId && $this->order->status_id !== (int) $fiscalizedId) {
+            // Ставимо status_id лише якщо такий статус РЕАЛЬНО існує — інакше
+            // FK-обмеження кине помилку й успішний чек запишеться як «error».
+            // payment_status='paid' і текстовий status проставляться в будь-якому разі.
+            if ($fiscalizedId
+                && Status::whereKey($fiscalizedId)->exists()
+                && $this->order->status_id !== (int) $fiscalizedId) {
                 $updates['status_id'] = (int) $fiscalizedId;
             }
             if ($this->order->status !== $fiscalizedCode) {

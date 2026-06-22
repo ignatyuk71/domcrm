@@ -140,6 +140,19 @@ class FiscalizeOrderJobTest extends TestCase
         $this->assertSame('paid', $order->fresh()->payment_status);
     }
 
+    /** Якщо статусу delivered_paid немає — чек НЕ падає на FK, лишається успішним. */
+    public function test_missing_status_does_not_break_successful_receipt(): void
+    {
+        \App\Models\Status::where('code', 'delivered_paid')->delete();
+        $order = $this->makeOrder(500.00, 1);
+
+        (new FiscalizeOrderJob($order))->handle(app(CheckboxService::class));
+
+        $receipt = FiscalReceipt::where('order_id', $order->id)->first();
+        $this->assertSame(FiscalReceipt::STATUS_SUCCESS, $receipt->status);
+        $this->assertSame('paid', $order->fresh()->payment_status);
+    }
+
     /** Ідемпотентність: повторний запуск не створює другий успішний чек. */
     public function test_does_not_fiscalize_twice(): void
     {
