@@ -153,6 +153,80 @@ class FiscalizeOrderJobTest extends TestCase
         $this->assertSame('paid', $order->fresh()->payment_status);
     }
 
+    /** На створення передаємо клієнтський UUID чека (основа ідемпотентності). */
+    public function test_sends_client_receipt_id_to_checkbox(): void
+    {
+        $order = $this->makeOrder(500.00, 1);
+
+        (new FiscalizeOrderJob($order))->handle(app(CheckboxService::class));
+
+        Http::assertSent(function ($request) {
+            if (!str_contains($request->url(), 'receipts/sell')) {
+                return false;
+            }
+            return !empty($request->data()['id']); // наш UUID присутній
+        });
+    }
+
+    /** Якщо чек із нашим UUID уже існує в Checkbox — не створюємо вдруге. */
+    public function test_does_not_recreate_when_receipt_already_exists(): void
+    {
+        $order = $this->makeOrder(500.00, 1);
+        $uuid = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'; // UUID попередньої спроби
+
+        // Попередня невдала спроба з тим самим UUID (чек насправді створився в Checkbox).
+        $order->fiscalReceipts()->create([
+            'type' => FiscalReceipt::TYPE_SELL,
+            'status' => FiscalReceipt::STATUS_ERROR,
+            'total_amount' => 50000,
+            'uuid' => $uuid,
+            'payload_hash' => 'prior',
+        ]);
+
+        Http::fake([
+            '*cashier/signin' => Http::response(['access_token' => 'test-token'], 200),
+            '*cashier/shift' => Http::response(['status' => 'OPENED'], 200),
+            "*receipts/{$uuid}" => Http::response(['id' => $uuid, 'status' => 'DONE', 'fiscal_code' => 'FC-EXIST'], 200),
+            '*receipts/sell' => Http::response(['id' => 'SHOULD-NOT-BE-USED', 'status' => 'DONE'], 200),
+        ]);
+
+        (new FiscalizeOrderJob($order))->handle(app(CheckboxService::class));
+
+        Http::assertNotSent(fn ($r) => str_contains($r->url(), 'receipts/sell'));
+        $this->assertSame(1, FiscalReceipt::where('order_id', $order->id)
+            ->where('status', FiscalReceipt::STATUS_SUCCESS)->count());
+        $this->assertSame('paid', $order->fresh()->payment_status);
+    }
+
+    /** Якщо статус чека невідомий (мережа) — НЕ створюємо, щоб не дублювати. */
+    public function test_aborts_without_create_when_status_unknown(): void
+    {
+        $order = $this->makeOrder(500.00, 1);
+        $uuid = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'; // UUID попередньої спроби
+
+        $order->fiscalReceipts()->create([
+            'type' => FiscalReceipt::TYPE_SELL,
+            'status' => FiscalReceipt::STATUS_ERROR,
+            'total_amount' => 50000,
+            'uuid' => $uuid,
+            'payload_hash' => 'prior',
+        ]);
+
+        Http::fake([
+            '*cashier/signin' => Http::response(['access_token' => 'test-token'], 200),
+            "*receipts/{$uuid}" => Http::response('server error', 500),
+            '*receipts/sell' => Http::response(['id' => 'X', 'status' => 'DONE'], 200),
+        ]);
+
+        try {
+            (new FiscalizeOrderJob($order))->handle(app(CheckboxService::class));
+        } catch (\Throwable $e) {
+            // очікувано: кидає, щоб ретрайнути пізніше
+        }
+
+        Http::assertNotSent(fn ($r) => str_contains($r->url(), 'receipts/sell'));
+    }
+
     /** Ідемпотентність: повторний запуск не створює другий успішний чек. */
     public function test_does_not_fiscalize_twice(): void
     {

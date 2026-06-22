@@ -197,17 +197,17 @@ class CheckboxService
      * Основний метод створення чека.
      * ОНОВЛЕНО: Додано аргумент $customGoods для передачі списку товарів ззовні.
      */
-    public function createReceipt(Order $order, string $type = FiscalReceipt::TYPE_SELL, ?int $amountCents = null, array $customGoods = []): ?array
+    public function createReceipt(Order $order, string $type = FiscalReceipt::TYPE_SELL, ?int $amountCents = null, array $customGoods = [], ?string $receiptId = null): ?array
     {
         $token = $this->auth();
-        
+
         if (!$token || !$this->ensureShift($token)) {
             Log::error("Checkbox: Auth or Shift failed for Order #{$order->id}");
             return null;
         }
 
         // Будуємо тіло запиту (payload), передаючи $customGoods
-        $payload = $this->buildReceiptPayload($order, $type, $amountCents, $customGoods);
+        $payload = $this->buildReceiptPayload($order, $type, $amountCents, $customGoods, $receiptId);
         $endpoint = ($type === FiscalReceipt::TYPE_RETURN) ? 'receipts/return' : 'receipts/sell';
 
         $start = microtime(true);
@@ -277,7 +277,7 @@ class CheckboxService
      * Формування масиву даних для чека.
      * ОНОВЛЕНО: Логіка пріоритетів формування товарів.
      */
-    protected function buildReceiptPayload(Order $order, string $type, ?int $customAmountCents = null, array $customGoods = []): array
+    protected function buildReceiptPayload(Order $order, string $type, ?int $customAmountCents = null, array $customGoods = [], ?string $receiptId = null): array
     {
         // Завантажуємо дані, якщо їх немає (безпечно)
         $order->loadMissing(['customer', 'payment', 'fiscalReceipts', 'items']);
@@ -334,7 +334,7 @@ class CheckboxService
             $delivery['phone'] = $deliveryPhone;
         }
 
-        return [
+        $payload = [
             'goods' => $goods,
             'payments' => [[
                 'type' => $paymentDetails['type'],
@@ -343,6 +343,40 @@ class CheckboxService
             ]],
             'delivery' => $delivery,
         ];
+
+        // Клієнтський UUID чека — для ідемпотентності повторних спроб.
+        if ($receiptId !== null) {
+            $payload['id'] = $receiptId;
+        }
+
+        return $payload;
+    }
+
+    /**
+     * Перевірка існування чека за нашим UUID (ідемпотентність ретраїв).
+     * Повертає статус: 'found' (+receipt), 'not_found' (404), або 'unknown'
+     * (мережа/інша помилка — НЕ можна вважати, що чека немає).
+     */
+    public function getReceipt(string $uuid): array
+    {
+        $token = $this->auth();
+        if (!$token) {
+            return ['status' => 'unknown'];
+        }
+
+        try {
+            $response = $this->client($token)->get($this->url("receipts/{$uuid}"));
+            if ($response->successful()) {
+                return ['status' => 'found', 'receipt' => $response->json()];
+            }
+            if ($response->status() === 404) {
+                return ['status' => 'not_found'];
+            }
+            return ['status' => 'unknown'];
+        } catch (\Throwable $e) {
+            Log::warning('Checkbox getReceipt failed', ['uuid' => $uuid, 'error' => $e->getMessage()]);
+            return ['status' => 'unknown'];
+        }
     }
 
     /**
