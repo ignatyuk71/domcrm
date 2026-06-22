@@ -28,57 +28,34 @@
     </div>
 
     <!-- Data -->
-    <template v-else>
-      <!-- Reliability summary -->
-      <div class="reliability">
-        <div class="rel-item rel-green">
-          <span class="rel-num">{{ stats.received }}</span>
-          <span class="rel-label">Забрав</span>
+    <div v-else class="orders-list">
+      <a
+        v-for="order in orders"
+        :key="order.id"
+        :href="`/orders/${order.id}/edit`"
+        target="_blank"
+        rel="noopener"
+        class="order-card"
+      >
+        <div class="oc-head">
+          <span class="oc-number font-monospace">#{{ order.order_number || order.id }}</span>
+          <span class="oc-sum">{{ formatCurrency(order.items_sum_total, order.currency) }}</span>
         </div>
-        <div class="rel-item rel-red">
-          <span class="rel-num">{{ stats.returned }}</span>
-          <span class="rel-label">Повернув</span>
+        <div v-if="productSummary(order)" class="oc-product text-truncate">{{ productSummary(order) }}</div>
+        <div class="oc-foot">
+          <span class="oc-date"><i class="bi bi-calendar3 me-1"></i>{{ formatDate(order.created_at) }}</span>
+          <span class="status-badge" :style="badgeStyle(order)">
+            <i v-if="statusRef(order)?.icon" :class="statusRef(order).icon"></i>
+            {{ statusRef(order)?.name || order.status || '—' }}
+          </span>
         </div>
-        <div class="rel-item rel-blue">
-          <span class="rel-num">{{ stats.buyoutLabel }}</span>
-          <span class="rel-label">% викупу</span>
-        </div>
-      </div>
-
-      <!-- Orders list -->
-      <div class="orders-list">
-        <a
-          v-for="order in orders"
-          :key="order.id"
-          :href="`/orders/${order.id}/edit`"
-          target="_blank"
-          rel="noopener"
-          class="order-card"
-        >
-          <div class="order-top">
-            <span class="order-product text-truncate">{{ productSummary(order) }}</span>
-            <span class="order-price">{{ formatCurrency(order.items_sum_total, order.currency) }}</span>
-          </div>
-          <div class="order-bottom">
-            <span class="order-meta">
-              <span class="order-number font-monospace">#{{ order.order_number || order.id }}</span>
-              <span class="order-date">
-                <i class="bi bi-calendar3 me-1"></i>{{ formatDate(order.created_at) }}
-              </span>
-            </span>
-            <span class="status-badge" :style="badgeStyle(order)">
-              <i v-if="statusRef(order)?.icon" :class="statusRef(order).icon"></i>
-              {{ statusRef(order)?.name || order.status || '—' }}
-            </span>
-          </div>
-        </a>
-      </div>
-    </template>
+      </a>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { ref, watch } from 'vue';
 import { getCustomer } from '@/crm/api/customers';
 import { formatCurrency, formatDate } from '@/crm/utils/orderDisplay';
 
@@ -89,10 +66,6 @@ const props = defineProps({
 const orders = ref([]);
 const loading = ref(false);
 const error = ref('');
-
-// Коди статусів CRM, що відповідають за «надійність» клієнта
-const RECEIVED_CODES = ['delivered_paid'];
-const RETURNED_CODES = ['returned'];
 
 const statusRef = (order) => order?.status_ref || order?.statusRef || null;
 
@@ -106,19 +79,6 @@ const productSummary = (order) => {
   if (more > 0) label += ` +${more}`;
   return label;
 };
-
-const stats = computed(() => {
-  let received = 0;
-  let returned = 0;
-  for (const order of orders.value) {
-    const code = statusRef(order)?.code;
-    if (RECEIVED_CODES.includes(code)) received += 1;
-    else if (RETURNED_CODES.includes(code)) returned += 1;
-  }
-  const total = received + returned;
-  const buyoutLabel = total ? `${Math.round((received / total) * 100)}%` : '—';
-  return { received, returned, buyoutLabel };
-});
 
 // Колір беремо живий зі статусу CRM; текст контрастимо до фону
 const badgeStyle = (order) => {
@@ -205,27 +165,6 @@ watch(() => props.customerId, (id) => load(id), { immediate: true });
 }
 .history-state i { font-size: 1.1rem; opacity: 0.7; }
 
-/* --- Reliability summary --- */
-.reliability {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin-bottom: 12px;
-}
-.rel-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 8px 4px;
-  border-radius: 12px;
-  border: 1px solid transparent;
-}
-.rel-num { font-size: 1.2rem; font-weight: 800; line-height: 1.1; }
-.rel-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.03em; font-weight: 600; opacity: 0.85; }
-.rel-green { background: #f0fdf4; border-color: #bbf7d0; color: #16a34a; }
-.rel-red { background: #fef2f2; border-color: #fecaca; color: #ef4444; }
-.rel-blue { background: #eff6ff; border-color: #bfdbfe; color: #2563eb; }
-
 /* --- Orders list --- */
 .orders-list { display: flex; flex-direction: column; gap: 8px; }
 
@@ -245,25 +184,14 @@ watch(() => props.customerId, (id) => load(id), { immediate: true });
   transform: translateY(-1px);
 }
 
-.order-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
-}
-.order-product { font-weight: 600; color: #1e293b; font-size: 0.85rem; min-width: 0; }
-.order-price { font-weight: 700; color: #1e293b; font-size: 0.85rem; white-space: nowrap; }
+.oc-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.oc-number { font-size: 0.9rem; font-weight: 700; color: #0f172a; }
+.oc-sum { font-size: 0.9rem; font-weight: 800; color: #0f172a; white-space: nowrap; }
 
-.order-bottom {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-}
-.order-meta { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
-.order-number { font-size: 0.72rem; font-weight: 700; color: #475569; white-space: nowrap; }
-.order-date { font-size: 0.72rem; color: #94a3b8; white-space: nowrap; }
+.oc-product { font-size: 0.78rem; color: #64748b; margin-top: 2px; }
+
+.oc-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 8px; }
+.oc-date { font-size: 0.72rem; color: #94a3b8; white-space: nowrap; }
 
 .status-badge {
   display: inline-flex;
