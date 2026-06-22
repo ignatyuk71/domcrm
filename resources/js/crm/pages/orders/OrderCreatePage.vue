@@ -54,9 +54,10 @@
                 <i class="bi bi-person text-purple me-2"></i>Клієнт
               </div>
               <CustomerBlock v-model="form.customer" />
+              <CustomerOrderHistory v-if="form.customer.id" :customer-id="form.customer.id" class="mt-3" />
             </div>
           </div>
-          
+
           <div class="col-12 col-lg-5">
             <div class="clean-card h-100">
               <div class="card-title-section">
@@ -139,6 +140,7 @@ import { computed, reactive, ref } from 'vue';
 import { createOrder, getOrder, updateOrder } from '@/crm/api/orders';
 
 import CustomerBlock from '@/crm/components/orders/CustomerBlock.vue';
+import CustomerOrderHistory from '@/crm/components/orders/CustomerOrderHistory.vue';
 import OrderMetaBlock from '@/crm/components/orders/OrderMetaBlock.vue';
 import ItemsTable from '@/crm/components/orders/ItemsTable.vue';
 import PaymentBlock from '@/crm/components/orders/PaymentBlock.vue';
