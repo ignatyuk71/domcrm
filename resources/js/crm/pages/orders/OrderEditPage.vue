@@ -273,7 +273,9 @@ function openConfirm() {
   const errs = validateDelivery();
   deliveryErrors.value = errs;
   if (Object.keys(errs).length) {
-    return; // є помилка доставки — модалку підтвердження не відкриваємо
+    // Чітке повідомлення + підсвітка поля; модалку підтвердження не відкриваємо.
+    alert(Object.values(errs).join('\n'));
+    return;
   }
   confirmOpen.value = true;
 }
