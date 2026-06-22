@@ -172,10 +172,7 @@ class FiscalizeOrderJobTest extends TestCase
     public function test_does_not_recreate_when_receipt_already_exists(): void
     {
         $order = $this->makeOrder(500.00, 1);
-        $uuid = \Ramsey\Uuid\Uuid::uuid5(
-            \Ramsey\Uuid\Uuid::NAMESPACE_URL,
-            "domcrm-receipt-{$order->id}-" . FiscalReceipt::TYPE_SELL . '-50000'
-        )->toString();
+        $uuid = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'; // UUID попередньої спроби
 
         // Попередня невдала спроба з тим самим UUID (чек насправді створився в Checkbox).
         $order->fiscalReceipts()->create([
@@ -205,10 +202,7 @@ class FiscalizeOrderJobTest extends TestCase
     public function test_aborts_without_create_when_status_unknown(): void
     {
         $order = $this->makeOrder(500.00, 1);
-        $uuid = \Ramsey\Uuid\Uuid::uuid5(
-            \Ramsey\Uuid\Uuid::NAMESPACE_URL,
-            "domcrm-receipt-{$order->id}-" . FiscalReceipt::TYPE_SELL . '-50000'
-        )->toString();
+        $uuid = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'; // UUID попередньої спроби
 
         $order->fiscalReceipts()->create([
             'type' => FiscalReceipt::TYPE_SELL,
