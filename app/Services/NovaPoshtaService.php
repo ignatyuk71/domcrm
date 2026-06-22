@@ -18,7 +18,7 @@ class NovaPoshtaService
         $this->apiKey = $this->settings?->api_key
             ?? config('services.nova_poshta.api_key')
             ?? config('services.novaposhta.key')
-            ?? env('NOVA_POSHTA_API_KEY', '');
+            ?? '';
     }
 
     public function getApiKey(): string
