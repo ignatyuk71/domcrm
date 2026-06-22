@@ -70,7 +70,22 @@ class FiscalController extends Controller
      */
     public function refund(Order $order): JsonResponse
     {
-        return $this->runFiscalJob($order, FiscalReceipt::TYPE_RETURN);
+        // Повертаємо рівно стільки, скільки фактично продано (успішні SELL-чеки)
+        // мінус уже повернуте — щоб не повернути зайве чи вдруге.
+        $soldCents = $this->getAlreadyPaidCents($order);
+        $refundedCents = (int) $order->fiscalReceipts()
+            ->where('status', FiscalReceipt::STATUS_SUCCESS)
+            ->where('type', FiscalReceipt::TYPE_RETURN)
+            ->sum('total_amount');
+        $refundCents = $soldCents - $refundedCents;
+
+        if ($refundCents <= 0) {
+            return response()->json([
+                'message' => 'Немає що повертати: товар не продано або вже повернуто.',
+            ], 422);
+        }
+
+        return $this->runFiscalJob($order, FiscalReceipt::TYPE_RETURN, $refundCents);
     }
 
     /**
