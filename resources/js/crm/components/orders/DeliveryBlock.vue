@@ -11,6 +11,12 @@
             <span>Відділення</span>
           </label>
 
+          <input type="radio" class="btn-check" id="dt_postomat" value="postomat" v-model="local.delivery_type" @change="resetDeliveryFields">
+          <label class="toggle-item" for="dt_postomat">
+            <i class="bi bi-mailbox"></i>
+            <span>Поштомат</span>
+          </label>
+
           <input type="radio" class="btn-check" id="dt_courier" value="courier" v-model="local.delivery_type" @change="resetDeliveryFields">
           <label class="toggle-item" for="dt_courier">
             <i class="bi bi-geo-fill"></i>
@@ -60,9 +66,9 @@
       </section>
 
       <section v-if="local.delivery_type !== 'courier'" class="position-relative animate-fade-in">
-        <label class="form-label-custom">Відділення або поштомат</label>
+        <label class="form-label-custom">{{ local.delivery_type === 'postomat' ? 'Поштомат' : 'Відділення' }}</label>
         <div class="input-modern-wrapper" :class="{ 'opacity-50': !local.city_ref }">
-          <i class="bi bi-building-up prefix-icon"></i>
+          <i class="bi prefix-icon" :class="local.delivery_type === 'postomat' ? 'bi-mailbox' : 'bi-building-up'"></i>
           <input
             type="text"
             autocomplete="off"
@@ -72,15 +78,15 @@
             @focus="onWarehouseFocus"
             @blur="scheduleCloseWarehouse"
             :disabled="!local.city_ref"
-            placeholder="Введіть номер або назву..."
+            :placeholder="local.city_ref ? 'Введіть номер або назву...' : 'Спочатку оберіть місто'"
           />
           <div v-if="warehouseLoading" class="input-suffix">
             <div class="loader-mini"></div>
           </div>
 
-          <div v-if="showWarehouseDropdown && warehouseOptions.length" class="premium-dropdown">
+          <div v-if="showWarehouseDropdown && visibleWarehouses.length" class="premium-dropdown">
             <button
-              v-for="wh in warehouseOptions"
+              v-for="wh in visibleWarehouses"
               :key="wh.ref || wh.name"
               type="button"
               class="dropdown-item"
@@ -168,7 +174,7 @@
 </template>
 
 <script setup>
-import { reactive, ref, watch } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import { fetchCities, fetchWarehouses } from '@/crm/api/novaPoshta';
 import http from '@/crm/api/http';
 
@@ -344,10 +350,20 @@ function selectCity(city) {
   cityQuery.value = local.city_name;
   showCityDropdown.value = false;
 
-  if (local.delivery_type === 'warehouse') {
+  if (local.delivery_type !== 'courier') {
     loadWarehouses('');
   }
 }
+
+// Один пошук НП повертає і відділення, і поштомати — показуємо лише потрібний
+// тип залежно від обраного способу доставки (warehouse_ref і ТТН не змінюються).
+const visibleWarehouses = computed(() => {
+  const wantPostomat = local.delivery_type === 'postomat';
+  return warehouseOptions.value.filter((wh) => {
+    const isPostomat = String(wh.name || '').includes('Поштомат');
+    return wantPostomat ? isPostomat : !isPostomat;
+  });
+});
 
 function selectWarehouse(wh) {
   local.warehouse_ref = wh.ref; 
