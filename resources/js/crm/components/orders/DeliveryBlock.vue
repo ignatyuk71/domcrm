@@ -299,6 +299,7 @@ async function loadCities(query) {
   try {
     const { data } = await fetchCities(query);
     cityOptions.value = data?.data || data || [];
+    if (data?.error) cityError.value = data.error; // НП недоступна/не налаштована
   } catch (e) {
     console.error(e);
     cityError.value = 'Помилка завантаження';

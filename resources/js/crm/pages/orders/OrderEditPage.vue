@@ -64,7 +64,7 @@
               <div class="card-title-section">
                 <i class="bi bi-truck text-dark me-2"></i>Доставка
               </div>
-              <DeliveryBlock v-model="form.delivery" />
+              <DeliveryBlock v-model="form.delivery" :errors="deliveryErrors" />
             </div>
           </div>
 
@@ -183,6 +183,9 @@ const form = reactive({
   comment_internal: '',
 });
 
+// Помилки валідації доставки з бекенду (підсвічуємо конкретне поле у DeliveryBlock).
+const deliveryErrors = ref({});
+
 // Формуємо payload для відправки на сервер
 const payload = computed(() => ({
   customer: form.customer,
@@ -219,6 +222,7 @@ function resolveOrderSourceCode(source) {
 
 async function submit() {
   loading.value = true;
+  deliveryErrors.value = {};
   try {
     if (props.initialOrderId) {
       await updateOrder(props.initialOrderId, payload.value);
@@ -228,8 +232,18 @@ async function submit() {
     // Перенаправлення
     window.location.href = '/orders';
   } catch (error) {
-    console.error('Помилка при збереженні:', error);
-    alert('Не вдалося зберегти замовлення. Перевірте обов\'язкові поля.');
+    if (error.response?.status === 422) {
+      const errs = error.response.data?.errors || {};
+      deliveryErrors.value = Object.fromEntries(
+        Object.entries(errs)
+          .filter(([key]) => key.startsWith('delivery.'))
+          .map(([key, val]) => [key.replace('delivery.', ''), Array.isArray(val) ? val[0] : val]),
+      );
+      alert(error.response.data?.message || 'Перевірте заповнення полів.');
+    } else {
+      console.error('Помилка при збереженні:', error);
+      alert('Не вдалося зберегти замовлення. Перевірте обов\'язкові поля.');
+    }
   } finally {
     loading.value = false;
     closeConfirm();

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\NovaPoshtaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class NovaPoshtaController extends Controller
 {
@@ -26,11 +27,16 @@ class NovaPoshtaController extends Controller
             return response()->json(['data' => []]);
         }
 
-        $data = $this->np->searchCities($query);
+        if (!$this->np->getApiKey()) {
+            return response()->json(['data' => [], 'error' => 'Нова Пошта не налаштована']);
+        }
 
-        return response()->json([
-            'data' => $data ?? []
-        ]);
+        try {
+            return response()->json(['data' => $this->np->searchCities($query)]);
+        } catch (\Throwable $e) {
+            Log::error('NovaPoshta cities search failed', ['error' => $e->getMessage()]);
+            return response()->json(['data' => [], 'error' => 'Помилка Нової Пошти, спробуйте пізніше']);
+        }
     }
 
     /**
@@ -46,11 +52,16 @@ class NovaPoshtaController extends Controller
             return response()->json(['data' => []]);
         }
 
-        $data = $this->np->getWarehouses($cityRef, $query, $limit);
+        if (!$this->np->getApiKey()) {
+            return response()->json(['data' => [], 'error' => 'Нова Пошта не налаштована']);
+        }
 
-        return response()->json([
-            'data' => $data ?? []
-        ]);
+        try {
+            return response()->json(['data' => $this->np->getWarehouses($cityRef, $query, $limit)]);
+        } catch (\Throwable $e) {
+            Log::error('NovaPoshta warehouses search failed', ['error' => $e->getMessage()]);
+            return response()->json(['data' => [], 'error' => 'Помилка Нової Пошти, спробуйте пізніше']);
+        }
     }
 
     /**
@@ -67,14 +78,19 @@ class NovaPoshtaController extends Controller
             return response()->json(['data' => []]);
         }
 
-        if ($settlementRef) {
-            $data = $this->np->searchSettlementStreets($settlementRef, $query, $limit);
-        } else {
-            $data = $this->np->searchStreets($cityRef ?? '', $query, $limit);
+        if (!$this->np->getApiKey()) {
+            return response()->json(['data' => [], 'error' => 'Нова Пошта не налаштована']);
         }
 
-        return response()->json([
-            'data' => $data ?? []
-        ]);
+        try {
+            $data = $settlementRef
+                ? $this->np->searchSettlementStreets($settlementRef, $query, $limit)
+                : $this->np->searchStreets($cityRef ?? '', $query, $limit);
+
+            return response()->json(['data' => $data]);
+        } catch (\Throwable $e) {
+            Log::error('NovaPoshta streets search failed', ['error' => $e->getMessage()]);
+            return response()->json(['data' => [], 'error' => 'Помилка Нової Пошти, спробуйте пізніше']);
+        }
     }
 }
