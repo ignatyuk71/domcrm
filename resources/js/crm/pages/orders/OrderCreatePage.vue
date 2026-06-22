@@ -238,8 +238,8 @@ async function submit() {
           .filter(([key]) => key.startsWith('delivery.'))
           .map(([key, val]) => [key.replace('delivery.', ''), Array.isArray(val) ? val[0] : val]),
       );
-      const firstMessage = error.response.data?.message || 'Перевірте заповнення полів.';
-      alert(firstMessage);
+      const messages = Object.values(errs).flat();
+      alert(messages.length ? messages.join('\n') : 'Перевірте заповнення полів.');
     } else {
       console.error('Помилка при збереженні:', error);
       alert('Не вдалося зберегти замовлення. Перевірте консоль.');
