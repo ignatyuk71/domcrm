@@ -60,8 +60,11 @@
             <span class="order-price">{{ formatCurrency(order.items_sum_total, order.currency) }}</span>
           </div>
           <div class="order-bottom">
-            <span class="order-date">
-              <i class="bi bi-calendar3 me-1"></i>{{ formatDate(order.created_at) }}
+            <span class="order-meta">
+              <span class="order-number font-monospace">#{{ order.order_number || order.id }}</span>
+              <span class="order-date">
+                <i class="bi bi-calendar3 me-1"></i>{{ formatDate(order.created_at) }}
+              </span>
             </span>
             <span class="status-badge" :style="badgeStyle(order)">
               <i v-if="statusRef(order)?.icon" :class="statusRef(order).icon"></i>
@@ -255,6 +258,8 @@ watch(() => props.customerId, (id) => load(id), { immediate: true });
   align-items: center;
   gap: 8px;
 }
+.order-meta { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.order-number { font-size: 0.72rem; font-weight: 700; color: #475569; white-space: nowrap; }
 .order-date { font-size: 0.72rem; color: #94a3b8; white-space: nowrap; }
 
 .status-badge {
