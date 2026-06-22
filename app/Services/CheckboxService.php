@@ -145,6 +145,11 @@ class CheckboxService
         $response = $this->client($token)->get($this->url('cashier/shift'));
         if ($response->successful()) {
             $body = $response->json();
+            // 200 + порожньо (null) = немає активної зміни → зміна закрита
+            // (інакше UI показував би «Статус невідомий» замість «Зміна закрита»).
+            if (empty($body)) {
+                return ['status' => 'CLOSED'];
+            }
             $status = $this->extractShiftStatus($body);
             if ($status) {
                 if (is_array($body)) {
