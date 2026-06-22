@@ -28,56 +28,32 @@ class AiAgentService
     private const MAX_VISION_IMAGES = 2;
 
     /**
-     * Внутрішні назви лінійок (вигадані для CRM, клієнти їх не знають).
-     * Вирізаються з УСЬОГО, що бачить модель: каталог, картки, історія.
-     * Модель не може сказати слово, якого ніколи не бачила.
-     */
-    private const INTERNAL_WORDS = ['halluci', 'luxury'];
-
-    /**
-     * Чи дозволяє графік працювати зараз. schedule: null/['mode'=>'always'] —
-     * цілодобово; ['mode'=>'window','from'=>'20:00','to'=>'09:00'] — вікно
-     * активності (через північ підтримується).
+     * Чи дозволяє графік працювати зараз. Делегує AiSchedule (лишено тут для
+     * стабільного публічного API: команда й тести кличуть AiAgentService::scheduleAllows).
      */
     public static function scheduleAllows(?array $schedule, ?\Carbon\Carbon $at = null): bool
     {
-        if (($schedule['mode'] ?? 'always') !== 'window') {
-            return true;
-        }
-        $from = $schedule['from'] ?? '00:00';
-        $to = $schedule['to'] ?? '24:00';
-        $now = ($at ?? now())->format('H:i');
-
-        return $from <= $to
-            ? ($now >= $from && $now < $to)
-            : ($now >= $from || $now < $to); // вікно через північ, напр. 20:00–09:00
+        return AiSchedule::allows($schedule, $at);
     }
 
-    /** Прибрати службові слова з тексту для моделі. */
+    /** Прибрати службові слова з тексту для моделі. Делегує TextScrubber. */
     private function scrub(?string $text): ?string
     {
-        if ($text === null || $text === '') {
-            return $text;
-        }
-        $clean = preg_replace('/(?:' . implode('|', self::INTERNAL_WORDS) . ')/iu', '', $text);
-        return trim(preg_replace('/[ \t]{2,}/u', ' ', $clean));
+        return $this->scrubber->scrub($text);
     }
 
     /**
-     * Вирізати плейсхолдер фото («[зображення]» тощо). Фото шле лише send_photos;
-     * якщо модель надрукувала позначку текстом — клієнт побачив би сміття.
-     * Чистимо і вихідний текст, і історію (щоб модель не копіювала позначку далі).
+     * Вирізати плейсхолдер фото («[зображення]» тощо). Делегує TextScrubber.
      */
     private function stripPhotoPlaceholder(?string $text): string
     {
-        $clean = preg_replace('/\[\s*(?:зображення|фото|image|photo|картинк[аи])\s*\]/iu', '', (string) $text);
-        // Службова примітка памʼяті «(надіслала клієнту фото товарів: …)» — лише для
-        // історії бота; якщо модель її скопіювала у відповідь — вирізаємо, щоб не злити клієнту.
-        $clean = preg_replace('/\(\s*надісла[^)]*фото товарів[^)]*\)/iu', '', (string) $clean);
-        return trim(preg_replace('/\n{3,}/u', "\n\n", (string) $clean));
+        return $this->scrubber->stripPhotoPlaceholder($text);
     }
-    public function __construct(private MetaSendService $send)
-    {
+
+    public function __construct(
+        private MetaSendService $send,
+        private TextScrubber $scrubber,
+    ) {
     }
 
     public function respond(InboxConversation $conversation, int $triggerMessageId): AiRun
@@ -554,36 +530,12 @@ class AiAgentService
     }
 
     /**
-     * Тексти й реквізити флоу замовлення. Поки в коді (легко редагувати тут);
-     * згодом можна винести в налаштування. Номер картки шлеться ЛИШЕ звідси —
-     * щоб модель випадково не переплутала цифру.
+     * Тексти й реквізити флоу замовлення. Делегує OrderTexts (лишено тут для
+     * стабільного публічного API: тести кличуть AiAgentService::orderTexts).
      */
     public static function orderTexts(): array
     {
-        return [
-            'delivery_template' =>
-                "Для оформлення замовлення вкажіть, будь ласка, наступні дані 📝\n"
-                . "🚚 Доставка до вашого відділення пошти!\n\n"
-                . "📌 ПІБ отримувача\n"
-                . "📌 Номер мобільного\n"
-                . "📌 Адреса доставки (місто/село, номер відділення пошти)",
-            'payment_question' =>
-                "Є два варіанти оплати 💰 — оплата при отриманні або оплата на карту. Який спосіб вам буде зручний?",
-            'card_intro' =>
-                "Оплата на картку ПриватБанк (ФОП Ігнатюк Л.В) 💳\n"
-                . "Після оплати надішліть, будь ласка, скрін або PDF файл 🙏",
-            'card_number' => '5169335107343648',
-            'final_message' =>
-                "Дякуємо за замовлення 💛 Відправка протягом 1-2 днів, чекайте на ТТН ♥️",
-            'delivery_time' => '1-2 дні від дати замовлення',
-            'follow_up' =>
-                "Доброго дня ще раз 🙂 Підкажіть, чи вдалося визначитися з вибором? Радо допоможу з розміром чи кольором 💛",
-            'voice_reject' =>
-                "Дякую за повідомлення 🙂\n"
-                . "На жаль, голосові я не можу прослухати — напишіть, будь ласка, текстом, і я залюбки допоможу 💛",
-            'handover' =>
-                "Хвилинку, уточню це питання й повернусь до вас 🙂",
-        ];
+        return OrderTexts::all();
     }
 
     /** Один теплий пінг мовчазному ліду (ставить прапор, щоб не повторювати). */
