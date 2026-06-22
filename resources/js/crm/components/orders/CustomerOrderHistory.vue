@@ -151,7 +151,10 @@ async function load(id) {
   error.value = '';
   try {
     const { data } = await getCustomer(id);
-    orders.value = data?.recent_orders || [];
+    // Контролер віддає { data: { recent_orders } }, а http не розгортає відповідь —
+    // тож реальний шлях data.data.recent_orders (як у OrderListPage).
+    const payload = data?.data || data || {};
+    orders.value = payload.recent_orders || [];
   } catch (e) {
     console.error('Не вдалося завантажити історію замовлень', e);
     error.value = 'Не вдалося завантажити історію';
