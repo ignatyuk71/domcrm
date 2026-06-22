@@ -92,6 +92,63 @@ class OrderStoreTest extends TestCase
         $this->assertSame($existing->id, Order::latest('id')->first()->customer_id);
     }
 
+    public function test_rejects_warehouse_typed_without_selection(): void
+    {
+        $payload = $this->validPayload(['delivery' => [
+            'delivery_type' => 'warehouse',
+            'warehouse_name' => 'Відділення №5',
+            // warehouse_ref відсутній — не обрано зі списку
+        ]]);
+
+        $this->actingAs($this->operator())
+            ->postJson('/orders', $payload)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['delivery.warehouse_name']);
+
+        $this->assertSame(0, Order::count());
+    }
+
+    public function test_rejects_city_typed_without_selection(): void
+    {
+        $payload = $this->validPayload(['delivery' => [
+            'delivery_type' => 'warehouse',
+            'city_name' => 'Київ', // без city_ref
+        ]]);
+
+        $this->actingAs($this->operator())
+            ->postJson('/orders', $payload)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['delivery.city_name']);
+    }
+
+    public function test_allows_delivery_selected_from_list(): void
+    {
+        $payload = $this->validPayload(['delivery' => [
+            'delivery_type' => 'warehouse',
+            'city_name' => 'Київ', 'city_ref' => 'city-ref-1',
+            'warehouse_name' => 'Відділення №5', 'warehouse_ref' => 'wh-ref-1',
+        ]]);
+
+        $this->actingAs($this->operator())
+            ->postJson('/orders', $payload)
+            ->assertCreated();
+    }
+
+    /** Курʼєр: вулиці може не бути в базі НП — street без ref має проходити. */
+    public function test_allows_courier_street_without_ref(): void
+    {
+        $payload = $this->validPayload(['delivery' => [
+            'delivery_type' => 'courier',
+            'city_name' => 'Село', 'city_ref' => 'city-ref-1',
+            'street_name' => 'вул. Богдана Хмельницького', // без street_ref
+            'building' => '10',
+        ]]);
+
+        $this->actingAs($this->operator())
+            ->postJson('/orders', $payload)
+            ->assertCreated();
+    }
+
     public function test_requires_at_least_one_item(): void
     {
         $payload = $this->validPayload();

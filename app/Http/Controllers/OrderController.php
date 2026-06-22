@@ -17,6 +17,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 
 class OrderController extends Controller
 {
@@ -234,6 +235,8 @@ class OrderController extends Controller
             'tag_ids.*' => ['nullable'],
         ]);
 
+        $this->assertDeliverySelected($data);
+
         $order = $this->orders->create($data, $request->user()?->id);
 
         return response()->json([
@@ -296,6 +299,8 @@ class OrderController extends Controller
             'tag_ids' => ['array'],
             'tag_ids.*' => ['nullable'],
         ]);
+
+        $this->assertDeliverySelected($data);
 
         $this->orders->update($order, $data);
 
@@ -363,6 +368,31 @@ class OrderController extends Controller
         return response()->json([
             'comment_internal' => $order->comment_internal,
         ]);
+    }
+
+    /**
+     * Не даємо зберегти, якщо назву міста/відділення ВПИСАЛИ, але не ОБРАЛИ зі
+     * списку (ref порожній) — інакше ТТН потім мовчки впаде. Курʼєрську вулицю
+     * НЕ перевіряємо: її може не бути в базі НП (легітимний кейс).
+     */
+    protected function assertDeliverySelected(array $data): void
+    {
+        $delivery = $data['delivery'] ?? [];
+        $errors = [];
+
+        if (trim((string) ($delivery['city_name'] ?? '')) !== '' && empty($delivery['city_ref'])) {
+            $errors['delivery.city_name'] = 'Оберіть місто зі списку підказок.';
+        }
+
+        if (($delivery['delivery_type'] ?? 'warehouse') !== 'courier'
+            && trim((string) ($delivery['warehouse_name'] ?? '')) !== ''
+            && empty($delivery['warehouse_ref'])) {
+            $errors['delivery.warehouse_name'] = 'Оберіть відділення або поштомат зі списку.';
+        }
+
+        if ($errors) {
+            throw ValidationException::withMessages($errors);
+        }
     }
 
     protected function resolveStatusIdByCode(?string $code, string $type = 'order'): ?int
