@@ -74,7 +74,34 @@ class FiscalizeOrderJob implements ShouldQueue, ShouldBeUnique
                 return;
             }
 
-            $receipt = $this->createPendingReceipt($effectiveAmount);
+            // Ідемпотентність: стабільний UUID чека. Якщо попередня спроба вже
+            // створила чек у Checkbox, а відповідь загубилась (обрив мережі) —
+            // не бʼємо вдруге, а підхоплюємо наявний (захист від дубля в податковій).
+            $receiptUuid = $this->deterministicUuid($effectiveAmount);
+            $hadPriorAttempt = $this->order->fiscalReceipts()
+                ->where('type', $this->type)
+                ->where('uuid', $receiptUuid)
+                ->exists();
+
+            if ($hadPriorAttempt) {
+                $existing = $checkbox->getReceipt($receiptUuid);
+                if (($existing['status'] ?? '') === 'found') {
+                    $receipt = $this->order->fiscalReceipts()
+                        ->where('type', $this->type)->where('uuid', $receiptUuid)
+                        ->latest('id')->first()
+                        ?? $this->createPendingReceipt($effectiveAmount, $receiptUuid);
+                    $this->completeReceipt($receipt, $existing['receipt']);
+                    $this->updateOrderStatusIfNeeded($totalOrderCents);
+                    Log::info("Fiscal: підхопили вже створений чек (idempotency) для Order #{$this->order->id}");
+                    return;
+                }
+                if (($existing['status'] ?? '') === 'unknown') {
+                    throw new \Exception('Checkbox: не вдалося перевірити статус чека — пропускаємо, щоб не дублювати');
+                }
+                // 'not_found' → чек не створювався, безпечно бити знову
+            }
+
+            $receipt = $this->createPendingReceipt($effectiveAmount, $receiptUuid);
 
             // Логуємо для контролю
             Log::info("Fiscalizing Order #{$this->order->id}", [
@@ -84,8 +111,8 @@ class FiscalizeOrderJob implements ShouldQueue, ShouldBeUnique
                 'goods_count' => count($goods)
             ]);
 
-            // 4. Відправляємо в сервіс
-            $response = $checkbox->createReceipt($this->order, $this->type, $effectiveAmount, $goods);
+            // 4. Відправляємо в сервіс (передаємо наш UUID як id чека)
+            $response = $checkbox->createReceipt($this->order, $this->type, $effectiveAmount, $goods, $receiptUuid);
 
             if (!$response) {
                 throw new \Exception('Empty response from Checkbox Service');
@@ -237,15 +264,25 @@ class FiscalizeOrderJob implements ShouldQueue, ShouldBeUnique
         return true;
     }
 
-    private function createPendingReceipt(int $amount): FiscalReceipt
+    private function createPendingReceipt(int $amount, ?string $uuid = null): FiscalReceipt
     {
         $hash = md5($this->order->id . $this->type . $amount . microtime());
         return $this->order->fiscalReceipts()->create([
             'type' => $this->type,
             'status' => FiscalReceipt::STATUS_PROCESSING,
             'total_amount' => $amount,
-            'payload_hash' => $hash, 
+            'payload_hash' => $hash,
+            'uuid' => $uuid,
         ]);
+    }
+
+    /** Стабільний UUID чека для (замовлення, тип, сума) — для ідемпотентності ретраїв. */
+    private function deterministicUuid(int $amountCents): string
+    {
+        return \Ramsey\Uuid\Uuid::uuid5(
+            \Ramsey\Uuid\Uuid::NAMESPACE_URL,
+            "domcrm-receipt-{$this->order->id}-{$this->type}-{$amountCents}"
+        )->toString();
     }
 
     private function failReceipt(FiscalReceipt $receipt, string $message): void
