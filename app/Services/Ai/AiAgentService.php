@@ -3,15 +3,12 @@
 namespace App\Services\Ai;
 
 use App\Models\AiPhoto;
-use App\Models\AiPhotoGroup;
 use App\Models\AiRun;
 use App\Models\AiSetting;
 use App\Models\InboxConversation;
 use App\Models\InboxMessage;
-use App\Models\Product;
 use App\Services\Meta\MetaSendService;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -56,6 +53,7 @@ class AiAgentService
         private OutgoingMessageWriter $outgoing,
         private HistoryBuilder $history,
         private AgentTools $tools,
+        private ClaudeClient $claude,
     ) {
     }
 
@@ -162,10 +160,7 @@ class AiAgentService
                     $payload['tool_choice'] = ['type' => 'none'];
                 }
 
-                $r = Http::timeout(40)->withHeaders([
-                    'x-api-key' => $apiKey,
-                    'anthropic-version' => '2023-06-01',
-                ])->post('https://api.anthropic.com/v1/messages', $payload);
+                $r = $this->claude->messages($apiKey, $payload, 40);
 
                 // Вхідні = свіжі + записані в кеш + прочитані з кешу (інакше статистика бреше при кешуванні).
                 $tokensIn += (int) $r->json('usage.input_tokens', 0)
@@ -409,15 +404,12 @@ class AiAgentService
             . 'що клієнт хоче (модель/колір/розмір) і про що домовились (оплата, статус). '
             . 'Лише суть, без вступів і звертань. Якщо конкретики ще нема — напиши, що саме питав клієнт.';
 
-        $r = Http::timeout(30)->withHeaders([
-            'x-api-key' => $apiKey,
-            'anthropic-version' => '2023-06-01',
-        ])->post('https://api.anthropic.com/v1/messages', [
+        $r = $this->claude->messages($apiKey, [
             'model' => AiSetting::global()->model ?: 'claude-sonnet-4-6',
             'max_tokens' => 200,
             'system' => $system,
             'messages' => [['role' => 'user', 'content' => $transcript]],
-        ]);
+        ], 30);
 
         if (!$r->successful()) {
             Log::warning('AI summary failed', ['conv' => $conversation->id, 'body' => mb_substr($r->body(), 0, 200)]);
