@@ -227,6 +227,34 @@ class FiscalizeOrderJobTest extends TestCase
         Http::assertNotSent(fn ($r) => str_contains($r->url(), 'receipts/sell'));
     }
 
+    /** not_found: перевикористовуємо рядок попередньої спроби (без дубля uuid). */
+    public function test_reuses_prior_receipt_row_when_not_found(): void
+    {
+        $order = $this->makeOrder(500.00, 1);
+        $uuid = 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff';
+        $prior = $order->fiscalReceipts()->create([
+            'type' => FiscalReceipt::TYPE_SELL,
+            'status' => FiscalReceipt::STATUS_ERROR,
+            'total_amount' => 50000,
+            'uuid' => $uuid,
+            'payload_hash' => 'prior',
+        ]);
+
+        Http::fake([
+            '*cashier/signin' => Http::response(['access_token' => 'test-token'], 200),
+            '*cashier/shift' => Http::response(['status' => 'OPENED'], 200),
+            "*receipts/{$uuid}" => Http::response('not found', 404), // GET → not_found
+            '*receipts/sell' => Http::response(['id' => $uuid, 'status' => 'DONE', 'fiscal_code' => 'FC-NEW'], 200),
+        ]);
+
+        (new FiscalizeOrderJob($order))->handle(app(CheckboxService::class));
+
+        Http::assertSent(fn ($r) => str_contains($r->url(), 'receipts/sell'));
+        // Рядок ОДИН (перевикористали prior, без дубля uuid), став success.
+        $this->assertSame(1, FiscalReceipt::where('order_id', $order->id)->count());
+        $this->assertSame(FiscalReceipt::STATUS_SUCCESS, $prior->fresh()->status);
+    }
+
     /** Ідемпотентність: повторний запуск не створює другий успішний чек. */
     public function test_does_not_fiscalize_twice(): void
     {

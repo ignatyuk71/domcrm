@@ -97,10 +97,16 @@ class FiscalizeOrderJob implements ShouldQueue, ShouldBeUnique
                 if (($existing['status'] ?? '') === 'unknown') {
                     throw new \Exception('Checkbox: не вдалося перевірити статус чека — пропускаємо, щоб не дублювати');
                 }
-                // 'not_found' → чек не створювався, безпечно бити знову з тим самим UUID
+                // 'not_found' → чек не створювався. ПЕРЕВИКОРИСТОВУЄМО рядок попередньої
+                // спроби (на uuid є unique-індекс — новий рядок з тим самим uuid не вставити).
+                $receipt = $prior;
+                $receipt->update([
+                    'status' => FiscalReceipt::STATUS_PROCESSING,
+                    'total_amount' => $effectiveAmount,
+                ]);
+            } else {
+                $receipt = $this->createPendingReceipt($effectiveAmount, $receiptUuid);
             }
-
-            $receipt = $this->createPendingReceipt($effectiveAmount, $receiptUuid);
 
             // Логуємо для контролю
             Log::info("Fiscalizing Order #{$this->order->id}", [
