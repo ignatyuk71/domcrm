@@ -177,6 +177,7 @@
 import { computed, reactive, ref, watch } from 'vue';
 import { fetchCities, fetchWarehouses } from '@/crm/api/novaPoshta';
 import http from '@/crm/api/http';
+import { filterWarehouses } from '@/crm/utils/delivery';
 
 const props = defineProps({
   errors: { type: Object, default: () => ({}) },
@@ -358,13 +359,7 @@ function selectCity(city) {
 
 // Один пошук НП повертає і відділення, і поштомати — показуємо лише потрібний
 // тип залежно від обраного способу доставки (warehouse_ref і ТТН не змінюються).
-const visibleWarehouses = computed(() => {
-  const wantPostomat = local.delivery_type === 'postomat';
-  return warehouseOptions.value.filter((wh) => {
-    const isPostomat = String(wh.name || '').includes('Поштомат');
-    return wantPostomat ? isPostomat : !isPostomat;
-  });
-});
+const visibleWarehouses = computed(() => filterWarehouses(warehouseOptions.value, local.delivery_type));
 
 function selectWarehouse(wh) {
   local.warehouse_ref = wh.ref; 
