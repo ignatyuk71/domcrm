@@ -254,7 +254,26 @@ function confirmOrder() {
   submit();
 }
 
+// Перевірка доставки ДО вікна підтвердження: якщо місто/відділення вписано,
+// але не обрано зі списку (ref порожній) — підсвічуємо поле й не відкриваємо модалку.
+function validateDelivery() {
+  const d = form.delivery;
+  const errs = {};
+  if ((d.city_name || '').trim() && !d.city_ref) {
+    errs.city_name = 'Оберіть місто зі списку підказок.';
+  }
+  if (d.delivery_type !== 'courier' && (d.warehouse_name || '').trim() && !d.warehouse_ref) {
+    errs.warehouse_name = 'Оберіть відділення або поштомат зі списку.';
+  }
+  return errs;
+}
+
 function openConfirm() {
+  const errs = validateDelivery();
+  deliveryErrors.value = errs;
+  if (Object.keys(errs).length) {
+    return; // є помилка доставки — модалку підтвердження не відкриваємо
+  }
   confirmOpen.value = true;
 }
 
