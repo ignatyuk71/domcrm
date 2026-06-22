@@ -168,6 +168,7 @@
                   <td class="text-muted small">{{ receiptTypeLabel(receipt.type) }}</td>
                   <td class="text-end fw-bold text-dark">{{ formatReceiptAmount(receipt.total_amount) }}</td>
                   <td class="pe-4 text-end">
+                    <a v-if="receipt.order_id" :href="`/orders/${receipt.order_id}/edit`" target="_blank" class="btn btn-sm btn-light rounded-pill me-1">Замовлення <i class="bi bi-box-arrow-up-right ms-1"></i></a>
                     <a v-if="receipt.check_link" :href="receipt.check_link" target="_blank" class="btn btn-sm btn-light rounded-pill">Чек <i class="bi bi-box-arrow-up-right ms-1"></i></a>
                   </td>
                 </tr>
