@@ -126,8 +126,9 @@
           </div>
 
           <div class="col-12">
-            <label class="form-label-custom">Електронна пошта</label>
+            <label class="form-label-custom">Електронна пошта <span class="text-muted small">(необовʼязково)</span></label>
             <input type="email" autocomplete="email" class="form-control custom-input" :class="{ 'is-invalid': errors.email }" v-model="local.email" placeholder="example@mail.com" />
+            <div class="invalid-feedback d-block" v-if="errors.email">{{ errors.email }}</div>
           </div>
         </div>
       </div>
@@ -162,6 +163,12 @@ const local = reactive({
 });
 
 const editing = ref(false);
+
+// Якщо прийшли помилки валідації — розгортаємо форму, щоб червоні поля було видно.
+watch(() => props.errors, (errs) => {
+  if (errs && Object.keys(errs).length) editing.value = true;
+}, { deep: true });
+
 const searchLoading = ref(false);
 const searchError = ref('');
 const suggestions = ref([]);

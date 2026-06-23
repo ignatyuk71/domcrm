@@ -1,5 +1,6 @@
 <template>
   <div class="container-fluid p-0 p-md-4">
+    <Toast :show="toast.show" :messages="toast.messages" @close="closeToast" />
     <div class="mx-auto" style="max-width: 1600px;">
       
       <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 gap-3">
@@ -54,7 +55,7 @@
               <div class="card-title-section">
                 <i class="bi bi-person text-purple me-2"></i>Клієнт
               </div>
-              <CustomerBlock v-model="form.customer" />
+              <CustomerBlock v-model="form.customer" :errors="customerErrors" />
               <CustomerOrderHistory v-if="form.customer.id" :customer-id="form.customer.id" class="mt-3" />
             </div>
           </div>
@@ -83,6 +84,9 @@
                   :prepay-amount="prepayAmount"
                   :prepay-enabled="form.payment.method === 'prepay'"
                 />
+                <div v-if="itemsError" class="text-danger small mt-2">
+                  <i class="bi bi-exclamation-circle me-1"></i>{{ itemsError }}
+                </div>
               </div>
             </div>
           </div>
@@ -139,8 +143,10 @@
 <script setup>
 import { computed, reactive, ref } from 'vue';
 import { createOrder, getOrder, updateOrder } from '@/crm/api/orders';
-import { validateDelivery, mapServerDeliveryErrors } from '@/crm/utils/delivery';
+import { mapServerDeliveryErrors } from '@/crm/utils/delivery';
+import { validateOrder } from '@/crm/utils/orderValidation';
 
+import Toast from '@/crm/components/ui/Toast.vue';
 import CustomerBlock from '@/crm/components/orders/CustomerBlock.vue';
 import CustomerOrderHistory from '@/crm/components/orders/CustomerOrderHistory.vue';
 import OrderMetaBlock from '@/crm/components/orders/OrderMetaBlock.vue';
@@ -184,8 +190,24 @@ const form = reactive({
   comment_internal: '',
 });
 
-// Помилки валідації доставки з бекенду (підсвічуємо конкретне поле у DeliveryBlock).
+// Помилки валідації (підсвічування полів) + toast зі списком причин.
 const deliveryErrors = ref({});
+const customerErrors = ref({});
+const itemsError = ref('');
+const toast = reactive({ show: false, messages: [] });
+let toastTimer = null;
+
+function showToast(messages) {
+  toast.messages = messages;
+  toast.show = true;
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { toast.show = false; }, 7000);
+}
+
+function closeToast() {
+  toast.show = false;
+  if (toastTimer) clearTimeout(toastTimer);
+}
 
 // Формуємо payload для відправки на сервер
 const payload = computed(() => ({
@@ -237,10 +259,10 @@ async function submit() {
       const errs = error.response.data?.errors || {};
       deliveryErrors.value = mapServerDeliveryErrors(errs);
       const messages = Object.values(errs).flat();
-      alert(messages.length ? messages.join('\n') : 'Перевірте заповнення полів.');
+      showToast(messages.length ? messages : ['Перевірте заповнення полів.']);
     } else {
       console.error('Помилка при збереженні:', error);
-      alert('Не вдалося зберегти замовлення. Перевірте обов\'язкові поля.');
+      showToast(['Не вдалося зберегти замовлення. Спробуйте ще раз.']);
     }
   } finally {
     loading.value = false;
@@ -254,12 +276,15 @@ function confirmOrder() {
 
 // Перевірка доставки ДО вікна підтвердження: якщо місто/відділення вписано,
 // але не обрано зі списку (ref порожній) — підсвічуємо поле й не відкриваємо модалку.
+// Повна перевірка ДО вікна підтвердження: клієнт, доставка, кошик.
 function openConfirm() {
-  const errs = validateDelivery(form.delivery);
-  deliveryErrors.value = errs;
-  if (Object.keys(errs).length) {
-    // Чітке повідомлення + підсвітка поля; модалку підтвердження не відкриваємо.
-    alert(Object.values(errs).join('\n'));
+  const { customer, delivery, items, messages } = validateOrder(form);
+  customerErrors.value = customer;
+  deliveryErrors.value = delivery;
+  itemsError.value = items;
+
+  if (messages.length) {
+    showToast(messages);
     return;
   }
   confirmOpen.value = true;
