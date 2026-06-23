@@ -36,7 +36,8 @@ class FiscalRefundTest extends TestCase
         Http::fake([
             '*cashier/signin' => Http::response(['access_token' => 'test-token'], 200),
             '*cashier/shift' => Http::response(['status' => 'OPENED'], 200),
-            '*receipts/return' => Http::response(['id' => 'uuid-ret-1', 'status' => 'DONE', 'fiscal_code' => 'FC-RET'], 200),
+            // Повернення йде на той самий receipts/sell (з is_return:true), не на окремий шлях.
+            '*receipts/sell' => Http::response(['id' => 'uuid-ret-1', 'status' => 'DONE', 'fiscal_code' => 'FC-RET'], 200),
         ]);
     }
 
@@ -74,7 +75,11 @@ class FiscalRefundTest extends TestCase
         $this->assertSame(1, $order->fiscalReceipts()
             ->where('type', FiscalReceipt::TYPE_RETURN)
             ->where('status', FiscalReceipt::STATUS_SUCCESS)->count());
-        Http::assertSent(fn ($r) => str_contains($r->url(), 'receipts/return'));
+        // Запит пішов на receipts/sell і саме як ПОВЕРНЕННЯ (is_return:true).
+        Http::assertSent(function ($r) {
+            return str_contains($r->url(), 'receipts/sell')
+                && collect($r->data()['goods'] ?? [])->contains(fn ($g) => ($g['is_return'] ?? false) === true);
+        });
     }
 
     public function test_refund_rejected_when_nothing_sold(): void
@@ -85,7 +90,7 @@ class FiscalRefundTest extends TestCase
             ->postJson("/api/orders/{$order->id}/refund")
             ->assertStatus(422);
 
-        Http::assertNotSent(fn ($r) => str_contains($r->url(), 'receipts/return'));
+        Http::assertNotSent(fn ($r) => str_contains($r->url(), 'receipts/sell'));
     }
 
     public function test_refund_rejected_when_already_fully_refunded(): void
@@ -104,6 +109,6 @@ class FiscalRefundTest extends TestCase
             ->postJson("/api/orders/{$order->id}/refund")
             ->assertStatus(422);
 
-        Http::assertNotSent(fn ($r) => str_contains($r->url(), 'receipts/return'));
+        Http::assertNotSent(fn ($r) => str_contains($r->url(), 'receipts/sell'));
     }
 }

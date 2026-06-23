@@ -213,7 +213,10 @@ class CheckboxService
 
         // Будуємо тіло запиту (payload), передаючи $customGoods
         $payload = $this->buildReceiptPayload($order, $type, $amountCents, $customGoods, $receiptId);
-        $endpoint = ($type === FiscalReceipt::TYPE_RETURN) ? 'receipts/return' : 'receipts/sell';
+        // І продаж, і повернення йдуть на ОДИН ендпоінт receipts/sell — повернення
+        // розрізняється прапором is_return:true в goods (окремого receipts/return
+        // у Checkbox немає, POST на нього дає 405 Method Not Allowed).
+        $endpoint = 'receipts/sell';
 
         $start = microtime(true);
         $response = $this->client($token)->post($this->url($endpoint), $payload);
