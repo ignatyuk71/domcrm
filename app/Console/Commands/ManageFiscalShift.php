@@ -57,10 +57,20 @@ class ManageFiscalShift extends Command
 
         // Обробляємо чергу тільки у вікні роботи та не раніше часу фіскалізації
         if ($settings->queue_enabled && $withinWindow && $now->greaterThanOrEqualTo($queueAt)) {
-            $processed = $queueService->processAvailable();
-            if ($processed > 0) {
-                $settings->update(['last_queue_processed_at' => $now]);
-                $cronLog->info("Fiscal queue processed: {$processed} items.");
+            // Бити чеки ЛИШЕ коли зміна реально OPENED, а не «відкривається».
+            // Інакше перша спроба гарантовано впаде «Зміну не відкрито» (особливо
+            // у тому ж запуску, де зміну щойно відкрили) — почекаємо наступний тік.
+            $current = $checkbox->getCurrentShift();
+            $isOpened = $current && strtoupper((string) ($current['status'] ?? '')) === 'OPENED';
+
+            if ($isOpened) {
+                $processed = $queueService->processAvailable();
+                if ($processed > 0) {
+                    $settings->update(['last_queue_processed_at' => $now]);
+                    $cronLog->info("Fiscal queue processed: {$processed} items.");
+                }
+            } else {
+                $cronLog->info('Fiscal queue: зміна ще не OPENED — відкладаємо обробку до наступного запуску.');
             }
         }
 
