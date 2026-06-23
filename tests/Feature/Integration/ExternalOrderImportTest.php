@@ -133,6 +133,28 @@ class ExternalOrderImportTest extends TestCase
         $this->assertSame(1, Customer::count());
     }
 
+    public function test_imports_nova_poshta_refs_into_delivery(): void
+    {
+        $source = $this->makeSource();
+
+        $order = app(ExternalOrderImporter::class)->import($source, $this->canonical([
+            'external_order_id' => 'T-REF',
+            'items' => [['external_id' => 'E', 'sku' => 'X', 'name' => 'N', 'size' => '40', 'qty' => 1, 'price' => 100]],
+            'delivery' => [
+                'type' => 'warehouse',
+                'city_name' => 'Рівне, Рівненська обл.',
+                'city_ref' => 'city-ref-123',
+                'warehouse_name' => 'Відділення №8',
+                'warehouse_ref' => 'wh-ref-456',
+            ],
+        ]));
+
+        // Реф-и збережені → ТТН створиться й доставку не треба перевибирати.
+        $d = $order->delivery;
+        $this->assertSame('city-ref-123', $d->city_ref);
+        $this->assertSame('wh-ref-456', $d->warehouse_ref);
+    }
+
     public function test_memory_mapping_takes_priority_over_sku(): void
     {
         $source = $this->makeSource();

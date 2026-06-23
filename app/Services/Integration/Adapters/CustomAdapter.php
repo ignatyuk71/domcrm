@@ -48,6 +48,10 @@ class CustomAdapter implements OrderAdapter
                 'apartment' => $delivery['apartment'] ?? null,
                 'recipient_name' => $delivery['recipient_name'] ?? null,
                 'recipient_phone' => $delivery['recipient_phone'] ?? null,
+                // Реф-и Нової Пошти з сайту (інакше ТТН не створиться й доставку треба перевибирати).
+                'city_ref' => $delivery['provider_city_ref'] ?? ($delivery['city_ref'] ?? null),
+                'settlement_ref' => $delivery['provider_settlement_ref'] ?? ($delivery['settlement_ref'] ?? null),
+                'warehouse_ref' => $delivery['provider_warehouse_ref'] ?? ($delivery['warehouse_ref'] ?? null),
             ],
             'payment' => [
                 'method' => $payment['method'] ?? 'cod',
