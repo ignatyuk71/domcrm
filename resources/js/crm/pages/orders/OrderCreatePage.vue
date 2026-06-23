@@ -140,7 +140,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import { createOrder, getOrder, updateOrder } from '@/crm/api/orders';
 import { mapServerDeliveryErrors } from '@/crm/utils/delivery';
 import { validateOrder } from '@/crm/utils/orderValidation';
@@ -193,6 +193,7 @@ const form = reactive({
 const deliveryErrors = ref({});
 const customerErrors = ref({});
 const itemsError = ref('');
+const validated = ref(false); // після першої невдалої спроби — оновлюємо помилки наживо
 const toast = reactive({ show: false, messages: [] });
 let toastTimer = null;
 
@@ -283,11 +284,22 @@ function openConfirm() {
   itemsError.value = items;
 
   if (messages.length) {
+    validated.value = true; // вмикаємо живу перевірку — виправлені поля одразу «очищаються»
     showToast(messages);
     return;
   }
   confirmOpen.value = true;
 }
+
+// Після першої невдалої спроби помилки оновлюються наживо: щойно поле виправлено
+// (обрано місто/відділення, введено телефон) — його червоний підпис зникає сам.
+watch(form, () => {
+  if (!validated.value) return;
+  const { customer, delivery, items } = validateOrder(form);
+  customerErrors.value = customer;
+  deliveryErrors.value = delivery;
+  itemsError.value = items;
+}, { deep: true });
 
 function closeConfirm() {
   if (!loading.value) {
