@@ -52,8 +52,23 @@ describe('validateDelivery', () => {
     expect(errs.warehouse_name).toBeUndefined();
   });
 
-  it('порожня доставка (чернетка) — без помилок', () => {
-    expect(validateDelivery({})).toEqual({});
+  it('порожня доставка — вимагає місто і відділення', () => {
+    const errs = validateDelivery({});
+    expect(errs.city_name).toBeTruthy();
+    expect(errs.warehouse_name).toBeTruthy();
+  });
+
+  it('повна доставка відділенням — без помилок', () => {
+    const errs = validateDelivery({
+      delivery_type: 'warehouse', city_ref: 'c1', warehouse_ref: 'w1',
+    });
+    expect(errs).toEqual({});
+  });
+
+  it('курʼєр без вулиці — помилка вулиці', () => {
+    const errs = validateDelivery({ delivery_type: 'courier', city_ref: 'c1' });
+    expect(errs.street_name).toBeTruthy();
+    expect(errs.warehouse_name).toBeUndefined();
   });
 });
 

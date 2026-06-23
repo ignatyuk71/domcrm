@@ -11,16 +11,33 @@ export function filterWarehouses(warehouses, deliveryType) {
   return (warehouses || []).filter((wh) => (wantPostomat ? isPostomat(wh.name) : !isPostomat(wh.name)));
 }
 
-// Валідація вибору доставки ДО збереження: текст вписано, але не обрано зі списку (ref порожній).
+// Валідація доставки ДО збереження. Доставка обовʼязкова: місто має бути ОБРАНЕ
+// зі списку (є ref), а для відділення/поштомата — обране відділення; для курʼєра — вулиця.
 export function validateDelivery(delivery) {
   const d = delivery || {};
   const errs = {};
-  if ((d.city_name || '').trim() && !d.city_ref) {
-    errs.city_name = 'Оберіть місто зі списку підказок.';
+
+  // Місто: має бути обране зі списку (city_ref). Розрізняємо «вписано, але не обрано» і «порожнє».
+  if (!d.city_ref) {
+    errs.city_name = (d.city_name || '').trim()
+      ? 'Оберіть місто зі списку підказок.'
+      : 'Вкажіть місто доставки.';
   }
-  if (d.delivery_type !== 'courier' && (d.warehouse_name || '').trim() && !d.warehouse_ref) {
-    errs.warehouse_name = 'Оберіть відділення або поштомат зі списку.';
+
+  if (d.delivery_type === 'courier') {
+    // Курʼєр: потрібна вулиця (мʼяко — достатньо введеного тексту, бо не всі вулиці є в базі НП).
+    if (!(d.street_name || '').trim()) {
+      errs.street_name = 'Вкажіть вулицю доставки.';
+    }
+  } else {
+    // Відділення / Поштомат: має бути обране зі списку (warehouse_ref).
+    if (!d.warehouse_ref) {
+      errs.warehouse_name = (d.warehouse_name || '').trim()
+        ? 'Оберіть відділення або поштомат зі списку.'
+        : 'Оберіть відділення або поштомат.';
+    }
   }
+
   return errs;
 }
 
