@@ -21,11 +21,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => \App\Http\Middleware\EnsureUserRole::class,
             'verify.external.source' => \App\Http\Middleware\VerifyExternalSource::class,
         ]);
-
-        // Вимикаємо перевірку CSRF для маршрутів генерації ТТН
-        $middleware->validateCsrfTokens(except: [
-            'orders/*/generate-ttn',
-        ]);
+        // CSRF діє на всі POST (зокрема генерацію ТТН — це гроші). Фронт шле токен:
+        // generate-ttn(-courier) — через X-CSRF-TOKEN (fetch), cancel/print — XSRF-кукі (axios).
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

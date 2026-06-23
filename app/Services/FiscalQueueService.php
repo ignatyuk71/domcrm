@@ -86,11 +86,27 @@ class FiscalQueueService
 
                 FiscalizeOrderJob::dispatchSync($order, $item->type, $item->amount_cents);
 
-                $item->update([
-                    'status' => FiscalQueue::STATUS_SUCCESS,
-                    'processed_at' => now(),
-                ]);
-                $processed++;
+                // SUCCESS лише якщо чек РЕАЛЬНО пробито (перевіряємо по БД). Джоба могла
+                // тихо вийти без винятку (зайнятий лок, порожні goods, shouldFiscalize=false,
+                // або Checkbox повернув error-статус) — тоді успішного чека немає.
+                $paidAfter = (int) $order->fiscalReceipts()
+                    ->where('status', FiscalReceipt::STATUS_SUCCESS)
+                    ->where('type', FiscalReceipt::TYPE_SELL)
+                    ->sum('total_amount');
+
+                if ($paidAfter > $alreadyPaid) {
+                    $item->update(['status' => FiscalQueue::STATUS_SUCCESS, 'processed_at' => now()]);
+                    $processed++;
+                } else {
+                    // Чека немає → не брешемо «success», лишаємо на авторетрай.
+                    $item->update([
+                        'status' => FiscalQueue::STATUS_ERROR,
+                        'attempts' => $item->attempts + 1,
+                        'last_error' => 'Чек не пробито: джоба завершилась без успішного чека продажу',
+                        'processed_at' => now(),
+                    ]);
+                    Log::channel('cron_fiscal')->warning("Fiscal Queue #{$item->id}: немає успішного чека після джоби (Order #{$order->id})");
+                }
             } catch (\Throwable $e) {
                 $attempts = $item->attempts + 1;
                 $item->update([
