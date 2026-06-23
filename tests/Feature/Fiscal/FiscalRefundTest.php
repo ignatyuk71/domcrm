@@ -93,6 +93,47 @@ class FiscalRefundTest extends TestCase
         Http::assertNotSent(fn ($r) => str_contains($r->url(), 'receipts/sell'));
     }
 
+    public function test_status_reflects_full_refund(): void
+    {
+        $order = $this->makeOrder();
+        $order->fiscalReceipts()->create([
+            'type' => FiscalReceipt::TYPE_SELL, 'status' => FiscalReceipt::STATUS_SUCCESS,
+            'total_amount' => 50000, 'uuid' => 's-uuid', 'payload_hash' => 's',
+        ]);
+        $order->fiscalReceipts()->create([
+            'type' => FiscalReceipt::TYPE_RETURN, 'status' => FiscalReceipt::STATUS_SUCCESS,
+            'total_amount' => 50000, 'uuid' => 'r-uuid', 'payload_hash' => 'r',
+        ]);
+
+        $this->actingAs($this->owner())
+            ->getJson("/api/orders/{$order->id}/fiscal-status")
+            ->assertOk()
+            ->assertJsonPath('has_refund', true)
+            ->assertJsonPath('refunded_cents', 50000)
+            ->assertJsonPath('already_paid_cents', 0)   // чиста сума: продаж − повернення
+            ->assertJsonPath('status', 'refunded');
+    }
+
+    public function test_status_reflects_partial_refund(): void
+    {
+        $order = $this->makeOrder();
+        $order->fiscalReceipts()->create([
+            'type' => FiscalReceipt::TYPE_SELL, 'status' => FiscalReceipt::STATUS_SUCCESS,
+            'total_amount' => 50000, 'uuid' => 's-uuid2', 'payload_hash' => 's',
+        ]);
+        $order->fiscalReceipts()->create([
+            'type' => FiscalReceipt::TYPE_RETURN, 'status' => FiscalReceipt::STATUS_SUCCESS,
+            'total_amount' => 20000, 'uuid' => 'r-uuid2', 'payload_hash' => 'r',
+        ]);
+
+        $this->actingAs($this->owner())
+            ->getJson("/api/orders/{$order->id}/fiscal-status")
+            ->assertOk()
+            ->assertJsonPath('has_refund', true)
+            ->assertJsonPath('refunded_cents', 20000)
+            ->assertJsonPath('already_paid_cents', 30000); // 500 − 200
+    }
+
     public function test_refund_rejected_when_already_fully_refunded(): void
     {
         $order = $this->makeOrder();

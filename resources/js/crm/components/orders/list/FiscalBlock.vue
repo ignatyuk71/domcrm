@@ -38,7 +38,8 @@
   // ЛОГІКА СУМИ (Та сама, що працює)
   const alreadyFiscalizedAmount = computed(() => {
     if (allReceipts.value.length > 0) {
-      return allReceipts.value.reduce((sum, r) => sum + Number(r.amount), 0);
+      // Повернення віднімаємо (чек повернення зберігається з додатнім amount).
+      return allReceipts.value.reduce((sum, r) => sum + (r.type === 'return' ? -Number(r.amount) : Number(r.amount)), 0);
     }
     if (state.receipt?.already_paid_cents !== undefined) {
       return Number(state.receipt.already_paid_cents) / 100;
@@ -62,6 +63,11 @@
   
   const isFullyPaid = computed(() => remainingAmount.value <= 0 && totalOrderAmount.value > 0);
   const prepayAmountNumber = computed(() => parseFloat(props.prepayAmount) || 0);
+
+  // Повернення
+  const hasRefund = computed(() => !!state.receipt?.has_refund);
+  const refundedAmount = computed(() => Number(state.receipt?.refunded_cents || 0) / 100);
+  const isFullyRefunded = computed(() => hasRefund.value && alreadyFiscalizedAmount.value <= 0.01);
   
   // --- VISIBILITY ---
   const showPrepayButton = computed(() => {
@@ -90,6 +96,7 @@
   
   // --- UI HELPERS ---
   const statusLabel = computed(() => {
+    if (hasRefund.value) return isFullyRefunded.value ? 'Повернено' : 'Част. повернено';
     if (isFullyPaid.value) return 'Сплачено';
     const labels = {
       success: 'Частково',
@@ -100,16 +107,18 @@
     };
     return labels[status.value] || status.value;
   });
-  
+
   const statusIcon = computed(() => {
+    if (hasRefund.value) return 'bi-arrow-counterclockwise';
     if (isFullyPaid.value) return 'bi-check-all';
     if (status.value === 'success') return 'bi-check-circle-fill';
     if (isPending.value) return 'bi-hourglass-split';
     if (status.value === 'error') return 'bi-exclamation-diamond-fill';
     return 'bi-circle';
   });
-  
+
   const statusClass = computed(() => {
+    if (hasRefund.value) return 'status-refunded';
     if (isFullyPaid.value) return 'status-success';
     return `status-${status.value}`;
   });
@@ -237,22 +246,27 @@
                  <i class="bi bi-check2-circle"></i>
                  <span>Сплачено: {{ formatMoney(alreadyFiscalizedAmount) }}</span>
              </div>
-             <div v-if="!isFullyPaid" class="text-danger fw-bold">
+             <div v-if="!isFullyPaid && !hasRefund" class="text-danger fw-bold">
                  Залишок: {{ formatMoney(remainingAmount) }}
+             </div>
+             <div v-else-if="hasRefund" class="fw-bold refund-amount">
+                 <i class="bi bi-arrow-counterclockwise"></i> Повернено: {{ formatMoney(refundedAmount) }}
              </div>
           </div>
         </div>
           
         <!-- Receipts List (Compact) -->
         <div v-if="allReceipts.length" class="receipts-list">
-          <div v-for="rec in allReceipts" :key="rec.id" class="receipt-item">
+          <div v-for="rec in allReceipts" :key="rec.id" class="receipt-item" :class="{ 'is-return': rec.type === 'return' }">
               <div class="d-flex align-items-center gap-2">
-                  <div class="icon-circle bg-success-subtle text-success">
-                      <i class="bi bi-receipt"></i>
+                  <div class="icon-circle" :class="rec.type === 'return' ? 'bg-danger-subtle text-danger' : 'bg-success-subtle text-success'">
+                      <i class="bi" :class="rec.type === 'return' ? 'bi-arrow-counterclockwise' : 'bi-receipt'"></i>
                   </div>
                   <div class="d-flex flex-column" style="line-height: 1.1;">
-                      <span class="receipt-amount">{{ formatMoney(rec.amount) }} <small class="text-muted">грн</small></span>
-                      <span class="receipt-time">{{ extractTime(rec.created_at) }}</span>
+                      <span class="receipt-amount" :class="{ 'text-danger': rec.type === 'return' }">
+                          {{ rec.type === 'return' ? '−' : '' }}{{ formatMoney(rec.amount) }} <small class="text-muted">грн</small>
+                      </span>
+                      <span class="receipt-time">{{ rec.type === 'return' ? 'Повернення' : 'Продаж' }} · {{ extractTime(rec.created_at) }}</span>
                   </div>
               </div>
               <a
@@ -636,6 +650,12 @@
   
   .status-absent { color: #64748b; background-color: #f1f5f9; }
   .status-indicator-ring.status-absent { color: #94a3b8; background-color: transparent; border-color: #cbd5e1; }
+
+  /* Повернення — нейтральний (сланцевий) колір, відмінний від зеленого «сплачено» */
+  .status-refunded { color: #475569; background-color: #e2e8f0; }
+  .status-indicator-ring.status-refunded { color: #475569; background-color: transparent; border-color: #475569; }
+  .refund-amount { color: #475569; }
+  .receipt-item.is-return { border-color: #fee2e2; background: #fff7f7; }
   
   .spin-icon { animation: spin 1s linear infinite; }
   @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }

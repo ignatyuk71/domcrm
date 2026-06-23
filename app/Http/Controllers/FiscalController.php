@@ -107,15 +107,20 @@ class FiscalController extends Controller
             return response()->json(['status' => 'absent']);
         }
 
-        // 3. Рахуємо математику
-        $successSum = (int) $successReceipts->sum('total_amount');
+        // 3. Рахуємо математику: продаж і повернення ОКРЕМО, бо чек повернення
+        // зберігається з додатнім total_amount. «Сплачено» = чиста сума (продаж − повернення).
+        $sellSum = (int) $successReceipts->where('type', FiscalReceipt::TYPE_SELL)->sum('total_amount');
+        $refundedCents = (int) $successReceipts->where('type', FiscalReceipt::TYPE_RETURN)->sum('total_amount');
+        $netPaidCents = $sellSum - $refundedCents;
+        $hasRefund = $refundedCents > 0;
         $totalOrderCents = (int) round($order->items->sum('total') * 100);
 
-        // 4. Визначаємо "Ефективний статус" для UI
-        // Якщо сума чеків покриває замовлення - то це SUCCESS, навіть якщо останній чек був помилковим (хоча це рідкість)
-        $effectiveStatus = ($totalOrderCents > 0 && $successSum >= $totalOrderCents && $latest->type === FiscalReceipt::TYPE_SELL)
-            ? FiscalReceipt::STATUS_SUCCESS
-            : $latest->status;
+        // 4. Ефективний статус для UI
+        $effectiveStatus = match (true) {
+            $hasRefund && $netPaidCents <= 0 => 'refunded', // повернено повністю
+            $totalOrderCents > 0 && $netPaidCents >= $totalOrderCents && $latest->type === FiscalReceipt::TYPE_SELL => FiscalReceipt::STATUS_SUCCESS,
+            default => $latest->status,
+        };
 
         return response()->json([
             'status' => $effectiveStatus,
@@ -123,14 +128,17 @@ class FiscalController extends Controller
             'fiscal_code' => $latest->fiscal_code,
             'check_link' => $latest->check_link,
             'total_amount' => $latest->total_amount, // сума останньої спроби
-            'already_paid_cents' => $successSum, // сума всіх успішних
+            'already_paid_cents' => $netPaidCents, // ЧИСТА сума (продаж − повернення)
+            'refunded_cents' => $refundedCents,    // скільки повернуто
+            'has_refund' => $hasRefund,
             'total_order_cents' => $totalOrderCents,
             'receipt_id' => $latest->id,
             'uuid' => $latest->uuid,
             'error_message' => $latest->error_message,
-            // Передаємо історію успішних чеків для списку на фронтенді
+            // Історія успішних чеків для списку на фронтенді (з типом — продаж/повернення)
             'all_success_receipts' => $successReceipts->map(fn ($r) => [
                 'id' => $r->id,
+                'type' => $r->type,
                 'amount' => $r->total_amount / 100,
                 'fiscal_code' => $r->fiscal_code,
                 'link' => $r->check_link,
