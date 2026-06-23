@@ -226,11 +226,20 @@ class InboxController extends Controller
     /** Надіслати щойно завантажений файл (фото/файл) клієнту. */
     public function sendAttachment(Request $request, InboxConversation $conversation)
     {
-        $request->validate(['file' => ['required', 'file', 'max:10240']]);
+        // Тільки безпечні типи (інакше можна було б залити shell.php у webroot → RCE).
+        $request->validate([
+            'file' => ['required', 'file', 'max:10240', 'mimes:jpg,jpeg,png,webp,gif,mp4,mov,pdf'],
+        ]);
 
         $file = $request->file('file');
         $mime = (string) $file->getMimeType();
-        $ext = $file->getClientOriginalExtension() ?: ($file->guessExtension() ?: 'bin');
+        // Розширення формуємо З СЕРВЕРНОГО визначення (не з імені клієнта) і ще раз
+        // звіряємо з allowlist — щоб у webroot не потрапив виконуваний файл.
+        $allowedExt = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'mp4', 'mov', 'pdf'];
+        $ext = strtolower((string) $file->guessExtension());
+        if (!in_array($ext, $allowedExt, true)) {
+            return response()->json(['ok' => false, 'error' => 'Недозволений тип файлу'], 422);
+        }
         $name = Str::random(24) . '.' . $ext;
         $file->move(public_path('inbox-uploads'), $name);
         $type = str_starts_with($mime, 'image/') ? 'image' : 'file';
