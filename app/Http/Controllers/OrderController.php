@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\StoreOrderRequest;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderDelivery;
@@ -185,59 +186,9 @@ class OrderController extends Controller
     }
 
     /** Збереження замовлення разом із покупцем, товарами, доставкою та оплатою. */
-    public function store(Request $request): JsonResponse
+    public function store(StoreOrderRequest $request): JsonResponse
     {
-        $data = $request->validate([
-            'customer.first_name' => ['nullable', 'string', 'max:255'],
-            'customer.last_name' => ['nullable', 'string', 'max:255'],
-            'customer.phone' => ['nullable', 'string', 'max:32'],
-            'customer.email' => ['nullable', 'string', 'max:255'],
-
-            'order.source' => ['nullable', 'string', 'max:32'],
-            'order.source_id' => ['nullable', 'integer', 'exists:order_sources,id'],
-            'order.status' => ['required', 'string', 'max:32'],
-            'order.payment_status' => ['required', 'string', 'max:32'],
-            'order.currency' => ['required', 'string', 'max:3'],
-            'order.comment_internal' => ['nullable', 'string'],
-
-            'items' => ['required', 'array', 'min:1'],
-            'items.*.sku' => ['nullable', 'string', 'max:64'],
-            'items.*.title' => ['nullable', 'string', 'max:255'],
-            'items.*.size' => ['nullable', 'string', 'max:64'],
-            'items.*.qty' => ['required', 'integer', 'min:1'],
-            'items.*.price' => ['required', 'numeric', 'min:0'],
-            'items.*.product_id' => ['nullable', 'integer', 'exists:products,id'],
-            'items.*.product_variant_id' => ['nullable', 'integer', 'exists:product_variants,id'],
-
-            'payment.method' => ['required', 'string', 'max:32'],
-            'payment.prepay_amount' => ['nullable', 'numeric', 'min:0'],
-            'payment.currency' => ['required', 'string', 'max:3'],
-
-            'delivery.carrier' => ['nullable', 'string', 'max:32'],
-            'delivery.delivery_type' => ['required', 'string', 'max:32'],
-            'delivery.payer' => ['nullable', 'string', 'max:32'],
-            'delivery.ttn' => ['nullable', 'string', 'max:64'],
-            'delivery.city_ref' => ['nullable', 'string', 'max:64'],
-            'delivery.settlement_ref' => ['nullable', 'string', 'max:64'],
-            'delivery.city_name' => ['nullable', 'string', 'max:255'],
-            'delivery.warehouse_ref' => ['nullable', 'string', 'max:64'],
-            'delivery.warehouse_name' => ['nullable', 'string', 'max:255'],
-            'delivery.street_name' => ['nullable', 'string', 'max:255'],
-            'delivery.street_ref' => ['nullable', 'string', 'max:64'],
-            'delivery.address_ref' => ['nullable', 'string', 'max:64'],
-            'delivery.building' => ['nullable', 'string', 'max:64'],
-            'delivery.apartment' => ['nullable', 'string', 'max:64'],
-            'delivery.address_note' => ['nullable', 'string', 'max:255'],
-            'delivery.recipient_name' => ['nullable', 'string', 'max:255'],
-            'delivery.recipient_phone' => ['nullable', 'string', 'max:64'],
-
-            'tag_ids' => ['array'],
-            'tag_ids.*' => ['nullable'],
-        ]);
-
-        $this->assertDeliverySelected($data);
-
-        $order = $this->orders->create($data, $request->user()?->id);
+        $order = $this->orders->create($request->validated(), $request->user()?->id);
 
         return response()->json([
             'data' => $order->load([
@@ -250,59 +201,9 @@ class OrderController extends Controller
         ], 201);
     }
 
-    public function update(Request $request, Order $order): JsonResponse
+    public function update(StoreOrderRequest $request, Order $order): JsonResponse
     {
-        $data = $request->validate([
-            'customer.first_name' => ['nullable', 'string', 'max:255'],
-            'customer.last_name' => ['nullable', 'string', 'max:255'],
-            'customer.phone' => ['nullable', 'string', 'max:32'],
-            'customer.email' => ['nullable', 'string', 'max:255'],
-
-            'order.source' => ['nullable', 'string', 'max:32'],
-            'order.source_id' => ['nullable', 'integer', 'exists:order_sources,id'],
-            'order.status' => ['required', 'string', 'max:32'],
-            'order.payment_status' => ['required', 'string', 'max:32'],
-            'order.currency' => ['required', 'string', 'max:3'],
-            'order.comment_internal' => ['nullable', 'string'],
-
-            'items' => ['required', 'array', 'min:1'],
-            'items.*.sku' => ['nullable', 'string', 'max:64'],
-            'items.*.title' => ['nullable', 'string', 'max:255'],
-            'items.*.size' => ['nullable', 'string', 'max:64'],
-            'items.*.qty' => ['required', 'integer', 'min:1'],
-            'items.*.price' => ['required', 'numeric', 'min:0'],
-            'items.*.product_id' => ['nullable', 'integer', 'exists:products,id'],
-            'items.*.product_variant_id' => ['nullable', 'integer', 'exists:product_variants,id'],
-
-            'payment.method' => ['required', 'string', 'max:32'],
-            'payment.prepay_amount' => ['nullable', 'numeric', 'min:0'],
-            'payment.currency' => ['required', 'string', 'max:3'],
-
-            'delivery.carrier' => ['nullable', 'string', 'max:32'],
-            'delivery.delivery_type' => ['required', 'string', 'max:32'],
-            'delivery.payer' => ['nullable', 'string', 'max:32'],
-            'delivery.ttn' => ['nullable', 'string', 'max:64'],
-            'delivery.city_ref' => ['nullable', 'string', 'max:64'],
-            'delivery.settlement_ref' => ['nullable', 'string', 'max:64'],
-            'delivery.city_name' => ['nullable', 'string', 'max:255'],
-            'delivery.warehouse_ref' => ['nullable', 'string', 'max:64'],
-            'delivery.warehouse_name' => ['nullable', 'string', 'max:255'],
-            'delivery.street_name' => ['nullable', 'string', 'max:255'],
-            'delivery.street_ref' => ['nullable', 'string', 'max:64'],
-            'delivery.address_ref' => ['nullable', 'string', 'max:64'],
-            'delivery.building' => ['nullable', 'string', 'max:64'],
-            'delivery.apartment' => ['nullable', 'string', 'max:64'],
-            'delivery.address_note' => ['nullable', 'string', 'max:255'],
-            'delivery.recipient_name' => ['nullable', 'string', 'max:255'],
-            'delivery.recipient_phone' => ['nullable', 'string', 'max:64'],
-
-            'tag_ids' => ['array'],
-            'tag_ids.*' => ['nullable'],
-        ]);
-
-        $this->assertDeliverySelected($data);
-
-        $this->orders->update($order, $data);
+        $this->orders->update($order, $request->validated());
 
         return response()->json([
             'data' => $order->load([
@@ -375,26 +276,6 @@ class OrderController extends Controller
      * списку (ref порожній) — інакше ТТН потім мовчки впаде. Курʼєрську вулицю
      * НЕ перевіряємо: її може не бути в базі НП (легітимний кейс).
      */
-    protected function assertDeliverySelected(array $data): void
-    {
-        $delivery = $data['delivery'] ?? [];
-        $errors = [];
-
-        if (trim((string) ($delivery['city_name'] ?? '')) !== '' && empty($delivery['city_ref'])) {
-            $errors['delivery.city_name'] = 'Оберіть місто зі списку підказок.';
-        }
-
-        if (($delivery['delivery_type'] ?? 'warehouse') !== 'courier'
-            && trim((string) ($delivery['warehouse_name'] ?? '')) !== ''
-            && empty($delivery['warehouse_ref'])) {
-            $errors['delivery.warehouse_name'] = 'Оберіть відділення або поштомат зі списку.';
-        }
-
-        if ($errors) {
-            throw ValidationException::withMessages($errors);
-        }
-    }
-
     protected function resolveStatusIdByCode(?string $code, string $type = 'order'): ?int
     {
         if (!$code) return null;
