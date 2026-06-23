@@ -143,7 +143,7 @@ class AiAutomationTest extends TestCase
                 ]],
             ]],
         ];
-        $this->postJson('/api/meta/webhook', $echo)->assertOk();
+        $this->postMetaWebhook($echo)->assertOk();
 
         $m = InboxMessage::where('external_message_id', 'mid_private_reply_1')->first();
         $this->assertSame('ai', $m->sender);
@@ -151,7 +151,7 @@ class AiAutomationTest extends TestCase
 
         // Ехо живого оператора (інший mid) → sender agent + пауза
         $echo['entry'][0]['messaging'][0]['message'] = ['mid' => 'mid_operator_1', 'text' => 'відповім сам', 'is_echo' => true];
-        $this->postJson('/api/meta/webhook', $echo)->assertOk();
+        $this->postMetaWebhook($echo)->assertOk();
 
         $m2 = InboxMessage::where('external_message_id', 'mid_operator_1')->first();
         $this->assertSame('agent', $m2->sender);

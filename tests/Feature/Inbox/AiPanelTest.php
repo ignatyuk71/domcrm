@@ -269,7 +269,7 @@ class AiPanelTest extends TestCase
             ]],
         ];
 
-        $this->postJson('/api/meta/webhook', $payload)->assertOk();
+        $this->postMetaWebhook($payload)->assertOk();
 
         $this->assertNotNull($conv->fresh()->last_read_at);
     }

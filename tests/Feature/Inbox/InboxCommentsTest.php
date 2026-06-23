@@ -64,7 +64,7 @@ class InboxCommentsTest extends TestCase
     {
         $this->connection();
 
-        $this->postJson('/api/meta/webhook', $this->fbCommentPayload('c_1', 'U777', 'Ціна?'))->assertOk();
+        $this->postMetaWebhook($this->fbCommentPayload('c_1', 'U777', 'Ціна?'))->assertOk();
 
         $this->assertDatabaseHas('inbox_comments', [
             'comment_id' => 'c_1',
@@ -76,7 +76,7 @@ class InboxCommentsTest extends TestCase
         ]);
 
         // Дубль не множиться
-        $this->postJson('/api/meta/webhook', $this->fbCommentPayload('c_1', 'U777', 'Ціна?'))->assertOk();
+        $this->postMetaWebhook($this->fbCommentPayload('c_1', 'U777', 'Ціна?'))->assertOk();
         $this->assertSame(1, InboxComment::count());
     }
 
@@ -84,7 +84,7 @@ class InboxCommentsTest extends TestCase
     {
         $this->connection();
 
-        $this->postJson('/api/meta/webhook', $this->fbCommentPayload('c_own', 'PAGE1', 'Дякуємо!'))->assertOk();
+        $this->postMetaWebhook($this->fbCommentPayload('c_own', 'PAGE1', 'Дякуємо!'))->assertOk();
 
         $this->assertSame(0, InboxComment::count());
     }
@@ -109,7 +109,7 @@ class InboxCommentsTest extends TestCase
             ]],
         ];
 
-        $this->postJson('/api/meta/webhook', $payload)->assertOk();
+        $this->postMetaWebhook($payload)->assertOk();
 
         $this->assertDatabaseHas('inbox_comments', [
             'comment_id' => 'igc_1',
@@ -159,7 +159,7 @@ class InboxCommentsTest extends TestCase
         $payload = $this->fbCommentPayload('c_rm_1', 'U777', '');
         $payload['entry'][0]['changes'][0]['value']['verb'] = 'remove';
 
-        $this->postJson('/api/meta/webhook', $payload)->assertOk();
+        $this->postMetaWebhook($payload)->assertOk();
 
         $this->assertDatabaseMissing('inbox_comments', ['comment_id' => 'c_rm_1']);
     }
