@@ -92,6 +92,33 @@ class OrderStoreTest extends TestCase
         $this->assertSame($existing->id, Order::latest('id')->first()->customer_id);
     }
 
+    public function test_writes_phone_normalized_on_create(): void
+    {
+        $this->actingAs($this->operator())
+            ->postJson('/orders', $this->validPayload())
+            ->assertCreated();
+
+        $customer = Order::latest('id')->first()->customer;
+        $this->assertSame('380991112233', $customer->phone_normalized);
+    }
+
+    public function test_dedups_customer_across_phone_formats(): void
+    {
+        $existing = Customer::create([
+            'first_name' => 'Існує', 'phone' => '+380991112233', 'phone_normalized' => '380991112233',
+        ]);
+
+        $this->actingAs($this->operator())
+            ->postJson('/orders', $this->validPayload(['customer' => [
+                'first_name' => 'Новий', 'phone' => '0991112233', // інший формат — той самий номер
+            ]]))
+            ->assertCreated();
+
+        // Дубль не створено, замовлення прив'язане до наявного клієнта.
+        $this->assertSame(1, Customer::where('phone_normalized', '380991112233')->count());
+        $this->assertSame($existing->id, Order::latest('id')->first()->customer_id);
+    }
+
     public function test_rejects_warehouse_typed_without_selection(): void
     {
         $payload = $this->validPayload(['delivery' => [

@@ -10,6 +10,7 @@ use App\Models\OrderPayment;
 use App\Models\OrderSource;
 use App\Models\Status;
 use App\Models\Tag;
+use App\Support\PhoneNormalizer;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -26,15 +27,25 @@ class OrderService
             // Клієнт: шукаємо за телефоном або створюємо нового
             $customer = null;
             $phone = trim($data['customer']['phone'] ?? '');
-            if ($phone) {
-                $customer = Customer::firstOrCreate(
-                    ['phone' => $phone],
-                    [
+            $normalized = PhoneNormalizer::normalize($phone !== '' ? $phone : null);
+            if ($normalized) {
+                // Дедуп за нормалізованим номером (+380.. / 0.. / з пробілами = один клієнт).
+                // Для legacy-клієнтів без phone_normalized — фолбек на сирий phone + backfill.
+                $customer = Customer::where('phone_normalized', $normalized)->first()
+                    ?? Customer::where('phone', $phone)->first();
+                if ($customer) {
+                    if (!$customer->phone_normalized) {
+                        $customer->update(['phone_normalized' => $normalized]);
+                    }
+                } else {
+                    $customer = Customer::create([
                         'first_name' => $data['customer']['first_name'] ?? null,
                         'last_name' => $data['customer']['last_name'] ?? null,
+                        'phone' => $phone,
+                        'phone_normalized' => $normalized,
                         'email' => $data['customer']['email'] ?? null,
-                    ]
-                );
+                    ]);
+                }
             } elseif (!empty($data['customer'])) {
                 $customer = Customer::create([
                     'first_name' => $data['customer']['first_name'] ?? null,
@@ -137,12 +148,26 @@ class OrderService
     public function update(Order $order, array $data): Order
     {
         DB::transaction(function () use ($data, $order) {
-            // Клієнт
-            $customer = $order->customer ?: new Customer();
-            $customer->first_name = $data['customer']['first_name'] ?? null;
-            $customer->last_name = $data['customer']['last_name'] ?? null;
-            $customer->phone = $data['customer']['phone'] ?? null;
-            $customer->email = $data['customer']['email'] ?? null;
+            // Клієнт: дедуп за нормалізованим номером; порожні поля не затирають наявні
+            // (інакше редагування одного замовлення псувало б спільного клієнта / обнуляло phone).
+            $cd = $data['customer'] ?? [];
+            $phone = trim((string) ($cd['phone'] ?? ''));
+            $normalized = PhoneNormalizer::normalize($phone !== '' ? $phone : null);
+
+            $customer = null;
+            if ($normalized) {
+                $customer = Customer::where('phone_normalized', $normalized)->first()
+                    ?? Customer::where('phone', $phone)->first();
+            }
+            $customer = $customer ?: ($order->customer ?: new Customer());
+
+            $customer->first_name = ($cd['first_name'] ?? '') !== '' ? $cd['first_name'] : $customer->first_name;
+            $customer->last_name = ($cd['last_name'] ?? '') !== '' ? $cd['last_name'] : $customer->last_name;
+            $customer->email = ($cd['email'] ?? '') !== '' ? $cd['email'] : $customer->email;
+            if ($phone !== '') {
+                $customer->phone = $phone;
+                $customer->phone_normalized = $normalized;
+            }
             $customer->save();
 
             $statusCode = $data['order']['status'] ?? 'new';

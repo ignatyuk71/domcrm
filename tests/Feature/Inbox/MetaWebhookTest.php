@@ -15,9 +15,21 @@ class MetaWebhookTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        // Без реальних HTTP (підтягування імені контакта) і без перевірки підпису за замовчуванням.
+        // Без реальних HTTP (підтягування імені контакта). Секрет заданий — події підписуємо.
         \Illuminate\Support\Facades\Http::fake();
-        config(['services.meta.app_secret' => '']);
+        config(['services.meta.app_secret' => 'test-secret']);
+    }
+
+    /** POST вебхука з валідним HMAC-підписом (бо тепер fail-closed). */
+    private function postWebhook(array $payload)
+    {
+        $body = json_encode($payload);
+        $sig = 'sha256=' . hash_hmac('sha256', $body, (string) config('services.meta.app_secret'));
+
+        return $this->call('POST', '/api/meta/webhook', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_X_HUB_SIGNATURE_256' => $sig,
+        ], $body);
     }
 
     private function connection(): MetaConnection
@@ -68,7 +80,7 @@ class MetaWebhookTest extends TestCase
     {
         $conn = $this->connection();
 
-        $this->postJson('/api/meta/webhook', $this->fbPayload('m_1', 'Привіт'))->assertOk();
+        $this->postWebhook($this->fbPayload('m_1', 'Привіт'))->assertOk();
 
         $this->assertDatabaseHas('inbox_contacts', [
             'meta_connection_id' => $conn->id,
@@ -104,7 +116,7 @@ class MetaWebhookTest extends TestCase
             ]],
         ];
 
-        $this->postJson('/api/meta/webhook', $payload)->assertOk();
+        $this->postWebhook($payload)->assertOk();
 
         // Контакт — клієнт (USER1), а не сторінка.
         $this->assertDatabaseHas('inbox_contacts', [
@@ -140,7 +152,7 @@ class MetaWebhookTest extends TestCase
             ]],
         ];
 
-        $this->postJson('/api/meta/webhook', $payload)->assertOk();
+        $this->postWebhook($payload)->assertOk();
 
         $this->assertDatabaseHas('inbox_contacts', ['channel' => 'instagram', 'external_id' => 'IGUSER']);
         $this->assertDatabaseHas('inbox_messages', ['external_message_id' => 'ig_1', 'text' => 'Хочу замовити']);
@@ -150,8 +162,8 @@ class MetaWebhookTest extends TestCase
     {
         $this->connection();
 
-        $this->postJson('/api/meta/webhook', $this->fbPayload('m_dup', 'Hi'))->assertOk();
-        $this->postJson('/api/meta/webhook', $this->fbPayload('m_dup', 'Hi'))->assertOk();
+        $this->postWebhook($this->fbPayload('m_dup', 'Hi'))->assertOk();
+        $this->postWebhook($this->fbPayload('m_dup', 'Hi'))->assertOk();
 
         $this->assertSame(1, InboxMessage::where('external_message_id', 'm_dup')->count());
     }
@@ -166,6 +178,17 @@ class MetaWebhookTest extends TestCase
         ])->assertOk();
 
         $this->assertDatabaseMissing('inbox_messages', ['external_message_id' => 'sig_bad']);
+    }
+
+    public function test_rejects_event_when_app_secret_empty(): void
+    {
+        config(['services.meta.app_secret' => '']); // місконфіг — fail-closed
+        $this->connection();
+
+        // Порожній секрет → подію НЕ обробляємо (раніше тут був fail-open).
+        $this->postJson('/api/meta/webhook', $this->fbPayload('no_secret', 'фейк'))->assertOk();
+
+        $this->assertDatabaseMissing('inbox_messages', ['external_message_id' => 'no_secret']);
     }
 
     public function test_accepts_valid_signature_when_secret_is_set(): void
@@ -192,7 +215,7 @@ class MetaWebhookTest extends TestCase
         $payload = $this->fbPayload('m_ctx_1', 'А ці є в 38?');
         $payload['entry'][0]['messaging'][0]['message']['reply_to'] = ['mid' => 'm_orig_99'];
 
-        $this->postJson('/api/meta/webhook', $payload)->assertOk();
+        $this->postWebhook($payload)->assertOk();
 
         $m = InboxMessage::where('external_message_id', 'm_ctx_1')->first();
         $this->assertSame(['type' => 'reply', 'mid' => 'm_orig_99'], $m->context);
@@ -213,7 +236,7 @@ class MetaWebhookTest extends TestCase
             'story' => ['url' => 'https://cdn.test/story123.jpg', 'id' => 'story123'],
         ];
 
-        $this->postJson('/api/meta/webhook', $payload)->assertOk();
+        $this->postWebhook($payload)->assertOk();
 
         $m = InboxMessage::where('external_message_id', 'm_ctx_2')->first();
         $this->assertSame('story', $m->context['type']);
@@ -240,7 +263,7 @@ class MetaWebhookTest extends TestCase
             ['type' => 'share', 'payload' => ['url' => 'https://cdn.test/post-image.png']],
         ];
 
-        $this->postJson('/api/meta/webhook', $payload)->assertOk();
+        $this->postWebhook($payload)->assertOk();
 
         $m = InboxMessage::where('external_message_id', 'm_ctx_3')->first();
         $this->assertSame('share', $m->context['type']);

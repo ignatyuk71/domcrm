@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Support\PhoneNormalizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Contracts\View\View;
@@ -26,21 +27,19 @@ class CustomerController extends Controller
         if ($query !== '') {
             $customers = Customer::query()
                 ->when($query, function ($q) use ($query) {
-                    $normalizedPhone = preg_replace('/\D+/', '', $query);
+                    $digits = preg_replace('/\D+/', '', $query);
+                    $normalizedQuery = PhoneNormalizer::normalize($query); // повний номер → 380XXXXXXXXX
                     $like = '%' . $query . '%';
 
-                    $q->where(function ($inner) use ($like, $normalizedPhone) {
+                    $q->where(function ($inner) use ($like, $digits, $normalizedQuery) {
                         $inner->where('first_name', 'like', $like)
                             ->orWhere('last_name', 'like', $like)
                             ->orWhere('email', 'like', $like)
                             ->orWhere('phone', 'like', $like);
 
-                        if ($normalizedPhone !== '') {
-                            // Спрощене нормалізоване порівняння номера без спеціальних символів
-                            $inner->orWhereRaw(
-                                'REPLACE(REPLACE(REPLACE(REPLACE(phone, "+", ""), "-", ""), " ", ""), "(", "") LIKE ?',
-                                ['%' . $normalizedPhone . '%']
-                            );
+                        if ($digits !== '') {
+                            // По індексованому phone_normalized (а не REPLACE() по сирому phone).
+                            $inner->orWhere('phone_normalized', 'like', '%' . ($normalizedQuery ?: $digits) . '%');
                         }
                     });
                 })

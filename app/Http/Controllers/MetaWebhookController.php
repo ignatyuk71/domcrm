@@ -35,11 +35,12 @@ class MetaWebhookController extends Controller
             return response('Forbidden', 403);
         }
 
-        // Суворо: якщо задано app_secret (у проді — задано), подія без валідного
-        // підпису відхиляється. Підтверджено на реальному вебхуку, що підпис проходить.
+        // Fail-closed: обробляємо ЛИШЕ з валідним HMAC-підписом. Якщо app_secret не заданий
+        // (місконфіг) АБО підпис невірний — НЕ обробляємо (інакше будь-хто слав би фейкові
+        // події). У проді app_secret заданий, тож легітимні події проходять.
         $secret = (string) config('services.meta.app_secret');
-        if ($secret !== '' && !$this->processor->verifySignature($request->getContent(), $request->header('X-Hub-Signature-256'))) {
-            Log::warning('Meta webhook: невірний підпис — подію відхилено');
+        if ($secret === '' || !$this->processor->verifySignature($request->getContent(), $request->header('X-Hub-Signature-256'))) {
+            Log::warning('Meta webhook: подію відхилено (порожній app_secret або невірний підпис)');
             return response('EVENT_RECEIVED', 200);
         }
 
