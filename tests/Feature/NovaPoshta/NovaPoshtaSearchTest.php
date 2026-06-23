@@ -56,4 +56,27 @@ class NovaPoshtaSearchTest extends TestCase
         $this->assertCount(1, $cities);
         $this->assertSame('Київ, Київська обл.', $cities[0]['name']);
     }
+
+    public function test_search_retries_on_transient_5xx(): void
+    {
+        NovaPoshtaSetting::create(['api_key' => 'TEST-NP-KEY']);
+
+        // Перший запит — 500 (транзієнтний), другий — успіх.
+        Http::fakeSequence('*api.novaposhta.ua*')
+            ->push('server error', 500)
+            ->push([
+                'success' => true,
+                'data' => [['Addresses' => [[
+                    'Present' => 'Київ',
+                    'DeliveryCity' => 'c1',
+                    'SettlementRef' => 's1',
+                    'Area' => 'Київська',
+                ]]]],
+            ], 200);
+
+        $cities = app(\App\Services\NovaPoshtaService::class)->searchCities('Київ');
+
+        $this->assertCount(1, $cities); // після повтору отримали дані
+        Http::assertSentCount(2);       // 500 → повтор → успіх
+    }
 }

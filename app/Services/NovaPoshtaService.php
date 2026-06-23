@@ -34,13 +34,15 @@ class NovaPoshtaService
     /**
      * Загальний приватний метод для запитів до API Нової Пошти
      */
-    private function makeRequest(string $model, string $method, array $properties = [])
+    private function makeRequest(string $model, string $method, array $properties = [], int $retries = 0)
     {
         if (!$this->apiKey) {
             Log::error("NovaPoshta: API key missing");
             return ['success' => false, 'errors' => ['API key is missing']];
         }
 
+        $attempt = 0;
+        while (true) {
         try {
             $response = Http::timeout(50)->post($this->endpoint, [
                 'apiKey' => $this->apiKey,
@@ -48,6 +50,14 @@ class NovaPoshtaService
                 'calledMethod' => $method,
                 'methodProperties' => $properties,
             ]);
+
+            // Транзієнтний збій сервера НП (5xx) — короткий повтор. Повторюємо ЛИШЕ читання
+            // ($retries>0); createWaybill і подібні викликають із retries=0, щоб не дублювати ТТН.
+            if ($response->serverError() && $attempt < $retries) {
+                $attempt++;
+                usleep(250000);
+                continue;
+            }
 
             $result = $response->json();
 
@@ -70,8 +80,15 @@ class NovaPoshtaService
 
             return $result;
         } catch (\Throwable $e) {
+            // Таймаут/обрив зʼєднання — повтор лише для читань ($retries>0).
+            if ($attempt < $retries) {
+                $attempt++;
+                usleep(250000);
+                continue;
+            }
             Log::error("NovaPoshta exception: " . $e->getMessage());
             return ['success' => false, 'errors' => [$e->getMessage()]];
+        }
         }
     }
 
@@ -396,7 +413,7 @@ class NovaPoshtaService
     
     public function searchCities(string $query, int $limit = 20): array
     {
-        $resp = $this->makeRequest('Address', 'searchSettlements', ['CityName' => $query, 'Page' => 1, 'Limit' => $limit]);
+        $resp = $this->makeRequest('Address', 'searchSettlements', ['CityName' => $query, 'Page' => 1, 'Limit' => $limit], retries: 2);
         return collect($resp['data'][0]['Addresses'] ?? [])->map(fn($item) => [
             'ref' => $item['DeliveryCity'] ?? $item['Ref'] ?? $item['SettlementRef'] ?? null,
             'delivery_city_ref' => $item['DeliveryCity'] ?? null,
@@ -409,7 +426,7 @@ class NovaPoshtaService
 
     public function getWarehouses(string $cityRef, ?string $query = null, int $limit = 50): array
     {
-        $resp = $this->makeRequest('AddressGeneral', 'getWarehouses', ['CityRef' => $cityRef, 'FindByString' => $query ?? '', 'Page' => 1, 'Limit' => $limit]);
+        $resp = $this->makeRequest('AddressGeneral', 'getWarehouses', ['CityRef' => $cityRef, 'FindByString' => $query ?? '', 'Page' => 1, 'Limit' => $limit], retries: 2);
         return collect($resp['data'] ?? [])->map(fn($item) => [
             'ref' => $item['Ref'] ?? null,
             'name' => $item['Description'] ?? '',
@@ -421,7 +438,7 @@ class NovaPoshtaService
     public function searchSettlementStreets(string $settlementRef, string $query, int $limit = 25): array
     {
         if (mb_strlen(trim($query)) < 2) return [];
-        $resp = $this->makeRequest('Address', 'searchSettlementStreets', ['SettlementRef' => $settlementRef, 'StreetName' => trim($query), 'Limit' => $limit]);
+        $resp = $this->makeRequest('Address', 'searchSettlementStreets', ['SettlementRef' => $settlementRef, 'StreetName' => trim($query), 'Limit' => $limit], retries: 2);
         return collect($resp['data'][0]['Addresses'] ?? [])->map(fn($item) => [
             'ref' => $item['SettlementStreetRef'] ?? $item['StreetRef'] ?? null,
             'name' => $item['Present'] ?? $item['Description'] ?? '',
@@ -432,7 +449,7 @@ class NovaPoshtaService
     public function searchStreets(string $cityRef, string $query, int $limit = 25): array
     {
         if (mb_strlen(trim($query)) < 2 || !$cityRef) return [];
-        $resp = $this->makeRequest('AddressGeneral', 'getStreet', ['CityRef' => $cityRef, 'FindByString' => trim($query), 'Page' => 1, 'Limit' => $limit]);
+        $resp = $this->makeRequest('AddressGeneral', 'getStreet', ['CityRef' => $cityRef, 'FindByString' => trim($query), 'Page' => 1, 'Limit' => $limit], retries: 2);
         return collect($resp['data'] ?? [])->map(fn($item) => [
             'ref' => $item['Ref'] ?? null,
             'name' => $item['Description'] ?? '',
@@ -464,6 +481,6 @@ class NovaPoshtaService
                 ];
             }, $documents),
         ];
-        return $this->makeRequest('TrackingDocument', 'getStatusDocuments', $payload);
+        return $this->makeRequest('TrackingDocument', 'getStatusDocuments', $payload, retries: 2);
     }
 }
