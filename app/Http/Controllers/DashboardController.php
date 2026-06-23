@@ -7,6 +7,7 @@ use App\Models\OrderItem;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
@@ -35,21 +36,27 @@ class DashboardController extends Controller
         $rangeStart = $start->copy()->startOfDay();
         $rangeEnd = $today->copy()->endOfDay();
 
-        $series = $this->buildSeries($rangeStart, $rangeEnd, $start, $today);
-        $kpis = $this->buildKpis($rangeStart, $rangeEnd, $today, $tz, $series);
-        $recent = $this->recentOrders();
-        $topProducts = $this->topProducts($rangeStart, $rangeEnd);
-        $sourceBreakdown = $this->sourceBreakdown($rangeStart, $rangeEnd);
-        $losses = $this->deliveryLosses($rangeStart, $rangeEnd);
+        // Важкі агрегації кешуємо на 5 хв (для аналітики легка несвіжість прийнятна).
+        // recent_orders лишаємо поза кешем — завжди свіже.
+        $aggregates = Cache::remember("dashboard:data:{$days}", 300, function () use ($rangeStart, $rangeEnd, $start, $today, $tz) {
+            $series = $this->buildSeries($rangeStart, $rangeEnd, $start, $today);
+            return [
+                'series' => $series,
+                'kpis' => $this->buildKpis($rangeStart, $rangeEnd, $today, $tz, $series),
+                'top_products' => $this->topProducts($rangeStart, $rangeEnd),
+                'source_breakdown' => $this->sourceBreakdown($rangeStart, $rangeEnd),
+                'losses' => $this->deliveryLosses($rangeStart, $rangeEnd),
+            ];
+        });
 
         return response()->json([
             'days' => $days,
-            'series' => $series,
-            'kpis' => $kpis,
-            'recent_orders' => $recent,
-            'top_products' => $topProducts,
-            'source_breakdown' => $sourceBreakdown,
-            'losses' => $losses,
+            'series' => $aggregates['series'],
+            'kpis' => $aggregates['kpis'],
+            'recent_orders' => $this->recentOrders(),
+            'top_products' => $aggregates['top_products'],
+            'source_breakdown' => $aggregates['source_breakdown'],
+            'losses' => $aggregates['losses'],
             'generated_at' => Carbon::now($tz)->toDateTimeString(),
         ]);
     }
