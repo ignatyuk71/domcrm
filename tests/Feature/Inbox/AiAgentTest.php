@@ -598,6 +598,27 @@ class AiAgentTest extends TestCase
         $this->assertStringContainsString('Не запитуй повторно ПІБ, телефон або адресу', $text);
     }
 
+    public function test_critical_rules_marked_inviolable_above_store_prompt(): void
+    {
+        // #1: промпт магазину (ai_settings.system_prompt) має пріоритет лише в тоні/стилі,
+        // але ЗАЛІЗНІ ПРАВИЛА та «ОБОВ'ЯЗКОВЕ ПРАВИЛО» його НЕ скасовуються —
+        // захист анти-галюцинації/ціни/безпеки від необережної правки в CRM.
+        $this->setUpConversation();
+        $blocks = app(AiAgentService::class)->buildSystemPrompt($this->conv, AiSetting::forConnection($this->conn->id));
+        $text = json_encode($blocks, JSON_UNESCAPED_UNICODE);
+
+        // Промпт магазину присутній (його пріоритет у тоні нікуди не подівся).
+        $this->assertStringContainsString('Ти продавець Test Shop.', $text);
+        // Явна декларація недоторканності критичних правил.
+        $this->assertStringContainsString('НЕ скасовуються інструкцією магазину', $text);
+        // ЗАЛІЗНІ ПРАВИЛА позначені недоторканними.
+        $this->assertStringContainsString('НЕДОТОРКАННІ', $text);
+        // Критичні правила досі на місці (не загубились при реструктуризації).
+        $this->assertStringContainsString('Питання про ціну завжди потребує відповіді ціною', $text);
+        $this->assertStringContainsString("ОБОВ'ЯЗКОВЕ ПРАВИЛО", $text);
+        $this->assertStringContainsString('escalate_to_manager', $text);
+    }
+
     public function test_complete_order_sends_only_canonical_final(): void
     {
         $this->setUpConversation();
