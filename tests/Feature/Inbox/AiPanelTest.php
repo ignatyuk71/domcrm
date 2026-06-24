@@ -171,17 +171,36 @@ class AiPanelTest extends TestCase
         $this->assertTrue($out->contains(fn ($m) => str_contains((string) $m->text, 'ПриватБанк')));
     }
 
-    public function test_request_iban_pauses_and_flags(): void
+    public function test_send_iban_details_sends_bill_with_amount_and_iban_separately(): void
     {
         $conv = $this->conversation();
+        Http::fake(['graph.facebook.com/*' => Http::sequence()
+            ->push(['message_id' => 'm_i1'], 200)
+            ->push(['message_id' => 'm_i2'], 200)]);
 
-        app(AiAgentService::class)->toolRequestIban($conv);
+        app(AiAgentService::class)->toolSendIbanDetails($conv, ['amount' => 530]);
 
+        $out = InboxMessage::where('inbox_conversation_id', $conv->id)->where('direction', 'out')->get();
+        $this->assertCount(2, $out); // рахунок із сумою + IBAN окремо
+        // IBAN — рівно з конфігу, окремим повідомленням (модель його не друкує).
+        $this->assertDatabaseHas('inbox_messages', [
+            'inbox_conversation_id' => $conv->id, 'text' => 'UA133052990000026009010716418',
+        ]);
+        // Сума підставлена в рахунок.
+        $this->assertTrue($out->contains(fn ($m) => str_contains((string) $m->text, 'Сума до оплати: 530 грн')));
+        $this->assertTrue($out->contains(fn ($m) => str_contains((string) $m->text, 'ФОП')));
+
+        // Бот цей шлях НЕ паузить і не вішає мітку «у працівника» (обслуговує сам).
         $conv->refresh();
-        $this->assertTrue((bool) $conv->ai_order_needs_iban);
-        $this->assertNotNull($conv->ai_paused_until);
-        $this->assertTrue($conv->ai_paused_until->gt(now()));
-        $this->assertDatabaseHas('chat_statuses', ['code' => 'iban_needed']);
+        $this->assertFalse((bool) $conv->ai_order_needs_iban);
+    }
+
+    public function test_send_iban_details_requires_amount(): void
+    {
+        $conv = $this->conversation();
+        $res = app(AiAgentService::class)->toolSendIbanDetails($conv, []);
+        $this->assertArrayHasKey('помилка', $res);
+        $this->assertSame(0, InboxMessage::where('inbox_conversation_id', $conv->id)->where('direction', 'out')->count());
     }
 
     public function test_complete_order_stores_items_and_delivery(): void

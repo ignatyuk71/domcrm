@@ -57,7 +57,7 @@ class AgentTools
                 'send_photos' => $this->toolSendPhotos($conversation, (array) ($input['photo_ids'] ?? [])),
                 'ask_delivery_details' => $this->toolAskDeliveryDetails($conversation),
                 'send_payment_details' => $this->toolSendPaymentDetails($conversation),
-                'request_iban' => $this->toolRequestIban($conversation),
+                'send_iban_details' => $this->toolSendIbanDetails($conversation, $input),
                 'escalate_to_manager' => $this->toolEscalateToManager($conversation),
                 'complete_order' => $this->toolCompleteOrder($conversation, $input),
                 default => ['помилка' => 'Невідомий інструмент'],
@@ -98,21 +98,29 @@ class AgentTools
         return ['готово' => 'Реквізити надіслано клієнту двома повідомленнями (текст + номер картки окремо). НЕ дублюй номер картки. Чекай скрін/PDF оплати, потім зафіксуй замовлення через complete_order.'];
     }
 
-    /** Клієнт просить повні реквізити / IBAN → пауза + бокова позначка для працівника. */
-    public function toolRequestIban(InboxConversation $conversation): array
+    /** Клієнт хоче оплату за рахунком ФОП → бот сам шле рахунок (із сумою) + IBAN окремим повідомленням. */
+    public function toolSendIbanDetails(InboxConversation $conversation, array $input): array
     {
-        $status = \App\Models\ChatStatus::firstOrCreate(
-            ['code' => 'iban_needed'],
-            ['name' => 'Потрібен IBAN — у працівника', 'icon' => '🏦', 'color' => '#dc2626', 'sort_order' => 95]
-        );
+        $t = OrderTexts::all();
+        $amount = max(0, (int) round((float) ($input['amount'] ?? 0)));
 
-        $conversation->update([
-            'chat_status_id' => $status->id,
-            'ai_order_needs_iban' => true,
-            'ai_paused_until' => now()->addMinutes(60), // бот мовчить, поки працівник дасть IBAN
-        ]);
+        if ($amount <= 0) {
+            return ['помилка' => 'Передай суму замовлення (amount) у грн — без неї рахунок не сформувати.'];
+        }
 
-        return ['далі' => 'Напиши клієнту, що повні реквізити (IBAN) найближчим часом надішле наш працівник, і більше нічого не питай.'];
+        // Захист від повтору: якщо IBAN уже надсилали в цій розмові — не дублюємо.
+        if ($conversation->messages()->where('direction', 'out')->where('text', $t['iban_number'])->exists()) {
+            return ['готово' => 'Рахунок ФОП цьому клієнту вже надіслано раніше — не дублюй. Чекай квитанцію/скрін оплати, потім зафіксуй замовлення через complete_order (payment: «на рахунок ФОП»).'];
+        }
+
+        $ok1 = $this->sendBotMessage($conversation, sprintf($t['iban_intro'], $amount));
+        $ok2 = $ok1 && $this->sendBotMessage($conversation, $t['iban_number']);
+
+        if (!$ok1 || !$ok2) {
+            return ['помилка' => 'Не вдалося надіслати рахунок ФОП'];
+        }
+
+        return ['готово' => 'Рахунок ФОП надіслано двома повідомленнями (реквізити з сумою + IBAN окремо). НЕ друкуй IBAN сам. Чекай квитанцію/скрін оплати, потім зафіксуй замовлення через complete_order (payment: «на рахунок ФОП»).'];
     }
 
     /** Бот не впевнений → пауза + червона мітка «Потрібна увага» менеджеру. */

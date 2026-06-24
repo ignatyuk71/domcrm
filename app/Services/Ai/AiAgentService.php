@@ -355,10 +355,10 @@ class AiAgentService
         return $this->tools->toolSendPaymentDetails($conversation);
     }
 
-    /** Клієнт просить повні реквізити / IBAN. Делегує AgentTools. */
-    public function toolRequestIban(InboxConversation $conversation): array
+    /** Клієнт хоче оплату за рахунком ФОП → бот шле рахунок + IBAN. Делегує AgentTools. */
+    public function toolSendIbanDetails(InboxConversation $conversation, array $input): array
     {
-        return $this->tools->toolRequestIban($conversation);
+        return $this->tools->toolSendIbanDetails($conversation, $input);
     }
 
     /** Бот не впевнений → ескалація менеджеру. Делегує AgentTools. */
