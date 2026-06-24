@@ -619,6 +619,27 @@ class AiAgentTest extends TestCase
         $this->assertStringContainsString('escalate_to_manager', $text);
     }
 
+    public function test_prompt_disambiguates_collage_vs_price_and_closing(): void
+    {
+        // #3: не дублювати колаж, якщо група вже показана й клієнт лише уточнює ціну.
+        // #4: просте «золоте правило» закриття (прибирає плутанину стану, кейс «40-41»).
+        $this->setUpConversation();
+        $blocks = app(AiAgentService::class)->buildSystemPrompt($this->conv, AiSetting::forConnection($this->conn->id));
+        $text = json_encode($blocks, JSON_UNESCAPED_UNICODE);
+
+        // #3 — розрулювання «вже показав → лише ціна, без повторного фото».
+        $this->assertStringContainsString('ВИНЯТОК ПРОТИ СПАМУ ФОТО', $text);
+        $this->assertStringContainsString('БЕЗ повторного колажу', $text);
+        // Стара логіка «назвав групу → колаж» лишилась (не зламали).
+        $this->assertStringContainsString('ГОЛОВНЕ ПРО КОЛАЖ', $text);
+        // #4 — золоте правило: закриття доречне при названому виборі (навіть із питанням ціни),
+        // але НЕ на голу ціну без вибору; ціна завжди першою.
+        $this->assertStringContainsString('ЗОЛОТЕ ПРАВИЛО ЗАКРИТТЯ', $text);
+        $this->assertStringContainsString('гарячий клієнт', $text);
+        $this->assertStringContainsString('БЕЗ конкретного вибору', $text);
+        $this->assertStringContainsString('заклик НЕ замість ціни', $text);
+    }
+
     public function test_complete_order_sends_only_canonical_final(): void
     {
         $this->setUpConversation();
