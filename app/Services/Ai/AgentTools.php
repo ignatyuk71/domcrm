@@ -56,8 +56,7 @@ class AgentTools
                 'get_product' => $this->toolGetProduct((int) ($input['product_id'] ?? 0)),
                 'send_photos' => $this->toolSendPhotos($conversation, (array) ($input['photo_ids'] ?? [])),
                 'ask_delivery_details' => $this->toolAskDeliveryDetails($conversation),
-                'send_payment_details' => $this->toolSendPaymentDetails($conversation),
-                'send_iban_details' => $this->toolSendIbanDetails($conversation, $input),
+                'send_payment_details' => $this->toolSendPaymentDetails($conversation, $input),
                 'escalate_to_manager' => $this->toolEscalateToManager($conversation),
                 'complete_order' => $this->toolCompleteOrder($conversation, $input),
                 default => ['помилка' => 'Невідомий інструмент'],
@@ -78,49 +77,35 @@ class AgentTools
             : ['помилка' => 'Не вдалося надіслати форму'];
     }
 
-    /** Надіслати реквізити оплати на карту: текст + номер картки ОКРЕМИМ повідомленням. */
-    public function toolSendPaymentDetails(InboxConversation $conversation): array
-    {
-        $t = OrderTexts::all();
-
-        // Захист від повтору: якщо номер картки вже надсилали в цій розмові — не дублюємо.
-        if ($conversation->messages()->where('direction', 'out')->where('text', $t['card_number'])->exists()) {
-            return ['готово' => 'Реквізити цьому клієнту вже надіслані раніше — не дублюй. Чекай скрін/PDF оплати, потім зафіксуй замовлення через complete_order.'];
-        }
-
-        $ok1 = $this->sendBotMessage($conversation, $t['card_intro']);
-        $ok2 = $ok1 && $this->sendBotMessage($conversation, $t['card_number']);
-
-        if (!$ok1 || !$ok2) {
-            return ['помилка' => 'Не вдалося надіслати реквізити'];
-        }
-
-        return ['готово' => 'Реквізити надіслано клієнту двома повідомленнями (текст + номер картки окремо). НЕ дублюй номер картки. Чекай скрін/PDF оплати, потім зафіксуй замовлення через complete_order.'];
-    }
-
-    /** Клієнт хоче оплату за рахунком ФОП → бот сам шле рахунок (із сумою) + IBAN окремим повідомленням. */
-    public function toolSendIbanDetails(InboxConversation $conversation, array $input): array
+    /**
+     * Надіслати ОБИДВА способи передоплати разом — клієнт обирає сам:
+     * картка (підпис + номер ОКРЕМО) і реквізити ФОП (підпис із сумою + IBAN ОКРЕМО).
+     * Номер картки й IBAN — завжди окремими повідомленнями (зручно копіювати, модель їх не друкує).
+     */
+    public function toolSendPaymentDetails(InboxConversation $conversation, array $input = []): array
     {
         $t = OrderTexts::all();
         $amount = max(0, (int) round((float) ($input['amount'] ?? 0)));
 
         if ($amount <= 0) {
-            return ['помилка' => 'Передай суму замовлення (amount) у грн — без неї рахунок не сформувати.'];
+            return ['помилка' => 'Передай суму замовлення (amount) у грн — вона потрібна для реквізитів ФОП.'];
         }
 
-        // Захист від повтору: якщо IBAN уже надсилали в цій розмові — не дублюємо.
-        if ($conversation->messages()->where('direction', 'out')->where('text', $t['iban_number'])->exists()) {
-            return ['готово' => 'Рахунок ФОП цьому клієнту вже надіслано раніше — не дублюй. Чекай квитанцію/скрін оплати, потім зафіксуй замовлення через complete_order (payment: «на рахунок ФОП»).'];
+        // Захист від повтору: якщо реквізити вже слали (за номером картки) — не дублюємо.
+        if ($conversation->messages()->where('direction', 'out')->where('text', $t['card_number'])->exists()) {
+            return ['готово' => 'Реквізити (картка + ФОП) цьому клієнту вже надіслані — не дублюй. Чекай скрін/квитанцію оплати, потім зафіксуй замовлення через complete_order.'];
         }
 
-        $ok1 = $this->sendBotMessage($conversation, sprintf($t['iban_intro'], $amount));
-        $ok2 = $ok1 && $this->sendBotMessage($conversation, $t['iban_number']);
+        $ok = $this->sendBotMessage($conversation, $t['card_intro'])
+            && $this->sendBotMessage($conversation, $t['card_number'])
+            && $this->sendBotMessage($conversation, sprintf($t['iban_intro'], $amount))
+            && $this->sendBotMessage($conversation, $t['iban_number']);
 
-        if (!$ok1 || !$ok2) {
-            return ['помилка' => 'Не вдалося надіслати рахунок ФОП'];
+        if (!$ok) {
+            return ['помилка' => 'Не вдалося надіслати реквізити'];
         }
 
-        return ['готово' => 'Рахунок ФОП надіслано двома повідомленнями (реквізити з сумою + IBAN окремо). НЕ друкуй IBAN сам. Чекай квитанцію/скрін оплати, потім зафіксуй замовлення через complete_order (payment: «на рахунок ФОП»).'];
+        return ['готово' => 'Надіслано ОБИДВА способи: картка (номер окремо) і реквізити ФОП із сумою (IBAN окремо) — клієнт обере сам. НЕ друкуй номер картки чи IBAN сам. Чекай скрін/квитанцію оплати, потім зафіксуй замовлення через complete_order.'];
     }
 
     /** Бот не впевнений → пауза + червона мітка «Потрібна увага» менеджеру. */

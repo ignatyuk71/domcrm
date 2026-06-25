@@ -349,16 +349,10 @@ class AiAgentService
         return $this->tools->toolAskDeliveryDetails($conversation);
     }
 
-    /** Надіслати реквізити оплати на карту. Делегує AgentTools. */
-    public function toolSendPaymentDetails(InboxConversation $conversation): array
+    /** Надіслати реквізити оплати: картка + IBAN ФОП разом (клієнт обирає). Делегує AgentTools. */
+    public function toolSendPaymentDetails(InboxConversation $conversation, array $input = []): array
     {
-        return $this->tools->toolSendPaymentDetails($conversation);
-    }
-
-    /** Клієнт хоче оплату за рахунком ФОП → бот шле рахунок + IBAN. Делегує AgentTools. */
-    public function toolSendIbanDetails(InboxConversation $conversation, array $input): array
-    {
-        return $this->tools->toolSendIbanDetails($conversation, $input);
+        return $this->tools->toolSendPaymentDetails($conversation, $input);
     }
 
     /** Бот не впевнений → ескалація менеджеру. Делегує AgentTools. */

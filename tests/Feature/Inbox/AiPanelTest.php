@@ -153,52 +153,35 @@ class AiPanelTest extends TestCase
         $this->assertStringContainsString('ПІБ', (string) $msg->text);
     }
 
-    public function test_send_payment_details_sends_card_number_separately(): void
+    public function test_send_payment_details_sends_both_card_and_iban_separately(): void
     {
         $conv = $this->conversation();
         Http::fake(['graph.facebook.com/*' => Http::sequence()
             ->push(['message_id' => 'm_p1'], 200)
-            ->push(['message_id' => 'm_p2'], 200)]);
+            ->push(['message_id' => 'm_p2'], 200)
+            ->push(['message_id' => 'm_p3'], 200)
+            ->push(['message_id' => 'm_p4'], 200)]);
 
-        app(AiAgentService::class)->toolSendPaymentDetails($conv);
+        app(AiAgentService::class)->toolSendPaymentDetails($conv, ['amount' => 530]);
 
         $out = InboxMessage::where('inbox_conversation_id', $conv->id)->where('direction', 'out')->get();
-        $this->assertCount(2, $out); // інтро + номер окремо
-        // Номер картки — рівно з конфігу, окремим повідомленням (модель його не друкує).
+        $this->assertCount(4, $out); // картка: підпис + номер; ФОП: реквізити + IBAN
+        // Номер картки й IBAN — рівно з конфігу, кожен ОКРЕМИМ повідомленням (зручно копіювати, модель їх не друкує).
         $this->assertDatabaseHas('inbox_messages', [
             'inbox_conversation_id' => $conv->id, 'text' => '5169335107343648',
         ]);
-        $this->assertTrue($out->contains(fn ($m) => str_contains((string) $m->text, 'ПриватБанк')));
-    }
-
-    public function test_send_iban_details_sends_bill_with_amount_and_iban_separately(): void
-    {
-        $conv = $this->conversation();
-        Http::fake(['graph.facebook.com/*' => Http::sequence()
-            ->push(['message_id' => 'm_i1'], 200)
-            ->push(['message_id' => 'm_i2'], 200)]);
-
-        app(AiAgentService::class)->toolSendIbanDetails($conv, ['amount' => 530]);
-
-        $out = InboxMessage::where('inbox_conversation_id', $conv->id)->where('direction', 'out')->get();
-        $this->assertCount(2, $out); // рахунок із сумою + IBAN окремо
-        // IBAN — рівно з конфігу, окремим повідомленням (модель його не друкує).
         $this->assertDatabaseHas('inbox_messages', [
             'inbox_conversation_id' => $conv->id, 'text' => 'UA133052990000026009010716418',
         ]);
-        // Сума підставлена в рахунок.
+        $this->assertTrue($out->contains(fn ($m) => str_contains((string) $m->text, 'ПриватБанк')));
+        // Сума підставлена в реквізити ФОП.
         $this->assertTrue($out->contains(fn ($m) => str_contains((string) $m->text, 'Сума до оплати: 530 грн')));
-        $this->assertTrue($out->contains(fn ($m) => str_contains((string) $m->text, 'ФОП')));
-
-        // Бот цей шлях НЕ паузить і не вішає мітку «у працівника» (обслуговує сам).
-        $conv->refresh();
-        $this->assertFalse((bool) $conv->ai_order_needs_iban);
     }
 
-    public function test_send_iban_details_requires_amount(): void
+    public function test_send_payment_details_requires_amount(): void
     {
         $conv = $this->conversation();
-        $res = app(AiAgentService::class)->toolSendIbanDetails($conv, []);
+        $res = app(AiAgentService::class)->toolSendPaymentDetails($conv, []);
         $this->assertArrayHasKey('помилка', $res);
         $this->assertSame(0, InboxMessage::where('inbox_conversation_id', $conv->id)->where('direction', 'out')->count());
     }
