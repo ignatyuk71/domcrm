@@ -1,4 +1,4 @@
-name: Deploy to Mirohost
+name: Deploy to Hetzner
 
 on:
   push:
@@ -6,49 +6,26 @@ on:
       - main
 
 # Деплої не ганяються наввипередки: новий пуш скасовує той, що ще їде.
-# Інакше старіший може фінішувати останнім і відкотити свіжий код (було двічі).
 concurrency:
   group: deploy-production
   cancel-in-progress: true
 
 jobs:
-  web-deploy:
+  deploy:
     name: Deploy
     runs-on: ubuntu-latest
 
     steps:
-      - name: Get latest code
-        uses: actions/checkout@v4
-
-      - name: Install rsync & sshpass
-        run: sudo apt-get update && sudo apt-get install -y rsync sshpass
-
-      # Деплой через SSH (rsync) — надійніше за FTP на Mirohost.
-      # Без --delete: лише додає/оновлює файли, нічого не видаляє (безпечно).
-      - name: Deploy code via rsync over SSH
+      # Запускаємо deploy.sh прямо на сервері (він сам тягне свіжий код із GitHub:
+      # clone → composer install → симлінки → migrate --force → перемикання current → reload php-fpm).
+      - name: Run deploy.sh on Hetzner via SSH
         env:
-          SSHPASS: ${{ secrets.SSH_PASSWORD }}
+          SSH_KEY: ${{ secrets.HETZNER_SSH_KEY }}
         run: |
-          sshpass -e rsync -rltz --checksum \
-            -e "ssh -p 22 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
-            --exclude='.git/' \
-            --exclude='.github/' \
-            --exclude='node_modules/' \
-            --exclude='vendor/' \
-            --exclude='storage/' \
-            --exclude='.env' \
-            ./ domcrm_ssh@vs2489.mirohost.net:/var/www/domcrm/domcrm.com.ua/
-
-      # Міграції + скидання кешу прямо в деплої (більше не вручну).
-      - name: Run migrations & clear caches
-        env:
-          SSHPASS: ${{ secrets.SSH_PASSWORD }}
-        run: |
-          sshpass -e ssh -p 22 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-            domcrm_ssh@vs2489.mirohost.net \
-            'cd /var/www/domcrm/domcrm.com.ua && php artisan migrate --force && php artisan optimize:clear'
-
-      # Скидання FPM OPcache: optimize:clear його НЕ чистить, тому без цього
-      # сервер міг крутити стару версію коду навіть після успішного rsync.
-      - name: Reset PHP OPcache (web SAPI)
-        run: curl -s -m 20 "https://domcrm.com.ua/opcache-reset.php?token=dom-oc-2026" || true
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            deploy@89.167.66.67 \
+            'bash /var/www/domcrm.com.ua/deploy.sh'
