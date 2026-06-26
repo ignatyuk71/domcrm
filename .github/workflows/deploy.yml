@@ -20,10 +20,11 @@ jobs:
       # clone → composer install → симлінки → migrate --force → перемикання current → reload php-fpm).
       - name: Run deploy.sh on Hetzner via SSH
         env:
-          SSH_KEY: ${{ secrets.HETZNER_SSH_KEY }}
+          # Секрет HETZNER_SSH_KEY — приватний ключ у base64 (одним рядком, без проблем форматування).
+          SSH_KEY_B64: ${{ secrets.HETZNER_SSH_KEY }}
         run: |
           mkdir -p ~/.ssh && chmod 700 ~/.ssh
-          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          echo "$SSH_KEY_B64" | base64 -d > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh -i ~/.ssh/deploy_key \
             -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
