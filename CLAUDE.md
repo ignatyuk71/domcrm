@@ -20,12 +20,13 @@
 - Стек: PHP 8.4, MySQL 8.0, nginx, Node 22. SSL — Let's Encrypt (certbot, авто-продовження).
 - Старий Mirohost (`vs2489.mirohost.net`) — **ЗАМОРОЖЕНО** (`php artisan down`) як резерв для відкату; вимкнути після стабілізації.
 
-## Деплой
+## Деплой (авто, через GitHub Actions → Hetzner)
 - Репозиторій: **`git@github.com:ignatyuk71/domcrm.git`**, гілка `main`.
-- Деплой на сервері: **`sudo -u deploy bash /var/www/domcrm.com.ua/deploy.sh`** (clone з GitHub → `composer install` [**з dev** — код юзає Pail-провайдер, `--no-dev` падає] → симлінки `.env`/`storage`/`bootstrap` + персистентні public-теки (ai-gallery, storage, saved, inbox-uploads, inbox-context) → `migrate --force` → атомарне перемикання `current` → reload `php8.4-fpm`).
-- ⚠️ GitHub Action `.github/workflows/deploy.yml` ще налаштований на СТАРИЙ Mirohost (заморожений) → **деплой поки РУЧНИЙ** через `deploy.sh`, доки Action не переналаштовано на Hetzner.
+- **`git push` у `main` == деплой на прод.** GitHub Action `.github/workflows/deploy.yml` → SSH як **`deploy@89.167.66.67`** (приватний ключ з GitHub-секрету **`HETZNER_SSH_KEY`**) → запускає `bash /var/www/domcrm.com.ua/deploy.sh` на сервері.
+- `deploy.sh`: clone з GitHub → `composer install` [**з dev** — код юзає Pail-провайдер, `--no-dev` падає] → симлінки `.env`/`storage`/`bootstrap` + персистентні public-теки (ai-gallery, storage, saved, inbox-uploads, inbox-context) → `migrate --force` → атомарне перемикання `current` → reload `php8.4-fpm` (opcache скидається на новий реліз).
+- **SSH-ключ деплою (перестворено 26.06.2026):** окрема пара `~/.ssh/domcrm_github_deploy` (локально). Приватний → GitHub-секрет `HETZNER_SSH_KEY`. Публічний → **єдиний** запис у `/home/deploy/.ssh/authorized_keys` (старі ключі в `authorized_keys.bak.*`). Перевірка ключа: `ssh -i ~/.ssh/domcrm_github_deploy deploy@89.167.66.67`. Старі секрети `FTP_*`/`SSH_PASSWORD` (від Mirohost) — видалені, не потрібні.
+- **Ручний деплой** (за потреби): `ssh -i ~/.ssh/domcrm_github_deploy deploy@89.167.66.67 'bash /var/www/domcrm.com.ua/deploy.sh'` (або як root: `sudo -u deploy bash /var/www/domcrm.com.ua/deploy.sh`).
 - Крон: **один** `/etc/cron.d/domcrm` → `php artisan schedule:run` щохвилини керує всім (ai:sweep, fiscal:delivered, fiscal:shift-manager, packing:auto-release, delivery:sync-statuses). QUEUE=sync (без окремого воркера).
-- Після деплою PHP-змін: `deploy.sh` сам робить reload php8.4-fpm (opcache скидається на новий реліз).
 
 ## Ключові домени
 - **Замовлення**: `OrderController` (тонкий) + `app/Services/Orders/OrderService.php` (створення/оновлення). Моделі `Order`, `OrderItem`, `OrderPayment`, `OrderDelivery`.
