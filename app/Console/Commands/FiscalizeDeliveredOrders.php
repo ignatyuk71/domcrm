@@ -145,7 +145,11 @@ class FiscalizeDeliveredOrders extends Command
                     try {
                         // 3. Б'ємо чек синхронно
                         FiscalizeOrderJob::dispatchSync($order, FiscalReceipt::TYPE_SELL, $remaining);
-                        
+
+                        // Каса Checkbox обробляє ТІЛЬКИ один запит одночасно — без паузи
+                        // пачка чеків (особливо backlog) ловить HTTP 429 "Занадто часто".
+                        // Невелика затримка між чеками робить розгрібання чистим.
+                        usleep(700000);
                     } catch (\Throwable $e) {
                         $cronLog->error('CRON Fiscal Error', [
                             'order_id' => $order->id,

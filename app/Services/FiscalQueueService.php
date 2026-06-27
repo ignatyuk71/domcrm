@@ -86,6 +86,10 @@ class FiscalQueueService
 
                 FiscalizeOrderJob::dispatchSync($order, $item->type, $item->amount_cents);
 
+                // Каса Checkbox = один запит одночасно. Пауза між чеками черги
+                // страхує від HTTP 429 при обробці пачки.
+                usleep(700000);
+
                 // SUCCESS лише якщо чек РЕАЛЬНО пробито (перевіряємо по БД). Джоба могла
                 // тихо вийти без винятку (зайнятий лок, порожні goods, shouldFiscalize=false,
                 // або Checkbox повернув error-статус) — тоді успішного чека немає.

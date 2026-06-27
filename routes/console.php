@@ -13,7 +13,7 @@ Artisan::command('inspire', function () {
  * ми міняємо hourly() на everyFiveMinutes(), щоб система працювала синхронно.
  */
 
-Schedule::command('delivery:sync-statuses')
+Schedule::command('delivery:sync-statuses --chunk=100')
     ->everyFiveMinutes()
     ->withoutOverlapping()
     ->onOneServer()

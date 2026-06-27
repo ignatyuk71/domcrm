@@ -473,14 +473,39 @@ class NovaPoshtaService
         }
 
         // Підтримуємо різні формати вхідних ключів (cron, manual, legacy).
-        $payload = [
-            'Documents' => array_map(function (array $doc) {
-                return [
-                    'DocumentNumber' => $doc['DocumentNumber'] ?? $doc['ttn'] ?? $doc['number'] ?? null,
-                    'Phone' => $doc['Phone'] ?? $doc['phone'] ?? null,
-                ];
-            }, $documents),
+        $normalized = array_map(function (array $doc) {
+            return [
+                'DocumentNumber' => $doc['DocumentNumber'] ?? $doc['ttn'] ?? $doc['number'] ?? null,
+                'Phone' => $doc['Phone'] ?? $doc['phone'] ?? null,
+            ];
+        }, $documents);
+
+        // Нова Пошта приймає МАКСИМУМ 100 ТТН за один запит getStatusDocuments
+        // ("Param Documents must not be more than 100 item"). Якщо передати більше —
+        // НП відхиляє ВЕСЬ запит і жодне замовлення не оновлюється. Тому ріжемо на
+        // пачки по 100 і зливаємо data, щоб великий список не валив усю синхронізацію.
+        $allData = [];
+        $allErrors = [];
+        $success = true;
+
+        foreach (array_chunk($normalized, 100) as $batch) {
+            $resp = $this->makeRequest('TrackingDocument', 'getStatusDocuments', [
+                'Documents' => $batch,
+            ], retries: 2);
+
+            if (!is_array($resp) || !($resp['success'] ?? false)) {
+                $success = false;
+                $allErrors = array_merge($allErrors, (array) ($resp['errors'] ?? ['unknown']));
+                continue;
+            }
+
+            $allData = array_merge($allData, $resp['data'] ?? []);
+        }
+
+        return [
+            'success' => $success,
+            'data' => $allData,
+            'errors' => $allErrors,
         ];
-        return $this->makeRequest('TrackingDocument', 'getStatusDocuments', $payload, retries: 2);
     }
 }
