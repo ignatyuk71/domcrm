@@ -24,6 +24,37 @@ class DeliveryStatusMapper
     public const NP_REFUSAL_ADDRESS = 108;
 
     /**
+     * Коди НП, які мапер СВІДОМО опрацьовує: або міняє статус замовлення,
+     * або навмисно лишає без змін (як код 1 — ТТН створено).
+     * Будь-який код ПОЗА цим списком вважаємо «невідомим» — його варто
+     * залогувати й вирішити, куди мапити (напр. 105 «припинено зберігання»,
+     * 106 «отримано+повернення», адресні коди). Це лише СИГНАЛ, не перехід.
+     */
+    public const HANDLED_CODES = [
+        self::NP_REGISTERED,          // 1
+        self::NP_DELETED,             // 2
+        self::NP_NOT_FOUND,           // 3
+        self::NP_IN_CITY,             // 4
+        self::NP_TO_CITY,             // 5
+        self::NP_IN_CITY_RECIPIENT,   // 6
+        self::NP_ARRIVED,             // 7
+        self::NP_ARRIVED_2,           // 8
+        self::NP_RECEIVED,            // 9
+        self::NP_MONEY_RECEIVED,      // 10
+        self::NP_MONEY_RECEIVED_2,    // 11
+        self::NP_ON_WAY_TO_RECIPIENT, // 41
+        self::NP_REFUSAL_RECIPIENT,   // 102
+        self::NP_REFUSAL_OTHER,       // 103
+        self::NP_REFUSAL_ADDRESS,     // 108
+    ];
+
+    /** Чи цей код НП мапер свідомо опрацьовує (інакше — «невідомий», вартий уваги). */
+    public static function isHandledCode(int $npCode): bool
+    {
+        return in_array($npCode, self::HANDLED_CODES, true);
+    }
+
+    /**
      * Мапа статусів НП -> наші статуси з кольором та іконкою.
      * Коди взяті з довідника НП для TrackingDocument.
      * Використовується для відображення лейблів в адмінці.

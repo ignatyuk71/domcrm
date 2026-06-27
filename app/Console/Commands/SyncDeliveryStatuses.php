@@ -61,13 +61,15 @@ class SyncDeliveryStatuses extends Command
         $checked = 0;
         $updated = 0;
         $failed = 0;
+        // Збираємо коди НП, які мапер не опрацьовує — щоб бачити, що дозмапити.
+        $unmappedCodes = [];
 
         $statusIdsByCode = Status::query()
             ->where('type', 'order')
             ->pluck('id', 'code')
             ->all();
 
-        $query->chunkById($chunk, function (Collection $orders) use ($novaPoshta, &$checked, &$updated, &$failed, $statusIdsByCode) {
+        $query->chunkById($chunk, function (Collection $orders) use ($novaPoshta, &$checked, &$updated, &$failed, &$unmappedCodes, $statusIdsByCode) {
             $mapByTtn = [];
             $documents = [];
 
@@ -130,6 +132,12 @@ class SyncDeliveryStatuses extends Command
                 $newStatusCode = DeliveryStatusMapper::getCrmStatusCode($npCode);
                 $newStatusId = $newStatusCode ? ($statusIdsByCode[$newStatusCode] ?? null) : null;
 
+                // Невідомий мапу код НП — лише фіксуємо (статус НЕ чіпаємо), щоб
+                // потім свідомо вирішити, куди його мапити.
+                if ($npCode > 0 && !DeliveryStatusMapper::isHandledCode($npCode)) {
+                    $unmappedCodes[$npCode][] = $entry['order']->id;
+                }
+
                 if ($newStatusCode && !$newStatusId) {
                     Log::warning('NovaPoshta status mapped to unknown CRM status code', [
                         'order_id' => $entry['order']->id,
@@ -157,6 +165,26 @@ class SyncDeliveryStatuses extends Command
         }, column: 'id');
 
         $this->info("Перевірено: {$checked}, оновлено: {$updated}, помилки: {$failed}");
+
+        // Зведення по незмаплених кодах — одна строка за прогін, без спаму.
+        if (!empty($unmappedCodes)) {
+            $summary = [];
+            foreach ($unmappedCodes as $code => $ids) {
+                $summary[$code] = [
+                    'count' => count($ids),
+                    'order_ids' => array_slice(array_values(array_unique($ids)), 0, 20),
+                ];
+            }
+            ksort($summary);
+            Log::warning('NovaPoshta: незмаплені коди статусів (потребують уваги — дозмапити в DeliveryStatusMapper)', [
+                'codes' => $summary,
+            ]);
+            $this->warn('Незмаплені коди НП: ' . implode(', ', array_map(
+                fn ($c, $d) => "{$c}×{$d['count']}",
+                array_keys($summary),
+                $summary
+            )));
+        }
 
         return self::SUCCESS;
     }
