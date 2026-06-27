@@ -79,9 +79,16 @@ class FiscalizeOrderJob implements ShouldQueue, ShouldBeUnique
             // спроба вже створила чек у Checkbox, а відповідь загубилась (обрив
             // мережі) — не бʼємо вдруге, а підхоплюємо наявний (захист від дубля).
             // UUID беремо з попередньої спроби; інакше новий v4 (як вимагає Checkbox).
+            // Ідемпотентність підхоплює лише НЕЗАВЕРШЕНУ спробу ЦЬОГО ж чека
+            // (processing/error з uuid — коли відповідь Checkbox загубилась).
+            // Уже УСПІШНІ чеки (напр. чек передоплати) НЕ беремо — інакше другий,
+            // законний чек на залишок «передоплата+доплата» ніколи не проб'ється
+            // (джоба думала б, що чек уже є). Захист від подвійної фіскалізації
+            // лишається в shouldFiscalize() — він стереже суми незалежно.
             $prior = $this->order->fiscalReceipts()
                 ->where('type', $this->type)
                 ->whereNotNull('uuid')
+                ->where('status', '!=', FiscalReceipt::STATUS_SUCCESS)
                 ->latest('id')
                 ->first();
             $receiptUuid = $prior?->uuid ?? (string) Str::uuid();

@@ -272,4 +272,64 @@ class FiscalizeOrderJobTest extends TestCase
                 ->count()
         );
     }
+
+    /**
+     * ПЕРЕДОПЛАТА + ЗАЛИШОК: після успішного чека передоплати другий, законний
+     * чек на залишок мусить пробитися ОКРЕМО. (Раніше ідемпотентність помилково
+     * «підхоплювала» чек передоплати й залишок ніколи не проходив.)
+     */
+    public function test_prepayment_then_remainder_creates_second_receipt(): void
+    {
+        $order = $this->makeOrder(1000.00, 1);
+
+        // Чек передоплати: успішний sell на 100 грн із власним uuid (як у проді).
+        $order->fiscalReceipts()->create([
+            'type' => FiscalReceipt::TYPE_SELL,
+            'status' => FiscalReceipt::STATUS_SUCCESS,
+            'total_amount' => 10000,
+            'uuid' => 'aaaaprep-0000-4000-8000-000000000001',
+            'payload_hash' => 'prepay',
+        ]);
+
+        // Фіскалізуємо ЗАЛИШОК 900 грн (1000 - 100).
+        (new FiscalizeOrderJob($order->fresh(), FiscalReceipt::TYPE_SELL, 90000))
+            ->handle(app(CheckboxService::class));
+
+        // Другий чек РЕАЛЬНО пішов у Checkbox (а не «підхопили» передоплату).
+        Http::assertSent(fn ($r) => str_contains($r->url(), 'receipts/sell'));
+
+        // Тепер 2 успішні sell-чеки на загалом 1000 грн, замовлення оплачене.
+        $sells = FiscalReceipt::where('order_id', $order->id)
+            ->where('type', FiscalReceipt::TYPE_SELL)
+            ->where('status', FiscalReceipt::STATUS_SUCCESS)
+            ->get();
+        $this->assertSame(2, $sells->count());
+        $this->assertSame(100000, (int) $sells->sum('total_amount'));
+        $this->assertSame('paid', $order->fresh()->payment_status);
+    }
+
+    /**
+     * ЗАХИСТ СУМ зберігається: навіть після передоплати не можна пробити більше
+     * за залишок (спроба пробити повну суму поверх передоплати — відмова).
+     */
+    public function test_cannot_overshoot_after_prepayment(): void
+    {
+        $order = $this->makeOrder(1000.00, 1);
+
+        $order->fiscalReceipts()->create([
+            'type' => FiscalReceipt::TYPE_SELL,
+            'status' => FiscalReceipt::STATUS_SUCCESS,
+            'total_amount' => 10000,
+            'uuid' => 'aaaaprep-0000-4000-8000-000000000002',
+            'payload_hash' => 'prepay',
+        ]);
+
+        // Спроба пробити ще раз ПОВНУ суму (1000) поверх передоплати — має відмовити.
+        (new FiscalizeOrderJob($order->fresh(), FiscalReceipt::TYPE_SELL, 100000))
+            ->handle(app(CheckboxService::class));
+
+        Http::assertNotSent(fn ($r) => str_contains($r->url(), 'receipts/sell'));
+        $this->assertSame(1, FiscalReceipt::where('order_id', $order->id)
+            ->where('status', FiscalReceipt::STATUS_SUCCESS)->count());
+    }
 }
