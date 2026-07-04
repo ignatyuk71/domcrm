@@ -307,6 +307,11 @@ class MetaWebhookProcessor
             'sent_at' => $sentAt,
         ]);
 
+        // Посилання Meta тимчасові → докачуємо медіа собі вже після відповіді вебхуку.
+        if ($attachments) {
+            \App\Jobs\PersistInboxAttachments::dispatchAfterResponse($msg->id);
+        }
+
         $conversation->update([
             'last_message_at' => $sentAt,
             'last_message_text' => $text ? mb_substr($text, 0, 480) : '[вкладення]',

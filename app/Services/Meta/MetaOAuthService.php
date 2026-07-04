@@ -133,6 +133,36 @@ class MetaOAuthService
         return $r->successful() ? $r->json() : null;
     }
 
+    /**
+     * Перевірка живості токена сторінки для сторожа meta:check-connections.
+     * transient=true — мережа/5xx/rate limit: статус підключення міняти НЕ можна.
+     */
+    public function checkPageToken(string $pageId, string $pageToken): array
+    {
+        try {
+            $r = Http::timeout(10)->get($this->graph()."/{$pageId}", [
+                'fields' => 'id,name',
+                'access_token' => $pageToken,
+            ]);
+        } catch (\Throwable $e) {
+            return ['ok' => false, 'transient' => true, 'error' => $e->getMessage()];
+        }
+
+        if ($r->successful()) {
+            return ['ok' => true, 'transient' => false, 'error' => null];
+        }
+
+        // 1/2 — внутрішні збої Graph, 4/17/32/613 — rate limit: це не смерть токена.
+        $code = (int) $r->json('error.code');
+        $transient = $r->serverError() || in_array($code, [1, 2, 4, 17, 32, 613], true);
+
+        return [
+            'ok' => false,
+            'transient' => $transient,
+            'error' => (string) ($r->json('error.message') ?: ('HTTP ' . $r->status())),
+        ];
+    }
+
     /** Профіль користувача (імʼя + аватар), best-effort, для інбоксу. */
     public function getUserProfile(string $pageToken, string $userId, string $channel = 'facebook'): array
     {

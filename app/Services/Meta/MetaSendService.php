@@ -30,6 +30,8 @@ class MetaSendService
             'access_token' => $conn->page_access_token,
         ]);
 
+        $this->trackAuthResult($conn, $r);
+
         if (!$r->successful()) {
             Log::warning('Meta send failed', ['page' => $conn->page_id, 'body' => $r->body()]);
             return ['ok' => false, 'error' => $r->json('error.message') ?? 'Не вдалося надіслати'];
@@ -50,6 +52,8 @@ class MetaSendService
             'message' => ['text' => $text],
             'access_token' => $conn->page_access_token,
         ]);
+
+        $this->trackAuthResult($conn, $r);
 
         if (!$r->successful()) {
             Log::warning('Meta private reply failed', ['page' => $conn->page_id, 'comment' => $commentId, 'body' => $r->body()]);
@@ -72,11 +76,36 @@ class MetaSendService
             'access_token' => $conn->page_access_token,
         ]);
 
+        $this->trackAuthResult($conn, $r);
+
         if (!$r->successful()) {
             Log::warning('Meta send attachment failed', ['page' => $conn->page_id, 'body' => $r->body()]);
             return ['ok' => false, 'error' => $r->json('error.message') ?? 'Не вдалося надіслати файл'];
         }
 
         return ['ok' => true, 'message_id' => $r->json('message_id')];
+    }
+
+    /**
+     * Живий трекінг здоровʼя підключення прямо з відправок:
+     * мертвий токен (190/102) → status=error і банер у чаті одразу,
+     * успішна відправка → підключення самовідновлюється в active.
+     */
+    private function trackAuthResult(MetaConnection $conn, \Illuminate\Http\Client\Response $r): void
+    {
+        if ($r->successful()) {
+            if ($conn->status !== 'active') {
+                $conn->update(['status' => 'active', 'last_error' => null]);
+            }
+            return;
+        }
+
+        if (in_array((int) $r->json('error.code'), [190, 102], true)) {
+            $conn->update([
+                'status' => 'error',
+                'last_error' => 'Send API: ' . ($r->json('error.message') ?: 'токен недійсний')
+                    . '. Перепідключіть сторінку в Налаштування → Meta.',
+            ]);
+        }
     }
 }

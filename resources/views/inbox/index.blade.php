@@ -244,6 +244,22 @@
         ::-webkit-scrollbar-thumb { background: #d8dae2; border-radius: 8px; }
     </style>
 
+    @if (($brokenConnections ?? collect())->isNotEmpty())
+        {{-- Оверлей, а не в потоці: .ib-wrap має фіксовану висоту 100vh-64px --}}
+        <div class="alert alert-danger alert-dismissible d-flex align-items-start gap-2 shadow"
+             style="position:fixed; top:74px; left:50%; transform:translateX(-50%); z-index:1055; max-width:640px; width:calc(100% - 32px); border-radius:12px;">
+            <i class="bi bi-exclamation-triangle-fill mt-1"></i>
+            <div style="min-width:0">
+                <strong>Чат не працює — проблема з підключенням Meta.</strong>
+                @foreach ($brokenConnections as $bc)
+                    <div class="mt-1">«{{ $bc->page_name }}»: {{ $bc->last_error ?: 'токен недійсний' }}</div>
+                @endforeach
+                <a href="{{ route('settings.meta.index') }}" class="alert-link">Перейти до налаштувань Meta →</a>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    @endif
+
     <div class="ib-wrap d-flex">
 
         {{-- 25% --}}

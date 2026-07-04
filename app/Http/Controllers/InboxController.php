@@ -21,7 +21,11 @@ class InboxController extends Controller
 {
     public function index()
     {
-        return view('inbox.index');
+        // Мертві підключення Meta → червоний банер угорі чату.
+        return view('inbox.index', [
+            'brokenConnections' => MetaConnection::where('status', '!=', 'active')
+                ->get(['id', 'page_name', 'last_error']),
+        ]);
     }
 
     /** Сторінка-дошка: усі розмови по колонках-статусах. */
@@ -96,7 +100,7 @@ class InboxController extends Controller
             if ($c) {
                 if (($c['type'] ?? '') === 'reply') {
                     $q = $quoted[$c['mid'] ?? ''] ?? null;
-                    $qImage = $q ? collect($q->attachments ?? [])->first(fn ($a) => !empty($a['url']))['url'] ?? null : null;
+                    $qImage = $q ? collect($q->attachments ?? [])->map(fn ($a) => $this->attachmentUrl($a))->first(fn ($u) => $u) : null;
                     $ctx = [
                         'type' => 'reply',
                         'text' => $q ? mb_substr((string) ($q->text ?: ($qImage ? 'фото' : 'повідомлення')), 0, 120) : 'повідомлення',
@@ -116,7 +120,10 @@ class InboxController extends Controller
                 'direction' => $m->direction,
                 'sender' => $m->sender,
                 'text' => $m->text,
-                'attachments' => $m->attachments ?? [],
+                'attachments' => collect($m->attachments ?? [])->map(fn ($a) => [
+                    'type' => $a['type'] ?? null,
+                    'url' => $this->attachmentUrl($a),
+                ])->values()->all(),
                 'context' => $ctx,
                 'sent_at_human' => ($m->sent_at ?? $m->created_at)?->format('d.m H:i'),
             ];
@@ -678,5 +685,11 @@ class InboxController extends Controller
         }
 
         return $externalId ? ('Клієнт ' . substr($externalId, -6)) : 'Клієнт';
+    }
+
+    /** Локальна копія вкладення (посилання Meta протухають), інакше — віддалений url. */
+    private function attachmentUrl(array $a): ?string
+    {
+        return !empty($a['local']) ? url($a['local']) : ($a['url'] ?? null);
     }
 }

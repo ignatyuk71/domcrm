@@ -42,3 +42,15 @@ Schedule::command('ai:sweep')
     ->withoutOverlapping()
     ->onOneServer()
     ->description('Страховка ШІ: добрати вхідні без реакції (фоновий процес вбито хостингом)');
+
+Schedule::command('inbox:persist-media --days=7 --limit=300')
+    ->hourly()
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->description('Докачування медіа переписок до себе (посилання Meta тимчасові)');
+
+Schedule::command('meta:check-connections')
+    ->everySixHours()
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->description('Сторож токенів Meta: мертве підключення → банер у чаті');
