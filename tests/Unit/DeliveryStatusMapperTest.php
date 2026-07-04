@@ -36,11 +36,20 @@ class DeliveryStatusMapperTest extends TestCase
         $this->assertTrue(DeliveryStatusMapper::isHandledCode(1));
     }
 
+    public function test_address_changed_is_handled_without_status_change(): void
+    {
+        // 104 (змінено адресу) — опрацьований, але статус НЕ рухає: код може
+        // прийти після «прибуло», і авто-перехід відкотив би замовлення назад.
+        $this->assertNull(DeliveryStatusMapper::getCrmStatusCode(104));
+        $this->assertTrue(DeliveryStatusMapper::isHandledCode(104));
+        $this->assertSame('in_transit', DeliveryStatusMapper::map(['StatusCode' => '104'])['code']);
+    }
+
     public function test_unknown_codes_are_flagged_as_unhandled(): void
     {
-        // 104 (змінив адресу), 105 (припинено зберігання), 106 (отримано+повернення)
+        // 105 (припинено зберігання), 106 (отримано+повернення)
         // — поки не змаплені: статус не міняється і код вважається «невідомим».
-        foreach ([104, 105, 106] as $code) {
+        foreach ([105, 106] as $code) {
             $this->assertNull(DeliveryStatusMapper::getCrmStatusCode($code), "code {$code} не має міняти статус");
             $this->assertFalse(DeliveryStatusMapper::isHandledCode($code), "code {$code} має бути невідомим");
         }
@@ -48,10 +57,12 @@ class DeliveryStatusMapperTest extends TestCase
 
     public function test_all_handled_codes_either_map_or_are_intentional(): void
     {
-        // Контракт: кожен «опрацьований» код або дає статус, або це код 1 (навмисний null).
+        // Контракт: кожен «опрацьований» код або дає статус, або це навмисний null
+        // (код 1 — ТТН створено, код 104 — змінено адресу).
+        $intentionalNull = [DeliveryStatusMapper::NP_REGISTERED, DeliveryStatusMapper::NP_ADDRESS_CHANGED];
         foreach (DeliveryStatusMapper::HANDLED_CODES as $code) {
             $mapped = DeliveryStatusMapper::getCrmStatusCode($code);
-            if ($code === DeliveryStatusMapper::NP_REGISTERED) {
+            if (in_array($code, $intentionalNull, true)) {
                 $this->assertNull($mapped);
             } else {
                 $this->assertNotNull($mapped, "опрацьований код {$code} має давати статус");

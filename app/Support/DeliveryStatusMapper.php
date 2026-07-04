@@ -23,6 +23,9 @@ class DeliveryStatusMapper
     public const NP_REFUSAL_OTHER = 103;
     public const NP_REFUSAL_ADDRESS = 108;
 
+    // Проміжні стани (посилка жива, але «в процесі» — статус CRM не рухаємо)
+    public const NP_ADDRESS_CHANGED = 104;
+
     /**
      * Коди НП, які мапер СВІДОМО опрацьовує: або міняє статус замовлення,
      * або навмисно лишає без змін (як код 1 — ТТН створено).
@@ -46,6 +49,7 @@ class DeliveryStatusMapper
         self::NP_REFUSAL_RECIPIENT,   // 102
         self::NP_REFUSAL_OTHER,       // 103
         self::NP_REFUSAL_ADDRESS,     // 108
+        self::NP_ADDRESS_CHANGED,     // 104 — свідомо без переходу (як код 1)
     ];
 
     /** Чи цей код НП мапер свідомо опрацьовує (інакше — «невідомий», вартий уваги). */
@@ -80,6 +84,9 @@ class DeliveryStatusMapper
         // Післяплата
         '41' => ['code' => 'cod_on_way', 'label' => 'Отримано, гроші в дорозі', 'color' => '#16a34a', 'icon' => 'bi-cash-coin'],
         
+        // Проміжні стани
+        '104' => ['code' => 'in_transit', 'label' => 'Змінено адресу доставки', 'color' => '#f59e0b', 'icon' => 'bi-geo-alt'],
+
         // Відмови / Проблеми
         '102' => ['code' => 'refusal', 'label' => 'Відмова одержувача', 'color' => '#ef4444', 'icon' => 'bi-x-circle'],
         '103' => ['code' => 'refusal', 'label' => 'Відмова (інше)', 'color' => '#ef4444', 'icon' => 'bi-x-circle'],
@@ -131,6 +138,13 @@ class DeliveryStatusMapper
         // Логіка пакування керується менеджером/пакувальником вручну.
         // Інакше cron може перезаписати "Упакування" -> "Запаковано" завчасно.
         if ($npCode === self::NP_REGISTERED) {
+            return null;
+        }
+
+        // 1б. Змінено адресу (104) -> НЕ чіпаємо CRM-статус: посилка жива і їде,
+        // 104 може прийти й ПІСЛЯ «прибуло» (перенаправлення з відділення) —
+        // авто-перехід тут відкотив би замовлення назад. Далі прийде знайомий код.
+        if ($npCode === self::NP_ADDRESS_CHANGED) {
             return null;
         }
 
