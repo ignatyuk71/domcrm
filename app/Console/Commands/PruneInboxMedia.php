@@ -12,7 +12,7 @@ use Illuminate\Console\Command;
  */
 class PruneInboxMedia extends Command
 {
-    protected $signature = 'inbox:prune-media {--days=180 : Видаляти файли, старші за стільки днів (мінімум 30)}';
+    protected $signature = 'inbox:prune-media {--days=90 : Видаляти файли, старші за стільки днів (мінімум 30)}';
 
     protected $description = 'Чистка старих медіа переписок (public/inbox-media, public/inbox-context)';
 
