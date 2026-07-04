@@ -12,19 +12,19 @@
 - Фронтенд: `npm run build` (Vite). **Зібрані ассети `public/build/` КОМІТЯТЬСЯ в git** — деплой НЕ робить `npm build` на сервері. Після зміни будь-якого `.vue`/`.js` обовʼязково `npm run build` і закомітити `public/build`.
 - Тести: `php artisan test` (або `php artisan test tests/Feature/Orders`).
 
-## Сервер і доступ (Hetzner — з 26.06.2026, переїхали з Mirohost)
-- Підключення: **`ssh -i ~/.ssh/id_ed25519 root@89.167.66.67`** (або хост `dream-v-doma` у ssh-config — це той самий сервер).
+## Сервер і доступ (Hetzner — єдиний прод)
+- Підключення: **`ssh -i ~/.ssh/id_ed25519 root@89.167.66.67`** (у ssh-config хости `domcrm` і `dream-v-doma` — це той самий сервер). Інших серверів у проєкту НЕМАЄ.
 - Робоча директорія DOM-CRM: **`/var/www/domcrm.com.ua/`** (структура `releases/` + симлінк `current` + `shared/`; живий код — у `current/`).
 - **На сервері ще 2 ЧУЖІ проєкти — `dommood.com.ua` і `dream-v-doma.com.ua`. НЕ ЧІПАТИ їх** (окремі папки, окремі бази). Працювати ЛИШЕ в `domcrm.com.ua` і базі `domcrm_com_ua`.
 - БД: `domcrm_com_ua`, юзер `domcrm` (пароль у `shared/.db_pass`). `.env` — у `shared/.env`. **Anthropic-ключ — у БД (`ai_settings`), не в `.env`.**
 - Стек: PHP 8.4, MySQL 8.0, nginx, Node 22. SSL — Let's Encrypt (certbot, авто-продовження).
-- Старий Mirohost (`vs2489.mirohost.net`) — **ЗАМОРОЖЕНО** (`php artisan down`) як резерв для відкату; вимкнути після стабілізації.
+- DNS домену `domcrm.com.ua` керується в панелі реєстратора (доступ лише у власника).
 
 ## Деплой (авто, через GitHub Actions → Hetzner)
 - Репозиторій: **`git@github.com:ignatyuk71/domcrm.git`**, гілка `main`.
 - **`git push` у `main` == деплой на прод.** GitHub Action `.github/workflows/deploy.yml` → SSH як **`deploy@89.167.66.67`** (приватний ключ з GitHub-секрету **`HETZNER_SSH_KEY`**) → запускає `bash /var/www/domcrm.com.ua/deploy.sh` на сервері.
 - `deploy.sh`: clone з GitHub → `composer install` [**з dev** — код юзає Pail-провайдер, `--no-dev` падає] → симлінки `.env`/`storage`/`bootstrap` + персистентні public-теки (ai-gallery, storage, saved, inbox-uploads, inbox-context) → `migrate --force` → атомарне перемикання `current` → reload `php8.4-fpm` (opcache скидається на новий реліз).
-- **SSH-ключ деплою (перестворено 26.06.2026):** окрема пара `~/.ssh/domcrm_github_deploy` (локально). Приватний → GitHub-секрет `HETZNER_SSH_KEY`. Публічний → **єдиний** запис у `/home/deploy/.ssh/authorized_keys` (старі ключі в `authorized_keys.bak.*`). Перевірка ключа: `ssh -i ~/.ssh/domcrm_github_deploy deploy@89.167.66.67`. Старі секрети `FTP_*`/`SSH_PASSWORD` (від Mirohost) — видалені, не потрібні.
+- **SSH-ключ деплою:** окрема пара `~/.ssh/domcrm_github_deploy` (локально). Приватний → GitHub-секрет `HETZNER_SSH_KEY` (base64 одним рядком!). Публічний → **єдиний** запис у `/home/deploy/.ssh/authorized_keys`. Перевірка ключа: `ssh -i ~/.ssh/domcrm_github_deploy deploy@89.167.66.67`.
 - **Ручний деплой** (за потреби): `ssh -i ~/.ssh/domcrm_github_deploy deploy@89.167.66.67 'bash /var/www/domcrm.com.ua/deploy.sh'` (або як root: `sudo -u deploy bash /var/www/domcrm.com.ua/deploy.sh`).
 - Крон: **один** `/etc/cron.d/domcrm` → `php artisan schedule:run` щохвилини керує всім (ai:sweep, fiscal:delivered, fiscal:shift-manager, packing:auto-release, delivery:sync-statuses). QUEUE=sync (без окремого воркера).
 
@@ -41,7 +41,7 @@
 - Тести створюють дані через `Model::create(...)` + `RefreshDatabase`; авторизація — `actingAs(User::factory()->create(['role'=>...]))`.
 
 ## Граблі (важливо)
-- **OPcache**: `deploy.sh` робить reload `php8.4-fpm` на новий реліз → opcache скидається сам (на старому Mirohost була окрема морока — більше не актуально).
+- **OPcache**: `deploy.sh` робить reload `php8.4-fpm` на новий реліз → opcache скидається сам.
 - **Дворівневий ШІ-промпт**: базові правила в коді (`PromptBuilder`) + per-connection `ai_settings.system_prompt` з БД (редагується в CRM, додається зверху). Має пріоритет **лише в тоні/стилі**; секція «ЗАЛІЗНІ ПРАВИЛА» і правила з позначкою «ОБОВ'ЯЗКОВЕ ПРАВИЛО» — **НЕДОТОРКАННІ**, промпт магазину їх НЕ скасовує. Якщо правки коду «не діють» — дивись промпт магазину в БД.
 - **Кеш промпту**: системний промпт має 2 точки `cache_control` (правила окремо від каталогу) — не ламай при змінах.
 - **Фіскалізація = гроші/податкова**: міняй обережно, лише з тестами (`tests/Feature/Fiscal`). `payments.value` рахується з тих самих `goods` → завжди == сумі товарів.

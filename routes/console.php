@@ -9,8 +9,8 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 /**
- * Оскільки на Mirohost Cron налаштовано на кожні 5 хвилин,
- * ми міняємо hourly() на everyFiveMinutes(), щоб система працювала синхронно.
+ * Крон на проді (Hetzner): /etc/cron.d/domcrm запускає schedule:run щохвилини,
+ * тож інтервали нижче спрацьовують точно за розкладом.
  */
 
 Schedule::command('delivery:sync-statuses --chunk=100')
@@ -38,7 +38,7 @@ Schedule::command('packing:auto-release')
     ->description('Автоматичне розблокування завислих пакувань');
 
 Schedule::command('ai:sweep')
-    ->everyMinute() // фактично спрацьовує з частотою крона Mirohost (зараз ~5 хв)
+    ->everyMinute()
     ->withoutOverlapping()
     ->onOneServer()
     ->description('Страховка ШІ: добрати вхідні без реакції (фоновий процес вбито хостингом)');
