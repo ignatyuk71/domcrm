@@ -75,6 +75,48 @@ class InboxMediaStore
     }
 
     /**
+     * Скачати аватарку контакта до себе в public/inbox-avatars.
+     * Файл фіксований на контакт (перезаписується при тижневому оновленні,
+     * тека не росте). Повертає відносний шлях або null при невдачі.
+     *
+     * Нащо: браузер клієнта тягнув аватарки напряму з cdninstagram.com —
+     * їх ріжуть блокувальники/протухання підпису. Зі свого домену — стабільно.
+     */
+    public function downloadAvatar(string $url, int $contactId): ?string
+    {
+        try {
+            $r = Http::timeout(10)->get($url);
+            if (!$r->successful()) {
+                return null;
+            }
+            $mime = trim(explode(';', (string) $r->header('Content-Type'))[0]);
+            if (!str_starts_with($mime, 'image/') || $mime === 'image/svg+xml') {
+                return null;
+            }
+            $body = $r->body();
+            if ($body === '' || strlen($body) > 5 * 1024 * 1024) {
+                return null;
+            }
+
+            $dir = public_path('inbox-avatars');
+            if (!is_dir($dir)) {
+                @mkdir($dir, 0775, true);
+            }
+            $ext = self::EXT_BY_MIME[$mime] ?? 'jpg';
+            $name = 'c' . $contactId . '.' . $ext;
+            if (@file_put_contents($dir . '/' . $name, $body) === false) {
+                return null;
+            }
+
+            // ?v= — щоб браузер не тримав стару картинку після оновлення файла.
+            return 'inbox-avatars/' . $name . '?v=' . substr(md5($body), 0, 8);
+        } catch (\Throwable $e) {
+            Log::info('Inbox: не вдалося скачати аватарку', ['contact' => $contactId, 'error' => $e->getMessage()]);
+            return null;
+        }
+    }
+
+    /**
      * Скачати один файл.
      *  - ['local' => 'inbox-media/….jpg'] — успіх;
      *  - ['dead' => true] — качати безглуздо (посилання мертве або тип поза білим списком);

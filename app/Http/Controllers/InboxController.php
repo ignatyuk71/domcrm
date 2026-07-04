@@ -66,7 +66,7 @@ class InboxController extends Controller
             'store_id' => $c->connection?->page_id,
             'channel' => $c->channel,
             'contact_name' => $this->contactName($c->contact?->name, $c->contact?->external_id),
-            'avatar' => $c->contact?->profile_pic,
+            'avatar' => $this->avatarUrl($c->contact?->profile_pic),
             'last_text' => $c->last_message_text,
             'last_direction' => $c->last_message_direction,
             'last_at_human' => $this->shortTime($c->last_message_at),
@@ -149,7 +149,7 @@ class InboxController extends Controller
                     ? $conversation->ai_paused_until->format('H:i')
                     : null,
                 'contact_name' => $this->contactName($conversation->contact?->name, $conversation->contact?->external_id),
-                'avatar' => $conversation->contact?->profile_pic,
+                'avatar' => $this->avatarUrl($conversation->contact?->profile_pic),
                 'last_out_id' => $lastOut?->id,
                 'last_out_read' => (bool) $lastOutRead,
                 'ai_summary' => $conversation->ai_summary,
@@ -555,7 +555,7 @@ class InboxController extends Controller
             'id' => $c->id,
             'status_id' => $c->chat_status_id,
             'name' => $this->contactName($c->contact?->name, $c->contact?->external_id),
-            'avatar' => $c->contact?->profile_pic,
+            'avatar' => $this->avatarUrl($c->contact?->profile_pic),
             'channel' => $c->channel,
             'phone' => $isAiOrder ? $c->ai_order_phone : null,
             'snippet' => Str::limit(trim($snippet), 90),
@@ -691,5 +691,18 @@ class InboxController extends Controller
     private function attachmentUrl(array $a): ?string
     {
         return !empty($a['local']) ? url($a['local']) : ($a['url'] ?? null);
+    }
+
+    /**
+     * Аватарка контакта: локальний файл (inbox-avatars/…) → абсолютний url
+     * з нашого домену; старий http-лінк CDN Meta віддаємо як є.
+     */
+    private function avatarUrl(?string $pic): ?string
+    {
+        if (!$pic) {
+            return null;
+        }
+
+        return str_starts_with($pic, 'http') ? $pic : url($pic);
     }
 }

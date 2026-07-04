@@ -20,8 +20,10 @@ use Illuminate\Support\Str;
  */
 class MetaWebhookProcessor
 {
-    public function __construct(private MetaOAuthService $oauth)
-    {
+    public function __construct(
+        private MetaOAuthService $oauth,
+        private InboxMediaStore $media,
+    ) {
     }
 
     /** Перевірка підпису X-Hub-Signature-256 (HMAC-SHA256 тіла на app_secret). */
@@ -267,9 +269,17 @@ class MetaWebhookProcessor
             || $contact->profile_pic_checked_at->lt(now()->subDays(7));
         if ($contact->wasRecentlyCreated || !$contact->name || $picStale) {
             $profile = $this->oauth->getUserProfile($connection->page_access_token, $userId, $channel);
+
+            // Аватарку одразу забираємо до себе: з CDN Meta браузери клієнтів
+            // її часто не бачать (блокувальники, протухлий підпис лінка).
+            $pic = $profile['profile_pic'] ?? null;
+            if ($pic) {
+                $pic = $this->media->downloadAvatar($pic, $contact->id) ?? $pic;
+            }
+
             $contact->update(array_filter([
                 'name' => $profile['name'] ?? null,
-                'profile_pic' => $profile['profile_pic'] ?? null,
+                'profile_pic' => $pic,
             ]) + ['profile_pic_checked_at' => now()]);
 
             // Профіль-АПІ часто закритий (400) — тоді імʼя беремо з Conversations API.
