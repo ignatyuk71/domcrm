@@ -162,7 +162,12 @@ class AiPanelTest extends TestCase
             ->push(['message_id' => 'm_p3'], 200)
             ->push(['message_id' => 'm_p4'], 200)]);
 
-        app(AiAgentService::class)->toolSendPaymentDetails($conv, ['amount' => 530]);
+        $res = app(AiAgentService::class)->toolSendPaymentDetails($conv, ['amount' => 530]);
+
+        // Сторож проти повторної форми доставки (кейс Алли): підказка моделі
+        // мусить прямо забороняти передрук списку ПІБ/телефон/адреса.
+        $this->assertStringContainsString('ПОВТОРНО НЕ друкуй', $res['готово']);
+        $this->assertStringContainsString('якщо клієнт їх УЖЕ надав — нічого не проси', $res['готово']);
 
         $out = InboxMessage::where('inbox_conversation_id', $conv->id)->where('direction', 'out')->get();
         $this->assertCount(4, $out); // картка: підпис + номер; ФОП: реквізити + IBAN
