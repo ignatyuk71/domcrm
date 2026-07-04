@@ -54,3 +54,9 @@ Schedule::command('meta:check-connections')
     ->withoutOverlapping()
     ->onOneServer()
     ->description('Сторож токенів Meta: мертве підключення → банер у чаті');
+
+Schedule::command('inbox:prune-media')
+    ->dailyAt('04:20')
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->description('Чистка медіа переписок, старших за 180 днів (теки не ростуть вічно)');

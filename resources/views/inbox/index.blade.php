@@ -1228,7 +1228,7 @@
                 const out = m.direction === 'out';
                 const atts = (m.attachments || []).map(a => {
                     const t = (a.type || '');
-                    if (t.includes('image') || (!t && a.url)) return a.url ? `<img src="${esc(a.url)}">` : '';
+                    if (t.includes('image') || (!t && a.url)) return a.url ? `<img src="${esc(a.url)}" onerror="this.remove()">` : '';
                     if (t.includes('audio')) return `<div style="display:flex;flex-direction:column;gap:6px"><span style="font-size:.82rem;opacity:.85"><i class="bi bi-mic-fill me-1"></i>Голосове повідомлення</span>${a.url ? `<audio controls preload="none" src="${esc(a.url)}" style="max-width:240px;height:36px"></audio>` : ''}</div>`;
                     if (t.includes('video')) return a.url ? `<video src="${esc(a.url)}" controls style="max-width:240px;border-radius:10px"></video>` : '';
                     return `<span style="font-size:.82rem;opacity:.85"><i class="bi bi-paperclip me-1"></i>Вкладення${a.url ? ` · <a href="${esc(a.url)}" target="_blank" rel="noopener">відкрити</a>` : ''}</span>`;
