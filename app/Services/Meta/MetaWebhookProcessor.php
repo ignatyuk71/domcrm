@@ -213,6 +213,13 @@ class MetaWebhookProcessor
 
         $message = $event['message'] ?? null;
         if (!$message) {
+            // postback/optin/referral поки не обробляємо; лишаємо слід, щоб не губились
+            // мовчки (deliveries не логуємо — то шум на кожну доставку).
+            $skipped = collect(['postback', 'optin', 'referral'])->first(fn ($k) => isset($event[$k]));
+            if ($skipped) {
+                Log::info('Meta webhook: подія без обробника', ['type' => $skipped, 'channel' => $channel]);
+            }
+
             return false;
         }
 
@@ -253,15 +260,17 @@ class MetaWebhookProcessor
             'external_id' => $userId,
         ]);
 
-        // Best-effort: підтягнути імʼя + аватар (при створенні або якщо імені ще немає).
-        if ($contact->wasRecentlyCreated || !$contact->name) {
+        // Best-effort: підтягнути імʼя + аватар. Крім нових контактів, раз на 7 днів
+        // оновлюємо і аватар — CDN-посилання Meta протухають, а checked_at тротлить
+        // спроби, щоб закритий FB-профіль-АПІ (#3) не смикався на кожне повідомлення.
+        $picStale = !$contact->profile_pic_checked_at
+            || $contact->profile_pic_checked_at->lt(now()->subDays(7));
+        if ($contact->wasRecentlyCreated || !$contact->name || $picStale) {
             $profile = $this->oauth->getUserProfile($connection->page_access_token, $userId, $channel);
-            if ($profile) {
-                $contact->update(array_filter([
-                    'name' => $profile['name'] ?? null,
-                    'profile_pic' => $profile['profile_pic'] ?? null,
-                ]));
-            }
+            $contact->update(array_filter([
+                'name' => $profile['name'] ?? null,
+                'profile_pic' => $profile['profile_pic'] ?? null,
+            ]) + ['profile_pic_checked_at' => now()]);
 
             // Профіль-АПІ часто закритий (400) — тоді імʼя беремо з Conversations API.
             if (!$contact->name) {

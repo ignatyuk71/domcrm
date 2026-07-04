@@ -57,8 +57,9 @@
         .ib-time { color: #9aa3b2; font-size: .7rem; white-space: nowrap; }
 
         .ib-av { position: relative; flex-shrink: 0; }
-        .ib-av .circle { border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; background: linear-gradient(135deg,#818cf8,#a78bfa); overflow: hidden; }
-        .ib-av .circle img { width: 100%; height: 100%; object-fit: cover; }
+        .ib-av .circle { position: relative; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; background: linear-gradient(135deg,#818cf8,#a78bfa); overflow: hidden; }
+        /* Картинка ПОВЕРХ літери: протухла аватарка зникає (onerror) — і видно літеру. */
+        .ib-av .circle img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
         .ib-av .ch { position: absolute; right: 3px; bottom: 3px; width: 13px; height: 13px; border-radius: 50%; background: #fff; display: flex; align-items: center; justify-content: center; font-size: 16px; line-height: 1; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
         .ib-dot { width: 8px; height: 8px; border-radius: 50%; background: #2563eb; flex-shrink: 0; align-self: center; }
 
@@ -346,7 +347,8 @@
 
         function avatar(name, url, ch, size = 42) {
             const letter = esc((name || '?').trim().charAt(0).toUpperCase() || '?');
-            const inner = url ? `<img src="${esc(url)}" onerror="this.remove()">` : letter;
+            // Літера рендериться завжди; робоча картинка лягає поверх, бита — зникає.
+            const inner = letter + (url ? `<img src="${esc(url)}" onerror="this.remove()">` : '');
             return `<span class="ib-av"><span class="circle" style="width:${size}px;height:${size}px;font-size:${size/2.4}px">${inner}</span><span class="ch">${chIcon(ch)}</span></span>`;
         }
 
