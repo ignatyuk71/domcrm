@@ -170,6 +170,26 @@ class ContactProfileRefreshTest extends TestCase
         $this->assertNotNull($contact->profile_pic_checked_at, 'спроба мусить тротлитись навіть при відмові');
     }
 
+    public function test_contact_without_pic_is_retried_daily(): void
+    {
+        // IG інколи відповідає «consent required», а за годину профіль уже відкритий —
+        // тому без фото пробуємо щодня (з фото — раз на 7 днів).
+        $conn = $this->connection();
+        InboxContact::create([
+            'meta_connection_id' => $conn->id,
+            'channel' => 'instagram',
+            'external_id' => 'USER1',
+            'name' => 'Ірина',
+            'profile_pic' => null,
+            'profile_pic_checked_at' => now()->subDays(2),
+        ]);
+        $this->fakeProfile('https://cdn.meta/late.jpg');
+
+        $this->postWebhook($this->igPayload('m_p6'))->assertOk();
+
+        $this->assertLocalAvatar(InboxContact::where('external_id', 'USER1')->firstOrFail());
+    }
+
     public function test_localize_command_moves_avatars_to_our_domain(): void
     {
         $conn = $this->connection();

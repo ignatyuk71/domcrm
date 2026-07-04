@@ -262,11 +262,13 @@ class MetaWebhookProcessor
             'external_id' => $userId,
         ]);
 
-        // Best-effort: підтягнути імʼя + аватар. Крім нових контактів, раз на 7 днів
-        // оновлюємо і аватар — CDN-посилання Meta протухають, а checked_at тротлить
-        // спроби, щоб закритий FB-профіль-АПІ (#3) не смикався на кожне повідомлення.
+        // Best-effort: підтягнути імʼя + аватар. З фото — оновлюємо раз на 7 днів;
+        // БЕЗ фото — щодня: IG спершу може відповісти «(#230) consent required»
+        // і відкрити профіль уже за годину спілкування (кейс vunnutska_ 04.07).
+        // checked_at тротлить спроби, щоб закрите профіль-АПІ не смикалось щоразу.
+        $retryAfterDays = $contact->profile_pic ? 7 : 1;
         $picStale = !$contact->profile_pic_checked_at
-            || $contact->profile_pic_checked_at->lt(now()->subDays(7));
+            || $contact->profile_pic_checked_at->lt(now()->subDays($retryAfterDays));
         if ($contact->wasRecentlyCreated || !$contact->name || $picStale) {
             $profile = $this->oauth->getUserProfile($connection->page_access_token, $userId, $channel);
 
