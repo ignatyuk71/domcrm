@@ -22,6 +22,12 @@ class AiAgentService
     private const MAX_TOOL_LOOPS = 5;
 
     /**
+     * Переробка «сказав = зробив»: модель написала про надсилання фото, але
+     * send_photos не викликала — чернетку клієнту не шлемо, повертаємо в API.
+     */
+    private const PHOTO_REPAIR_NOTE = '(система: у чернетці вище ти написала про надсилання фото, але інструмент send_photos НЕ викликала — клієнт фото НЕ отримав, і цієї чернетки він НЕ бачив. Сформуй відповідь заново: якщо показуєш фото — обовʼязково виклич send_photos з photo_ids з каталогу; службові позначки в дужках не пиши.)';
+
+    /**
      * Чи дозволяє графік працювати зараз. Делегує AiSchedule (лишено тут для
      * стабільного публічного API: команда й тести кличуть AiAgentService::scheduleAllows).
      */
@@ -142,6 +148,8 @@ class AiAgentService
             $tokensOut = 0;
             $content = [];
             $turnTexts = [];
+            $photoClaim = false; // модель ЗАЯВЛЯЛА в тексті, що надсилає фото
+            $repairs = 0;        // переробок «сказав=зробив» — не більше однієї
 
             // Цикл tool-ів: Claude може кілька разів заглянути в базу, потім відповідає.
             for ($loop = 0; $loop <= self::MAX_TOOL_LOOPS; $loop++) {
@@ -178,12 +186,31 @@ class AiAgentService
                 // Текст КОЖНОГО кроку (а не лише останнього). Коли модель пише
                 // привітання+ціну РАЗОМ із викликом send_photos — цей текст на кроці
                 // tool_use, і раніше ГУБИВСЯ: слався лише фінальний куций рядок.
-                $tt = trim($this->stripPhotoPlaceholder(collect($content)->where('type', 'text')->pluck('text')->implode("\n")));
+                $rawStep = collect($content)->where('type', 'text')->pluck('text')->implode("\n");
+                if ($this->scrubber->mentionsSendingPhotos($rawStep)) {
+                    $photoClaim = true;
+                }
+                $tt = trim($this->stripPhotoPlaceholder($rawStep));
                 if ($tt !== '') {
                     $turnTexts[] = $tt;
                 }
 
                 if ($r->json('stop_reason') !== 'tool_use') {
+                    // «Сказав = зробив»: модель писала про надсилання фото, але send_photos
+                    // за весь хід не викликала (кейс Тані: «(надіслала клієнту фото товару…)»
+                    // текстом і нуль фото). Чернетку клієнту НЕ шлемо — повертаємо в API
+                    // на переробку, щоб модель САМА викликала інструмент. Одна спроба.
+                    $sentPhotos = collect($toolsCalled)->contains(fn ($t) => ($t['tool'] ?? '') === 'send_photos');
+                    if ($photoClaim && !$sentPhotos && $repairs === 0 && $loop < self::MAX_TOOL_LOOPS) {
+                        $repairs++;
+                        $draft = trim(implode("\n\n", $turnTexts)) !== '' ? implode("\n\n", $turnTexts) : $rawStep;
+                        $messages[] = ['role' => 'assistant', 'content' => [['type' => 'text', 'text' => $draft !== '' ? $draft : '(порожня чернетка)']]];
+                        $messages[] = ['role' => 'user', 'content' => [['type' => 'text', 'text' => self::PHOTO_REPAIR_NOTE]]];
+                        $turnTexts = [];
+                        $photoClaim = false;
+                        Log::info('AI: photo claim without send_photos — повертаю на переробку', ['conv' => $conversation->id]);
+                        continue;
+                    }
                     break;
                 }
 

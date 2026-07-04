@@ -422,9 +422,12 @@ class AiAgentTest extends TestCase
     {
         $this->setUpConversation();
 
+        // Кейс Тані Ковальчук 04.07: модель написала позначку В ОДНИНІ («фото товарУ»)
+        // і не викликала send_photos. Обидві копії однакові — переробка теж «лажає»,
+        // тож перевіряємо запасний шар: клієнт отримує чистий текст без позначки.
         Http::fake([
             'api.anthropic.com/*' => Http::response([
-                'content' => [['type' => 'text', 'text' => '(надіслала клієнту фото товарів: #247 Капці для вулиці Бежевий — 530 грн)Бежеві вуличні — 530 грн 🙂']],
+                'content' => [['type' => 'text', 'text' => '(надіслала клієнту фото товару: #292 Домашні капці з хутра Сірий — 399 грн)Бежеві вуличні — 530 грн 🙂']],
                 'stop_reason' => 'end_turn',
                 'usage' => ['input_tokens' => 100, 'output_tokens' => 20],
             ], 200),
@@ -433,10 +436,128 @@ class AiAgentTest extends TestCase
 
         $this->runJob();
 
-        // Службова примітка памʼяті НЕ має потрапити клієнту.
+        // Службова примітка памʼяті НЕ має потрапити клієнту — у будь-якому написанні.
         $msg = InboxMessage::where('sender', 'ai')->latest('id')->first();
-        $this->assertStringNotContainsString('надіслала клієнту фото товарів', (string) $msg->text);
+        $this->assertStringNotContainsString('надіслала клієнту фото', (string) $msg->text);
         $this->assertStringContainsString('Бежеві вуличні — 530 грн', (string) $msg->text);
+
+        // Була одна спроба переробки через API (заява про фото без send_photos).
+        $anthropicCalls = collect(Http::recorded())
+            ->filter(fn ($pair) => str_contains($pair[0]->url(), 'api.anthropic.com'))
+            ->count();
+        $this->assertSame(2, $anthropicCalls);
+    }
+
+    public function test_photo_claim_without_tool_call_is_repaired_and_photos_really_sent(): void
+    {
+        $this->setUpConversation();
+
+        $group = \App\Models\AiPhotoGroup::create(['name' => 'Домашні пухнасті']);
+        $photo = \App\Models\AiPhoto::create(['ai_photo_group_id' => $group->id, 'path' => 'ai-gallery/gray.jpg', 'sort_order' => 1]);
+
+        // 1-й хід: модель БРЕШЕ, що надіслала фото (інструмент не викликано) →
+        // чернетка не шлеться, летить переробка. 2-й хід: модель викликає send_photos.
+        // 3-й хід: чистий фінальний текст.
+        $calls = 0;
+        Http::fake([
+            'api.anthropic.com/*' => function () use (&$calls, $photo) {
+                $calls++;
+                if ($calls === 1) {
+                    return Http::response([
+                        'content' => [['type' => 'text', 'text' => '(надіслала клієнту фото товару: #292 Сірі — 399 грн)Ось сірі капці 🙂']],
+                        'stop_reason' => 'end_turn',
+                        'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+                    ], 200);
+                }
+                if ($calls === 2) {
+                    return Http::response([
+                        'content' => [['type' => 'tool_use', 'id' => 'tu_repair', 'name' => 'send_photos', 'input' => ['photo_ids' => [$photo->id]]]],
+                        'stop_reason' => 'tool_use',
+                        'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+                    ], 200);
+                }
+                return Http::response([
+                    'content' => [['type' => 'text', 'text' => 'Сірі домашні — 399 грн 🙂 Бажаєте замовити?']],
+                    'stop_reason' => 'end_turn',
+                    'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+                ], 200);
+            },
+            'graph.facebook.com/*' => function () use (&$calls) {
+                return Http::response(['message_id' => 'm_repair_' . $calls . '_' . uniqid()], 200);
+            },
+        ]);
+
+        $this->runJob();
+
+        // Фото РЕАЛЬНО пішло (є вихідне повідомлення з вкладенням).
+        $photoMsg = InboxMessage::where('sender', 'ai')->whereNotNull('attachments')->latest('id')->first();
+        $this->assertNotNull($photoMsg);
+
+        // Клієнт отримав фінальний текст ПЕРЕРОБКИ, без чернетки і без позначки.
+        $textMsg = InboxMessage::where('sender', 'ai')->whereNotNull('text')->latest('id')->first();
+        $this->assertSame('Сірі домашні — 399 грн 🙂 Бажаєте замовити?', $textMsg->text);
+
+        // Друга спроба отримала системне пояснення, чому переробляємо.
+        $secondBody = collect(Http::recorded())
+            ->filter(fn ($pair) => str_contains($pair[0]->url(), 'api.anthropic.com'))
+            ->values()[1][0]->body();
+        $this->assertStringContainsString(trim((string) json_encode('send_photos НЕ викликала'), '"'), $secondBody);
+
+        $run = AiRun::latest('id')->first();
+        $this->assertSame('replied', $run->status);
+        $this->assertContains('send_photos', collect($run->tools_called)->pluck('tool')->all());
+    }
+
+    public function test_no_repair_when_photos_actually_sent_with_claim_text(): void
+    {
+        $this->setUpConversation();
+
+        $group = \App\Models\AiPhotoGroup::create(['name' => 'Домашні пухнасті']);
+        $photo = \App\Models\AiPhoto::create(['ai_photo_group_id' => $group->id, 'path' => 'ai-gallery/pink.jpg', 'sort_order' => 1]);
+
+        // «Ось фото 👇» РАЗОМ зі справжнім викликом send_photos — це норма, без переробки.
+        $calls = 0;
+        Http::fake([
+            'api.anthropic.com/*' => function () use (&$calls, $photo) {
+                $calls++;
+                if ($calls === 1) {
+                    return Http::response([
+                        'content' => [
+                            ['type' => 'text', 'text' => 'Ось фото рожевих 👇'],
+                            ['type' => 'tool_use', 'id' => 'tu_ok', 'name' => 'send_photos', 'input' => ['photo_ids' => [$photo->id]]],
+                        ],
+                        'stop_reason' => 'tool_use',
+                        'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+                    ], 200);
+                }
+                return Http::response([
+                    'content' => [['type' => 'text', 'text' => 'Рожеві — 399 грн 🙂']],
+                    'stop_reason' => 'end_turn',
+                    'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+                ], 200);
+            },
+            'graph.facebook.com/*' => Http::response(['message_id' => 'm_ok2'], 200),
+        ]);
+
+        $this->runJob();
+
+        // Рівно 2 звернення (tool-хід + фінал) — жодної переробки.
+        $bodies = collect(Http::recorded())
+            ->filter(fn ($pair) => str_contains($pair[0]->url(), 'api.anthropic.com'))
+            ->values();
+        $this->assertCount(2, $bodies);
+        $this->assertStringNotContainsString(trim((string) json_encode('НЕ викликала'), '"'), $bodies[1][0]->body());
+    }
+
+    public function test_system_prompt_forbids_service_notes_and_fake_photo_claims(): void
+    {
+        $this->setUpConversation();
+        $blocks = app(AiAgentService::class)->buildSystemPrompt($this->conv, AiSetting::forConnection($this->conn->id));
+        $text = json_encode($blocks, JSON_UNESCAPED_UNICODE);
+
+        // text-блок — лише чисті слова; службові позначки пише система, не модель.
+        $this->assertStringContainsString('службові позначки в дужках', $text);
+        $this->assertStringContainsString('слова фото не надсилають', $text);
     }
 
     public function test_agent_reads_description_via_get_product(): void

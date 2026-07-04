@@ -238,8 +238,9 @@ class AiGalleryTest extends TestCase
             ->filter(fn ($pair) => str_contains($pair[0]->url(), 'api.anthropic.com'))
             ->first()[0]->body();
 
-        // Модель бачить, ЩО саме було на надісланому фото — «цих» має адресата
-        $this->assertStringContainsString(trim((string) json_encode('надіслала клієнту фото товарів'), '"'), $body);
+        // Модель бачить, ЩО саме було на надісланому фото — «цих» має адресата.
+        // Нотатка СИСТЕМНИМ голосом — щоб модель не копіювала її як власну фразу.
+        $this->assertStringContainsString(trim((string) json_encode('система: ти надіслала клієнту фото'), '"'), $body);
         $this->assertStringContainsString(trim((string) json_encode('Вуличні тапки чорні'), '"'), $body);
     }
 
