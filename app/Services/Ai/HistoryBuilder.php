@@ -204,7 +204,43 @@ class HistoryBuilder
             array_shift($messages);
         }
 
+        // Годинник для моделі: без нього вона писала «Доброго дня!» о 22:26 і
+        // обіцяла «відправимо сьогодні» після 12:00 (кейси 05.07). Кладемо в
+        // ОСТАННЄ user-повідомлення (некешована частина — кеш промпту цілий).
+        if (!empty($messages)) {
+            $last = count($messages) - 1;
+            if ($messages[$last]['role'] === 'user') {
+                $note = ['type' => 'text', 'text' => self::clockNote()];
+                $prev = $messages[$last]['content'];
+                $messages[$last]['content'] = array_merge(
+                    is_array($prev) ? $prev : [['type' => 'text', 'text' => $prev]],
+                    [$note]
+                );
+            }
+        }
+
         return $messages;
+    }
+
+    /** Поточні день і час словами — щоб привітання і «сьогодні» були чесними. */
+    public static function clockNote(): string
+    {
+        $now = now();
+        $days = ['неділя', 'понеділок', 'вівторок', 'середа', 'четвер', "п'ятниця", 'субота'];
+        $part = match (true) {
+            $now->hour >= 6 && $now->hour < 11 => 'ранок',
+            $now->hour >= 11 && $now->hour < 17 => 'день',
+            $now->hour >= 17 && $now->hour < 23 => 'вечір',
+            default => 'ніч',
+        };
+
+        return sprintf(
+            '(система: зараз %s, %s, %s — %s. Вітайся відповідно до часу доби. «Відправимо сьогодні» обіцяй лише якщо ще НЕ минуло 12:00 і сьогодні не неділя — інакше чесно кажи, що відправка наступного робочого дня.)',
+            $days[$now->dayOfWeek],
+            $now->format('d.m.Y'),
+            $now->format('H:i'),
+            $part
+        );
     }
 
     /** Кеш фото галереї з товарами (на час одного запиту). */
