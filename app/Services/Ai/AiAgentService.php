@@ -166,6 +166,14 @@ class AiAgentService
                     // NB: параметр temperature НЕ передаємо — Opus 4.8 його не приймає
                     // («temperature is deprecated for this model» → відповідь падала).
                     // Проти вигадок працюють промпт-правила (forced grounding, анти-вигадка).
+                    //
+                    // thinking ВИМКНЕНО явно: Sonnet 5 інакше вмикає adaptive thinking
+                    // за замовчуванням і зʼїдає весь бюджет max_tokens на роздуми →
+                    // порожня відповідь (кейс 06.07 «Які ще у вас є?»). Наш бот працює
+                    // за жорстким сценарієм, міркувань не потребує; для Opus/Haiku це
+                    // штатний режим (нічого не змінює). Fable 5 thinking вимкнути НЕ
+                    // дозволяє — якщо колись перейдемо, цей рядок прибрати.
+                    'thinking' => ['type' => 'disabled'],
                     'system' => $systemBlocks,
                     'messages' => $messages,
                     'tools' => $this->toolDefinitions(),
