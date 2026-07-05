@@ -37,6 +37,50 @@ class AiGreetingRuleTest extends TestCase
         $this->assertStringNotContainsString('ПЕРШУ свою відповідь у розмові ОБОВ\'ЯЗКОВО починай з привітання', $system);
     }
 
+    /**
+     * Сценарій з реального чату Mykhailo Ihnatiuk (conv 294, 06.07): бот уже
+     * привітався («Доброго вечора»), клієнт продовжує питати «які у вас є на 37» —
+     * у запиті до моделі МУСИТЬ бути заборона вітатись повторно (і в промпті,
+     * і в позначці часу), а старого наказу «Вітайся» щоходу бути НЕ повинно.
+     */
+    public function test_no_repeat_greeting_instruction_mid_conversation(): void
+    {
+        $conn = MetaConnection::create(['page_id' => 'P_GR294', 'page_name' => 'Shop', 'page_access_token' => 'tok', 'status' => 'active']);
+        \App\Models\AiSetting::global()->update(['api_key' => 'sk-ant-test', 'model' => 'claude-sonnet-5']);
+        \App\Models\AiSetting::forConnection($conn->id)->update(['enabled' => true, 'system_prompt' => 'Ти продавець.']);
+        $contact = InboxContact::create(['meta_connection_id' => $conn->id, 'channel' => 'instagram', 'external_id' => 'U_GR294']);
+        $conv = InboxConversation::create(['meta_connection_id' => $conn->id, 'inbox_contact_id' => $contact->id, 'channel' => 'instagram']);
+
+        // Хід розмови як у чаті 294: клієнт → бот ВЖЕ привітався → далі питання.
+        InboxMessage::create(['inbox_conversation_id' => $conv->id, 'direction' => 'in', 'sender' => 'contact', 'external_message_id' => 'g1', 'text' => 'Розмір 36 Яка ціна?', 'sent_at' => now()->subMinutes(9)]);
+        InboxMessage::create(['inbox_conversation_id' => $conv->id, 'direction' => 'out', 'sender' => 'ai', 'external_message_id' => 'g2', 'text' => 'Доброго вечора! 🙂 Розмір 36/37 є у двох варіантах…', 'sent_at' => now()->subMinutes(8)]);
+        InboxMessage::create(['inbox_conversation_id' => $conv->id, 'direction' => 'out', 'sender' => 'ai', 'external_message_id' => 'g3', 'text' => 'Домашні пухнасті капці 36/37 — 399 грн 🙂', 'sent_at' => now()->subMinutes(7)]);
+        $ask = InboxMessage::create(['inbox_conversation_id' => $conv->id, 'direction' => 'in', 'sender' => 'contact', 'external_message_id' => 'g4', 'text' => 'Які у вас є на 37', 'sent_at' => now()]);
+
+        Http::fake([
+            'api.anthropic.com/*' => Http::response([
+                'content' => [['type' => 'text', 'text' => 'У 36/37 доступні: червоний, синій, сірий 🙂']],
+                'stop_reason' => 'end_turn',
+                'usage' => ['input_tokens' => 300, 'output_tokens' => 20],
+            ], 200),
+            'graph.facebook.com/*' => Http::response(['message_id' => 'g_out'], 200),
+        ]);
+
+        (new \App\Jobs\AiRespondToMessage($conv->id, $ask->id))->handle(app(AiAgentService::class));
+
+        $req = collect(Http::recorded())
+            ->map(fn ($pair) => $pair[0])
+            ->first(fn ($r) => str_contains($r->url(), 'api.anthropic.com'));
+        $this->assertNotNull($req);
+        $body = json_encode($req->data(), JSON_UNESCAPED_UNICODE);
+
+        // Модель отримує пряму заборону повторного привітання (промпт + позначка часу).
+        $this->assertStringContainsString('НІКОЛИ не вітайся у другому', $body);
+        $this->assertStringContainsString('НЕ вітайся знову', $body);
+        // Старого наказу «Вітайся …», що змушував вітатись щоходу, бути НЕ повинно.
+        $this->assertStringNotContainsString('Вітайся відповідно до часу доби', $body);
+    }
+
     public function test_clock_note_reaches_model_in_last_user_message(): void
     {
         $conn = MetaConnection::create(['page_id' => 'P_GR2', 'page_name' => 'Shop', 'page_access_token' => 'tok', 'status' => 'active']);
