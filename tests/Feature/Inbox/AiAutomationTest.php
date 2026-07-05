@@ -160,11 +160,11 @@ class AiAutomationTest extends TestCase
 
     // --- Автоворонка коментарів ---
 
-    private function makeComment(string $text, ?string $postExcerpt, string $channel = 'facebook'): InboxComment
+    private function makeComment(string $text, ?string $postExcerpt, string $channel = 'facebook', string $fromId = 'U9'): InboxComment
     {
         return InboxComment::create([
             'meta_connection_id' => $this->conn->id, 'channel' => $channel, 'post_id' => 'post_x',
-            'post_excerpt' => $postExcerpt, 'comment_id' => 'c_' . uniqid(), 'from_id' => 'U9',
+            'post_excerpt' => $postExcerpt, 'comment_id' => 'c_' . uniqid(), 'from_id' => $fromId,
             'from_name' => 'Klientka', 'text' => $text, 'commented_at' => now(),
         ]);
     }
@@ -199,9 +199,10 @@ class AiAutomationTest extends TestCase
         Http::assertSent(fn ($r) => str_contains($r->url(), '/P_AUT/messages')
             && str_contains((string) ($r['message']['text'] ?? ''), '530 грн'));
 
-        // Другий коментар того ж поста → з кешу, БЕЗ нового виклику Claude
+        // Другий коментар того ж поста (ІНША людина — та сама була б відсіяна
+        // антиспамом) → з кешу, БЕЗ нового виклику Claude
         $anthropicCalls = collect(Http::recorded())->filter(fn ($p) => str_contains($p[0]->url(), 'api.anthropic.com'))->count();
-        $comment2 = $this->makeComment('І мені ціну', 'Затишок для ваших ніжок надворі цієї зими 🤍');
+        $comment2 = $this->makeComment('І мені ціну', 'Затишок для ваших ніжок надворі цієї зими 🤍', 'facebook', 'U10');
         (new AiReplyToComment($comment2->id))->handle(app(MetaSendService::class));
         $this->assertSame('dm_sent', $comment2->fresh()->status);
         $anthropicCallsAfter = collect(Http::recorded())->filter(fn ($p) => str_contains($p[0]->url(), 'api.anthropic.com'))->count();
@@ -248,10 +249,11 @@ class AiAutomationTest extends TestCase
         Http::assertSent(fn ($r) => str_contains((string) ($r['message']['text'] ?? ''), 'Підкажіть, які тапулі цікавлять?'));
         $this->assertDatabaseHas('ai_post_lines', ['post_id' => 'post_x', 'ai_photo_group_id' => null, 'source' => 'none']);
 
-        // 2) БУДЬ-ЯКИЙ коментар (без слова «ціна») того ж поста → теж відповідаємо (з кешу)
+        // 2) БУДЬ-ЯКИЙ коментар (без слова «ціна») того ж поста → теж відповідаємо
+        // (з кешу; людина інша — ту саму відсіяв би антиспам)
         Http::swap(new \Illuminate\Http\Client\Factory());
         Http::fake(['graph.facebook.com/*' => Http::response(['message_id' => 'mid_open_2'], 200)]);
-        $c2 = $this->makeComment('Класні! 😍', 'будь-що');
+        $c2 = $this->makeComment('Класні! 😍', 'будь-що', 'facebook', 'U11');
         (new AiReplyToComment($c2->id))->handle(app(MetaSendService::class));
         $this->assertSame('dm_sent', $c2->fresh()->status);
 
@@ -268,6 +270,40 @@ class AiAutomationTest extends TestCase
         $c4 = $this->makeComment('Ціна?', 'вуличні');
         (new AiReplyToComment($c4->id))->handle(app(MetaSendService::class));
         $this->assertSame('new', $c4->fresh()->status);
+    }
+
+    public function test_comment_funnel_cooldown_skips_repeat_dm_within_10_hours(): void
+    {
+        $this->setUpConversation();
+        AiSetting::global()->update(['comment_settings' => ['enabled' => true, 'facebook' => true, 'instagram' => true, 'opener' => 'Відкривач']]);
+
+        Http::fake([
+            'api.anthropic.com/*' => Http::response([
+                'content' => [['type' => 'text', 'text' => 'невідомо']],
+                'stop_reason' => 'end_turn',
+                'usage' => ['input_tokens' => 200, 'output_tokens' => 3],
+            ], 200),
+            'graph.facebook.com/*' => Http::response(['message_id' => 'mid_cd_1'], 200),
+        ]);
+
+        // 1-й комент → DM пішов
+        $first = $this->makeComment('Ціна?', 'пост А');
+        (new AiReplyToComment($first->id))->handle(app(MetaSendService::class));
+        $this->assertSame('dm_sent', $first->fresh()->status);
+
+        // 2-й комент тієї ж людини за хвилину (хоч і інший пост) → БЕЗ DM
+        $graphCalls = collect(Http::recorded())->filter(fn ($p) => str_contains($p[0]->url(), 'graph.facebook.com'))->count();
+        $second = $this->makeComment('А ці є в 38?', 'пост Б');
+        (new AiReplyToComment($second->id))->handle(app(MetaSendService::class));
+        $this->assertSame('dm_skipped', $second->fresh()->status);
+        $this->assertSame($graphCalls, collect(Http::recorded())->filter(fn ($p) => str_contains($p[0]->url(), 'graph.facebook.com'))->count(), 'повторний DM не мав піти');
+
+        // «Через місяць»: минуло >10 год від попереднього DM → знову відповідаємо
+        $first->timestamps = false;
+        $first->forceFill(['updated_at' => now()->subHours(11)])->save();
+        $third = $this->makeComment('Знов я 🙂 Ціна?', 'пост В');
+        (new AiReplyToComment($third->id))->handle(app(MetaSendService::class));
+        $this->assertSame('dm_sent', $third->fresh()->status);
     }
 
     public function test_comment_conversation_link_resolves_via_echo_mid(): void

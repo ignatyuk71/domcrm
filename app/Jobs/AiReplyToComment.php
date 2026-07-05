@@ -62,6 +62,21 @@ class AiReplyToComment
                 return;
             }
 
+            // Антиспам: цій людині вже пішов DM на комент за останні 10 годин
+            // (кілька коментів поспіль чи на різні пости) → повторно не бомбимо,
+            // комент лишається у вкладці для ручної відповіді. Комент «через
+            // місяць» працює як завжди — вікно давно мине.
+            $recentDm = InboxComment::where('meta_connection_id', $comment->meta_connection_id)
+                ->where('from_id', $comment->from_id)
+                ->where('id', '!=', $comment->id)
+                ->where('status', 'dm_sent')
+                ->where('updated_at', '>=', now()->subHours(10))
+                ->exists();
+            if ($recentDm) {
+                $comment->update(['status' => 'dm_skipped']);
+                return;
+            }
+
             $group = $this->resolveLine($comment);
             $text = self::replyText($group, $cfg);
 

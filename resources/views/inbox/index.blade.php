@@ -1634,7 +1634,8 @@
                     action = dmForm;
                 } else {
                     const failed = c.status === 'dm_failed' ? '<span class="text-danger small me-2">не надіслалось</span>' : '';
-                    action = `${failed}<button class="btn btn-sm btn-outline-primary" onclick="cmOpenDm=${c.id};ensureTpl().then(renderComments);setTimeout(()=>document.getElementById('dm-input-${c.id}')?.focus(),80)"><i class="bi bi-send me-1"></i>Написати в директ</button>`;
+                    const skipped = c.status === 'dm_skipped' ? '<span class="text-muted small me-2" title="Цій людині нещодавно вже писали в директ — бот не дублює">без авто-DM</span>' : '';
+                    action = `${failed}${skipped}<button class="btn btn-sm btn-outline-primary" onclick="cmOpenDm=${c.id};ensureTpl().then(renderComments);setTimeout(()=>document.getElementById('dm-input-${c.id}')?.focus(),80)"><i class="bi bi-send me-1"></i>Написати в директ</button>`;
                 }
                 return `<div class="ib-cm">
                     <div class="hd">${chIcon(c.channel)}<span class="nm">${esc(c.from_name)}</span><span class="tm">${esc(c.at_human || '')}</span>
