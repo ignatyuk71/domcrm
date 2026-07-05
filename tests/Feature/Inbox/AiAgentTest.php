@@ -753,6 +753,10 @@ class AiAgentTest extends TestCase
         $this->assertStringContainsString('БЕЗ повторного колажу', $text);
         // Стара логіка «назвав групу → колаж» лишилась (не зламали).
         $this->assertStringContainsString('ГОЛОВНЕ ПРО КОЛАЖ', $text);
+        // Посилення після кейсу Людмили Дацюк 06.07: питання про колір НЕ замінює
+        // колаж — Sonnet 5 інакше давав ціну+питання й чекав, показуючи фото потім.
+        $this->assertStringContainsString('НАЙЧАСТІША ПОМИЛКА', $text);
+        $this->assertStringContainsString('НЕ ЗАМІНЮЄ колаж', $text);
         // #4 — золоте правило: закриття доречне при названому виборі (навіть із питанням ціни),
         // але НЕ на голу ціну без вибору; ціна завжди першою.
         $this->assertStringContainsString('ЗОЛОТЕ ПРАВИЛО ЗАКРИТТЯ', $text);
