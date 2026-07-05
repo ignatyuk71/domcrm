@@ -80,7 +80,9 @@ class HistoryBuilder
             // Власні минулі репліки агента чистимо від службових слів і від
             // плейсхолдерів фото, щоб модель не вчилась друкувати їх текстом.
             if ($role === 'assistant') {
-                $text = $this->stripPhotoPlaceholder((string) $this->scrub($text));
+                // + чистка markdown/галюцинацій: щоб модель не копіювала власні
+                // старі артефакти з історії (Sonnet вчиться сам у себе).
+                $text = $this->scrubber->stripModelArtifacts($this->stripPhotoPlaceholder((string) $this->scrub($text)));
             }
 
             $blocks = [];
@@ -119,9 +121,19 @@ class HistoryBuilder
                         ];
                     }
                 }
-                if ($blocks && $text === '') {
+                $hasImages = collect($blocks)->contains(fn ($b) => ($b['type'] ?? '') === 'image');
+                if ($hasImages && $text === '') {
                     $text = '(зображення вище — роздивись і знайди відповідник у каталозі)';
                 }
+            }
+
+            // Рілс/відео переглядати не вміємо: чесно скажи це клієнту, а не
+            // «фото не долучилося» (кейс соні 05.07 — переслала рілс).
+            if ($role === 'user' && $this->hasVideoAttachment($m)) {
+                $blocks[] = [
+                    'type' => 'text',
+                    'text' => '(система: клієнт надіслав ВІДЕО або РІЛС — ти НЕ можеш переглядати відео. НЕ кажи «фото не долучилося». Чесно скажи, що відео переглянути не можеш, і попроси надіслати фото чи скріншот — або уточни модель/колір словами.)',
+                ];
             }
 
             // Примітка про контекст: на ЩО відповів клієнт.
@@ -253,11 +265,24 @@ class HistoryBuilder
     /** URL-и картинок клієнта з повідомлення (лише вхідні зображення). */
     private function clientImageUrls(InboxMessage $m): array
     {
+        // Не лише type=image: пересланий пост (ig_post/share/media_share) несе
+        // картинку поста — раніше відсіювався, і бот казав «фото не долучилося»
+        // (кейс Оксани К. 05.07). Відео/рілси сюди не беремо (там url не картинка);
+        // сміття відсіє fetchImage — він валідує байти. Локальна копія — перша
+        // (посилання Meta протухають).
         return collect($m->attachments ?? [])
-            ->filter(fn ($a) => !empty($a['url']) && str_contains((string) ($a['type'] ?? ''), 'image'))
-            ->pluck('url')
+            ->filter(fn ($a) => (!empty($a['url']) || !empty($a['local']))
+                && preg_match('/image|ig_post|media_share|share|story/i', (string) ($a['type'] ?? '')))
+            ->map(fn ($a) => !empty($a['local']) ? url($a['local']) : $a['url'])
             ->values()
             ->all();
+    }
+
+    /** Чи є у повідомленні відео/рілс (переглядати не вміємо — чесно кажемо). */
+    private function hasVideoAttachment(InboxMessage $m): bool
+    {
+        return collect($m->attachments ?? [])
+            ->contains(fn ($a) => preg_match('/reel|video/i', (string) ($a['type'] ?? '')));
     }
 
     /** Чи повідомлення — лише голосове/аудіо (без тексту й без картинки). */

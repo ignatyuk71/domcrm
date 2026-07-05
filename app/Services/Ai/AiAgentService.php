@@ -197,7 +197,7 @@ class AiAgentService
                 if ($this->scrubber->mentionsSendingPhotos($rawStep)) {
                     $photoClaim = true;
                 }
-                $tt = trim($this->stripPhotoPlaceholder($rawStep));
+                $tt = trim($this->scrubber->stripModelArtifacts($this->stripPhotoPlaceholder($rawStep)));
                 if ($tt !== '') {
                     $turnTexts[] = $tt;
                 }

@@ -339,6 +339,32 @@ class AiPanelTest extends TestCase
         ]);
     }
 
+    public function test_sweep_skips_follow_up_after_client_refusal(): void
+    {
+        AiSetting::global()->update(['follow_up_hours' => 3]);
+        $conn = MetaConnection::create(['page_id' => 'PAGE3', 'page_name' => 'Shop', 'page_access_token' => 'tok', 'status' => 'active']);
+        AiSetting::forConnection($conn->id)->update(['enabled' => true]);
+        $contact = InboxContact::create(['meta_connection_id' => $conn->id, 'channel' => 'facebook', 'external_id' => 'USER3']);
+        $conv = InboxConversation::create([
+            'meta_connection_id' => $conn->id, 'inbox_contact_id' => $contact->id, 'channel' => 'facebook',
+            'ai_enabled' => true, 'last_message_direction' => 'out', 'last_message_at' => now()->subHours(4),
+        ]);
+        // Клієнтка чемно відмовилась, ми попрощались (кейс соні 05.07).
+        InboxMessage::create(['inbox_conversation_id' => $conv->id, 'direction' => 'in', 'sender' => 'contact', 'text' => 'нет спасибо', 'sent_at' => now()->subHours(5)]);
+        InboxMessage::create(['inbox_conversation_id' => $conv->id, 'direction' => 'out', 'sender' => 'ai', 'text' => 'Зрозуміла 🙂 Звертайтесь!', 'sent_at' => now()->subHours(4)]);
+
+        Http::fake(['graph.facebook.com/*' => Http::response(['message_id' => 'm_ref'], 200)]);
+
+        $this->artisan('ai:sweep')->assertExitCode(0);
+
+        // Пінг «списаний» без відправки: дата стоїть, а повідомлення-догонялки нема.
+        $this->assertNotNull($conv->fresh()->follow_up_sent_at);
+        $this->assertDatabaseMissing('inbox_messages', [
+            'inbox_conversation_id' => $conv->id,
+            'text' => AiAgentService::orderTexts()['follow_up'],
+        ]);
+    }
+
     public function test_sweep_skips_follow_up_without_client_dm(): void
     {
         AiSetting::global()->update(['follow_up_hours' => 3]);

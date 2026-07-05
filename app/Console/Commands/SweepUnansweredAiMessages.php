@@ -91,6 +91,17 @@ class SweepUnansweredAiMessages extends Command
                 if (!$store || !$store->enabled || !AiAgentService::scheduleAllows($store->schedule)) {
                     continue;
                 }
+
+                // Клієнт уже чемно ВІДМОВИВСЯ («ні, дякую», «нет спасибо», «поки що ні»)
+                // → «чи вдалося визначитися?» після цього — спам (кейси Оксани К. і соні
+                // 05.07). Пінг одноразовий — просто списуємо його без відправки.
+                $lastIn = $conv->messages()->where('direction', 'in')->latest('id')->first();
+                if ($lastIn && self::looksLikeRefusal((string) $lastIn->text)) {
+                    $conv->update(['follow_up_sent_at' => now()]);
+                    $this->line("follow-up conv #{$conv->id}: пропущено (клієнт відмовився)");
+                    continue;
+                }
+
                 $ai->sendFollowUp($conv);
                 $followed++;
                 $this->line("follow-up conv #{$conv->id}");
@@ -100,5 +111,17 @@ class SweepUnansweredAiMessages extends Command
         $this->info('Оброблено: ' . $messages->count() . ' повідомлень, ' . $comments->count() . ' коментарів, ' . $followed . ' фоллоу-апів');
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Останнє повідомлення клієнта схоже на відмову. Свідомо обережний список:
+     * краще пропустити зайвий пінг, ніж дістати людину, яка сказала «ні».
+     */
+    public static function looksLikeRefusal(string $text): bool
+    {
+        return (bool) preg_match(
+            '/(?<!\p{L})(ні|нет|не\s+(?:треба|потрібно|потрібні|буду|хочу|надо|нужно|цікавить|интересует)|передумал\p{L}*|відмовл\p{L}*)(?!\p{L})/iu',
+            mb_strtolower($text)
+        );
     }
 }
