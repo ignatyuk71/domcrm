@@ -67,7 +67,9 @@ class AiGreetingRuleTest extends TestCase
         $body = json_encode($req->data(), JSON_UNESCAPED_UNICODE);
 
         $this->assertStringContainsString('(система: зараз ', $body);
-        $this->assertStringContainsString('Вітайся відповідно до часу доби', $body);
+        // Без наказу «вітайся» (він змушував Sonnet вітатись щоходу).
+        $this->assertStringNotContainsString('Вітайся відповідно до часу доби', $body);
+        $this->assertStringContainsString('НЕ вітайся знову', $body);
         $this->assertStringContainsString(now()->format('d.m.Y'), $body);
     }
 
