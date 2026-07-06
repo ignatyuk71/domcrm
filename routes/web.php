@@ -101,6 +101,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/api/inbox/board', [InboxController::class, 'boardData'])->name('inbox.boardData');
         Route::get('/api/inbox/conversations', [InboxController::class, 'conversations'])->name('inbox.conversations');
         Route::get('/api/inbox/conversations/{conversation}/messages', [InboxController::class, 'messages'])->name('inbox.messages');
+        Route::get('/api/inbox/conversations/{conversation}/preview', [InboxController::class, 'preview'])->name('inbox.preview');
         Route::post('/api/inbox/conversations/{conversation}/send', [InboxController::class, 'send'])->name('inbox.send');
         Route::post('/api/inbox/sync', [InboxController::class, 'sync'])->name('inbox.sync');
         Route::post('/api/inbox/conversations/{conversation}/send-attachment', [InboxController::class, 'sendAttachment'])->name('inbox.sendAttachment');

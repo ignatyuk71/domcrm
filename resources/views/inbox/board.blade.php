@@ -57,6 +57,25 @@
         @keyframes kbspin { to { transform: rotate(360deg); } }
 
         @media (max-width: 700px) { .kb-head { padding: 12px 14px; } .kb-hint { display: none; } .kb-board { padding: 14px; } }
+
+        /* Прев'ю останніх повідомлень при наведенні на картку */
+        .kb-peek { position: fixed; z-index: 1200; width: 300px; max-height: 340px; background: #fff;
+                   border: 1px solid #e7e9f1; border-radius: 13px; box-shadow: 0 12px 34px rgba(16,24,40,.16);
+                   display: flex; flex-direction: column; opacity: 0; transform: translateY(4px);
+                   transition: opacity .13s, transform .13s; pointer-events: none; }
+        .kb-peek.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
+        .kb-peek-head { padding: 9px 13px; border-bottom: 1px solid #f0f1f6; font-weight: 700; font-size: .82rem;
+                        color: #0f172a; display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+        .kb-peek-head i { color: #6366f1; }
+        .kb-peek-body { padding: 9px 11px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; }
+        .kb-peek-row { display: flex; }
+        .kb-peek-row.out { justify-content: flex-end; }
+        .kb-peek-bub { max-width: 82%; padding: 6px 10px; border-radius: 12px; font-size: .8rem; line-height: 1.32;
+                       white-space: pre-wrap; word-break: break-word; }
+        .kb-peek-bub.in { background: #f1f3f7; color: #1c1e21; border-bottom-left-radius: 4px; }
+        .kb-peek-bub.out { background: #e8ebff; color: #2c2f6b; border-bottom-right-radius: 4px; }
+        .kb-peek-ai { font-size: .68rem; color: #7c86b8; margin-right: 3px; }
+        .kb-peek-empty { color: #b6bcc7; font-size: .82rem; text-align: center; padding: 14px 0; }
     </style>
 
     <div class="kb-page">
@@ -196,6 +215,91 @@
             if (dragged) return;
             window.location = '{{ route('inbox.index') }}?conv=' + id;
         }
+
+        // --- Прев'ю чату при наведенні на картку ---
+        let peekEl = null, peekTimer = null, peekId = null, peekCache = {};
+
+        function ensurePeek() {
+            if (peekEl) return peekEl;
+            peekEl = document.createElement('div');
+            peekEl.className = 'kb-peek';
+            // курсор у віконці — тримаємо відкритим і даємо прокрутити
+            peekEl.addEventListener('mouseenter', () => { clearTimeout(peekTimer); });
+            peekEl.addEventListener('mouseleave', hidePeek);
+            document.body.appendChild(peekEl);
+            return peekEl;
+        }
+
+        function positionPeek(card) {
+            const el = ensurePeek();
+            const r = card.getBoundingClientRect();
+            const w = 300, gap = 10;
+            // праворуч від картки, якщо влазить, інакше ліворуч
+            let left = r.right + gap;
+            if (left + w > window.innerWidth - 8) left = Math.max(8, r.left - w - gap);
+            let top = r.top;
+            top = Math.min(top, window.innerHeight - el.offsetHeight - 8);
+            el.style.left = left + 'px';
+            el.style.top = Math.max(8, top) + 'px';
+        }
+
+        function renderPeek(data) {
+            const rows = (data.messages || []).map(m => {
+                const out = m.direction === 'out';
+                const ai = m.sender === 'ai' ? '<i class="bi bi-stars kb-peek-ai"></i>' : '';
+                const body = m.text ? esc(m.text) : (m.has_photo ? '📷 фото' : '…');
+                return `<div class="kb-peek-row ${out ? 'out' : ''}"><div class="kb-peek-bub ${out ? 'out' : 'in'}">${ai}${body}</div></div>`;
+            }).join('');
+            return `<div class="kb-peek-head"><i class="bi bi-chat-left-text"></i>${esc(data.name || 'Чат')}</div>
+                    <div class="kb-peek-body">${rows || '<div class="kb-peek-empty">Немає повідомлень</div>'}</div>`;
+        }
+
+        async function showPeek(card, id) {
+            const el = ensurePeek();
+            peekId = id;
+            if (peekCache[id]) {
+                el.innerHTML = renderPeek(peekCache[id]);
+            } else {
+                el.innerHTML = `<div class="kb-peek-head"><i class="bi bi-chat-left-text"></i>Завантаження…</div>`;
+                try {
+                    const res = await fetch(`/api/inbox/conversations/${id}/preview`, { headers: { Accept: 'application/json' } });
+                    const data = await res.json();
+                    if (peekId !== id) return; // курсор уже пішов на іншу картку
+                    peekCache[id] = data;
+                    el.innerHTML = renderPeek(data);
+                } catch (e) {
+                    if (peekId === id) el.innerHTML = `<div class="kb-peek-head">Не вдалося завантажити</div>`;
+                }
+            }
+            positionPeek(card);
+            el.classList.add('show');
+        }
+
+        function hidePeek() {
+            peekId = null;
+            if (peekEl) peekEl.classList.remove('show');
+        }
+
+        // делегування: наведення на будь-яку картку дошки
+        BOARD.addEventListener('mouseover', (e) => {
+            const card = e.target.closest('.kb-card');
+            if (!card || card.classList.contains('dragging')) return;
+            if (e.relatedTarget && card.contains(e.relatedTarget)) return; // рух усередині картки
+            const id = card.dataset.id;
+            clearTimeout(peekTimer);
+            peekTimer = setTimeout(() => showPeek(card, id), 380);
+        });
+        BOARD.addEventListener('mouseout', (e) => {
+            const card = e.target.closest('.kb-card');
+            if (!card) return;
+            // якщо курсор іде у прев'ю — не ховаємо (обробить mouseenter прев'ю)
+            if (e.relatedTarget && (peekEl && peekEl.contains(e.relatedTarget))) return;
+            if (e.relatedTarget && card.contains(e.relatedTarget)) return;
+            clearTimeout(peekTimer);
+            peekTimer = setTimeout(hidePeek, 160);
+        });
+        // тягнемо картку — прев'ю геть
+        BOARD.addEventListener('dragstart', hidePeek);
 
         loadBoard();
     </script>

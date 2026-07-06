@@ -77,6 +77,33 @@ class InboxController extends Controller
         return response()->json(['data' => $data, 'has_more' => $hasMore]);
     }
 
+    /**
+     * Легке прев'ю останніх повідомлень для наведення на картку дошки.
+     * НЕ позначає прочитаним і не тягне важке — лише останні N реплік.
+     */
+    public function preview(InboxConversation $conversation)
+    {
+        $items = $conversation->messages()
+            ->latest('id')
+            ->limit(10)
+            ->get(['direction', 'sender', 'text', 'attachments', 'sent_at', 'created_at'])
+            ->reverse()
+            ->values();
+
+        $messages = $items->map(fn (InboxMessage $m) => [
+            'direction' => $m->direction,
+            'sender' => $m->sender,
+            'text' => $m->text,
+            'has_photo' => !empty($m->attachments),
+            'at' => ($m->sent_at ?? $m->created_at)?->format('d.m H:i'),
+        ]);
+
+        return response()->json([
+            'name' => $this->contactName($conversation->contact?->name, $conversation->contact?->external_id),
+            'messages' => $messages,
+        ]);
+    }
+
     /** Повідомлення діалогу + позначити прочитаним. */
     public function messages(InboxConversation $conversation)
     {
