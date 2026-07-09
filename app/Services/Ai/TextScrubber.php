@@ -56,7 +56,10 @@ class TextScrubber
         $clean = (string) $text;
 
         // Галюцинований діалог: відрізаємо ВСЕ від рядка «Human:»/«Assistant:»/«User:».
-        $clean = preg_replace('/\n\s*(?:Human|Assistant|User)\s*:.*$/su', '', $clean);
+        // Кейс Olena Lykova 09.07 (Opus): «user Домашні» — без двокрапки й з малої
+        // літери, тому двокрапка необовʼязкова (досить пробілу після ролі),
+        // а збіг регістронезалежний. Українських слів ці ролі не зачіпають.
+        $clean = preg_replace('/\n\s*(?:Human|Assistant|User)(?:\s*:|[ \t]).*$/siu', '', $clean);
 
         // Markdown-емфаза: **жирний** / __жирний__ → чистий текст (одинарні * не чіпаємо).
         $clean = preg_replace('/\*\*(.+?)\*\*/su', '$1', $clean);

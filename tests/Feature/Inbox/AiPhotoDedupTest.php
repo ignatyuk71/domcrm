@@ -113,4 +113,76 @@ class AiPhotoDedupTest extends TestCase
             'text' => "Вуличні капці — 530 грн 🙂\n\nЯкий колір показати ближче?",
         ]);
     }
+
+    /**
+     * Кейс Olena Lykova 09.07 13:31: усі фото з виклику дедуп пропустив
+     * («щойно надсилалося»), але модель отримувала брехливу нотатку «фото вже
+     * надіслані» → клієнту пішло «Ось детальні фото 🙂» БЕЗ жодного фото.
+     * Тепер нотатка чесна — модель дописує виправлення.
+     */
+    public function test_skipped_note_when_all_photos_deduped(): void
+    {
+        [, $conv] = $this->makeConversation();
+        $collage = $this->makeCollage();
+
+        // Ті самі фото щойно надсилалися цьому клієнту.
+        InboxMessage::create([
+            'inbox_conversation_id' => $conv->id, 'direction' => 'out', 'sender' => 'ai',
+            'external_message_id' => 'prev_photo', 'text' => null,
+            'attachments' => [['type' => 'image', 'url' => $collage->url()]],
+            'sent_at' => now()->subMinutes(50),
+        ]);
+
+        $incoming = InboxMessage::create([
+            'inbox_conversation_id' => $conv->id, 'direction' => 'in', 'sender' => 'contact',
+            'external_message_id' => 'm_dd2', 'text' => 'Так, покажіть ближче', 'sent_at' => now(),
+        ]);
+
+        Http::fake([
+            'api.anthropic.com/*' => Http::sequence()
+                ->push([
+                    'content' => [
+                        ['type' => 'text', 'text' => 'Ось детальні фото чорних капців 🙂'],
+                        ['type' => 'tool_use', 'id' => 'tu_dd2', 'name' => 'send_photos', 'input' => ['photo_ids' => [$collage->id]]],
+                    ],
+                    'stop_reason' => 'tool_use',
+                    'usage' => ['input_tokens' => 300, 'output_tokens' => 30],
+                ], 200)
+                ->push([
+                    'content' => [['type' => 'text', 'text' => 'Це ті самі фото, що я надсилала вище 🙂']],
+                    'stop_reason' => 'end_turn',
+                    'usage' => ['input_tokens' => 350, 'output_tokens' => 20],
+                ], 200),
+            // Єдиний виклик Graph — текст. Фото повторно НЕ шлються.
+            'graph.facebook.com/*' => Http::response(['message_id' => 'm_dd_text2'], 200),
+        ]);
+
+        (new \App\Jobs\AiRespondToMessage($conv->id, $incoming->id))->handle(app(AiAgentService::class));
+
+        $second = collect(Http::recorded())
+            ->map(fn ($pair) => $pair[0])
+            ->first(function ($req) {
+                if (!str_contains($req->url(), 'api.anthropic.com')) {
+                    return false;
+                }
+                return str_contains(json_encode($req->data(), JSON_UNESCAPED_UNICODE), 'tool_result');
+            });
+
+        $this->assertNotNull($second, 'другий запит із tool_result не знайдено');
+        $body = json_encode($second->data(), JSON_UNESCAPED_UNICODE);
+        $this->assertStringContainsString('жодне фото ЗАРАЗ НЕ пішло клієнту', $body);
+        $this->assertStringNotContainsString('фото вже надіслані клієнту', $body, 'брехлива нотатка не мусить іти моделі');
+
+        // Дубль фото клієнту не пішов: Graph викликався лише для тексту.
+        $graphCalls = collect(Http::recorded())
+            ->filter(fn ($pair) => str_contains($pair[0]->url(), 'graph.facebook.com'))
+            ->count();
+        $this->assertSame(1, $graphCalls, 'фото не мали піти повторно');
+
+        // Клієнт отримує обіцянку + чесне виправлення одним повідомленням.
+        $this->assertDatabaseHas('inbox_messages', [
+            'sender' => 'ai',
+            'text' => "Ось детальні фото чорних капців 🙂\n\nЦе ті самі фото, що я надсилала вище 🙂",
+        ]);
+    }
 }

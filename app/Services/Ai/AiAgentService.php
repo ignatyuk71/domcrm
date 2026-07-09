@@ -35,6 +35,13 @@ class AiAgentService
     private const PHOTOS_SENT_NOTE = '(система: фото вже надіслані клієнту. Увесь текст, який ти написала ДО виклику інструмента, ТЕЖ буде надіслано клієнту — одним повідомленням після фото. НЕ повторюй і НЕ перефразовуй його. Якщо відповідь уже повна — заверши хід БЕЗ додаткового тексту; якщо тексту ще не було — напиши повну відповідь зараз.)';
 
     /**
+     * Жодне фото з виклику реально не пішло (дубль пропущено або помилка відправки).
+     * Стара нотатка «фото вже надіслані» тут БРЕХАЛА моделі → клієнт отримував
+     * «Ось детальні фото 🙂» без жодного фото (кейс Olena Lykova 09.07 13:31).
+     */
+    private const PHOTOS_SKIPPED_NOTE = '(система: УВАГА — жодне фото ЗАРАЗ НЕ пішло клієнту: це повтор уже надісланих фото або помилка відправки (див. результат інструмента). Текст, який ти написала ДО виклику, все одно буде надіслано клієнту. Якщо в ньому ти обіцяла показати фото — допиши зараз ОДИН короткий чесний рядок: для повтору — «Це ті самі фото, що я надсилала вище 🙂», для помилки — вибачся і опиши товар словами. НЕ повторюй попередній текст і НЕ обіцяй нових фото.)';
+
+    /**
      * Чи дозволяє графік працювати зараз. Делегує AiSchedule (лишено тут для
      * стабільного публічного API: команда й тести кличуть AiAgentService::scheduleAllows).
      */
@@ -241,12 +248,19 @@ class AiAgentService
                 // Виконуємо всі запити в базу з цього кроку і віддаємо результати назад.
                 $messages[] = ['role' => 'assistant', 'content' => $content];
                 $results = [];
+                $photoToolCalled = false;
+                $photoActuallySent = false;
                 foreach ($content as $block) {
                     if (($block['type'] ?? '') !== 'tool_use') {
                         continue;
                     }
                     $toolsCalled[] = ['tool' => $block['name'], 'input' => $block['input'] ?? []];
                     $out = $this->runTool($block['name'], (array) ($block['input'] ?? []), $conversation);
+                    if (($block['name'] ?? '') === 'send_photos') {
+                        $photoToolCalled = true;
+                        // toolSendPhotos повертає постатусно: 'надіслано' | 'пропущено…' | 'помилка…'.
+                        $photoActuallySent = $photoActuallySent || in_array('надіслано', $out, true);
+                    }
                     $results[] = [
                         'type' => 'tool_result',
                         'tool_use_id' => $block['id'],
@@ -254,9 +268,11 @@ class AiAgentService
                     ];
                 }
                 // Після send_photos нагадуємо: текст кроків склеїться в одне
-                // повідомлення — не переказуй себе (захист від дубля).
-                if (collect($content)->contains(fn ($b) => ($b['type'] ?? '') === 'tool_use' && ($b['name'] ?? '') === 'send_photos')) {
-                    $results[] = ['type' => 'text', 'text' => self::PHOTOS_SENT_NOTE];
+                // повідомлення — не переказуй себе (захист від дубля). Нотатка
+                // каже ПРАВДУ: якщо дедуп/помилка пропустили ВСІ фото — модель
+                // мусить чесно виправитись, а не лишати «Ось фото…» без фото.
+                if ($photoToolCalled) {
+                    $results[] = ['type' => 'text', 'text' => $photoActuallySent ? self::PHOTOS_SENT_NOTE : self::PHOTOS_SKIPPED_NOTE];
                 }
                 $messages[] = ['role' => 'user', 'content' => $results];
             }
