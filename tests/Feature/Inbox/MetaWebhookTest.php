@@ -98,6 +98,35 @@ class MetaWebhookTest extends TestCase
         $this->assertSame('Привіт', $conversation->last_message_text);
     }
 
+    public function test_client_message_after_pending_ai_order_flags_needs_human(): void
+    {
+        // Кейс conv 599 (20.07 01:27): після фіксації ШІ-замовлення бот вимкнений,
+        // клієнт написав «Які ще є у вас» — і повідомлення висіло без жодної реакції.
+        // Тепер: замовлення ще не оброблене менеджером → чат отримує «Потрібна увага».
+        $this->connection();
+        $this->postWebhook($this->fbPayload('m_ord_1', 'Хочу замовити'))->assertOk();
+
+        $aiOrder = \App\Models\ChatStatus::firstOrCreate(
+            ['code' => 'ai_order'],
+            ['name' => 'Замовлення від ШІ', 'icon' => '🤖', 'color' => '#7c3aed', 'sort_order' => 90]
+        );
+        $conversation = InboxConversation::first();
+        $conversation->update([
+            'ai_enabled' => false,
+            'chat_status_id' => $aiOrder->id,
+            'ai_order_handled_at' => null,
+        ]);
+
+        $this->postWebhook($this->fbPayload('m_ord_2', 'Які ще є у вас'))->assertOk();
+        $this->assertSame('needs_human', $conversation->fresh()->chatStatus?->code);
+
+        // А от коли менеджер замовлення ВЖЕ обробив — мітку не чіпаємо.
+        $conversation->refresh();
+        $conversation->update(['chat_status_id' => $aiOrder->id, 'ai_order_handled_at' => now()]);
+        $this->postWebhook($this->fbPayload('m_ord_3', 'Дякую'))->assertOk();
+        $this->assertSame('ai_order', $conversation->fresh()->chatStatus?->code);
+    }
+
     public function test_echo_from_facebook_inbox_is_stored_as_outgoing(): void
     {
         $conn = $this->connection();

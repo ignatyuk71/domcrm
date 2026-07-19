@@ -523,10 +523,11 @@ class AiGalleryTest extends TestCase
         $this->assertNotNull($status);
         $this->assertSame($status->id, $conv->chat_status_id);
         $this->assertFalse((bool) $conv->ai_enabled);
-        // Фінальне повідомлення пішло — РІВНО текст із конфігу (не від моделі)
+        // Текст агента НЕ ріжеться (вимога 20.07): його відповідь + канонічний фінал.
         $this->assertDatabaseHas('inbox_messages', [
             'sender' => 'ai',
-            'text' => AiAgentService::orderTexts()['final_message'],
+            'text' => "Дякуємо! Ваше замовлення прийнято 💛 Вуличні тапки, чорні, 36/37, оплата при отриманні. Зранку оформимо і напишемо вам тут 🙏\n\n"
+                . AiAgentService::orderTexts()['final_message'],
         ]);
 
         // Наступне повідомлення клієнта — бот мовчить (розмова в людей)

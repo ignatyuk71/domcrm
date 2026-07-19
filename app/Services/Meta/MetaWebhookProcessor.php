@@ -356,6 +356,16 @@ class MetaWebhookProcessor
             // AI-агент: думає вже ПІСЛЯ того, як вебхук віддав фейсбуку 200.
             if ($conversation->ai_enabled) {
                 AiRespondToMessage::dispatchAfterResponse($conversation->id, $msg->id);
+            } elseif ($conversation->ai_order_handled_at === null
+                && $conversation->chatStatus?->code === 'ai_order') {
+                // Клієнт пише ПІСЛЯ фіксації ШІ-замовлення, поки менеджер його ще
+                // не обробив (бот уже вимкнений) → червона мітка, щоб повідомлення
+                // не висіло без відповіді (кейс conv 599, 20.07 01:27).
+                $needsHuman = \App\Models\ChatStatus::firstOrCreate(
+                    ['code' => 'needs_human'],
+                    ['name' => 'Потрібна увага', 'icon' => '🔴', 'color' => '#dc2626', 'sort_order' => 0]
+                );
+                $conversation->update(['chat_status_id' => $needsHuman->id]);
             }
         }
 

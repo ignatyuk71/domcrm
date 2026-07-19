@@ -747,6 +747,10 @@ class AiAgentTest extends TestCase
         // Запобіжник якоріння: цифри в прикладах умовні, ціни — лише з каталогу.
         $this->assertStringContainsString('УВАГА ПРО ПРИКЛАДИ', $text);
         $this->assertStringContainsString('цифру з прикладу клієнту не називай', $text);
+        // Кейс conv 599 (20.07): питання поруч із підтвердженням замовлення НЕ губиться,
+        // а власний фінал модель не дублює (канонічний шле система після її тексту).
+        $this->assertStringContainsString('питання губитись НЕ має', $text);
+        $this->assertStringContainsString('за замовлення НЕ пиши й не дублюй', $text);
         $this->assertStringContainsString('escalate_to_manager', $text);
     }
 
@@ -778,32 +782,37 @@ class AiAgentTest extends TestCase
         $this->assertStringNotContainsString('ЗОЛОТЕ ПРАВИЛО ЗАКРИТТЯ', $text);
     }
 
-    public function test_complete_order_sends_only_canonical_final(): void
+    public function test_complete_order_keeps_model_answer_before_final(): void
     {
+        // Кейс conv 599 (20.07): «При отриманні» + «Які ще у вас тапки є?» однією
+        // пачкою. Раніше код викидав ВЕСЬ текст моделі й слав лише канонічний
+        // фінал — питання губилось. Вимога власника: код відповіді НЕ ріже.
         $this->setUpConversation();
 
         Http::fake([
             'api.anthropic.com/*' => Http::sequence()
-                ->push(['content' => [['type' => 'tool_use', 'id' => 't1', 'name' => 'complete_order', 'input' => [
-                    'items' => [['title' => 'Домашні', 'color' => 'чорні', 'size' => '38', 'qty' => 1]],
-                    'customer_name' => 'Іван', 'phone' => '0961234567', 'address' => 'Київ №5', 'payment' => 'при отриманні',
-                ]]], 'stop_reason' => 'tool_use', 'usage' => ['input_tokens' => 10, 'output_tokens' => 5]], 200)
-                ->push(['content' => [['type' => 'text', 'text' => 'Дякую! Оформлюю ваше замовлення 💛 Замовлення оформлено!']], 'stop_reason' => 'end_turn', 'usage' => ['input_tokens' => 5, 'output_tokens' => 3]], 200),
+                ->push(['content' => [
+                    ['type' => 'text', 'text' => 'Окрім домашніх у нас є вуличні капці з хутром — 530 грн 🙂'],
+                    ['type' => 'tool_use', 'id' => 't1', 'name' => 'complete_order', 'input' => [
+                        'items' => [['title' => 'Домашні', 'color' => 'чорні', 'size' => '38', 'qty' => 1]],
+                        'customer_name' => 'Іван', 'phone' => '0961234567', 'address' => 'Київ №5', 'payment' => 'при отриманні',
+                    ]],
+                ], 'stop_reason' => 'tool_use', 'usage' => ['input_tokens' => 10, 'output_tokens' => 5]], 200)
+                ->push(['content' => [], 'stop_reason' => 'end_turn', 'usage' => ['input_tokens' => 5, 'output_tokens' => 1]], 200),
             'graph.facebook.com/*' => Http::response(['message_id' => 'm_final'], 200),
         ]);
 
         $this->runJob();
 
-        // Після оформлення — лише канонічний фінал, без власної балаканини моделі.
         $final = AiAgentService::orderTexts()['final_message'];
         $sent = InboxMessage::where('inbox_conversation_id', $this->conv->id)->where('sender', 'ai')->latest('id')->first();
-        $this->assertSame($final, trim((string) $sent->text));
-        $this->assertStringNotContainsString('Оформлюю', (string) $sent->text);
+        // Відповідь агента збережена, фінал системи — після неї.
+        $this->assertSame("Окрім домашніх у нас є вуличні капці з хутром — 530 грн 🙂\n\n" . $final, trim((string) $sent->text));
         $this->assertFalse((bool) $this->conv->fresh()->ai_enabled);
         $this->assertSame('Іван', $this->conv->fresh()->ai_order_customer_name);
     }
 
-    public function test_complete_order_uses_final_only_when_model_wrote_it(): void
+    public function test_complete_order_sends_final_when_model_silent(): void
     {
         $this->setUpConversation();
 
@@ -813,16 +822,37 @@ class AiAgentTest extends TestCase
                     'items' => [['title' => 'Домашні', 'color' => 'чорні', 'size' => '38', 'qty' => 1]],
                     'customer_name' => 'Іван', 'phone' => '0961234567', 'address' => 'Київ №5', 'payment' => 'при отриманні',
                 ]]], 'stop_reason' => 'tool_use', 'usage' => ['input_tokens' => 10, 'output_tokens' => 5]], 200)
-                ->push(['content' => [['type' => 'text', 'text' => 'Дякуємо за замовлення, чекайте на ТТН']], 'stop_reason' => 'end_turn', 'usage' => ['input_tokens' => 5, 'output_tokens' => 3]], 200),
+                ->push(['content' => [], 'stop_reason' => 'end_turn', 'usage' => ['input_tokens' => 5, 'output_tokens' => 1]], 200),
             'graph.facebook.com/*' => Http::response(['message_id' => 'm_final2'], 200),
         ]);
 
         $this->runJob();
 
-        // Модель сама написала фінал → НЕ дублюємо, шлемо рівно один фінальний текст.
+        // Модель нічого не написала → клієнт отримує лише канонічний фінал.
         $this->assertDatabaseHas('inbox_messages', [
             'inbox_conversation_id' => $this->conv->id, 'sender' => 'ai', 'text' => AiAgentService::orderTexts()['final_message'],
         ]);
+    }
+
+    public function test_service_note_echo_never_reaches_client(): void
+    {
+        // Кейс conv 599 (20.07 01:23): модель відлунила «(відповідь уже повна)»
+        // з системної нотатки — клієнт побачив службовий текст у чаті.
+        $this->setUpConversation();
+
+        Http::fake([
+            'api.anthropic.com/*' => Http::response([
+                'content' => [['type' => 'text', 'text' => "Ось усі кольори — по 399 грн 🙂\n\n(відповідь уже повна)"]],
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ], 200),
+            'graph.facebook.com/*' => Http::response(['message_id' => 'm_echo'], 200),
+        ]);
+
+        $this->runJob();
+
+        $sent = InboxMessage::where('inbox_conversation_id', $this->conv->id)->where('sender', 'ai')->latest('id')->first();
+        $this->assertStringNotContainsString('відповідь уже повна', (string) $sent->text);
+        $this->assertStringContainsString('Ось усі кольори — по 399 грн 🙂', (string) $sent->text);
     }
 
     public function test_voice_message_gets_polite_reply_and_skips_model(): void
