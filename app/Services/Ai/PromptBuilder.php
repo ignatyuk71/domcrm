@@ -143,7 +143,7 @@ class PromptBuilder
                         ],
                         'customer_name' => ['type' => 'string', 'description' => 'ПІБ отримувача'],
                         'phone' => ['type' => 'string', 'description' => 'Номер мобільного'],
-                        'address' => ['type' => 'string', 'description' => 'Місто/село + номер відділення Нової Пошти'],
+                        'address' => ['type' => 'string', 'description' => 'Адреса доставки ТАК, як її дав клієнт: місто/село + відділення НП, поштомат або кур\'єрська адреса — будь-який формат приймається, нічого не перепитуй'],
                         'payment' => ['type' => 'string', 'description' => '«при отриманні» або «передоплата»'],
                     ],
                     'required' => ['items', 'customer_name', 'phone', 'address', 'payment'],
