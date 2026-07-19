@@ -742,6 +742,9 @@ class AiAgentTest extends TestCase
         // Критичні правила досі на місці (не загубились при реструктуризації).
         $this->assertStringContainsString('Питання про ціну завжди потребує відповіді ціною', $text);
         $this->assertStringContainsString("ОБОВ'ЯЗКОВЕ ПРАВИЛО", $text);
+        // Запобіжник якоріння: цифри в прикладах умовні, ціни — лише з каталогу.
+        $this->assertStringContainsString('УВАГА ПРО ПРИКЛАДИ', $text);
+        $this->assertStringContainsString('цифру з прикладу клієнту не називай', $text);
         $this->assertStringContainsString('escalate_to_manager', $text);
     }
 
