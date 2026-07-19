@@ -32,7 +32,9 @@ class AiGreetingRuleTest extends TestCase
 
         $this->assertStringContainsString('ПРИВІТАННЯ — РІВНО ОДНЕ НА РОЗМОВУ', $system);
         $this->assertStringContainsString('включно з авто-відповіддю на коментар', $system);
-        $this->assertStringContainsString('після паузи понад 3 дні — привітайся знову', $system);
+        // Мертвий виняток «після паузи 3 дні» видалено (аудит 19.07): модель
+        // не бачить дат в історії й виконати його не могла — лише шум у правилі.
+        $this->assertStringNotContainsString('після паузи понад 3 дні', $system);
         // Старе формулювання, що змушувало вітатися вдруге після комент-DM, — прибране.
         $this->assertStringNotContainsString('ПЕРШУ свою відповідь у розмові ОБОВ\'ЯЗКОВО починай з привітання', $system);
     }
