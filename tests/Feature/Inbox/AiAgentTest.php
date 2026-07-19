@@ -759,12 +759,15 @@ class AiAgentTest extends TestCase
         // колаж — Sonnet 5 інакше давав ціну+питання й чекав, показуючи фото потім.
         $this->assertStringContainsString('НАЙЧАСТІША ПОМИЛКА', $text);
         $this->assertStringContainsString('НЕ ЗАМІНЮЄ колаж', $text);
-        // #4 — золоте правило: закриття доречне при названому виборі (навіть із питанням ціни),
-        // але НЕ на голу ціну без вибору; ціна завжди першою.
-        $this->assertStringContainsString('ЗОЛОТЕ ПРАВИЛО ЗАКРИТТЯ', $text);
-        $this->assertStringContainsString('гарячий клієнт', $text);
+        // #4 — ЄДИНЕ правило заклику: критерій лише повнота вибору (модель+колір+розмір),
+        // «останнє повідомлення — про ціну» більше НЕ скасовує заклик; ціна завжди першою.
+        $this->assertStringContainsString('ЄДИНЕ ПРАВИЛО ЗАКЛИКУ', $text);
+        $this->assertStringContainsString('вибір повний + ціна названа', $text);
         $this->assertStringContainsString('БЕЗ конкретного вибору', $text);
         $this->assertStringContainsString('заклик НЕ замість ціни', $text);
+        // Старий ВИНЯТОК (конфліктував із правилом) видалено назавжди.
+        $this->assertStringNotContainsString('містить ЛИШЕ запит щодо ціни', $text);
+        $this->assertStringNotContainsString('ЗОЛОТЕ ПРАВИЛО ЗАКРИТТЯ', $text);
     }
 
     public function test_complete_order_sends_only_canonical_final(): void
