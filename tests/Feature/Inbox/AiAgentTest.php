@@ -721,7 +721,9 @@ class AiAgentTest extends TestCase
         $this->assertStringContainsString('видаючи молочний за бежевий', $text);
         // Кейс Михайла: «Укрпоштою?» → чітке «ні», і не перепитувати дану адресу.
         $this->assertStringContainsString('Ні, Укрпоштою не відправляємо', $text);
-        $this->assertStringContainsString('Не запитуй повторно ПІБ, телефон або адресу', $text);
+        // Канонічне правило «не перепитуй дані» — у кроці 3 (дубль із секції
+        // ДОСТАВКА видалено дедупом 20.07).
+        $this->assertStringContainsString('ЗАБОРОНЕНО повторно запитувати номер відділення', $text);
     }
 
     public function test_critical_rules_marked_inviolable_above_store_prompt(): void
