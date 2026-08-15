@@ -141,10 +141,10 @@ const perPageOptions = [15, 30, 60];
 let searchTimer;
 
 const statusChips = ref([{ value: '', label: 'Всі', icon: 'bi-grid', color: null }]);
-const countableStatusCodes = new Set(['in_process', 'confirmed', 'packing', 'packed', 'shipped', 'delivered']);
+const countableStatusCodes = new Set(['new', 'in_process', 'confirmed', 'packing', 'packed', 'shipped', 'delivered']);
 
 function buildStatusChips() {
-  const hiddenStatusCodes = new Set(['new', 'cancelled', 'canceled']);
+  const hiddenStatusCodes = new Set(['cancelled', 'canceled']);
   const hiddenStatusNames = new Set(['Скасовано']);
 
   statusChips.value = [
