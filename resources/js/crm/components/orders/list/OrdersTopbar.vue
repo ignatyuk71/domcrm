@@ -189,14 +189,16 @@ const vClickOutside = {
   flex: 1; /* Займає вільне місце */
   min-width: 250px; /* UPDATED: Даємо мінімальну ширину, щоб не стискалось в 0 */
   flex-wrap: nowrap !important;
-  gap: 6px;
+  gap: 4px;
   overflow-x: auto;
   overflow-y: hidden;
   white-space: nowrap;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: none; /* прокрутка лишається, смугу не малюємо */
 }
+.status-scroll-area::-webkit-scrollbar { display: none; }
 
-.filter-chip { height: 34px; padding: 0 10px; border-radius: 7px; border: 1px solid #e2e8f0; background: #fff; color: #64748b; font-size: 0.8rem; font-weight: 500; white-space: nowrap; transition: all 0.2s; display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.filter-chip { height: 30px; padding: 0 8px; border-radius: 7px; border: 1px solid #e2e8f0; background: #fff; color: #64748b; font-size: 0.75rem; font-weight: 500; white-space: nowrap; transition: all 0.2s; display: flex; align-items: center; gap: 4px; cursor: pointer; }
 .filter-chip:hover { background: #f8fafc; border-color: #cbd5e1; color: #334155; }
 .filter-chip.active { border-color: transparent; transform: translateY(-1px); }
 

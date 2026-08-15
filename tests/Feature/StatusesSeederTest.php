@@ -28,8 +28,8 @@ class StatusesSeederTest extends TestCase
             'packing'        => 'Упакування',
             'packed'         => 'Запаковано',
             'shipped'        => 'Відправлено',
-            'delivered'      => 'Прибуло у відділ.',
-            'delivered_paid' => 'Успішно завер.',
+            'delivered'      => 'У відділенні',
+            'delivered_paid' => 'Завершено',
             'returned'       => 'Повернення',
             'cancelled'      => 'Скасовано',
         ];

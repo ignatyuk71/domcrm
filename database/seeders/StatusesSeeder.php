@@ -29,8 +29,8 @@ class StatusesSeeder extends Seeder
             ['code' => 'packing',        'name' => 'Упакування',        'icon' => 'bi-qr-code',                'color' => '#78716c', 'sort_order' => 40, 'is_default' => false],
             ['code' => 'packed',         'name' => 'Запаковано',        'icon' => 'bi-box-seam',               'color' => '#f97316', 'sort_order' => 45, 'is_default' => false],
             ['code' => 'shipped',        'name' => 'Відправлено',       'icon' => 'bi-truck',                  'color' => '#0ea5e9', 'sort_order' => 50, 'is_default' => false],
-            ['code' => 'delivered',      'name' => 'Прибуло у відділ.', 'icon' => 'bi-geo-alt',                'color' => '#4ade80', 'sort_order' => 60, 'is_default' => false],
-            ['code' => 'delivered_paid', 'name' => 'Успішно завер.',    'icon' => 'bi-check-all',              'color' => '#16a34a', 'sort_order' => 70, 'is_default' => false],
+            ['code' => 'delivered',      'name' => 'У відділенні',      'icon' => 'bi-geo-alt',                'color' => '#4ade80', 'sort_order' => 60, 'is_default' => false],
+            ['code' => 'delivered_paid', 'name' => 'Завершено',         'icon' => 'bi-check-all',              'color' => '#16a34a', 'sort_order' => 70, 'is_default' => false],
             ['code' => 'returned',       'name' => 'Повернення',        'icon' => 'bi-arrow-counterclockwise', 'color' => '#ef4444', 'sort_order' => 80, 'is_default' => false],
             ['code' => 'cancelled',      'name' => 'Скасовано',         'icon' => 'bi-x-circle',               'color' => '#1f2937', 'sort_order' => 90, 'is_default' => false],
         ];
