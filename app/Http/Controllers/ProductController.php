@@ -6,6 +6,7 @@ use App\Models\Category;
 use App\Models\Color;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Support\ImageOptimizer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\File;
@@ -285,8 +286,15 @@ class ProductController extends Controller
             mkdir($dir, 0775, true);
         }
 
+        // Оригінали з камери важать мегабайти — одразу тиснемо в JPEG ~1200px.
+        $name = Str::random(40);
+        if (ImageOptimizer::toJpeg($file->getRealPath(), $dir . '/' . $name . '.jpg')) {
+            return 'products/' . $name . '.jpg';
+        }
+
+        // GD не впорався (екзотичний формат) — зберігаємо як є.
         $extension = $file->getClientOriginalExtension();
-        $filename = Str::random(40) . ($extension ? '.' . $extension : '');
+        $filename = $name . ($extension ? '.' . $extension : '');
         $file->move($dir, $filename);
 
         return 'products/' . $filename;
