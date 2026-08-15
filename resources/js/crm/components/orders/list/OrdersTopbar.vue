@@ -26,7 +26,7 @@
     </div>
 
     <div class="toolbar-filters px-4 pb-3">
-      <div class="filters-container d-flex flex-wrap align-items-start justify-content-between gap-3">
+      <div class="filters-container d-flex flex-wrap align-items-center justify-content-between gap-3">
         
         <div class="d-flex flex-wrap gap-2 status-scroll-area">
           <button
@@ -181,7 +181,7 @@ const vClickOutside = {
 .filters-container {
   position: relative;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: center;
 }
 
 /* STATUS CHIPS AREA */
@@ -208,7 +208,6 @@ const vClickOutside = {
   align-items: center;
   gap: 16px;
   flex-shrink: 0; /* Не стискається */
-  align-self: flex-start;
 }
 
 .divider-vertical {
