@@ -89,7 +89,7 @@ class ProductPhotoOptimizationTest extends TestCase
         ]);
 
         $jpgPath = $dir . '/' . $name . '.jpg';
-        $backupPath = storage_path('app/product-photos-backup/' . $name . '.png');
+        $backupPath = storage_path('app/product-photos-backup/' . hash('sha256', 'products/' . $name . '.png') . '-' . $name . '.png');
         $this->cleanupFiles[] = $jpgPath;
         $this->cleanupFiles[] = $backupPath;
 
@@ -126,5 +126,42 @@ class ProductPhotoOptimizationTest extends TestCase
         $this->artisan('products:optimize-photos')->assertSuccessful();
 
         $this->assertSame($md5Before, md5_file($jpgPath), 'Легкий JPEG не перетискаємо');
+    }
+
+    public function test_optimize_command_skips_path_that_would_overwrite_another_photo(): void
+    {
+        $dir = public_path('storage/products');
+        File::ensureDirectoryExists($dir);
+        $name = 'test_conflict_' . uniqid();
+        $pngPath = $dir . '/' . $name . '.png';
+        $jpgPath = $dir . '/' . $name . '.jpg';
+
+        $png = imagecreatetruecolor(2400, 1600);
+        imagepng($png, $pngPath);
+        imagedestroy($png);
+
+        $jpg = imagecreatetruecolor(600, 400);
+        imagejpeg($jpg, $jpgPath, 82);
+        imagedestroy($jpg);
+
+        $this->cleanupFiles[] = $pngPath;
+        $this->cleanupFiles[] = $jpgPath;
+
+        $pngProduct = Product::create([
+            'title' => 'Товар з PNG',
+            'main_photo_path' => 'products/' . $name . '.png',
+        ]);
+        $jpgProduct = Product::create([
+            'title' => 'Товар з JPEG',
+            'main_photo_path' => 'products/' . $name . '.jpg',
+        ]);
+        $jpgMd5Before = md5_file($jpgPath);
+
+        $this->artisan('products:optimize-photos')->assertSuccessful();
+
+        $this->assertFileExists($pngPath);
+        $this->assertSame($jpgMd5Before, md5_file($jpgPath));
+        $this->assertSame('products/' . $name . '.png', $pngProduct->fresh()->main_photo_path);
+        $this->assertSame('products/' . $name . '.jpg', $jpgProduct->fresh()->main_photo_path);
     }
 }

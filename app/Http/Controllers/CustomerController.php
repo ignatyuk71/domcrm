@@ -25,21 +25,36 @@ class CustomerController extends Controller
         $query = trim((string) $request->get('q', ''));
 
         if ($query !== '') {
+            $normalizedPhone = PhoneNormalizer::normalize($query);
+
+            // Повний український номер шукаємо точним збігом по індексу.
+            // Широкий fallback нижче лишається для legacy-даних без backfill.
+            if ($this->isNormalizedUkrainianPhone($normalizedPhone)) {
+                $customers = Customer::query()
+                    ->where('phone_normalized', $normalizedPhone)
+                    ->latest('id')
+                    ->limit(10)
+                    ->get(['id', 'first_name', 'last_name', 'phone', 'email']);
+
+                if ($customers->isNotEmpty()) {
+                    return response()->json(['data' => $customers]);
+                }
+            }
+
             $customers = Customer::query()
-                ->when($query, function ($q) use ($query) {
+                ->when($query, function ($q) use ($query, $normalizedPhone) {
                     $digits = preg_replace('/\D+/', '', $query);
-                    $normalizedQuery = PhoneNormalizer::normalize($query); // повний номер → 380XXXXXXXXX
                     $like = '%' . $query . '%';
 
-                    $q->where(function ($inner) use ($like, $digits, $normalizedQuery) {
+                    $q->where(function ($inner) use ($like, $digits, $normalizedPhone) {
                         $inner->where('first_name', 'like', $like)
                             ->orWhere('last_name', 'like', $like)
                             ->orWhere('email', 'like', $like)
                             ->orWhere('phone', 'like', $like);
 
                         if ($digits !== '') {
-                            // По індексованому phone_normalized (а не REPLACE() по сирому phone).
-                            $inner->orWhere('phone_normalized', 'like', '%' . ($normalizedQuery ?: $digits) . '%');
+                            // Частковий номер не може використати B-tree індекс через початковий %.
+                            $inner->orWhere('phone_normalized', 'like', '%' . ($normalizedPhone ?: $digits) . '%');
                         }
                     });
                 })
@@ -123,13 +138,20 @@ class CustomerController extends Controller
             'email'      => ['nullable', 'email', 'max:255'],
         ]);
 
-        // Нормалізуємо порожні значення, щоб не зберігати сміття у вигляді порожніх рядків.
-        $payload = [
-            'first_name' => $this->normalizeNullableString($validated['first_name'] ?? null),
-            'last_name' => $this->normalizeNullableString($validated['last_name'] ?? null),
-            'phone' => $this->normalizeNullablePhone($validated['phone'] ?? null),
-            'email' => $this->normalizeNullableString($validated['email'] ?? null),
-        ];
+        // Оновлюємо лише передані поля, щоб частковий запит не затирав інші контакти.
+        $payload = [];
+        foreach (['first_name', 'last_name', 'email'] as $field) {
+            if (array_key_exists($field, $validated)) {
+                $payload[$field] = $this->normalizeNullableString($validated[$field]);
+            }
+        }
+
+        if (array_key_exists('phone', $validated)) {
+            $phone = $this->normalizeNullablePhone($validated['phone']);
+
+            $payload['phone'] = $phone;
+            $payload['phone_normalized'] = PhoneNormalizer::normalize($phone);
+        }
 
         $customer->update($payload);
         $customer->refresh();
@@ -153,5 +175,10 @@ class CustomerController extends Controller
         $digits = preg_replace('/\D+/', '', (string) $value);
 
         return $digits !== '' ? $digits : null;
+    }
+
+    private function isNormalizedUkrainianPhone(?string $phone): bool
+    {
+        return $phone !== null && preg_match('/^380\d{9}$/', $phone) === 1;
     }
 }

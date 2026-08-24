@@ -346,27 +346,12 @@ Route::middleware('auth')->group(function () {
     });
 
     // --- ОБСЛУГОВУВАННЯ СИСТЕМИ ---
-    Route::middleware('role:owner')->get('/clear-everything', function () {
+    Route::middleware('role:owner')->post('/system/cache/clear', function () {
         Artisan::call('route:clear');
         Artisan::call('config:clear');
         Artisan::call('cache:clear');
-        return response('ok');
-    });
-
-
-    Route::middleware('role:owner')->get('/check-logs', function () {
-        $path = storage_path('logs/laravel.log');
-        if (!file_exists($path)) return "Файл логів ще не створено.";
-        
-        $lines = file($path);
-        $lastLines = array_slice($lines, -20);
-        
-        echo "<h3>Останні записи в логах:</h3><pre>";
-        foreach ($lastLines as $line) {
-            echo htmlspecialchars($line);
-        }
-        echo "</pre>";
-    });
+        return response()->json(['message' => 'Кеш очищено.']);
+    })->name('system.cache.clear');
 
 
 

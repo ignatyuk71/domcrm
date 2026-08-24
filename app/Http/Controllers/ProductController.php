@@ -99,6 +99,8 @@ class ProductController extends Controller
 
     public function update(Product $product, Request $request)
     {
+        $previousPhotoPath = $product->main_photo_path;
+
         if ($request->has('variants')) {
             $request->merge(['variants' => $this->normalizeVariants($request->input('variants'))]);
         }
@@ -110,6 +112,11 @@ class ProductController extends Controller
         }
         $product->update($data);
         $this->syncVariants($product, $variants);
+
+        if (($data['main_photo_path'] ?? null) !== null && $data['main_photo_path'] !== $previousPhotoPath) {
+            $this->deletePhotoIfUnused($previousPhotoPath);
+        }
+
         return response()->json(['data' => $product]);
     }
 
@@ -188,15 +195,7 @@ class ProductController extends Controller
     {
         $photoPath = $product->main_photo_path;
         $product->delete();
-        if ($photoPath) {
-            $clean = ltrim($photoPath, '/');
-            $fullPath = str_starts_with($clean, 'storage/')
-                ? public_path($clean)
-                : public_path('storage/' . $clean);
-            if (File::exists($fullPath)) {
-                File::delete($fullPath);
-            }
-        }
+        $this->deletePhotoIfUnused($photoPath);
 
         if ($request->expectsJson()) {
             return response()->json(['success' => true]);
@@ -262,9 +261,15 @@ class ProductController extends Controller
             })
             ->values();
 
+        $hadVariants = $product->variants()->exists();
         $product->variants()->delete();
         if ($clean->isNotEmpty()) {
             $product->variants()->createMany($clean->all());
+        }
+
+        // Якщо варіанти щойно прибрали, залишок товару теж має стати нульовим.
+        // Для товару без варіантів зберігаємо ручний залишок.
+        if ($hadVariants || $clean->isNotEmpty()) {
             $this->recalculateProductStock($product);
         }
     }
@@ -298,5 +303,22 @@ class ProductController extends Controller
         $file->move($dir, $filename);
 
         return 'products/' . $filename;
+    }
+
+    /** Видаляємо файл лише коли жоден товар більше на нього не посилається. */
+    private function deletePhotoIfUnused(?string $photoPath): void
+    {
+        if (!$photoPath || Product::query()->where('main_photo_path', $photoPath)->exists()) {
+            return;
+        }
+
+        $clean = ltrim($photoPath, '/');
+        $fullPath = str_starts_with($clean, 'storage/')
+            ? public_path($clean)
+            : public_path('storage/' . $clean);
+
+        if (File::isFile($fullPath)) {
+            File::delete($fullPath);
+        }
     }
 }

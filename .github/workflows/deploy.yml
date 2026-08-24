@@ -26,7 +26,9 @@ jobs:
           mkdir -p ~/.ssh && chmod 700 ~/.ssh
           echo "$SSH_KEY_B64" | base64 -d > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
+          echo '89.167.66.67 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBtCcOh4wkdfmBXCIn5TKB/1IJSh38ezNk2BMJSeLP+R' > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
           ssh -i ~/.ssh/deploy_key \
-            -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            -o StrictHostKeyChecking=yes \
             deploy@89.167.66.67 \
             'bash /var/www/domcrm.com.ua/deploy.sh'

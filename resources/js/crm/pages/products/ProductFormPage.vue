@@ -425,7 +425,6 @@ const pv = computed(() => {
 })
 
 const syncStockFromVariants = () => {
-  if (!form.variants.length) return;
   form.stock_qty = form.variants.reduce((sum, v) => sum + Number(v.stock_qty || 0), 0);
 };
 

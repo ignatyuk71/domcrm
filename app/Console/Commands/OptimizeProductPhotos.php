@@ -66,6 +66,15 @@ class OptimizeProductPhotos extends Command
             $newPath = preg_replace('/\.[^.]+$/', '', $path) . '.jpg';
             $newFullPath = $this->resolveFullPath($newPath);
 
+            // Не перетираємо інше фото, якщо legacy-шляхи відрізнялись лише розширенням.
+            if ($newFullPath !== $fullPath && is_file($newFullPath)) {
+                $this->warn("КОНФЛІКТ: {$path} -> {$newPath}; цільовий файл уже існує.");
+                $skipped++;
+                $bytesBefore += $size;
+                $bytesAfter += $size;
+                continue;
+            }
+
             if ($dryRun) {
                 $this->line(sprintf('[dry-run] %s (%s, %dx%d) -> %s', $path, $this->human($size), $info[0] ?? 0, $info[1] ?? 0, $newPath));
                 $done++;
@@ -73,9 +82,10 @@ class OptimizeProductPhotos extends Command
                 continue;
             }
 
-            // Бекап оригіналу (не перетираємо, якщо вже є від попереднього запуску).
-            $backupFile = $backupDir . '/' . basename($fullPath);
+            // Бекап оригіналу. Хеш шляху прибирає колізії однакових назв у різних теках.
+            $backupFile = $this->backupPath($backupDir, $path);
             if (!is_file($backupFile)) {
+                File::ensureDirectoryExists(dirname($backupFile));
                 File::copy($fullPath, $backupFile);
             }
 
@@ -105,7 +115,7 @@ class OptimizeProductPhotos extends Command
 
         $this->newLine();
         $this->info(sprintf(
-            'Стиснуто: %d, пропущено (вже легкі): %d, відсутні файли: %d, помилки: %d',
+            'Стиснуто: %d, пропущено: %d, відсутні файли: %d, помилки: %d',
             $done,
             $skipped,
             $missing,
@@ -126,6 +136,11 @@ class OptimizeProductPhotos extends Command
         return str_starts_with($clean, 'storage/')
             ? public_path($clean)
             : public_path('storage/' . $clean);
+    }
+
+    private function backupPath(string $backupDir, string $path): string
+    {
+        return $backupDir . '/' . hash('sha256', $path) . '-' . basename($path);
     }
 
     private function human(int $bytes): string

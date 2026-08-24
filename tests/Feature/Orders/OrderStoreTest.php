@@ -5,6 +5,7 @@ namespace Tests\Feature\Orders;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\Product;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -185,6 +186,32 @@ class OrderStoreTest extends TestCase
             ->postJson('/orders', $payload)
             ->assertStatus(422)
             ->assertJsonValidationErrors(['items']);
+    }
+
+    public function test_update_clears_review_flag_when_all_items_are_mapped(): void
+    {
+        $product = Product::create([
+            'title' => 'Капці домашні', 'sku' => 'K1', 'currency' => 'UAH',
+            'cost_price' => 0, 'sale_price' => 399, 'stock_qty' => 1, 'min_stock' => 0, 'is_active' => true,
+        ]);
+        $order = Order::create([
+            'order_number' => 'EXT-1', 'status' => 'new', 'payment_status' => 'unpaid',
+            'currency' => 'UAH', 'needs_review' => true,
+        ]);
+        $order->items()->create([
+            'product_title' => 'Нерозпізнані капці', 'sku' => 'EXT-K1', 'price' => 399, 'qty' => 1, 'total' => 399,
+        ]);
+
+        $payload = $this->validPayload();
+        $payload['items'] = [[
+            'product_id' => $product->id, 'title' => $product->title, 'sku' => $product->sku, 'qty' => 1, 'price' => 399,
+        ]];
+
+        $this->actingAs($this->operator())
+            ->putJson("/orders/{$order->id}", $payload)
+            ->assertOk();
+
+        $this->assertFalse($order->fresh()->needs_review);
     }
 
     public function test_packer_role_is_forbidden(): void

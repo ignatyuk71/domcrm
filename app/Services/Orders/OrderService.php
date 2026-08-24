@@ -207,6 +207,13 @@ class OrderService
                 ]);
             }
 
+            // Ручне зіставлення товарів має прибрати замовлення з черги інтеграцій.
+            if ($order->needs_review) {
+                $order->update([
+                    'needs_review' => $order->items()->whereNull('product_id')->exists(),
+                ]);
+            }
+
             // Оплата
             $order->payment()->updateOrCreate(
                 ['order_id' => $order->id],

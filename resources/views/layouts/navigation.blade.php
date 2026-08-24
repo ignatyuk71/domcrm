@@ -241,8 +241,17 @@
         clearCacheBtn.addEventListener('click', function () {
             clearCacheBtn.classList.add('loading');
 
-            fetch('{{ url('/clear-everything') }}')
-                .then(function (res) { return res.text(); })
+            fetch('{{ route('system.cache.clear') }}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    'Accept': 'application/json',
+                },
+            })
+                .then(function (res) {
+                    if (!res.ok) throw new Error('Не вдалося очистити кеш');
+                    return res.json();
+                })
                 .then(function () {
                     setTimeout(() => {
                         console.log('Кеш очищено');

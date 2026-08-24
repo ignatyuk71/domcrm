@@ -451,7 +451,12 @@
                 <span class="item-text">Товари</span>
             </a>
 
-            @php $reviewCount = \App\Models\Order::where('needs_review', true)->count(); @endphp
+            @php
+                $reviewCount = \App\Models\Order::query()
+                    ->where('needs_review', true)
+                    ->whereHas('items', fn ($query) => $query->whereNull('product_id'))
+                    ->count();
+            @endphp
             <a href="{{ route('integrations.review') }}" class="sidebar-link {{ request()->is('integrations/review*') ? 'active' : '' }}">
                 <span class="icon-frame"><i class="bi bi-link-45deg"></i></span>
                 <span class="item-text">Незмаплені</span>
@@ -584,4 +589,3 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 </script>
-
