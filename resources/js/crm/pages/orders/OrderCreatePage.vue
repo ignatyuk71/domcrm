@@ -162,7 +162,7 @@ const props = defineProps({
 
 const form = reactive({
   customer: { first_name: '', last_name: '', phone: '', email: '' },
-  meta: { currency: 'UAH', source: 'site', status: 'new', payment_status: 'unpaid' },
+  meta: { currency: 'UAH', source: 'site', sale_type: 'retail', status: 'new', payment_status: 'unpaid' },
   items: [],
   payment: { method: 'cod', currency: 'UAH', prepay_amount: 0, note: '' },
   // Поля доставки ініціалізуємо
@@ -327,6 +327,7 @@ async function loadOrder() {
     Object.assign(form.meta, {
       currency: order.currency || 'UAH',
       source: resolveOrderSourceCode(order.source),
+      sale_type: order.sale_type || 'retail',
       status: order.status || 'new',
       payment_status: order.payment_status || 'unpaid',
     });

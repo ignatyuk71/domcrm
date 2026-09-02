@@ -400,6 +400,13 @@
             <span class="item-text">Дашборд</span>
         </a>
 
+        @if($isOwner)
+            <a href="{{ route('analytics.sales') }}" class="sidebar-link {{ request()->is('analytics*') ? 'active' : '' }}">
+                <span class="icon-frame"><i class="bi bi-graph-up-arrow"></i></span>
+                <span class="item-text">Аналітика продажів</span>
+            </a>
+        @endif
+
         @if($canSeeOperations)
             <a href="{{ url('/orders') }}" class="sidebar-link {{ request()->is('orders*') ? 'active' : '' }}">
                 <span class="icon-frame"><i class="bi bi-basket2-fill"></i></span>

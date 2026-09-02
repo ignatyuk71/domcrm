@@ -28,6 +28,17 @@ export function mountDashboard(selector = '#crm-dashboard') {
     return app;
 }
 
+export async function mountSalesAnalytics(selector = '#crm-sales-analytics') {
+    const el = document.querySelector(selector);
+    if (!el) return;
+
+    // Важку аналітику й ApexCharts завантажуємо лише на її сторінці.
+    const { default: SalesAnalyticsPage } = await import('./pages/analytics/SalesAnalyticsPage.vue');
+    const app = createApp(SalesAnalyticsPage);
+    app.mount(el);
+    return app;
+}
+
 export function mountOrderCreate(selector = '#crm-order-create') {
     const el = document.querySelector(selector);
     if (!el) return;
@@ -184,6 +195,7 @@ export function mountSettingsNovaPoshta(selector = '#crm-settings-nova-poshta') 
 // Auto-mount if element exists
 function autoMount() {
     mountDashboard();
+    mountSalesAnalytics();
     mountOrderCreate();
     mountOrderEdit();
     mountOrderList();

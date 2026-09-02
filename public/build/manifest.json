@@ -37,15 +37,31 @@
     ]
   },
   "resources/js/crm/index.js": {
-    "file": "assets/index-C7lYXCek.js",
+    "file": "assets/index-Cdo2NGDc.js",
     "name": "index",
     "src": "resources/js/crm/index.js",
     "isEntry": true,
     "imports": [
       "_index-B9ygI19o.js"
     ],
+    "dynamicImports": [
+      "resources/js/crm/pages/analytics/SalesAnalyticsPage.vue"
+    ],
     "css": [
-      "assets/index-Dt-9oeiD.css"
+      "assets/index-CiiuKRgq.css"
+    ]
+  },
+  "resources/js/crm/pages/analytics/SalesAnalyticsPage.vue": {
+    "file": "assets/SalesAnalyticsPage-eovwz38_.js",
+    "name": "SalesAnalyticsPage",
+    "src": "resources/js/crm/pages/analytics/SalesAnalyticsPage.vue",
+    "isDynamicEntry": true,
+    "imports": [
+      "resources/js/crm/index.js",
+      "_index-B9ygI19o.js"
+    ],
+    "css": [
+      "assets/SalesAnalyticsPage-7tOA2X5v.css"
     ]
   }
 }

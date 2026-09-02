@@ -29,6 +29,8 @@ class StoreOrderRequest extends FormRequest
             'order.status' => ['required', 'string', 'max:32'],
             'order.payment_status' => ['required', 'string', 'max:32'],
             'order.currency' => ['required', 'string', 'max:3'],
+            // nullable для сумісності зі старими інтеграціями; сервіс підставить retail.
+            'order.sale_type' => ['nullable', 'in:retail,wholesale'],
             'order.comment_internal' => ['nullable', 'string'],
 
             'items' => ['required', 'array', 'min:1'],

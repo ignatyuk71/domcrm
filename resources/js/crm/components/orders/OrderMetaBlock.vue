@@ -26,6 +26,19 @@
       </div>
     </div>
 
+    <div>
+      <label class="info-label mb-1">Тип продажу</label>
+      <div class="custom-select-trigger" @click="openPicker('sale_type')">
+        <div class="d-flex align-items-center gap-2">
+          <div class="icon-mini" :style="{ backgroundColor: local.sale_type === 'wholesale' ? '#0f766e20' : '#7c3aed20', color: local.sale_type === 'wholesale' ? '#0f766e' : '#7c3aed' }">
+            <i :class="local.sale_type === 'wholesale' ? 'bi bi-boxes' : 'bi bi-bag-check'"></i>
+          </div>
+          <span class="fw-medium text-dark">{{ local.sale_type === 'wholesale' ? 'Опт' : 'Роздріб' }}</span>
+        </div>
+        <i class="bi bi-chevron-down text-muted small"></i>
+      </div>
+    </div>
+
     <div class="row g-2">
       <div class="col-6">
         <label class="info-label mb-1">Статус</label>
@@ -161,7 +174,7 @@ import { fetchOrderSources } from '@/crm/api/orderSources';
 import { fetchStatuses } from '@/crm/api/statuses';
 
 const props = defineProps({ errors: { type: Object, default: () => ({}) } });
-const model = defineModel({ type: Object, default: () => ({ id: '', source: 'site', status: 'new', payment_status: 'unpaid' }) });
+const model = defineModel({ type: Object, default: () => ({ id: '', source: 'site', sale_type: 'retail', status: 'new', payment_status: 'unpaid' }) });
 const tagModel = defineModel('tagIds', { type: Array, default: () => [] });
 
 const local = reactive({ ...model.value });
@@ -179,6 +192,10 @@ const payments = [
   { value: 'prepayment', label: 'Передоплата', color: '#f59e0b', icon: 'bi-wallet2' },
   { value: 'paid', label: 'Оплачено', color: '#198754', icon: 'bi-check-circle' },
   { value: 'refund', label: 'Повернення', color: '#6c757d', icon: 'bi-arrow-counterclockwise' }
+];
+const saleTypes = [
+  { value: 'retail', label: 'Роздріб', color: '#7c3aed', icon: 'bi-bag-check' },
+  { value: 'wholesale', label: 'Опт', color: '#0f766e', icon: 'bi-boxes' },
 ];
 
 // --- Helpers ---
@@ -249,6 +266,10 @@ function openPicker(type) {
   if (type === 'source') { 
     picker.title = 'Оберіть джерело'; 
     picker.options = sources.value.map(s => ({ ...s, color: '#6366f1' })); 
+  }
+  else if (type === 'sale_type') {
+    picker.title = 'Оберіть тип продажу';
+    picker.options = saleTypes;
   }
   else if (type === 'status') { 
     picker.title = 'Змінити статус'; 

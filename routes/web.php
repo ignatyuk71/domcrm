@@ -16,6 +16,7 @@ use App\Http\Controllers\ChatStatusController;
 use App\Http\Controllers\ColorController;
 use App\Http\Controllers\FiscalController;
 use App\Http\Controllers\FinanceController;
+use App\Http\Controllers\SalesAnalyticsController;
 use App\Http\Controllers\PackingController;
 use App\Http\Controllers\SavedFileController;
 use App\Http\Controllers\NovaPoshtaSettingsController;
@@ -55,6 +56,13 @@ Route::middleware(['auth', 'verified', 'role:owner,operator,packer'])->group(fun
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth')->group(function () {
+
+    // --- АНАЛІТИКА ПРОДАЖІВ (фінансові дані — лише власник) ---
+    Route::middleware('role:owner')->group(function () {
+        Route::get('/analytics', [SalesAnalyticsController::class, 'index'])->name('analytics.sales');
+        Route::get('/api/analytics/sales', [SalesAnalyticsController::class, 'data'])->name('analytics.sales.data');
+        Route::get('/analytics/export', [SalesAnalyticsController::class, 'export'])->name('analytics.sales.export');
+    });
 
     // --- ЗАМОВЛЕННЯ (Orders) ---
     Route::middleware('role:owner,operator')->controller(OrderController::class)->group(function () {

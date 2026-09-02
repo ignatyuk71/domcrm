@@ -7,16 +7,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use App\Models\User;
-use App\Models\Customer;
-use App\Models\OrderDelivery;
-use App\Models\OrderItem;
-use App\Models\OrderPayment;
-use App\Models\OrderSource;
-use App\Models\PackingSession;
-use App\Models\Tag;
-use App\Models\Status;
-use App\Models\FiscalReceipt;
 
 class Order extends Model
 {
@@ -33,6 +23,7 @@ class Order extends Model
         'packer_id',
         'source_id',
         'currency',
+        'sale_type',
         'comment_internal',
         'search_blob',
         'external_id',

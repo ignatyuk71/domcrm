@@ -4,7 +4,6 @@ namespace Tests\Feature\Orders;
 
 use App\Models\Customer;
 use App\Models\Order;
-use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -74,6 +73,34 @@ class OrderStoreTest extends TestCase
         $delivery = Order::latest('id')->first()->delivery;
         $this->assertSame('postomat', $delivery->delivery_type);
         $this->assertSame(\App\Models\OrderDelivery::SERVICE_POSTOMAT, $delivery->service_type);
+    }
+
+    public function test_snapshots_product_cost_and_sale_type_for_analytics(): void
+    {
+        $product = Product::create([
+            'title' => 'Аналітичний товар',
+            'sku' => 'AN-1',
+            'currency' => 'UAH',
+            'cost_price' => 125.50,
+            'sale_price' => 300,
+        ]);
+
+        $payload = $this->validPayload([
+            'order' => ['sale_type' => 'wholesale'],
+            'items' => [[
+                'product_id' => $product->id,
+                'title' => $product->title,
+                'sku' => $product->sku,
+                'qty' => 2,
+                'price' => 250,
+            ]],
+        ]);
+
+        $this->actingAs($this->operator())->postJson('/orders', $payload)->assertCreated();
+
+        $order = Order::with('items')->latest('id')->firstOrFail();
+        $this->assertSame('wholesale', $order->sale_type);
+        $this->assertSame(125.50, (float) $order->items->first()->cost_price);
     }
 
     public function test_reuses_existing_customer_by_phone(): void

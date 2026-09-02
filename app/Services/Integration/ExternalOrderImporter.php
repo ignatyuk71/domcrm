@@ -18,9 +18,7 @@ use Illuminate\Support\Facades\DB;
  */
 class ExternalOrderImporter
 {
-    public function __construct(protected ProductMatcher $matcher)
-    {
-    }
+    public function __construct(protected ProductMatcher $matcher) {}
 
     /**
      * Ідемпотентно: повторний імпорт того ж external_order_id повертає наявне замовлення.
@@ -51,7 +49,7 @@ class ExternalOrderImporter
             $currency = (string) ($canonical['currency'] ?? 'UAH');
 
             $order = Order::create([
-                'order_number' => 'TMP-' . now()->format('YmdHis') . '-' . random_int(100, 999),
+                'order_number' => 'TMP-'.now()->format('YmdHis').'-'.random_int(100, 999),
                 'source' => $source->code,
                 'source_id' => $source->id,
                 'external_id' => $externalOrderId !== '' ? $externalOrderId : null,
@@ -60,6 +58,9 @@ class ExternalOrderImporter
                 'payment_status' => 'unpaid',
                 'customer_id' => $customer?->id,
                 'currency' => $currency,
+                'sale_type' => in_array(($canonical['sale_type'] ?? null), ['retail', 'wholesale'], true)
+                    ? $canonical['sale_type']
+                    : 'retail',
                 'comment_internal' => $canonical['note'] ?? null,
                 'needs_review' => false,
                 'search_blob' => $this->buildSearchBlob($customer),
@@ -70,12 +71,24 @@ class ExternalOrderImporter
 
             // Позиції + мапінг товарів.
             $needsReview = false;
+            $matchedItems = [];
             foreach ((array) ($canonical['items'] ?? []) as $item) {
                 $item = (array) $item;
                 $match = $this->matcher->match($source, $item);
-                if (!$match['matched']) {
+                if (! $match['matched']) {
                     $needsReview = true;
                 }
+
+                $matchedItems[] = compact('item', 'match');
+            }
+
+            $productCosts = DB::table('products')
+                ->whereIn('id', array_values(array_unique(array_filter(array_column(array_column($matchedItems, 'match'), 'product_id')))))
+                ->pluck('cost_price', 'id');
+
+            foreach ($matchedItems as $matchedItem) {
+                $item = $matchedItem['item'];
+                $match = $matchedItem['match'];
 
                 $price = (float) ($item['price'] ?? 0);
                 $qty = (int) ($item['qty'] ?? 1);
@@ -90,6 +103,7 @@ class ExternalOrderImporter
                     'size' => $this->nullableString($item['size'] ?? null),
                     'color' => $this->nullableString($item['color'] ?? null),
                     'price' => $price,
+                    'cost_price' => $match['product_id'] ? ($productCosts[$match['product_id']] ?? null) : null,
                     'qty' => $qty,
                     'total' => $price * $qty,
                 ]);
@@ -176,7 +190,7 @@ class ExternalOrderImporter
 
     protected function buildSearchBlob(?Customer $customer): ?string
     {
-        if (!$customer) {
+        if (! $customer) {
             return null;
         }
 

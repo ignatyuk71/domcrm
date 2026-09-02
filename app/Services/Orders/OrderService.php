@@ -34,7 +34,7 @@ class OrderService
                 $customer = Customer::where('phone_normalized', $normalized)->first()
                     ?? Customer::where('phone', $phone)->first();
                 if ($customer) {
-                    if (!$customer->phone_normalized) {
+                    if (! $customer->phone_normalized) {
                         $customer->update(['phone_normalized' => $normalized]);
                     }
                 } else {
@@ -46,7 +46,7 @@ class OrderService
                         'email' => $data['customer']['email'] ?? null,
                     ]);
                 }
-            } elseif (!empty($data['customer'])) {
+            } elseif (! empty($data['customer'])) {
                 $customer = Customer::create([
                     'first_name' => $data['customer']['first_name'] ?? null,
                     'last_name' => $data['customer']['last_name'] ?? null,
@@ -72,6 +72,7 @@ class OrderService
                 'customer_id' => $customer?->id,
                 'manager_id' => $managerId,
                 'currency' => $data['order']['currency'] ?? 'UAH',
+                'sale_type' => $data['order']['sale_type'] ?? 'retail',
                 'comment_internal' => $data['order']['comment_internal'] ?? null,
                 // ДОДАНО: передаємо ТТН у пошуковий блоб
                 'search_blob' => $this->buildSearchBlob($customer, $data['delivery']['ttn'] ?? null),
@@ -81,12 +82,14 @@ class OrderService
             $order->update(['order_number' => (string) $order->id]);
 
             // Теги (звʼязок через pivot)
-            if (!empty($data['tag_ids'])) {
+            if (! empty($data['tag_ids'])) {
                 $order->tags()->sync($this->resolveTagIds($data['tag_ids']));
             }
 
             // Товари
+            $productCosts = $this->productCosts($data['items']);
             foreach ($data['items'] as $item) {
+                $productId = isset($item['product_id']) ? (int) $item['product_id'] : null;
                 OrderItem::create([
                     'order_id' => $order->id,
                     'product_id' => $item['product_id'] ?? null,
@@ -96,6 +99,7 @@ class OrderService
                     'size' => $item['size'] ?? null,
                     'color' => $item['color'] ?? null,
                     'price' => $item['price'] ?? 0,
+                    'cost_price' => $productId ? ($productCosts[$productId] ?? null) : null,
                     'qty' => $item['qty'] ?? 1,
                     'total' => ($item['price'] ?? 0) * ($item['qty'] ?? 1),
                 ]);
@@ -159,7 +163,7 @@ class OrderService
                 $customer = Customer::where('phone_normalized', $normalized)->first()
                     ?? Customer::where('phone', $phone)->first();
             }
-            $customer = $customer ?: ($order->customer ?: new Customer());
+            $customer = $customer ?: ($order->customer ?: new Customer);
 
             $customer->first_name = ($cd['first_name'] ?? '') !== '' ? $cd['first_name'] : $customer->first_name;
             $customer->last_name = ($cd['last_name'] ?? '') !== '' ? $cd['last_name'] : $customer->last_name;
@@ -183,6 +187,7 @@ class OrderService
                 'payment_status' => $data['order']['payment_status'] ?? 'unpaid',
                 'customer_id' => $customer->id,
                 'currency' => $data['order']['currency'] ?? 'UAH',
+                'sale_type' => $data['order']['sale_type'] ?? 'retail',
                 'comment_internal' => $data['order']['comment_internal'] ?? null,
                 // ДОДАНО: передаємо ТТН у пошуковий блоб
                 'search_blob' => $this->buildSearchBlob($customer, $data['delivery']['ttn'] ?? null),
@@ -193,7 +198,9 @@ class OrderService
 
             // Позиції: простий варіант — видалити старі і створити нові
             $order->items()->delete();
+            $productCosts = $this->productCosts($data['items']);
             foreach ($data['items'] as $item) {
+                $productId = isset($item['product_id']) ? (int) $item['product_id'] : null;
                 $order->items()->create([
                     'product_id' => $item['product_id'] ?? null,
                     'product_variant_id' => $item['product_variant_id'] ?? null,
@@ -202,6 +209,7 @@ class OrderService
                     'size' => $item['size'] ?? null,
                     'color' => $item['color'] ?? null,
                     'price' => $item['price'] ?? 0,
+                    'cost_price' => $productId ? ($productCosts[$productId] ?? null) : null,
                     'qty' => $item['qty'] ?? 1,
                     'total' => ($item['price'] ?? 0) * ($item['qty'] ?? 1),
                 ]);
@@ -268,13 +276,15 @@ class OrderService
 
     protected function generateOrderNumber(): string
     {
-        return 'TMP-' . now()->format('YmdHis') . '-' . random_int(100, 999);
+        return 'TMP-'.now()->format('YmdHis').'-'.random_int(100, 999);
     }
 
     /** Формуємо пошуковий blob для швидких фільтрів. */
     public function buildSearchBlob(?Customer $customer, $ttn = null): ?string
     {
-        if (!$customer) return $ttn;
+        if (! $customer) {
+            return $ttn;
+        }
 
         // ОНОВЛЕНО: Додаємо ТТН в пошук
         return trim(implode(' ', array_filter([
@@ -310,18 +320,44 @@ class OrderService
                 $ids[] = $tagModel->id;
             }
         }
+
         return $ids;
     }
 
     protected function resolveStatusId(?string $code, string $type = 'order'): ?int
     {
-        if (!$code) return null;
+        if (! $code) {
+            return null;
+        }
+
         return Status::where('code', $code)->where('type', $type)->value('id');
     }
 
     protected function resolveSourceId(?string $code): ?int
     {
-        if (!$code) return null;
+        if (! $code) {
+            return null;
+        }
+
         return OrderSource::where('code', $code)->value('id');
+    }
+
+    /** Закупівельні ціни одним запитом, без N+1 під час збереження позицій. */
+    private function productCosts(array $items): array
+    {
+        $productIds = array_values(array_unique(array_filter(array_map(
+            fn (array $item) => isset($item['product_id']) ? (int) $item['product_id'] : null,
+            $items
+        ))));
+
+        if ($productIds === []) {
+            return [];
+        }
+
+        return DB::table('products')
+            ->whereIn('id', $productIds)
+            ->pluck('cost_price', 'id')
+            ->map(fn ($cost) => $cost !== null ? (float) $cost : null)
+            ->all();
     }
 }
