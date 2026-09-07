@@ -26,7 +26,15 @@ class DeliveryStatusMapperTest extends TestCase
         $this->assertSame('delivered', DeliveryStatusMapper::getCrmStatusCode(7));
         $this->assertSame('delivered', DeliveryStatusMapper::getCrmStatusCode(8));
         $this->assertSame('returned', DeliveryStatusMapper::getCrmStatusCode(102));
-        $this->assertSame('cancelled', DeliveryStatusMapper::getCrmStatusCode(2));
+    }
+
+    public function test_unavailable_waybill_does_not_cancel_order(): void
+    {
+        // Видалена або ще недоступна в трекінгу ТТН не скасовує продаж.
+        foreach ([DeliveryStatusMapper::NP_DELETED, DeliveryStatusMapper::NP_NOT_FOUND] as $code) {
+            $this->assertNull(DeliveryStatusMapper::getCrmStatusCode($code));
+            $this->assertTrue(DeliveryStatusMapper::isHandledCode($code));
+        }
     }
 
     public function test_registered_code_does_not_change_status(): void
@@ -58,8 +66,13 @@ class DeliveryStatusMapperTest extends TestCase
     public function test_all_handled_codes_either_map_or_are_intentional(): void
     {
         // Контракт: кожен «опрацьований» код або дає статус, або це навмисний null
-        // (код 1 — ТТН створено, код 104 — змінено адресу).
-        $intentionalNull = [DeliveryStatusMapper::NP_REGISTERED, DeliveryStatusMapper::NP_ADDRESS_CHANGED];
+        // (ТТН створено/видалено/не знайдено або змінено адресу).
+        $intentionalNull = [
+            DeliveryStatusMapper::NP_REGISTERED,
+            DeliveryStatusMapper::NP_DELETED,
+            DeliveryStatusMapper::NP_NOT_FOUND,
+            DeliveryStatusMapper::NP_ADDRESS_CHANGED,
+        ];
         foreach (DeliveryStatusMapper::HANDLED_CODES as $code) {
             $mapped = DeliveryStatusMapper::getCrmStatusCode($code);
             if (in_array($code, $intentionalNull, true)) {

@@ -173,9 +173,11 @@ class DeliveryStatusMapper
             return 'returned';
         }
 
-        // 6. Видалено/Не знайдено -> Скасовано (ID 7)
+        // 6. Видалено/Не знайдено — стан ТТН, а не скасування замовлення.
+        // Накладну можуть перевипустити, а трекінг тимчасово не знайти.
+        // Зберігаємо CRM-статус, щоб замовлення залишилося в наступних перевірках.
         if (in_array($npCode, [self::NP_DELETED, self::NP_NOT_FOUND], true)) {
-            return 'cancelled';
+            return null;
         }
 
         return null;
