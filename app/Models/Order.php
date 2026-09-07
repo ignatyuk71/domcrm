@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\RecordsOrderStatusChanges;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -10,6 +11,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Order extends Model
 {
+    use RecordsOrderStatusChanges;
+
     protected $fillable = [
         'order_number',
         'source',
@@ -50,6 +53,11 @@ class Order extends Model
     public function statusRef(): BelongsTo
     {
         return $this->belongsTo(Status::class, 'status_id');
+    }
+
+    public function statusChanges(): HasMany
+    {
+        return $this->hasMany(OrderStatusChange::class);
     }
 
     /** Менеджер, що веде замовлення. */

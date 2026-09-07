@@ -123,7 +123,11 @@ class PackingService
             $updates['status'] = $statusCode;
         }
 
-        $order->update($updates);
+        $order->updateWithStatusAudit(
+            $updates,
+            $reason === 'auto_release' ? 'packing_auto_release' : 'packing',
+            $reason === 'auto_release' ? 'Зависле пакування автоматично повернуто у чергу' : 'Пакування розблоковано користувачем',
+        );
     }
 
     /**

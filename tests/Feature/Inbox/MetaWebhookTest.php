@@ -247,7 +247,10 @@ class MetaWebhookTest extends TestCase
         $this->postWebhook($payload)->assertOk();
 
         $m = InboxMessage::where('external_message_id', 'm_ctx_1')->first();
-        $this->assertSame(['type' => 'reply', 'mid' => 'm_orig_99'], $m->context);
+        // MySQL JSON може перевпорядкувати ключі обʼєкта, але не їхні значення чи типи.
+        $context = $m->context;
+        ksort($context);
+        $this->assertSame(['mid' => 'm_orig_99', 'type' => 'reply'], $context);
     }
 
     public function test_story_reply_downloads_media_and_stores_context(): void

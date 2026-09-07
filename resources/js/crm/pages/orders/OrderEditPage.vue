@@ -103,6 +103,8 @@
         </div>
       </form>
 
+      <OrderStatusHistory v-if="initialOrderId && !fetching" :order-id="initialOrderId" class="mt-4" />
+
       <div v-if="confirmOpen">
         <div class="modal-backdrop fade show bg-dark bg-opacity-50" style="backdrop-filter: blur(4px);"></div>
         <div class="modal fade show d-block" tabindex="-1" @click.self="closeConfirm">
@@ -149,6 +151,7 @@ import { validateOrder } from '@/crm/utils/orderValidation';
 import Toast from '@/crm/components/ui/Toast.vue';
 import CustomerBlock from '@/crm/components/orders/CustomerBlock.vue';
 import CustomerOrderHistory from '@/crm/components/orders/CustomerOrderHistory.vue';
+import OrderStatusHistory from '@/crm/components/orders/OrderStatusHistory.vue';
 import OrderMetaBlock from '@/crm/components/orders/OrderMetaBlock.vue';
 import ItemsTable from '@/crm/components/orders/ItemsTable.vue';
 import PaymentBlock from '@/crm/components/orders/PaymentBlock.vue';

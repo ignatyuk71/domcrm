@@ -1,34 +1,140 @@
-name: Deploy to Hetzner
+name: CI and deploy
 
 on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
 
-# Деплої не ганяються наввипередки: новий пуш скасовує той, що ще їде.
+# Активний деплой не перериваємо посеред міграції або перемикання релізу.
 concurrency:
-  group: deploy-production
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
 
 jobs:
-  deploy:
-    name: Deploy
+  test:
+    name: Tests (${{ matrix.database }})
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        database: [sqlite, mysql]
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: domcrm_testing
+          MYSQL_USER: domcrm_test
+          MYSQL_PASSWORD: domcrm_ci_password
+          MYSQL_ROOT_PASSWORD: domcrm_ci_root_password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      APP_ENV: testing
+      DB_CONNECTION: ${{ matrix.database }}
+      DB_DATABASE: ${{ matrix.database == 'sqlite' && ':memory:' || 'domcrm_testing' }}
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_USERNAME: domcrm_test
+      DB_PASSWORD: domcrm_ci_password
+      CACHE_STORE: array
+      SESSION_DRIVER: array
+      QUEUE_CONNECTION: sync
+      MAIL_MAILER: array
 
     steps:
-      # Запускаємо deploy.sh прямо на сервері (він сам тягне свіжий код із GitHub:
-      # clone → composer install → симлінки → migrate --force → перемикання current → reload php-fpm).
-      - name: Run deploy.sh on Hetzner via SSH
+      - name: Checkout tested commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, sqlite3, pdo_mysql, gd, zip
+          coverage: none
+          tools: composer:v2
+
+      - name: Install PHP dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Prepare isolated test environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate --force
+          php artisan config:clear
+
+      - name: Run all PHP tests
+        run: php artisan test
+
+      - name: Set up Node.js
+        if: matrix.database == 'sqlite'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install frontend dependencies
+        if: matrix.database == 'sqlite'
+        run: npm ci
+
+      - name: Run all frontend tests
+        if: matrix.database == 'sqlite'
+        run: npm test
+
+      - name: Verify production build
+        if: matrix.database == 'sqlite'
+        run: npm run build
+
+      - name: Check deployment script syntax
+        run: bash -n scripts/deploy.sh
+
+  deploy:
+    name: Deploy
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout tested deployment script
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      # PR запускає лише тести. Ключ доступний тільки цьому кроку після їх успіху.
+      - name: Deploy tested commit to Hetzner
         env:
           # Секрет HETZNER_SSH_KEY — приватний ключ у base64 (одним рядком, без проблем форматування).
           SSH_KEY_B64: ${{ secrets.HETZNER_SSH_KEY }}
+          DEPLOY_SHA: ${{ github.sha }}
         run: |
-          mkdir -p ~/.ssh && chmod 700 ~/.ssh
-          echo "$SSH_KEY_B64" | base64 -d > ~/.ssh/deploy_key
+          set -euo pipefail
+          [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          trap 'rm -f ~/.ssh/deploy_key' EXIT
+          printf '%s' "$SSH_KEY_B64" | base64 -d > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           echo '89.167.66.67 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBtCcOh4wkdfmBXCIn5TKB/1IJSh38ezNk2BMJSeLP+R' > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
           ssh -i ~/.ssh/deploy_key \
+            -o BatchMode=yes \
+            -o ConnectTimeout=15 \
             -o StrictHostKeyChecking=yes \
             deploy@89.167.66.67 \
-            'bash /var/www/domcrm.com.ua/deploy.sh'
+            "bash -s -- '$DEPLOY_SHA'" < scripts/deploy.sh

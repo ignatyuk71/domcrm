@@ -150,9 +150,12 @@ class SyncDeliveryStatuses extends Command
                     $order = $entry['order'];
                     // Якщо статус змінився - оновлюємо
                     if ($order->status_id !== $newStatusId || $order->status !== $newStatusCode) {
-                        $order->update([
+                        $order->updateWithStatusAudit([
                             'status_id' => $newStatusId,
                             'status' => $newStatusCode,
+                        ], 'nova_poshta_sync', 'Статус оновлено за результатом автоматичної перевірки НП', [
+                            'ttn' => $ttn,
+                            'np_response' => $row,
                         ]);
                         // Тут можна додати Log::info, щоб бачити зміни в консолі/логах
                     }

@@ -74,6 +74,8 @@ Route::middleware('auth')->group(function () {
         })->name('orders.create');
 
         Route::get('/orders/{order}', 'show')->name('orders.show');
+        Route::get('/orders/{order}/status-history', \App\Http\Controllers\OrderStatusHistoryController::class)
+            ->name('orders.statusHistory');
         Route::get('/orders/{order}/edit', function (\App\Models\Order $order) {
             return view('orders.edit', ['orderId' => $order->id]);
         })->name('orders.edit');

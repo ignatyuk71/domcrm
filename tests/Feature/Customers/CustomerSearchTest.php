@@ -34,8 +34,10 @@ class CustomerSearchTest extends TestCase
         $queries = collect(DB::getQueryLog())->pluck('query');
         DB::disableQueryLog();
 
-        $this->assertTrue($queries->contains(fn (string $sql) => str_contains($sql, '"phone_normalized" = ?')));
-        $this->assertFalse($queries->contains(fn (string $sql) => str_contains($sql, '"phone_normalized" like ?')));
+        // Лапки ідентифікатора відрізняються між SQLite та MySQL; спосіб пошуку має бути однаковим.
+        $phoneColumn = DB::connection()->getQueryGrammar()->wrap('phone_normalized');
+        $this->assertTrue($queries->contains(fn (string $sql) => str_contains($sql, $phoneColumn.' = ?')));
+        $this->assertFalse($queries->contains(fn (string $sql) => str_contains($sql, $phoneColumn.' like ?')));
     }
 
     public function test_finds_customer_by_partial_phone_with_fallback_search(): void

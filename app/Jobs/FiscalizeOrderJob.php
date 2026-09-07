@@ -339,7 +339,7 @@ class FiscalizeOrderJob implements ShouldQueue, ShouldBeUnique
                 $updates['payment_status'] = 'paid';
             }
             if (!empty($updates)) {
-                $this->order->update($updates);
+                $this->order->updateWithStatusAudit($updates, 'fiscal', 'Успішні фіскальні чеки покривають повну суму замовлення');
             }
         }
     }

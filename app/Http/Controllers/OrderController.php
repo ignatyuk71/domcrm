@@ -572,9 +572,12 @@ class OrderController extends Controller
 
             if ($newStatusId) {
                 if ($order->status_id !== $newStatusId || $order->status !== $newStatusCode) {
-                    $order->update([
+                    $order->updateWithStatusAudit([
                         'status_id' => $newStatusId,
                         'status' => $newStatusCode,
+                    ], 'nova_poshta_manual', 'Статус оновлено за результатом ручної перевірки НП', [
+                        'ttn' => $delivery->ttn,
+                        'np_response' => $data,
                     ]);
                 }
             } else {
