@@ -34,13 +34,19 @@
             :key="opt.value"
             class="filter-chip"
             :class="{ active: isStatusActive(opt.value) }"
-            :style="opt.value !== '' ? getStatusStyle({ status_color: opt.color, status_key: opt.code }) : {}"
+            :style="isStatusActive(opt.value) && opt.color ? {
+              backgroundColor: opt.color,
+              borderColor: opt.color,
+              color: '#fff',
+              boxShadow: `0 4px 12px ${opt.color}40`
+            } : {}"
             :aria-pressed="isStatusActive(opt.value)"
             @click="$emit('toggle-status', opt.value)"
           >
             <i 
               v-if="opt.icon" 
               :class="`bi ${opt.icon}`"
+              :style="!isStatusActive(opt.value) && opt.color ? { color: opt.color } : {}"
             ></i>
             <span>{{ opt.label }}</span>
           </button>
@@ -104,7 +110,6 @@
 
 <script setup>
 import { ref } from 'vue';
-import { getStatusStyle } from '@/crm/utils/orderDisplay';
 
 const props = defineProps({
   search: { type: String, default: '' },
@@ -196,7 +201,7 @@ const vClickOutside = {
 
 .filter-chip { height: 30px; padding: 0 8px; border-radius: 7px; border: 1px solid #e2e8f0; background: #fff; color: #64748b; font-size: 0.75rem; font-weight: 500; white-space: nowrap; transition: all 0.2s; display: flex; align-items: center; gap: 4px; cursor: pointer; }
 .filter-chip:hover { background: #f8fafc; border-color: #cbd5e1; color: #334155; }
-.filter-chip.active { box-shadow: inset 0 0 0 1px currentColor; font-weight: 700; transform: translateY(-1px); }
+.filter-chip.active { border-color: transparent; transform: translateY(-1px); }
 .filter-chip:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 
 /* --- ALERT TOGGLE BUTTON --- */
