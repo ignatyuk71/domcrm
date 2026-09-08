@@ -9,6 +9,14 @@ trait RecordsOrderStatusChanges
 {
     private ?array $statusAuditContext = null;
 
+    protected function performInsert(Builder $query)
+    {
+        // Початок першого статусу фіксується і для створення через saveQuietly().
+        $this->status_changed_at = $this->freshTimestamp();
+
+        return parent::performInsert($query);
+    }
+
     /** Одноразовий контекст: не переходить до наступного збереження моделі. */
     public function updateWithStatusAudit(array $attributes, string $source, string $reason, array $metadata = []): bool
     {
@@ -37,7 +45,7 @@ trait RecordsOrderStatusChanges
 
             if ($saved) {
                 $after = $this->newModelQuery()->whereKey($this->getKey())->lockForUpdate()
-                    ->firstOrFail(['order_number', 'status', 'status_id']);
+                    ->firstOrFail(['order_number', 'status', 'status_id', 'status_changed_at']);
                 app(OrderStatusAudit::class)->record($this, $before, $after, $this->statusAuditContext);
             }
 

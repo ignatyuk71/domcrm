@@ -37,7 +37,7 @@
     ]
   },
   "resources/js/crm/index.js": {
-    "file": "assets/index-DW8VH9c9.js",
+    "file": "assets/index-BB0tm4d-.js",
     "name": "index",
     "src": "resources/js/crm/index.js",
     "isEntry": true,
@@ -48,11 +48,11 @@
       "resources/js/crm/pages/analytics/SalesAnalyticsPage.vue"
     ],
     "css": [
-      "assets/index-xiDRkpqw.css"
+      "assets/index-JdJMMWr7.css"
     ]
   },
   "resources/js/crm/pages/analytics/SalesAnalyticsPage.vue": {
-    "file": "assets/SalesAnalyticsPage-B7DGZBuR.js",
+    "file": "assets/SalesAnalyticsPage-DU4hEAF6.js",
     "name": "SalesAnalyticsPage",
     "src": "resources/js/crm/pages/analytics/SalesAnalyticsPage.vue",
     "isDynamicEntry": true,

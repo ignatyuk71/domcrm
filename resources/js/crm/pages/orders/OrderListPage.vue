@@ -259,6 +259,7 @@ async function refreshDeliveryStatus(order) {
       csrf ? { headers: { 'X-CSRF-TOKEN': csrf } } : undefined
     );
     const data = response.data || {};
+    if (data.order_status) applyOrderStatus(order, data.order_status);
     order.delivery_status = data.delivery_status_label || order.delivery_status;
     order.delivery_status_code = data.delivery_status_code || order.delivery_status_code;
     order.delivery_status_updated_at = data.delivery_status_updated_at || order.delivery_status_updated_at;
@@ -595,6 +596,15 @@ function closeStatusesModal() {
   selectedStatusId.value = null;
 }
 
+function applyOrderStatus(order, status) {
+  order.status_id = status.id;
+  order.status_key = status.code;
+  order.status = status.name;
+  order.status_icon = status.icon;
+  order.status_color = status.color;
+  order.status_changed_at = status.status_changed_at ?? null;
+}
+
 async function saveStatus() {
   if (!statusesOrder.value || !selectedStatusId.value) return;
   try {
@@ -602,11 +612,7 @@ async function saveStatus() {
     const status = data?.data || data || {};
     const idx = orders.value.findIndex((o) => o.id === statusesOrder.value.id);
     const target = idx !== -1 ? orders.value[idx] : statusesOrder.value;
-    target.status_id = status.id;
-    target.status_key = status.code;
-    target.status = status.name;
-    target.status_icon = status.icon;
-    target.status_color = status.color;
+    applyOrderStatus(target, status);
     closeStatusesModal();
   } catch (e) {
     console.error('Не вдалося оновити статус', e);

@@ -35,6 +35,7 @@ class Order extends Model
 
     protected $casts = [
         'needs_review' => 'boolean',
+        'status_changed_at' => 'datetime',
     ];
 
     /*

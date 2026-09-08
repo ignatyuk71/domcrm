@@ -25,6 +25,9 @@ class OrderStatusAudit
         $oldId = $before->status_id === null ? null : (int) $before->status_id;
         $newId = $after->status_id === null ? null : (int) $after->status_id;
         if ($before->status === $after->status && $oldId === $newId) {
+            // Застаріла модель може повторити вже збережений статус: час не скидаємо.
+            $order->status_changed_at = $after->status_changed_at;
+
             return;
         }
 
@@ -43,6 +46,7 @@ class OrderStatusAudit
 
         $change = new OrderStatusChange;
         $change->setConnection($order->getConnectionName());
+        $occurredAt = now()->startOfSecond();
         $saved = $change->fill([
             'order_id' => $order->id,
             'order_number' => $after->order_number,
@@ -57,11 +61,16 @@ class OrderStatusAudit
             'source' => Str::limit($source, 64, ''),
             'reason' => Str::limit($context['reason'], 500, ''),
             'metadata' => $metadata ?: null,
-            'occurred_at' => now(),
+            'occurred_at' => $occurredAt,
         ])->saveOrFail();
         if (! $saved) {
             throw new RuntimeException('Не вдалося записати зміну статусу в журнал.');
         }
+
+        // Та сама транзакція і блокування, що й статус та журнал; повторних подій немає.
+        $order->getConnection()->table($order->getTable())->where($order->getKeyName(), $order->getKey())
+            ->update(['status_changed_at' => $order->fromDateTime($occurredAt)]);
+        $order->status_changed_at = $occurredAt;
     }
 
     private function requestContext(?string $route): array

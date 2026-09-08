@@ -304,6 +304,7 @@ class OrderController extends Controller
                 'name' => $status->name,
                 'icon' => $status->icon,
                 'color' => $status->color,
+                'status_changed_at' => $order->status_changed_at,
             ],
         ]);
     }
@@ -589,8 +590,19 @@ class OrderController extends Controller
             }
         }
 
+        // Поки НП відповідала, інший процес міг змінити замовлення.
+        $order->refresh()->load('statusRef');
+
         return response()->json([
             'success' => true,
+            'order_status' => [
+                'id' => $order->status_id,
+                'code' => $order->status,
+                'name' => $order->statusRef?->name ?? $order->status,
+                'icon' => $order->statusRef?->icon,
+                'color' => $order->statusRef?->color,
+                'status_changed_at' => $order->status_changed_at,
+            ],
             'delivery_status_code' => $delivery->delivery_status_code,
             'delivery_status_label' => $delivery->delivery_status_label,
             'delivery_status_description' => $delivery->delivery_status_description,

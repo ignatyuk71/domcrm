@@ -142,6 +142,25 @@ function parseDate(value) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+export function formatStatusDuration(value, now = Date.now()) {
+  const startedAt = parseDate(value);
+  if (!startedAt || !Number.isFinite(now)) return '';
+
+  const minutes = Math.max(0, Math.floor((now - startedAt.getTime()) / 60_000));
+  if (minutes === 0) return 'Щойно у статусі';
+  if (minutes < 60) return `${minutes} хв у статусі`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    const remainder = minutes % 60;
+    return `${hours} год${remainder ? ` ${remainder} хв` : ''} у статусі`;
+  }
+
+  const days = Math.floor(hours / 24);
+  const remainder = hours % 24;
+  return `${days} дн${remainder ? ` ${remainder} год` : ''} у статусі`;
+}
+
 export function formatDate(value) {
   const date = parseDate(value);
   if (!date) return value || '';

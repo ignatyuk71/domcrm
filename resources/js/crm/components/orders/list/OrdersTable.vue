@@ -1,15 +1,16 @@
 <script setup>
-  import { ref } from 'vue';
+  import { computed, onMounted, onUnmounted, ref } from 'vue';
   import OrderDetails from '@/crm/components/orders/list/OrderDetails.vue';
   import {
     formatCurrency,
     formatDate,
+    formatStatusDuration,
     getStatusClass,
     getStatusIcon,
     getStatusStyle,
   } from '@/crm/utils/orderDisplay';
   
-  defineProps({
+  const props = defineProps({
     orders: { type: Array, default: () => [] },
     expandedRows: { type: Object, required: true },
     deletingId: { type: [Number, String, null], default: null },
@@ -34,6 +35,28 @@
 
   const ttnConfirmOpen = ref(false);
   const ttnConfirmOrder = ref(null);
+
+  // Один таймер на таблицю; тривалість не потребує нових запитів до сервера.
+  const currentTime = ref(Date.now());
+  const statusDurations = computed(() => new Map(props.orders.map((order) => [
+    order.id,
+    formatStatusDuration(order.status_changed_at, currentTime.value),
+  ])));
+  let clockInterval;
+  const refreshClock = () => { currentTime.value = Date.now(); };
+  const resumeClock = () => {
+    if (document.visibilityState === 'visible') refreshClock();
+  };
+
+  onMounted(() => {
+    refreshClock();
+    clockInterval = window.setInterval(refreshClock, 60_000);
+    document.addEventListener('visibilitychange', resumeClock);
+  });
+  onUnmounted(() => {
+    window.clearInterval(clockInterval);
+    document.removeEventListener('visibilitychange', resumeClock);
+  });
   
   const getSourceStyle = (colorHex) => {
     const color = colorHex || '#64748b';
@@ -212,6 +235,13 @@
                 >
                   <i class="bi" :class="order.status_icon || getStatusIcon(order.status_key)"></i>
                   <span>{{ order.status }}</span>
+                </div>
+                <div v-if="statusDurations.get(order.id)" class="order-status-age">
+                  <i class="bi bi-clock" aria-hidden="true"></i>
+                  <time
+                    :datetime="order.status_changed_at"
+                    :title="`У статусі з ${formatDate(order.status_changed_at)}`"
+                  >{{ statusDurations.get(order.id) }}</time>
                 </div>
               </td>
 
@@ -558,6 +588,7 @@
 .tag-amber { background: #fef3c7; color: #b45309; }
 .tag-gray { background: #f3f4f6; color: #4b5563; }
 .status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 8px; font-size: 0.8rem; font-weight: 600; border: 1px solid rgba(0, 0, 0, 0.03); }
+.order-status-age { display: flex; align-items: center; gap: 5px; margin-top: 6px; color: #64748b; font-size: 0.7rem; line-height: 1.3; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .product-stack { display: flex; align-items: center; padding-left: 8px; }
 .product-thumb { width: 62px; height: 62px; border-radius: 10px; border: 2px solid #fff; overflow: hidden; margin-left: -10px; background: #fff; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08); position: relative; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease; }
 .product-thumb img { width: 100%; height: 100%; object-fit: cover; }
