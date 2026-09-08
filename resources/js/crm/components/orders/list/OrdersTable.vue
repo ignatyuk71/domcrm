@@ -63,12 +63,17 @@
     return [order.id, { label, title, icon: option.icon }];
   })));
 
+  // Час потрібен лише для робочих етапів до відправлення.
+  const statusAgeKeys = new Set(['new', 'in_process', 'confirmed', 'packing', 'packed']);
+
   // Один таймер на таблицю; тривалість не потребує нових запитів до сервера.
   const currentTime = ref(Date.now());
-  const statusDurations = computed(() => new Map(props.orders.map((order) => [
-    order.id,
-    formatStatusDuration(order.status_changed_at, currentTime.value),
-  ])));
+  const statusDurations = computed(() => new Map(props.orders
+    .filter((order) => statusAgeKeys.has(order.status_key))
+    .map((order) => [
+      order.id,
+      formatStatusDuration(order.status_changed_at, currentTime.value),
+    ])));
   let clockInterval;
   const refreshClock = () => { currentTime.value = Date.now(); };
   const resumeClock = () => {
