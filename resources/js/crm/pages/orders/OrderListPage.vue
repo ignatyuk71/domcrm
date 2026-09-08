@@ -39,6 +39,7 @@
     <div class="card border-0 shadow-sm overflow-hidden">
       <OrdersTable
         :orders="orders"
+        :copied-ttn="copiedTtn"
         :expanded-rows="expandedRows"
         :deleting-id="deletingId"
         :loading="loading"
@@ -106,6 +107,7 @@ import { listOrders, deleteOrder, updateOrderTags, updateOrderStatus, updateOrde
 import { fetchTags } from '@/crm/api/tags';
 import { fetchStatuses } from '@/crm/api/statuses';
 import { getCustomer } from '@/crm/api/customers';
+import { useTtnCopy } from '@/crm/composables/useTtnCopy';
 import {
   buildPhotoUrl,
   paymentLabels,
@@ -113,6 +115,7 @@ import {
 } from '@/crm/utils/orderDisplay';
 
 const orders = ref([]);
+const { copiedTtn, copyTtn } = useTtnCopy();
 const expandedRows = ref(new Set());
 const loading = ref(false);
 const deletingId = ref(null);
@@ -477,15 +480,6 @@ function changePage(page) {
   if (page < 1 || page > meta.value.last_page) return;
   filters.page = page;
   fetchData();
-}
-
-async function copyTtn(ttn) {
-  if (!ttn || typeof navigator === 'undefined' || !navigator.clipboard) return;
-  try {
-    await navigator.clipboard.writeText(ttn);
-  } catch (err) {
-    console.error('Не вдалося скопіювати ТТН', err);
-  }
 }
 
 async function openTagsModal(order) {

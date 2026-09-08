@@ -45,9 +45,31 @@ afterEach(() => {
   wrapper?.unmount();
   wrapper = null;
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe('оновлення доставки у списку замовлень', () => {
+  it('показує галочку в рядку лише після успішного копіювання та не розгортає замовлення', async () => {
+    let finishCopy;
+    const writeText = vi.fn(() => new Promise((resolve) => { finishCopy = resolve; }));
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    wrapper = shallowMount(OrderListPage, { global: { stubs: { OrdersTable: false } } });
+    await flushPromises();
+
+    const button = wrapper.get('.ttn-row');
+    await button.trigger('click');
+    expect(writeText).toHaveBeenCalledWith('20450000000001');
+    expect(button.find('.bi-check-lg').exists()).toBe(false);
+    expect(wrapper.findComponent(OrdersTable).props('expandedRows').size).toBe(0);
+
+    finishCopy();
+    await flushPromises();
+    expect(button.find('.ttn-copy-icon.is-copied .bi-check-lg').exists()).toBe(true);
+    expect(button.attributes('title')).toBe('ТТН скопійовано');
+    expect(button.find('.bi-copy').exists()).toBe(false);
+    expect(listOrders).toHaveBeenCalledTimes(1);
+  });
+
   it('передає таблиці нові статуси, колір та іконку без повторного завантаження списку', async () => {
     const post = vi.spyOn(axios, 'post').mockResolvedValue({
       data: {

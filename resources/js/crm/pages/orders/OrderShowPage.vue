@@ -123,6 +123,7 @@
           <div class="details-frame">
             <OrderDetails
               :order="order"
+              :copied-ttn="copiedTtn"
               @open-tags="openTagsModal"
               @open-statuses="openStatusesModal"
               @copy-ttn="copyTtn(order.ttn)"
@@ -163,6 +164,7 @@ import axios from 'axios';
 import { getOrder, updateOrderComment, updateOrderStatus, updateOrderTags } from '@/crm/api/orders';
 import { fetchTags } from '@/crm/api/tags';
 import { fetchStatuses } from '@/crm/api/statuses';
+import { useTtnCopy } from '@/crm/composables/useTtnCopy';
 import OrderDetails from '@/crm/components/orders/list/OrderDetails.vue';
 import OrderTagsModal from '@/crm/components/orders/list/OrderTagsModal.vue';
 import OrderStatusesModal from '@/crm/components/orders/list/OrderStatusesModal.vue';
@@ -176,6 +178,7 @@ const loading = ref(true);
 const reloading = ref(false);
 const error = ref('');
 const order = ref(null);
+const { copiedTtn, copyTtn } = useTtnCopy();
 
 const tagsModalOpen = ref(false);
 const tagsModalLoading = ref(false);
@@ -452,17 +455,6 @@ async function saveComment(comment) {
   } catch (e) {
     console.error('Не вдалося зберегти нотатку', e);
     showNotice('Не вдалося зберегти нотатку', 'danger');
-  }
-}
-
-async function copyTtn(ttn) {
-  if (!ttn || typeof navigator === 'undefined' || !navigator.clipboard) return;
-  try {
-    await navigator.clipboard.writeText(ttn);
-    showNotice('ТТН скопійовано');
-  } catch (err) {
-    console.error('Не вдалося скопіювати ТТН', err);
-    showNotice('Не вдалося скопіювати ТТН', 'danger');
   }
 }
 

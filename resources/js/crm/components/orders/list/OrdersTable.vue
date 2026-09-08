@@ -12,6 +12,7 @@
   
   const props = defineProps({
     orders: { type: Array, default: () => [] },
+    copiedTtn: { type: String, default: '' },
     expandedRows: { type: Object, required: true },
     deletingId: { type: [Number, String, null], default: null },
     loading: { type: Boolean, default: false },
@@ -379,15 +380,20 @@
                 <div v-if="order.ttn" class="delivery-widget">
                   <DeliveryStatusLabel :order="order" compact class="mb-1" />
 
-                  <div
-                    class="d-flex align-items-center gap-2 ttn-row"
+                  <button
+                    type="button"
+                    class="d-flex align-items-center gap-1 ttn-row"
                     @click.stop="$emit('copy-ttn', order.ttn)"
-                    title="Копіювати ТТН"
+                    :title="copiedTtn === String(order.ttn) ? 'ТТН скопійовано' : 'Копіювати ТТН'"
+                    :aria-label="`Копіювати ТТН ${order.ttn}`"
                   >
                     <i class="bi bi-upc-scan text-muted" style="font-size: 0.85rem;"></i>
                     <span class="ttn-number">{{ order.ttn }}</span>
-                    <i class="bi bi-copy ttn-copy-icon"></i>
-                  </div>
+                    <span class="ttn-copy-icon" :class="{ 'is-copied': copiedTtn === String(order.ttn) }" aria-hidden="true">
+                      <i class="bi" :class="copiedTtn === String(order.ttn) ? 'bi-check-lg' : 'bi-copy'"></i>
+                    </span>
+                    <span class="visually-hidden" aria-live="polite">{{ copiedTtn === String(order.ttn) ? 'ТТН скопійовано' : '' }}</span>
+                  </button>
                 </div>
 
                 <div
@@ -466,6 +472,7 @@
                 <div class="details-wrapper">
                   <OrderDetails
                     :order="order"
+                    :copied-ttn="copiedTtn"
                     @open-tags="$emit('open-tags', order)"
                     @open-statuses="$emit('open-statuses', order)"
                     @copy-ttn="$emit('copy-ttn', order.ttn)"
@@ -532,11 +539,13 @@
 .widget-empty.widget-error { background: #fef2f2; color: #b91c1c; border-color: #fca5a5; border-style: solid; }
 .delivery-widget { display: flex; flex-direction: column; justify-content: center; padding: 6px 10px; background: #fff; border-radius: 8px; border: 1px solid #e2e8f0; min-height: 48px; transition: all 0.2s; max-width: 180px; }
 .delivery-widget:hover { border-color: #cbd5e1; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.03); }
-.ttn-row { cursor: copy; }
+.ttn-row { cursor: default; padding: 0; border: 0; background: transparent; text-align: left; width: 100%; }
+.ttn-row:focus-visible { outline: 2px solid #3b82f6; outline-offset: 3px; border-radius: 4px; }
 .ttn-number { font-family: 'Consolas', 'Monaco', monospace; font-weight: 600; font-size: 0.85rem; color: #1e293b; letter-spacing: -0.02em; }
-.ttn-copy-icon { font-size: 0.75rem; color: #94a3b8; opacity: 0; transition: all 0.2s; transform: scale(0.8); }
-.ttn-row:hover .ttn-copy-icon { opacity: 1; transform: scale(1); color: #3b82f6; }
+.ttn-copy-icon { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 20px; height: 20px; border-radius: 5px; font-size: 0.75rem; color: #94a3b8; opacity: 0; transition: opacity 0.15s, color 0.15s, background-color 0.15s, transform 0.15s; transform: scale(0.8); }
+.ttn-row:hover .ttn-copy-icon, .ttn-row:focus-visible .ttn-copy-icon { opacity: 1; transform: scale(1); color: #3b82f6; }
 .ttn-row:active .ttn-copy-icon { transform: scale(0.9); }
+.ttn-row .ttn-copy-icon.is-copied { opacity: 1; transform: scale(1); color: #fff; background: #16a34a; }
 .delivery-empty { background: #f8fafc; border: 1px dashed #cbd5e1; cursor: pointer; align-items: center; }
 .delivery-empty:hover { background: #f1f5f9; border-color: #3b82f6; color: #3b82f6 !important; }
 .delivery-empty .text-muted { transition: color 0.2s; font-size: 0.8rem; font-weight: 600; }

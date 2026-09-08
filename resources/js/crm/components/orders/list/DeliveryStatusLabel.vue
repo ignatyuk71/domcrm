@@ -224,7 +224,7 @@ onBeforeUnmount(() => {
   font: inherit;
   font-weight: 700;
   text-align: left;
-  cursor: help;
+  cursor: default;
 }
 .delivery-status-label:focus-visible {
   outline: 2px solid currentColor;

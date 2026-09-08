@@ -24,6 +24,7 @@
   
   const props = defineProps({
     order: { type: Object, required: true },
+    copiedTtn: { type: String, default: '' },
   });
   
   const emit = defineEmits([
@@ -355,8 +356,9 @@
                     >
                       {{ order.ttn }}
                     </span>
-                    <button class="btn-copy" @click.stop="$emit('copy-ttn')">
-                      <i class="bi bi-clipboard"></i>
+                    <button type="button" class="btn-copy" :class="{ 'is-copied': copiedTtn === String(order.ttn) }" @click.stop="$emit('copy-ttn')" :title="copiedTtn === String(order.ttn) ? 'ТТН скопійовано' : 'Копіювати ТТН'" :aria-label="`Копіювати ТТН ${order.ttn}`">
+                      <i class="bi" :class="copiedTtn === String(order.ttn) ? 'bi-check-lg' : 'bi-clipboard'" aria-hidden="true"></i>
+                      <span class="visually-hidden" aria-live="polite">{{ copiedTtn === String(order.ttn) ? 'ТТН скопійовано' : '' }}</span>
                     </button>
                   </div>
   
@@ -698,8 +700,9 @@
   /* TTN */
   .ttn-display { background: #ffffff; border-radius: 8px; border: 1px solid #e2e8f0; padding: 4px; display: flex; align-items: center; margin-bottom: 8px; }
   .ttn-number { font-size: 0.85rem; }
-  .btn-copy { background: #f8fafc; border: none; border-left: 1px solid #e2e8f0; width: 32px; height: 26px; color: #64748b; display: flex; align-items: center; justify-content: center; border-radius: 6px; cursor: pointer; font-size: 0.85rem; transition: all 0.15s; }
+  .btn-copy { background: #f8fafc; border: none; border-left: 1px solid #e2e8f0; width: 32px; height: 26px; color: #64748b; display: flex; align-items: center; justify-content: center; border-radius: 6px; cursor: default; font-size: 0.85rem; transition: all 0.15s; }
   .btn-copy:hover { color: #2563eb; background: #e0f2fe; }
+  .btn-copy.is-copied { background: #16a34a; color: #fff; border-color: transparent; }
   
   .btn-action-light { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px; font-size: 0.75rem; font-weight: 600; color: #475569; cursor: pointer; transition: all 0.15s; }
   .btn-action-light:hover { background: #f8fafc; border-color: #cbd5e1; }
