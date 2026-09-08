@@ -398,6 +398,7 @@ function mapOrder(order) {
       payment.prepayment ??
       0
     ),
+    payment_method: payment.method || order.payment_method || '',
     payment_method_label: payment.method === 'cod'
       ? 'Накладений платіж'
       : payment.method === 'card'

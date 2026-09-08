@@ -37,6 +37,32 @@
   const ttnConfirmOpen = ref(false);
   const ttnConfirmOrder = ref(null);
 
+  const paymentMethodOptions = {
+    cod: { label: 'Накладений платіж', icon: 'bi-cash-coin' },
+    card: { label: 'На рахунок', icon: 'bi-bank' },
+    cashless: { label: 'На рахунок', icon: 'bi-bank' },
+    cash: { label: 'Готівка', icon: 'bi-cash' },
+    prepay: { label: 'Передоплата', icon: 'bi-wallet2' },
+  };
+  const paymentMethods = computed(() => new Map(props.orders.map((order) => {
+    const method = order.payment_method;
+    const option = Object.hasOwn(paymentMethodOptions, method)
+      ? paymentMethodOptions[method]
+      : { label: 'Спосіб не вказано', icon: 'bi-question-circle' };
+    let label = option.label;
+    let title = option.label;
+    const prepay = Number(order.prepay_amount);
+    if (method === 'prepay' && Number.isFinite(prepay) && prepay > 0) {
+      label = `Передоплата: ${formatCurrency(prepay, order.currency)}`;
+      const total = Number(order.total);
+      title = `Внесено ${formatCurrency(prepay, order.currency)}`;
+      if (Number.isFinite(total)) {
+        title += ` · Залишок ${formatCurrency(Math.max(0, total - prepay), order.currency)}`;
+      }
+    }
+    return [order.id, { label, title, icon: option.icon }];
+  })));
+
   // Один таймер на таблицю; тривалість не потребує нових запитів до сервера.
   const currentTime = ref(Date.now());
   const statusDurations = computed(() => new Map(props.orders.map((order) => [
@@ -200,6 +226,10 @@
                   >
                     <i v-if="order.source_icon" :class="order.source_icon" class="source-icon"></i>
                     {{ order.source_name }}
+                  </div>
+                  <div class="order-payment-method" :title="paymentMethods.get(order.id)?.title">
+                    <i class="bi" :class="paymentMethods.get(order.id)?.icon" aria-hidden="true"></i>
+                    <span>{{ paymentMethods.get(order.id)?.label }}</span>
                   </div>
                 </div>
               </td>
@@ -559,6 +589,36 @@
 .loyalty-pill.is-vip { background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%); color: #c2410c; border: 1px solid #fed7aa; }
 .source-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 0.7rem; font-weight: 600; padding: 2px 0; color: #64748b; opacity: 0.9; }
 .source-icon { font-size: 0.75rem; opacity: 0.8; }
+.order-payment-method {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 6px;
+  max-width: 200px;
+  margin-top: 4px;
+  color: #475569;
+  font-size: 0.7rem;
+  font-weight: 500;
+  line-height: 1.35;
+  cursor: default;
+}
+.order-payment-method i {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 18px;
+  height: 18px;
+  border-radius: 5px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 0.7rem;
+}
+.order-payment-method span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .orders-container { background: #fff; border-radius: 16px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03); overflow: hidden; border: 1px solid rgba(0, 0, 0, 0.04); }
 .table-responsive-wrapper { width: 100%; overflow-x: auto; }
 .orders-table { --bs-table-bg: transparent; width: 100%; border-collapse: separate; border-spacing: 0; }
