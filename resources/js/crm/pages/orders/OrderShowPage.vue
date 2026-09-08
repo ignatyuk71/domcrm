@@ -166,7 +166,7 @@ import { fetchStatuses } from '@/crm/api/statuses';
 import OrderDetails from '@/crm/components/orders/list/OrderDetails.vue';
 import OrderTagsModal from '@/crm/components/orders/list/OrderTagsModal.vue';
 import OrderStatusesModal from '@/crm/components/orders/list/OrderStatusesModal.vue';
-import { buildPhotoUrl, formatCurrency, formatDate, paymentLabels, statusLabels } from '@/crm/utils/orderDisplay';
+import { buildPhotoUrl, formatCurrency, formatDate, getStatusStyle, paymentLabels, statusLabels } from '@/crm/utils/orderDisplay';
 
 const props = defineProps({
   initialOrderId: { type: [String, Number], default: null },
@@ -196,23 +196,7 @@ const amountDue = computed(() => {
   return Math.max(0, total - prepay);
 });
 
-const statusChipStyle = computed(() => {
-  const color = String(order.value?.status_color || '').trim();
-  if (!color) return {};
-  if (color.startsWith('#')) {
-    return {
-      color,
-      borderColor: `${color}55`,
-      backgroundColor: `${color}16`,
-    };
-  }
-
-  return {
-    color,
-    borderColor: color,
-    backgroundColor: 'transparent',
-  };
-});
+const statusChipStyle = computed(() => getStatusStyle(order.value));
 
 function paymentChipClass(status) {
   const map = {
@@ -294,6 +278,7 @@ function mapOrder(payload) {
     status: statusRef.name || statusLabels[payload.status] || payload.status || '—',
     status_icon: statusRef.icon || '',
     status_color: statusRef.color || '',
+    status_changed_at: payload.status_changed_at || null,
     payment_status: payload.payment_status || '',
     payment_status_label: paymentLabels[payload.payment_status] || payload.payment_status || '—',
     tags: payload.tags || [],
@@ -563,12 +548,21 @@ async function refreshDeliveryStatus(targetOrder) {
     );
 
     const payload = response.data?.data || response.data || {};
+    if (payload.order_status) {
+      const status = payload.order_status;
+      targetOrder.status_id = status.id;
+      targetOrder.status_key = status.code;
+      targetOrder.status = status.name;
+      targetOrder.status_color = status.color;
+      targetOrder.status_icon = status.icon;
+      targetOrder.status_changed_at = status.status_changed_at ?? null;
+    }
     if (payload.delivery_status_label || payload.delivery_status_code) {
       targetOrder.delivery_status = payload.delivery_status_label || targetOrder.delivery_status;
       targetOrder.delivery_status_code = payload.delivery_status_code || targetOrder.delivery_status_code;
       targetOrder.delivery_status_updated_at = payload.delivery_status_updated_at || targetOrder.delivery_status_updated_at;
-      targetOrder.delivery_status_color = payload.delivery_status_color || targetOrder.delivery_status_color;
-      targetOrder.delivery_status_icon = payload.delivery_status_icon || targetOrder.delivery_status_icon;
+      targetOrder.delivery_status_color = payload.delivery_status_color ?? targetOrder.delivery_status_color;
+      targetOrder.delivery_status_icon = payload.delivery_status_icon ?? targetOrder.delivery_status_icon;
       showNotice('Статус доставки оновлено');
     } else {
       showNotice(payload.message || 'Дані про доставку вже актуальні', 'success');

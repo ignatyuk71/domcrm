@@ -5,7 +5,7 @@
     formatCurrency,
     formatDate,
     formatStatusDuration,
-    getStatusClass,
+    getDeliveryStatusStyle,
     getStatusIcon,
     getStatusStyle,
   } from '@/crm/utils/orderDisplay';
@@ -230,7 +230,6 @@
               <td class="cell-status">
                 <div
                   class="status-badge"
-                  :class="order.status_color ? '' : getStatusClass(order.status_key)"
                   :style="getStatusStyle(order)"
                 >
                   <i class="bi" :class="order.status_icon || getStatusIcon(order.status_key)"></i>
@@ -378,16 +377,14 @@
 
               <td class="cell-delivery">
                 <div v-if="order.ttn" class="delivery-widget">
-                  <div class="d-flex align-items-center gap-2 mb-1">
+                  <div class="delivery-status-badge d-flex align-items-center gap-2 mb-1" :style="getDeliveryStatusStyle(order)">
                     <i
                       v-if="order.delivery_status_icon"
                       :class="['bi', order.delivery_status_icon]"
-                      :style="{ color: order.delivery_status_color }"
                       style="font-size: 0.8rem;"
                     ></i>
                     <span
                       class="delivery-status-text text-truncate"
-                      :style="{ color: order.delivery_status_color || '#475569' }"
                       :title="order.delivery_status"
                     >
                       {{ order.delivery_status }}
@@ -548,6 +545,7 @@
 .delivery-widget { display: flex; flex-direction: column; justify-content: center; padding: 6px 10px; background: #fff; border-radius: 8px; border: 1px solid #e2e8f0; min-height: 48px; transition: all 0.2s; max-width: 180px; }
 .delivery-widget:hover { border-color: #cbd5e1; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.03); }
 .delivery-status-text { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; line-height: 1.2; }
+.delivery-status-badge { min-width: 0; padding: 4px 6px; border: 1px solid transparent; border-radius: 6px; }
 .ttn-row { cursor: copy; }
 .ttn-number { font-family: 'Consolas', 'Monaco', monospace; font-weight: 600; font-size: 0.85rem; color: #1e293b; letter-spacing: -0.02em; }
 .ttn-copy-icon { font-size: 0.75rem; color: #94a3b8; opacity: 0; transition: all 0.2s; transform: scale(0.8); }

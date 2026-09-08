@@ -42,7 +42,7 @@
     <div class="row g-2">
       <div class="col-6">
         <label class="info-label mb-1">Статус</label>
-        <div class="status-card" :style="getStatusStyle(local.status)" @click="openPicker('status')">
+        <div class="status-card order-status-card" :style="statusStyle(local.status)" @click="openPicker('status')">
           <i :class="getStatusIcon(local.status)" class="fs-5"></i>
           <span class="text-truncate">{{ getStatusName(local.status) }}</span>
         </div>
@@ -149,7 +149,7 @@
                     @click="selectOption(opt.value)"
                   >
                     <div class="d-flex align-items-center gap-3">
-                      <div class="option-icon" :style="opt.color ? { backgroundColor: opt.color + '20', color: opt.color } : {}">
+                      <div class="option-icon" :style="picker.type === 'status' ? getStatusStyle({ status_color: opt.color, status_key: opt.value }) : (opt.color ? { backgroundColor: opt.color + '20', color: opt.color } : {})">
                         <i :class="opt.icon || 'bi-circle-fill'"></i>
                       </div>
                       <span class="fw-medium">{{ opt.label }}</span>
@@ -172,6 +172,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { fetchTags } from '@/crm/api/tags';
 import { fetchOrderSources } from '@/crm/api/orderSources';
 import { fetchStatuses } from '@/crm/api/statuses';
+import { getStatusStyle } from '@/crm/utils/orderDisplay';
 
 const props = defineProps({ errors: { type: Object, default: () => ({}) } });
 const model = defineModel({ type: Object, default: () => ({ id: '', source: 'site', sale_type: 'retail', status: 'new', payment_status: 'unpaid' }) });
@@ -243,9 +244,9 @@ const getSourceIcon = (val) => {
 
 const getStatusName = (val) => statuses.value.find(s => s.code === val)?.name || '...';
 const getStatusIcon = (val) => statuses.value.find(s => s.code === val)?.icon || 'bi-circle';
-const getStatusStyle = (val) => {
+const statusStyle = (val) => {
     const s = statuses.value.find(s => s.code === val);
-    return s?.color ? { backgroundColor: s.color, borderColor: s.color, color: '#fff' } : { backgroundColor: '#6c757d', color: '#fff' };
+    return getStatusStyle({ status_color: s?.color, status_key: s?.code || val });
 }
 
 const getPaymentLabel = (val) => payments.find(p => p.value === val)?.label || val;
@@ -402,6 +403,7 @@ onMounted(async () => {
   text-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
 .status-card:active { transform: scale(0.98); }
+.order-status-card { text-shadow: none; }
 
 /* --- NEW TAGS STYLES --- */
 .tag-badge {

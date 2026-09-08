@@ -64,13 +64,13 @@ class DeliveryStatusMapper
      * Використовується для відображення лейблів в адмінці.
      */
     private const NP_STATUS_MAP = [
-        '1' => ['code' => 'created', 'label' => 'Створена накладна', 'color' => '#37caec', 'icon' => 'bi-file-earmark'],
-        '2' => ['code' => 'deleted', 'label' => 'Видалено', 'color' => '#8d9fa3', 'icon' => 'bi-trash'], // Виправлено лейбл
+        '1' => ['code' => 'created', 'label' => 'Створена накладна', 'color' => '#78716c', 'icon' => 'bi-file-earmark'],
+        '2' => ['code' => 'deleted', 'label' => 'Видалено', 'color' => '#1f2937', 'icon' => 'bi-trash'], // Виправлено лейбл
         
         // У дорозі
-        '4' => ['code' => 'in_transit', 'label' => 'У місті відправника', 'color' => '#2563eb', 'icon' => 'bi-truck'],
-        '5' => ['code' => 'in_transit', 'label' => 'Прямує до міста одержувача', 'color' => '#2563eb', 'icon' => 'bi-truck'],
-        '6' => ['code' => 'in_transit', 'label' => 'У місті одержувача', 'color' => '#2563eb', 'icon' => 'bi-truck'],
+        '4' => ['code' => 'in_transit', 'label' => 'У місті відправника', 'color' => '#0ea5e9', 'icon' => 'bi-truck'],
+        '5' => ['code' => 'in_transit', 'label' => 'Прямує до міста одержувача', 'color' => '#0ea5e9', 'icon' => 'bi-truck'],
+        '6' => ['code' => 'in_transit', 'label' => 'У місті одержувача', 'color' => '#0ea5e9', 'icon' => 'bi-truck'],
         
         // Прибуло
         '7' => ['code' => 'at_warehouse', 'label' => 'Прибув у відділення', 'color' => '#f59e0b', 'icon' => 'bi-building'],
@@ -121,7 +121,8 @@ class DeliveryStatusMapper
         return [
             'code' => 'unknown',
             'label' => $sourceLabel ?? 'Невідомий статус',
-            'color' => '#6b7280',
+            // Номер не знайдено: підсвічуємо увагу, зберігаючи нормалізований unknown.
+            'color' => $npCode === (string) self::NP_NOT_FOUND ? '#f59e0b' : '#6b7280',
             'icon' => 'bi-question-circle',
             'description' => $description,
             'source_code' => $npCode ?: null,

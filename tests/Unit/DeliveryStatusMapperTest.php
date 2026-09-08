@@ -11,6 +11,49 @@ use PHPUnit\Framework\TestCase;
  */
 class DeliveryStatusMapperTest extends TestCase
 {
+    public function test_delivery_palette_preserves_status_identity_and_source_details(): void
+    {
+        $cases = [
+            [1, 'created', 'Створена накладна', '#78716c', 'bi-file-earmark'],
+            [2, 'deleted', 'Видалено', '#1f2937', 'bi-trash'],
+            [3, 'unknown', 'Номер не знайдено', '#f59e0b', 'bi-question-circle'],
+            [4, 'in_transit', 'У місті відправника', '#0ea5e9', 'bi-truck'],
+            [5, 'in_transit', 'Прямує до міста одержувача', '#0ea5e9', 'bi-truck'],
+            [6, 'in_transit', 'У місті одержувача', '#0ea5e9', 'bi-truck'],
+            [7, 'at_warehouse', 'Прибув у відділення', '#f59e0b', 'bi-building'],
+            [8, 'at_warehouse', 'Прибув у відділення', '#f59e0b', 'bi-building'],
+            [9, 'received', 'Отримано', '#16a34a', 'bi-check-circle-fill'],
+            [10, 'received_money', 'Отримано (Гроші)', '#16a34a', 'bi-cash-stack'],
+            [11, 'received_money', 'Отримано (Гроші)', '#16a34a', 'bi-cash-stack'],
+            [41, 'cod_on_way', 'Отримано, гроші в дорозі', '#16a34a', 'bi-cash-coin'],
+            [102, 'refusal', 'Відмова одержувача', '#ef4444', 'bi-x-circle'],
+            [103, 'refusal', 'Відмова (інше)', '#ef4444', 'bi-x-circle'],
+            [108, 'refusal', 'Відмова (адреса)', '#ef4444', 'bi-x-circle'],
+            [104, 'in_transit', 'Змінено адресу доставки', '#f59e0b', 'bi-geo-alt'],
+        ];
+
+        foreach ($cases as [$sourceCode, $code, $label, $color, $icon]) {
+            $this->assertSame([
+                'code' => $code,
+                'label' => $label,
+                'color' => $color,
+                'icon' => $icon,
+                'description' => 'Опис перевізника',
+                'source_code' => (string) $sourceCode,
+            ], DeliveryStatusMapper::map([
+                'StatusCode' => (string) $sourceCode,
+                'Status' => $label,
+                'StatusDescription' => 'Опис перевізника',
+            ]), "Код НП {$sourceCode}");
+        }
+
+        // Непізнаний код не успадковує попереджувальний колір помилки пошуку ТТН.
+        $unknown = DeliveryStatusMapper::map(['StatusCode' => '105', 'Status' => 'Інший стан']);
+        $this->assertSame('unknown', $unknown['code']);
+        $this->assertSame('#6b7280', $unknown['color']);
+        $this->assertSame('Інший стан', $unknown['label']);
+    }
+
     public function test_received_codes_map_to_delivered_paid(): void
     {
         // 9/10/11 = отримано → delivered_paid (тригер фіскалізації). Не зламати!

@@ -57,7 +57,7 @@
 <script setup>
 import { ref, watch } from 'vue';
 import { getCustomer } from '@/crm/api/customers';
-import { formatCurrency, formatDate } from '@/crm/utils/orderDisplay';
+import { formatCurrency, formatDate, getStatusStyle } from '@/crm/utils/orderDisplay';
 
 const props = defineProps({
   customerId: { type: [Number, String], default: null },
@@ -80,26 +80,10 @@ const productSummary = (order) => {
   return label;
 };
 
-// Колір беремо живий зі статусу CRM; текст контрастимо до фону
-const badgeStyle = (order) => {
-  const color = statusRef(order)?.color;
-  if (!color) return {};
-  return {
-    background: color,
-    borderColor: 'transparent',
-    color: readableText(color),
-  };
-};
-
-function readableText(hex) {
-  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '');
-  if (!m) return '#1e293b';
-  const r = parseInt(m[1], 16);
-  const g = parseInt(m[2], 16);
-  const b = parseInt(m[3], 16);
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  return luminance > 0.6 ? '#1e293b' : '#ffffff';
-}
+const badgeStyle = (order) => getStatusStyle({
+  status_color: statusRef(order)?.color,
+  status_key: statusRef(order)?.code || order.status,
+});
 
 async function load(id) {
   if (!id) {

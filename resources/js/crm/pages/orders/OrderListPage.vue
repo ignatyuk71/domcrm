@@ -161,6 +161,7 @@ function buildStatusChips() {
 
         return {
           value: status.id,
+          code: status.code,
           label,
           icon: status.icon,
           color: status.color,
@@ -262,6 +263,8 @@ async function refreshDeliveryStatus(order) {
     if (data.order_status) applyOrderStatus(order, data.order_status);
     order.delivery_status = data.delivery_status_label || order.delivery_status;
     order.delivery_status_code = data.delivery_status_code || order.delivery_status_code;
+    order.delivery_status_color = data.delivery_status_color ?? order.delivery_status_color;
+    order.delivery_status_icon = data.delivery_status_icon ?? order.delivery_status_icon;
     order.delivery_status_updated_at = data.delivery_status_updated_at || order.delivery_status_updated_at;
     order.last_tracked_at = data.last_tracked_at || order.last_tracked_at;
     if (data.warehouse_entered_at) {

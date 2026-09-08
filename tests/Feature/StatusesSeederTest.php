@@ -58,6 +58,14 @@ class StatusesSeederTest extends TestCase
         $this->assertSame(['new'], $defaults);
     }
 
+    public function test_waiting_for_collection_is_amber_and_completion_stays_green(): void
+    {
+        $this->seed(StatusesSeeder::class);
+
+        $this->assertSame('#f59e0b', Status::where('code', 'delivered')->value('color'));
+        $this->assertSame('#16a34a', Status::where('code', 'delivered_paid')->value('color'));
+    }
+
     public function test_seeder_is_idempotent(): void
     {
         $this->seed(StatusesSeeder::class);

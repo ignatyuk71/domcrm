@@ -160,7 +160,8 @@
                       <i class="bi bi-geo-alt-fill"></i>
                       {{ order.delivery?.city_name || 'Самовивіз' }}
                     </div>
-                    <span class="status-badge">
+                    <span class="status-badge" :style="statusStyle(order)">
+                       <i v-if="(order.status_ref || order.statusRef)?.icon" :class="['bi', (order.status_ref || order.statusRef).icon]"></i>
                        {{ (order.status_ref || order.statusRef)?.name || order.status }}
                     </span>
                   </div>
@@ -220,7 +221,7 @@
 <script setup>
 import { computed, ref } from 'vue';
 import axios from 'axios';
-import { formatCurrency, formatDate } from '@/crm/utils/orderDisplay';
+import { formatCurrency, formatDate, getStatusStyle } from '@/crm/utils/orderDisplay';
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -235,6 +236,10 @@ const emit = defineEmits(['close']);
 const customer = computed(() => props.data?.customer || {});
 const metrics = computed(() => props.data?.metrics || {});
 const recentOrders = computed(() => props.data?.recent_orders || []);
+const statusStyle = (order) => {
+  const status = order.status_ref || order.statusRef;
+  return getStatusStyle({ status_color: status?.color, status_key: status?.code || order.status });
+};
 
 const customerName = computed(() =>
   [customer.value.first_name, customer.value.last_name].filter(Boolean).join(' ') || 'Без імені'
@@ -808,6 +813,9 @@ function close() {
   gap: 4px;
 }
 .status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 0.7rem;
   background: #fff;
   border: 1px solid #e2e8f0;

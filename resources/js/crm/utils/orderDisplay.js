@@ -3,9 +3,11 @@ export const statusLabels = {
   confirmed: 'Підтверджено',
   pending: 'Очікує підтвердження',
   in_process: 'В обробці',
-  packed: 'Упаковане',
-  delivered: 'Доставлене',
-  returned: 'Повернене',
+  packing: 'Упакування',
+  packed: 'Запаковано',
+  delivered: 'У відділенні',
+  delivered_paid: 'Завершено',
+  returned: 'Повернення',
   in_progress: 'В роботі',
   done: 'Готово',
   completed: 'Виконано',
@@ -22,83 +24,88 @@ export const paymentLabels = {
 };
 
 export const statusColorMap = {
-  pending: '#fcd5b5',
-  in_process: '#c7f2d4',
-  in_progress: '#c7f2d4',
-  confirmed: '#b2ecf7',
-  packed: '#e4e6e9',
-  shipped: '#dcd9ff',
-  delivered: '#c6f1d4',
-  cancelled: '#e4e6e9',
-  canceled: '#e4e6e9',
-  returned: '#ffd6d6',
+  new: '#fbbf24',
+  pending: '#fbbf24',
+  in_process: '#3b82f6',
+  in_progress: '#3b82f6',
+  in_work: '#3b82f6',
+  confirmed: '#a855f7',
+  packing: '#78716c',
+  packed: '#f97316',
+  shipped: '#0ea5e9',
+  delivered: '#f59e0b',
+  delivered_paid: '#16a34a',
+  completed: '#16a34a',
+  done: '#16a34a',
+  cancelled: '#1f2937',
+  canceled: '#1f2937',
+  returned: '#ef4444',
 };
 
-export function getStatusClass(status) {
-  const map = {
-    new: 'bg-warning-subtle text-warning-emphasis border-warning-subtle',
-    in_process: 'bg-success-subtle text-success-emphasis border-success-subtle',
-    confirmed: 'bg-info-subtle text-info-emphasis border-info-subtle',
-    in_progress: 'bg-primary-subtle text-primary-emphasis border-primary-subtle',
-    in_work: 'bg-primary-subtle text-primary-emphasis border-primary-subtle',
-    pending: 'bg-warning-subtle text-warning-emphasis border-warning-subtle',
-    packed: 'bg-secondary-subtle text-secondary-emphasis border-secondary-subtle',
-    delivered: 'bg-success-subtle text-success-emphasis border-success-subtle',
-    completed: 'bg-success-subtle text-success-emphasis border-success-subtle',
-    done: 'bg-success-subtle text-success-emphasis border-success-subtle',
-    cancelled: 'bg-secondary-subtle text-secondary-emphasis border-secondary-subtle',
-    canceled: 'bg-secondary-subtle text-secondary-emphasis border-secondary-subtle',
-    shipped: 'bg-indigo-subtle text-indigo-emphasis border-indigo-subtle',
-    returned: 'bg-danger-subtle text-danger-emphasis border-danger-subtle',
-  };
-  return map[status] || 'bg-light text-dark border-light-subtle';
+const deliveryColorMap = {
+  created: '#78716c',
+  deleted: '#1f2937',
+  in_transit: '#0ea5e9',
+  at_warehouse: '#f59e0b',
+  received: '#16a34a',
+  received_money: '#16a34a',
+  cod_on_way: '#16a34a',
+  refusal: '#ef4444',
+};
+
+function normalizeHex(color) {
+  const hex = String(color || '').trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i)?.[1];
+  if (!hex) return null;
+  return `#${hex.length === 3 ? hex.split('').map((c) => c + c).join('') : hex}`.toLowerCase();
 }
 
-function buildStatusStyle(color) {
-  const normalized = String(color).trim();
-  const hexMatch = normalized.match(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/);
+const badgeStyles = new Map();
+const toHex = (rgb) => `#${rgb.map((value) => value.toString(16).padStart(2, '0')).join('')}`;
+function luminance(rgb) {
+  const channels = rgb.map((value) => {
+    const channel = value / 255;
+    return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+  });
+  return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+}
 
-  if (hexMatch) {
-    const hex = hexMatch[1];
-    const fullHex = hex.length === 3 ? hex.split('').map((c) => c + c).join('') : hex;
-    const base = `#${fullHex}`;
-
-    return {
-      color: base,
-      backgroundColor: `${base}1F`,
-      borderColor: `${base}40`,
-    };
+function buildStatusStyle(base) {
+  if (badgeStyles.has(base)) return badgeStyles.get(base);
+  const rgb = base.slice(1).match(/../g).map((channel) => Number.parseInt(channel, 16));
+  const background = rgb.map((channel) => Math.round(255 * 0.88 + channel * 0.12));
+  let text = [...rgb];
+  // Світлий фон однаковий на всіх поверхнях, а текст має достатній контраст.
+  while ((luminance(background) + 0.05) / (luminance(text) + 0.05) < 4.5) {
+    text = text.map((channel) => Math.floor(channel * 0.9));
   }
-
-  return {
-    color: normalized,
-    backgroundColor: normalized,
-    borderColor: normalized,
+  const style = {
+    color: toHex(text),
+    backgroundColor: toHex(background),
+    borderColor: `${base}40`,
   };
+  badgeStyles.set(base, style);
+  return style;
 }
 
 export function getStatusStyle(order) {
-  if (order?.status_color) {
-    return buildStatusStyle(order.status_color);
-  }
+  return buildStatusStyle(normalizeHex(order?.status_color) || normalizeHex(statusColorMap[order?.status_key]) || '#6b7280');
+}
 
-  const color = statusColorMap[order?.status_key];
-  if (!color) return {};
-
-  return {
-    backgroundColor: color,
-    borderColor: color,
-    color: '#0f172a',
-  };
+export function getDeliveryStatusStyle(order) {
+  return buildStatusStyle(normalizeHex(order?.delivery_status_color) || normalizeHex(deliveryColorMap[order?.delivery_status_code]) || '#6b7280');
 }
 
 export function getStatusIcon(status) {
   const map = {
     new: 'bi-circle',
-    confirmed: 'bi-check-circle',
+    in_process: 'bi-telephone',
+    confirmed: 'bi-person-check-fill',
     pending: 'bi-hourglass-split',
+    packing: 'bi-qr-code',
     packed: 'bi-box-seam',
-    delivered: 'bi-bag-check',
+    delivered: 'bi-geo-alt',
+    delivered_paid: 'bi-check-all',
+    returned: 'bi-arrow-counterclockwise',
     in_progress: 'bi-hourglass-split',
     in_work: 'bi-hourglass-split',
     done: 'bi-check2-circle',

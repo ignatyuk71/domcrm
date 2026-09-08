@@ -1,4 +1,8 @@
 <script setup>
+  import { getStatusStyle } from '@/crm/utils/orderDisplay';
+
+  const statusStyle = (status) => getStatusStyle({ status_color: status.color, status_key: status.code });
+
   const props = defineProps({
     open: { type: Boolean, default: false },
     loading: { type: Boolean, default: false },
@@ -54,18 +58,12 @@
                   class="status-option"
                   :class="{ 'is-selected': modelValue === st.id }"
                   @click="selectStatus(st.id)"
-                  :style="modelValue === st.id && st.color ? { borderColor: st.color, backgroundColor: st.color + '08' } : {}"
+                  :style="modelValue === st.id ? statusStyle(st) : {}"
                 >
                   <!-- Стилізований бейдж статусу -->
                   <div 
                     class="status-pill"
-                    :style="st.color ? { 
-                      backgroundColor: st.color + '15', 
-                      color: st.color 
-                    } : { 
-                      backgroundColor: '#f1f5f9', 
-                      color: '#64748b' 
-                    }"
+                    :style="statusStyle(st)"
                   >
                     <i v-if="st.icon" :class="['bi', st.icon]"></i>
                     <span>{{ st.name }}</span>
@@ -73,7 +71,7 @@
   
                   <!-- Індикатор вибору -->
                   <div class="selection-indicator">
-                    <i v-if="modelValue === st.id" class="bi bi-check-circle-fill" :style="{ color: st.color || '#6366f1' }"></i>
+                    <i v-if="modelValue === st.id" class="bi bi-check-circle-fill"></i>
                     <i v-else class="bi bi-circle text-muted opacity-25"></i>
                   </div>
                 </div>
@@ -160,6 +158,7 @@
   
   /* Status Pill Design */
   .status-pill {
+    border: 1px solid transparent;
     display: inline-flex;
     align-items: center;
     gap: 8px;

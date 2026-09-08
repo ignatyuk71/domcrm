@@ -195,6 +195,7 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue';
 import http from '@/crm/api/http';
+import { getStatusStyle } from '@/crm/utils/orderDisplay';
 
 const statuses = ref([]);
 const loading = ref(false);
@@ -237,8 +238,7 @@ function safeColor(value) {
 }
 
 function statusStyle(item) {
-  const color = safeColor(item?.color);
-  return { backgroundColor: `${color}20`, color, borderColor: `${color}40` };
+  return getStatusStyle({ status_color: item?.color, status_key: item?.code });
 }
 
 async function load() {
