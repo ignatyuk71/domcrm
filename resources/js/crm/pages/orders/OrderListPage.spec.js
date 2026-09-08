@@ -33,6 +33,8 @@ beforeEach(() => {
           delivery_status_code: 'in_transit',
           delivery_status_color: '#0ea5e9',
           delivery_status_icon: 'bi-truck',
+          delivery_status_description: 'Попередній опис перевізника',
+          last_tracked_at: '2026-09-07T09:00:00Z',
         },
       }],
     },
@@ -54,6 +56,9 @@ describe('оновлення доставки у списку замовлень
         delivery_status_color: '#f59e0b',
         delivery_status_icon: 'bi-building',
         delivery_status_updated_at: '2026-09-08T12:00:00Z',
+        delivery_status_description: 'Посилка готова до видачі',
+        last_tracked_at: '2026-09-08T12:00:00Z',
+        warehouse_entered_at: '2026-09-08T10:00:00Z',
         order_status: {
           id: 6,
           code: 'delivered',
@@ -68,6 +73,8 @@ describe('оновлення доставки у списку замовлень
     await flushPromises();
     const table = wrapper.findComponent(OrdersTable);
     expect(table.props('orders')[0].delivery_status_color).toBe('#0ea5e9');
+    expect(table.props('orders')[0].delivery_status_description).toBe('Попередній опис перевізника');
+    expect(table.props('orders')[0].last_tracked_at).toBe('2026-09-07T09:00:00Z');
 
     table.vm.$emit('refresh-delivery', table.props('orders')[0]);
     await flushPromises();
@@ -80,6 +87,9 @@ describe('оновлення доставки у списку замовлень
       delivery_status_color: '#f59e0b',
       delivery_status_icon: 'bi-building',
       delivery_status_updated_at: '2026-09-08T12:00:00Z',
+      delivery_status_description: 'Посилка готова до видачі',
+      last_tracked_at: '2026-09-08T12:00:00Z',
+      delivery_status_entered_at: '2026-09-08T10:00:00Z',
       status_id: 6,
       status_key: 'delivered',
       status: 'У відділенні',

@@ -6,9 +6,9 @@
     getPaymentClass,
     getPaymentIcon,
     getStatusStyle,
-    getDeliveryStatusStyle,
   } from '@/crm/utils/orderDisplay';
   import FiscalBlock from '@/crm/components/orders/list/FiscalBlock.vue';
+  import DeliveryStatusLabel from '@/crm/components/orders/list/DeliveryStatusLabel.vue';
   
   const paymentLabels = {
     cod: 'Накладений платіж',
@@ -288,18 +288,7 @@
   
               <div class="delivery-status-box mb-2">
                 <div class="d-flex justify-content-between align-items-center mb-1">
-                  <div
-                    class="delivery-status-badge d-flex align-items-center gap-2"
-                    :style="getDeliveryStatusStyle(order)"
-                  >
-                    <i
-                      v-if="order.delivery_status_icon"
-                      :class="['bi', order.delivery_status_icon]"
-                    ></i>
-                    <span class="fw-bold delivery-status-text">
-                      {{ order.delivery_status || 'Статус невідомий' }}
-                    </span>
-                  </div>
+                  <DeliveryStatusLabel :order="order" />
                   <button
                     class="btn-refresh"
                     :disabled="order.refreshingDelivery"
@@ -650,7 +639,6 @@
   /* DELIVERY */
   .carrier-badge { background: #0f172a; color: #ffffff; font-size: 0.7rem; font-weight: 600; padding: 3px 8px; border-radius: 999px; }
   .delivery-status-box { background: #f8fafc; border-radius: 8px; border-left: 3px solid #cbd5e1; padding: 8px 10px; }
-  .delivery-status-badge { padding: 5px 8px; border: 1px solid transparent; border-radius: 8px; }
   .btn-refresh { border: none; background: #ffffff; width: 22px; height: 22px; border-radius: 999px; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12); display: flex; align-items: center; justify-content: center; color: #3b82f6; cursor: pointer; font-size: 0.8rem; transition: transform 0.15s; }
   .btn-refresh:hover { transform: translateY(-1px); }
   .spin { animation: spin 1s linear infinite; }

@@ -263,6 +263,9 @@ async function refreshDeliveryStatus(order) {
     if (data.order_status) applyOrderStatus(order, data.order_status);
     order.delivery_status = data.delivery_status_label || order.delivery_status;
     order.delivery_status_code = data.delivery_status_code || order.delivery_status_code;
+    if (Object.hasOwn(data, 'delivery_status_description')) {
+      order.delivery_status_description = data.delivery_status_description || '';
+    }
     order.delivery_status_color = data.delivery_status_color ?? order.delivery_status_color;
     order.delivery_status_icon = data.delivery_status_icon ?? order.delivery_status_icon;
     order.delivery_status_updated_at = data.delivery_status_updated_at || order.delivery_status_updated_at;
@@ -373,8 +376,11 @@ function mapOrder(order) {
       : delivery.warehouse_name) || '—',
     city_name: delivery.city_name || '',
     delivery_status: delivery.delivery_status_label || '',
+    delivery_status_description: delivery.delivery_status_description || '',
     delivery_status_code: delivery.delivery_status_code || '',
     delivery_status_updated_at: deliveryStatusUpdatedAt,
+    delivery_status_entered_at: delivery.active_warehouse_status?.entered_at || '',
+    last_tracked_at: delivery.last_tracked_at || '',
     delivery_status_color: delivery.delivery_status_color || '',
     delivery_status_icon: delivery.delivery_status_icon || '',
     delivery_carrier: delivery.carrier === 'nova_poshta' ? 'Нова Пошта' : delivery.carrier || '',

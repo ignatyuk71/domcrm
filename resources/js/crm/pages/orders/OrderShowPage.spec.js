@@ -35,6 +35,8 @@ beforeEach(() => {
           delivery_status_code: 'at_warehouse',
           delivery_status_color: '#f59e0b',
           delivery_status_icon: 'bi-building',
+          delivery_status_description: 'Посилка у відділенні',
+          active_warehouse_status: { entered_at: '2026-09-07T08:00:00Z' },
         },
       },
     },
@@ -56,6 +58,9 @@ describe('оновлення доставки у перегляді замовл
         delivery_status_color: '#16a34a',
         delivery_status_icon: 'bi-check-circle-fill',
         delivery_status_updated_at: '2026-09-08T12:00:00Z',
+        delivery_status_description: null,
+        last_tracked_at: '2026-09-08T12:00:00Z',
+        warehouse_entered_at: null,
         order_status: {
           id: 11,
           code: 'delivered_paid',
@@ -70,6 +75,8 @@ describe('оновлення доставки у перегляді замовл
     await flushPromises();
     const details = wrapper.findComponent(OrderDetails);
     expect(details.props('order').status_key).toBe('delivered');
+    expect(details.props('order').delivery_status_description).toBe('Посилка у відділенні');
+    expect(details.props('order').delivery_status_entered_at).toBe('2026-09-07T08:00:00Z');
 
     details.vm.$emit('refresh-delivery');
     await flushPromises();
@@ -82,6 +89,9 @@ describe('оновлення доставки у перегляді замовл
       delivery_status_color: '#16a34a',
       delivery_status_icon: 'bi-check-circle-fill',
       delivery_status_updated_at: '2026-09-08T12:00:00Z',
+      delivery_status_description: '',
+      last_tracked_at: '2026-09-08T12:00:00Z',
+      delivery_status_entered_at: '',
       status_id: 11,
       status_key: 'delivered_paid',
       status: 'Завершено',

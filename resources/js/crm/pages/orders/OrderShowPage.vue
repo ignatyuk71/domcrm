@@ -294,8 +294,11 @@ function mapOrder(payload) {
     address,
     city_name: delivery.city_name || '',
     delivery_status: delivery.delivery_status_label || '',
+    delivery_status_description: delivery.delivery_status_description || '',
     delivery_status_code: delivery.delivery_status_code || '',
     delivery_status_updated_at: delivery.delivery_status_updated_at || '',
+    delivery_status_entered_at: delivery.active_warehouse_status?.entered_at || '',
+    last_tracked_at: delivery.last_tracked_at || '',
     delivery_status_color: delivery.delivery_status_color || '',
     delivery_status_icon: delivery.delivery_status_icon || '',
     delivery_carrier: delivery.carrier === 'nova_poshta' ? 'Нова Пошта' : (delivery.carrier || 'Самовивіз'),
@@ -560,6 +563,15 @@ async function refreshDeliveryStatus(targetOrder) {
     if (payload.delivery_status_label || payload.delivery_status_code) {
       targetOrder.delivery_status = payload.delivery_status_label || targetOrder.delivery_status;
       targetOrder.delivery_status_code = payload.delivery_status_code || targetOrder.delivery_status_code;
+      if (Object.hasOwn(payload, 'delivery_status_description')) {
+        targetOrder.delivery_status_description = payload.delivery_status_description || '';
+      }
+      targetOrder.last_tracked_at = payload.last_tracked_at || targetOrder.last_tracked_at;
+      if (Object.hasOwn(payload, 'warehouse_entered_at')) {
+        targetOrder.delivery_status_entered_at = payload.warehouse_entered_at || '';
+      } else if (targetOrder.delivery_status_code !== 'at_warehouse') {
+        targetOrder.delivery_status_entered_at = '';
+      }
       targetOrder.delivery_status_updated_at = payload.delivery_status_updated_at || targetOrder.delivery_status_updated_at;
       targetOrder.delivery_status_color = payload.delivery_status_color ?? targetOrder.delivery_status_color;
       targetOrder.delivery_status_icon = payload.delivery_status_icon ?? targetOrder.delivery_status_icon;
