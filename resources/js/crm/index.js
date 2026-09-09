@@ -193,7 +193,15 @@ export function mountSettingsNovaPoshta(selector = '#crm-settings-nova-poshta') 
 }
 
 // Auto-mount if element exists
+async function mountSettingsTelegram() {
+    const el = document.querySelector('#crm-settings-telegram');
+    if (!el) return;
+    const { default: page } = await import('./pages/settings/SettingsTelegramPage.vue');
+    createApp(page).mount(el);
+}
+
 function autoMount() {
+    mountSettingsTelegram();
     mountDashboard();
     mountSalesAnalytics();
     mountOrderCreate();

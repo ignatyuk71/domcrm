@@ -25,5 +25,5 @@ return Application::configure(basePath: dirname(__DIR__))
         // generate-ttn(-courier) — через X-CSRF-TOKEN (fetch), cancel/print — XSRF-кукі (axios).
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        //
+        $exceptions->dontFlash(['bot_token']);
     })->create();

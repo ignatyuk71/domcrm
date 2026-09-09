@@ -21,6 +21,7 @@ use App\Http\Controllers\PackingController;
 use App\Http\Controllers\SavedFileController;
 use App\Http\Controllers\NovaPoshtaSettingsController;
 use App\Http\Controllers\TeamController;
+use App\Http\Controllers\TelegramSettingsController;
 use App\Http\Controllers\MessageTemplateController;
 use App\Http\Controllers\IntegrationSettingsController;
 use App\Http\Controllers\IntegrationMappingController;
@@ -258,6 +259,10 @@ Route::middleware('auth')->group(function () {
 
     // --- НАЛАШТУВАННЯ: ДОВІДНИКИ ---
     Route::middleware('role:owner')->prefix('settings')->name('settings.')->group(function () {
+        Route::get('/telegram', [TelegramSettingsController::class, 'index'])->name('telegram.index');
+        Route::post('/telegram/connect', [TelegramSettingsController::class, 'connect'])->middleware('throttle:10,1,telegram-connect')->name('telegram.connect');
+        Route::put('/telegram', [TelegramSettingsController::class, 'update'])->name('telegram.update');
+        Route::post('/telegram/test', [TelegramSettingsController::class, 'test'])->middleware('throttle:2,1,telegram-test')->name('telegram.test');
         Route::get('/team', [TeamController::class, 'index'])->name('team.index');
         Route::post('/team', [TeamController::class, 'store'])->name('team.store');
         Route::patch('/team/{user}', [TeamController::class, 'update'])->name('team.update');
