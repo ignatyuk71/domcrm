@@ -31,7 +31,22 @@ class ProductMatcher
                 ->first();
 
             if ($map && ($map->product_id || $map->product_variant_id)) {
-                return $this->result($map->product_id, $map->product_variant_id, true, 'memory');
+                // Варіанти можуть видалятися та створюватися заново під час редагування товару.
+                // Використовуємо пам'ять лише доки її посилання залишаються коректними.
+                if ($map->product_variant_id) {
+                    $variant = ProductVariant::query()
+                        ->whereKey($map->product_variant_id)
+                        ->whereHas('product')
+                        ->first(['id', 'product_id']);
+
+                    if ($variant && (!$map->product_id || (int) $map->product_id === (int) $variant->product_id)) {
+                        return $this->result($variant->product_id, $variant->id, true, 'memory');
+                    }
+                } elseif (Product::query()->whereKey($map->product_id)->exists()) {
+                    return $this->result($map->product_id, null, true, 'memory');
+                }
+
+                // Застаріла відповідність: шукаємо актуальний SKU та оновлюємо пам'ять нижче.
             }
         }
 
