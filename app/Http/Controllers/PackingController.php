@@ -6,6 +6,7 @@ use App\Models\Order;
 use App\Models\PackingSession;
 use App\Services\PackingService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -22,8 +23,15 @@ class PackingController extends Controller
     /**
      * Сторінка пакування конкретного замовлення.
      */
-    public function show(Order $order)
+    public function show(Order $order, Request $request)
     {
+        // У послідовному проході замовлення вже захоплене через POST start.
+        // Повернення браузером не повинно заново запускати опрацьоване замовлення.
+        if ($request->query('queue') === 'skipped'
+            && ($order->packing_status !== 'processing' || (int) $order->packer_id !== Auth::id())) {
+            return redirect()->route('packing.list');
+        }
+
         // Якщо замовлення в роботі у іншого - перенаправляємо назад
         if ($order->packing_status === 'processing' && $order->packer_id !== Auth::id()) {
             return redirect()->route('packing.list')->with('error', 'Це замовлення вже зайняте.');
@@ -157,19 +165,31 @@ class PackingController extends Controller
     /**
      * API: Почати пакування (натискання кнопки "Пакувати").
      */
-    public function start(Order $order, PackingService $packing): JsonResponse
+    public function start(Order $order, PackingService $packing, Request $request): JsonResponse
     {
         $userId = Auth::id();
+        $validated = $request->validate(['queue' => ['sometimes', 'in:skipped']]);
+        $deferredQueue = ($validated['queue'] ?? null) === 'skipped';
+        $queueStatusIds = $deferredQueue ? $packing->queueStatusIds() : [];
 
-        $packing->releaseIfStale($order);
+        if (!$deferredQueue) {
+            $packing->releaseIfStale($order);
+        }
 
-        return DB::transaction(function () use ($order, $userId) {
+        return DB::transaction(function () use ($order, $userId, $deferredQueue, $queueStatusIds) {
             $locked = Order::whereKey($order->id)->lockForUpdate()->first();
 
             if (!$locked) return response()->json(['error' => 'Замовлення не знайдено'], 404);
 
-            if ($locked->packing_status === 'processing' && $locked->packer_id !== $userId) {
+            if ($locked->packing_status === 'processing' && (int) $locked->packer_id !== $userId) {
                 return response()->json(['error' => 'Замовлення вже пакує інший працівник'], 423);
+            }
+
+            // Повтор запиту після обриву зв'язку може відновити лише власне захоплення.
+            $isOwnProcessing = $locked->packing_status === 'processing' && (int) $locked->packer_id === $userId;
+            if ($deferredQueue && (!in_array((int) $locked->status_id, $queueStatusIds, true)
+                || ($locked->packing_status !== 'skipped' && !$isOwnProcessing))) {
+                return response()->json(['error' => 'Замовлення більше не належить до відкладених.'], 409);
             }
 
             $locked->update([
@@ -177,27 +197,40 @@ class PackingController extends Controller
                 'packing_status' => 'processing',
             ]);
 
-            PackingSession::firstOrCreate(
+            $session = PackingSession::firstOrCreate(
                 ['order_id' => $locked->id, 'finished_at' => null],
                 ['packer_id' => $userId, 'started_at' => now()]
             );
 
-            return response()->json(['success' => true, 'message' => 'Пакування розпочато']);
+            return response()->json([
+                'success' => true,
+                'message' => 'Пакування розпочато',
+                'packing_session_id' => $session->id,
+            ]);
         });
     }
 
     /**
      * API: Завершити пакування (Кнопка "Запаковано").
      */
-    public function finish(Order $order, PackingService $packing): JsonResponse
+    public function finish(Order $order, PackingService $packing, Request $request): JsonResponse
     {
         $userId = Auth::id();
+        $deferredQueue = $request->input('queue') === 'skipped';
+        $sessionId = $deferredQueue ? $this->deferredSessionId($request) : null;
 
-        return DB::transaction(function () use ($order, $userId, $packing) {
+        return DB::transaction(function () use ($order, $userId, $packing, $deferredQueue, $sessionId) {
             $locked = Order::whereKey($order->id)->lockForUpdate()->first();
 
             if (!$locked) return response()->json(['error' => 'Замовлення не знайдено'], 404);
-            if ($locked->packer_id !== $userId) return response()->json(['error' => 'Немає доступу'], 403);
+            if ($sessionId !== null && ($response = $this->deferredSessionResponse($locked, $sessionId, $userId, 'finished'))) {
+                return $response;
+            }
+            if ((int) $locked->packer_id !== $userId) return response()->json(['error' => 'Немає доступу'], 403);
+            if ($deferredQueue && ($locked->packing_status !== 'processing'
+                || !in_array((int) $locked->status_id, $packing->queueStatusIds(), true))) {
+                return response()->json(['error' => 'Замовлення вже опрацьоване або його статус змінено. Поверніться до списку.'], 409);
+            }
 
             $packing->closeSession($locked, $userId, 'finished');
 
@@ -251,9 +284,11 @@ class PackingController extends Controller
     /**
      * API: Проблема (Нема товару / Брак).
      */
-    public function problem(Order $order, PackingService $packing): JsonResponse
+    public function problem(Order $order, PackingService $packing, Request $request): JsonResponse
     {
         $userId = Auth::id();
+        $deferredQueue = $request->input('queue') === 'skipped';
+        $sessionId = $deferredQueue ? $this->deferredSessionId($request) : null;
         // ID статусу "Проблема" (наприклад, 2 - В обробці)
         $problemStatusId = $packing->problemStatusId();
 
@@ -263,9 +298,16 @@ class PackingController extends Controller
 
         $problemStatusCode = $packing->statusCodeById($problemStatusId);
 
-        return DB::transaction(function () use ($order, $userId, $problemStatusId, $problemStatusCode, $packing) {
+        return DB::transaction(function () use ($order, $userId, $problemStatusId, $problemStatusCode, $packing, $deferredQueue, $sessionId) {
             $locked = Order::whereKey($order->id)->lockForUpdate()->first();
             if (!$locked) return response()->json(['error' => 'Замовлення не знайдено'], 404);
+            if ($sessionId !== null && ($response = $this->deferredSessionResponse($locked, $sessionId, $userId, 'problem'))) {
+                return $response;
+            }
+            if ($deferredQueue && ((int) $locked->packer_id !== $userId || $locked->packing_status !== 'processing'
+                || !in_array((int) $locked->status_id, $packing->queueStatusIds(), true))) {
+                return response()->json(['error' => 'Замовлення вже опрацьоване або його статус змінено. Поверніться до списку.'], 409);
+            }
 
             $packing->closeSession($locked, $userId, 'problem');
 
@@ -303,5 +345,33 @@ class PackingController extends Controller
         }
 
         return response()->json(['success' => true]);
+    }
+
+    private function deferredSessionId(Request $request): ?int
+    {
+        $validated = $request->validate(['packing_session_id' => ['sometimes', 'integer', 'min:1']]);
+
+        return isset($validated['packing_session_id']) ? (int) $validated['packing_session_id'] : null;
+    }
+
+    /**
+     * Під блокуванням замовлення підтверджує повтор уже збереженої дії без нових записів.
+     * null означає, що очікувана сесія активна і дію можна перевіряти далі.
+     */
+    private function deferredSessionResponse(Order $order, int $sessionId, int $userId, string $reason): ?JsonResponse
+    {
+        $session = $order->packingSessions()->whereKey($sessionId)->where('packer_id', $userId)->first();
+
+        if ($session && $session->finished_at !== null
+            && (int) $session->closed_by === $userId && $session->close_reason === $reason) {
+            return response()->json(['success' => true]);
+        }
+
+        if (!$session || $session->finished_at !== null
+            || (int) $order->activePackingSession()->value('id') !== $sessionId) {
+            return response()->json(['error' => 'Сесія пакування вже змінилася. Поверніться до списку.'], 409);
+        }
+
+        return null;
     }
 }

@@ -12,7 +12,7 @@
           <div class="nav-divider d-none d-sm-block"></div>
           <div class="nav-context d-none d-sm-block">
             <div class="context-label">Робоче місце</div>
-            <div class="context-title">Пакування</div>
+            <div class="context-title">{{ isDeferredQueue ? 'Відкладені замовлення' : 'Пакування' }}</div>
           </div>
         </div>
 
@@ -55,6 +55,9 @@
             <div>
               <h1 class="page-heading" :class="{ 'is-done': isAllChecked }">{{ sectionHeading }}</h1>
               <div class="section-subheading" :class="{ 'is-done': isAllChecked }">{{ sectionSubtitle }}</div>
+              <div v-if="isDeferredQueue" class="deferred-mode-label">
+                <i class="bi bi-box-seam me-1"></i> Пакування відкладених · У проході залишилось: {{ deferredRemaining }}
+              </div>
             </div>
             <!-- Додатковий прогрес бар для мобільних -->
             <div class="d-md-none fw-bold fs-5">
@@ -231,7 +234,7 @@
                     <div class="d-flex flex-column align-items-start lh-1">
                       <span class="main-text">{{ mainButtonText }}</span>
                       
-                      <span class="sub-text" v-if="canFinishPacking">→ Наступне замовлення</span>
+                      <span class="sub-text" v-if="canFinishPacking">{{ isDeferredQueue ? '→ Наступне відкладене' : '→ Наступне замовлення' }}</span>
                       <span class="sub-text" v-else-if="isAllChecked">Роздрукуйте або відкрийте ТТН</span>
                       <span class="sub-text" v-else>{{ checkedCount }} з {{ products.length }} готово</span>
                     </div>
@@ -273,7 +276,7 @@
           <div class="success-icon mb-4">
              <i class="bi bi-check-lg"></i>
           </div>
-          <h2 class="fw-bold mb-2">Замовлення закрито!</h2>
+          <h2 class="fw-bold mb-2">{{ isDeferredQueue ? 'Опрацьовуємо відкладені' : 'Замовлення закрито!' }}</h2>
           <p class="text-muted mb-4">Перехід до наступного замовлення...</p>
           
           <div class="loading-spinner-wrapper">
@@ -290,8 +293,8 @@
           <div class="success-icon mb-4">
             <i class="bi bi-check-lg"></i>
           </div>
-          <h1 class="display-4 fw-black mb-3">Зміна завершена! 🎉</h1>
-          <p class="fs-4 text-muted mb-5">Всі замовлення успішно опрацьовано.</p>
+          <h1 class="display-4 fw-black mb-3">{{ isDeferredQueue ? 'Прохід відкладених завершено' : 'Зміна завершена! 🎉' }}</h1>
+          <p class="fs-4 text-muted mb-5">{{ isDeferredQueue ? 'Доступних замовлень у цьому проході більше немає. Повторно відкладені залишилися в жовтому списку.' : 'Всі замовлення успішно опрацьовано.' }}</p>
           
           <div class="stats-card mb-5">
             <div class="stat-box">
@@ -300,8 +303,8 @@
             </div>
             <div class="stat-divider"></div>
             <div class="stat-box">
-              <div class="stat-val">{{ stats.total }}</div>
-              <div class="stat-lbl">Всього</div>
+              <div class="stat-val">{{ isDeferredQueue ? stats.deferred : stats.total }}</div>
+              <div class="stat-lbl">{{ isDeferredQueue ? 'Знову відкладено' : 'Всього' }}</div>
             </div>
           </div>
 
@@ -316,6 +319,17 @@
         <div class="confetti c3">🎉</div>
       </div>
     </Transition>
+
+    <div v-if="deferredRunError || nextOrderError" class="success-screen">
+      <div class="success-content text-center">
+        <h2 class="fw-bold mb-3">{{ deferredRunError ? 'Прохід недоступний' : 'Не вдалося відкрити наступне замовлення' }}</h2>
+        <p class="text-muted mb-4">{{ deferredRunError || nextOrderError }}</p>
+        <button v-if="!deferredRunError" class="btn btn-warning mb-3 w-100" :disabled="isLoadingNext" @click="continueDeferredQueue">
+          Спробувати ще раз
+        </button>
+        <a href="/packing/list" class="btn btn-outline-dark w-100">Повернутися до списку</a>
+      </div>
+    </div>
 
     <!-- Modals -->
     <!-- TTN Modal -->
@@ -368,7 +382,7 @@
              <div class="skip-modal-hint">Ви зможете повернутися до нього пізніше.</div>
              <div class="skip-confirm-actions mt-4">
                <button class="btn-skip-cancel" data-bs-dismiss="modal">Повернутися</button>
-               <button class="btn-skip-confirm" data-bs-dismiss="modal" @click="skipOrder">Відкласти</button>
+               <button class="btn-skip-confirm" :disabled="isLoadingNext || deferredActionCompleted" data-bs-dismiss="modal" @click="skipOrder">Відкласти</button>
              </div>
            </div>
         </div>
@@ -381,6 +395,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import axios from 'axios';
+import { readDeferredRun, completeDeferredOrder, startNextDeferredOrder, deferredRunStats, disposeDeferredRun } from './deferredPackingQueue';
 
 const props = defineProps({
   order: { type: Object, default: null }
@@ -393,8 +408,29 @@ const hasActionTaken = ref(false);
 const isPrinting = ref(false);
 const isShiftFinished = ref(false); 
 const isLoadingNext = ref(false);
+const queueParams = new URLSearchParams(window.location.search);
+const isDeferredQueue = queueParams.get('queue') === 'skipped';
+const deferredRunId = queueParams.get('run');
+const deferredRemaining = ref(0);
+const deferredSessionId = ref(null);
+const deferredRunError = ref('');
+const nextOrderError = ref('');
+const deferredActionCompleted = ref(false);
 
-const stats = ref({ packed: 0, total: 0 });
+if (isDeferredQueue) {
+  try {
+    const run = readDeferredRun(deferredRunId);
+    if (Number(run.activeId) !== Number(props.order?.id)) {
+      throw new Error('Це замовлення не є поточним у проході. Поверніться до списку.');
+    }
+    deferredRemaining.value = run.remainingIds.length + 1;
+    deferredSessionId.value = run.activeSessionId;
+  } catch (error) {
+    deferredRunError.value = 'Не вдалося відновити прохід у цій вкладці. Поверніться до списку замовлень.';
+  }
+}
+
+const stats = ref({ packed: 0, total: 0, deferred: 0 });
 
 const normalizeImageUrl = (raw) => {
   if (!raw) return null;
@@ -491,7 +527,8 @@ const packingProgress = computed(() => {
   return total ? (checkedCount.value / total) * 100 : 0;
 });
 
-const canFinishPacking = computed(() => isAllChecked.value && hasActionTaken.value);
+const canFinishPacking = computed(() => isAllChecked.value && hasActionTaken.value
+  && !isLoadingNext.value && !deferredRunError.value && !deferredActionCompleted.value);
 
 const mainButtonText = computed(() => {
   if (!isAllChecked.value) return 'ЗБЕРІТЬ ТОВАРИ';
@@ -578,6 +615,7 @@ const handleInvoicePrint = async () => {
 
 const finishPacking = async () => {
   if (!canFinishPacking.value) return;
+  if (isDeferredQueue) return processDeferredOrder('packed');
   isLoadingNext.value = true;
 
   try {
@@ -613,6 +651,7 @@ const finishPacking = async () => {
 };
 
 const skipOrder = async () => {
+  if (isDeferredQueue) return processDeferredOrder('skipped');
   try {
     const orderId = order.value.id;
     if (!orderId) return;
@@ -631,6 +670,52 @@ const skipOrder = async () => {
   } catch (err) {
     alert(err.response?.data?.error || 'Помилка повідомлення про проблему');
   }
+};
+
+const continueDeferredQueue = async () => {
+  isLoadingNext.value = true;
+  nextOrderError.value = '';
+  try {
+    const url = await startNextDeferredOrder(deferredRunId);
+    if (url) {
+      window.location.href = url;
+      return;
+    }
+    stats.value = { ...stats.value, ...deferredRunStats(deferredRunId) };
+    disposeDeferredRun(deferredRunId);
+    isShiftFinished.value = true;
+  } catch (error) {
+    nextOrderError.value = 'Поточне замовлення вже опрацьоване. Повторіть лише перехід до наступного.';
+  } finally {
+    isLoadingNext.value = false;
+  }
+};
+
+const processDeferredOrder = async (result) => {
+  if (isLoadingNext.value || deferredActionCompleted.value || deferredRunError.value) return;
+  isLoadingNext.value = true;
+  const orderId = order.value.id;
+  try {
+    await axios.post(`/packing/${orderId}/${result === 'packed' ? 'finish' : 'problem'}`, {
+      queue: 'skipped',
+      ...(deferredSessionId.value ? { packing_session_id: deferredSessionId.value } : {}),
+    });
+  } catch (error) {
+    isLoadingNext.value = false;
+    alert(error.response?.data?.error || 'Не вдалося зберегти дію. Перевірте з’єднання та спробуйте ще раз.');
+    return;
+  }
+
+  // Після успішного збереження повторюємо лише перехід, а не finish/problem.
+  deferredActionCompleted.value = true;
+  try {
+    completeDeferredOrder(deferredRunId, orderId, result);
+  } catch (error) {
+    isLoadingNext.value = false;
+    deferredRunError.value = 'Замовлення опрацьоване, але не вдалося зберегти прохід у браузері. Поверніться до списку.';
+    return;
+  }
+  await continueDeferredQueue();
 };
 
 const invoiceButtonSelector = '#invoiceModal .btn-brand-accent';
@@ -671,6 +756,10 @@ onUnmounted(() => {
 }
 
 /* --- SUCCESS SCREEN --- */
+.deferred-mode-label {
+  display: inline-block; margin-top: 0.75rem; padding: 0.4rem 0.7rem;
+  border-radius: 8px; background: #fef3c7; color: #92400e; font-size: 0.85rem; font-weight: 600;
+}
 .success-screen {
   position: fixed; inset: 0; z-index: 2000;
   background: white;

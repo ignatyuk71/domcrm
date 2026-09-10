@@ -3,19 +3,20 @@
     <main class="main-content">
       
       <!-- Статистика зверху -->
-      <section class="stats-overview mb-4">
-        <div class="stat-card-modern success">
+      <section class="stats-overview" aria-label="Підсумки пакування">
+        <div class="stat-card-modern success" title="Ваші запаковані за сьогодні, які ще не відправлені">
           <div class="stat-info">
             <div class="stat-label">Всього запаковано</div>
             <div class="stat-value">{{ historyOrders.length }}</div>
           </div>
-          <div class="stat-bg-icon"><i class="bi bi-box-seam"></i></div>
+          <div class="stat-bg-icon" aria-hidden="true"><i class="bi bi-box-seam"></i></div>
         </div>
         
         <div class="stat-card-modern primary queue-stat-card">
           <div class="stat-info">
             <div class="stat-label">Залишилось у черзі</div>
             <div class="stat-value">{{ queueOrdersCount }}</div>
+            <div v-if="urgentCount > 0" class="urgent-count">Терміново: {{ urgentCount }}</div>
           </div>
           <button
             type="button"
@@ -26,42 +27,29 @@
             <i class="bi bi-scissors"></i>
             <span>Пошиття</span>
           </button>
-          <div class="stat-bg-icon"><i class="bi bi-list-task"></i></div>
-        </div>
-        
-        <div class="stat-card-modern danger" v-if="urgentCount > 0">
-          <div class="stat-info">
-            <div class="stat-label">Терміново</div>
-            <div class="stat-value">{{ urgentCount }}</div>
-          </div>
-          <div class="stat-bg-icon pulse-icon"><i class="bi bi-exclamation-circle"></i></div>
         </div>
       </section>
 
       <!-- Панель керування (Пошук + Оновлення) -->
-      <div class="control-panel mb-4">
+      <div class="control-panel">
         <div class="control-left">
-          <div class="control-copy">
-            <div class="control-title">Пошук та навігація по черзі</div>
-            <div class="control-hint">Введіть номер замовлення, місто або відділення</div>
-          </div>
-
           <div class="control-fields">
           <div class="search-wrapper">
-            <label class="field-label" for="packing-search">Пошук</label>
+            <label class="visually-hidden" for="packing-search">Пошук за номером замовлення або містом</label>
             <div class="search-input-wrap">
-              <i class="bi bi-search"></i>
+              <i class="bi bi-search" aria-hidden="true"></i>
               <input
                 id="packing-search"
                 v-model="searchQuery"
                 type="text"
-                placeholder="Номер замовлення або місто..."
+                placeholder="Номер замовлення або місто"
               />
               <button
                 v-if="searchQuery"
                 type="button"
                 class="search-clear"
                 title="Очистити пошук"
+                aria-label="Очистити пошук"
                 @click="clearSearch"
               >
                 <i class="bi bi-x-lg"></i>
@@ -69,38 +57,57 @@
             </div>
           </div>
 
+          <button type="button" class="btn-refresh" @click="refreshData" :disabled="loading" title="Оновити дані вручну" aria-label="Оновити список">
+            <i class="bi bi-arrow-repeat" :class="{ 'spin': loading }" aria-hidden="true"></i>
+          </button>
           <div class="settings-group">
-            <span class="field-label">Оновлення</span>
             <label class="auto-refresh-switch" title="Автоматично оновлювати список кожні 30 сек">
               <input type="checkbox" v-model="autoRefreshEnabled">
-              <span class="switch-slider"></span>
-              <span class="switch-label">Авто-оновлення</span>
+              <span class="switch-slider" aria-hidden="true"></span>
+              <span class="switch-label">Автооновлення</span>
             </label>
             <span class="switch-state" :class="{ active: autoRefreshEnabled }">
-              {{ autoRefreshEnabled ? 'Увімкнено (кожні 30 сек)' : 'Вимкнено' }}
+              {{ autoRefreshEnabled ? 'Кожні 30 с' : 'Вимкнено' }}
             </span>
           </div>
           </div>
         </div>
 
         <div class="actions-group">
-          <button class="btn-refresh" @click="refreshData" :disabled="loading" title="Оновити дані вручну">
-            <i class="bi bi-arrow-repeat" :class="{ 'spin': loading }"></i>
+          <button type="button" class="btn-main-action" :disabled="loading || pendingOrdersCount === 0 || isStarting" @click="startPackingFirst">
+            <i class="bi bi-play-fill" aria-hidden="true"></i>
+            <span>Пакувати чергу</span>
+            <span class="queue-count">{{ pendingOrdersCount }}</span>
           </button>
-          
-          <button class="btn-main-action" :disabled="pendingOrdersCount === 0" @click="startPackingFirst">
-            <span class="btn-content">
-              <i class="bi bi-play-fill"></i> Почати пакувати
-            </span>
+          <button
+            type="button"
+            class="btn-deferred-action"
+            :disabled="loading || isStarting || deferredOrders.length === 0"
+            @click="startDeferredPacking"
+          >
+            <i class="bi bi-box-seam" aria-hidden="true"></i>
+            <span>Пакувати відкладені</span>
+            <span class="deferred-count">{{ deferredOrders.length }}</span>
           </button>
         </div>
       </div>
 
+      <div v-if="deferredMessage" class="alert alert-warning d-flex flex-wrap align-items-center gap-2" role="status">
+        <span>{{ deferredMessage }}</span>
+        <button v-if="deferredRunId" class="btn btn-sm btn-outline-dark" :disabled="isStarting" @click="continueDeferredPacking">
+          Спробувати ще раз
+        </button>
+      </div>
+
       <!-- Список замовлень -->
+      <div class="orders-list-heading">
+        <span>{{ searchQuery ? 'Знайдено' : 'Замовлення' }} · {{ filteredOrders.length }}</span>
+        <span>У порядку пакування</span>
+      </div>
       <div class="orders-container">
         <TransitionGroup name="stagger">
           <div
-            v-for="(order, index) in filteredOrders"
+            v-for="order in filteredOrders"
             :key="order.id"
             class="order-row-modern"
             :class="{
@@ -110,7 +117,7 @@
             }"
           >
             <!-- Червона смужка для пріоритетних -->
-            <div v-if="order.is_priority && !isPacked(order)" class="priority-strip"></div>
+            <div v-if="order.is_priority && isPending(order)" class="priority-strip"></div>
 
             <div class="order-main-content">
               
@@ -119,17 +126,16 @@
                 <div class="d-flex align-items-center gap-2 mb-1 identity-top">
                   <span class="order-id">#{{ order.order_number }}</span>
                   
-                  <span v-if="isSkipped(order)" class="badge-status skipped">
-                    <i class="bi bi-pause-circle"></i> Відкладено
-                  </span>
-                  <span v-else-if="isPacked(order)" class="badge-status packed">
+                  <span v-if="isPacked(order)" class="badge-status packed">
                     <i class="bi bi-check-lg"></i> Запаковано
                   </span>
-                  <span v-else class="badge-status pending">Черга</span>
+                  <span v-else-if="isProcessing(order)" class="badge-status pending">У роботі</span>
+                  <span v-else-if="isPending(order)" class="badge-status pending">Черга</span>
                 </div>
+                <div v-if="order.items?.length" class="order-goods-summary">{{ orderGoodsSummary(order) }}</div>
                 <div class="order-sub">
                    <i class="bi bi-geo-alt-fill"></i>
-                   <span class="order-sub-text">{{ orderLocation(order) }}</span>
+                   <span class="order-sub-text" :title="orderLocation(order)">{{ orderLocation(order) }}</span>
                 </div>
                 <div v-if="hasOrderContact(order)" class="order-contact-compact">
                   <span v-if="orderContactName(order)">{{ orderContactName(order) }}</span>
@@ -146,11 +152,13 @@
                     :key="idx"
                     class="avatar"
                     :style="thumbStyle(item)"
-                  ></div>
+                    role="img"
+                    :aria-label="item.src ? item.title : 'Фото товару відсутнє'"
+                  ><i v-if="!item.src" class="bi bi-image" aria-hidden="true"></i></div>
                   <div v-if="order.items?.length > 3" class="avatar-more">+{{ order.items.length - 3 }}</div>
                 </div>
                 <div class="items-count-label">
-                  {{ order.items?.length }} {{ declension(order.items?.length, ['товар', 'товари', 'товарів']) }}
+                  {{ order.items?.length || 0 }} {{ declension(order.items?.length || 0, ['товар', 'товари', 'товарів']) }}
                 </div>
               </div>
 
@@ -162,6 +170,7 @@
                     <i class="bi bi-clock-history"></i> {{ formatTime(order.packed_at) }}
                   </span>
                   <span v-else-if="isSkipped(order)" class="text-skipped">Відкладено до готовності</span>
+                  <span v-else-if="isProcessing(order)" class="text-waiting">Пакування розпочато</span>
                   <span v-else class="text-waiting">{{ formatAge(order.created_at) }} очікує</span>
                 </div>
               </div>
@@ -176,11 +185,11 @@
                   <i class="bi bi-info-circle me-1"></i> Деталі
                 </button>
                 <div v-else class="queue-actions">
-                  <button class="btn-action-primary" @click="startPacking(order.id)">
+                  <button class="btn-action-primary" :disabled="isStarting" @click="startPacking(order.id)">
                     Пакувати
                   </button>
                   <button class="btn-action-secondary" @click.stop="openDetails(order)">
-                    <i class="bi bi-eye me-1"></i> Переглянути
+                    Переглянути
                   </button>
                 </div>
               </div>
@@ -191,8 +200,8 @@
         <!-- Порожній стан -->
         <div v-if="!filteredOrders.length && !loading" class="empty-state-modern">
           <div class="empty-icon"><i class="bi bi-inbox"></i></div>
-          <h3>Список порожній</h3>
-          <p>Немає жодного замовлення.</p>
+          <h3>{{ searchQuery ? 'Нічого не знайдено' : 'Список порожній' }}</h3>
+          <p>{{ searchQuery ? 'Спробуйте інший номер замовлення або місто.' : 'Немає жодного замовлення.' }}</p>
         </div>
       </div>
     </main>
@@ -371,6 +380,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import axios from 'axios';
+import { createDeferredRun, startNextDeferredOrder, disposeDeferredRun } from './deferredPackingQueue';
 
 // --- State ---
 const orders = ref([]);
@@ -382,6 +392,9 @@ const showDetailsModal = ref(false);
 const showSewingModal = ref(false);
 const selectedOrder = ref(null);
 const printingSelected = ref(false);
+const isStarting = ref(false);
+const deferredRunId = ref(null);
+const deferredMessage = ref('');
 
 let refreshInterval = null;
 
@@ -391,6 +404,11 @@ const isPending = (o) => o.packing_status === 'pending' || !o.packing_status;
 const isProcessing = (o) => o.packing_status === 'processing';
 const isSkipped = (o) => o.packing_status === 'skipped';
 const isPacked = (o) => o.packing_status === 'packed' || !!o.packed_at;
+const compareDeferredOrders = (a, b) => (
+  new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at) || Number(b.id) - Number(a.id)
+);
+// Кнопка запускає всі жовті замовлення, незалежно від поточного пошуку.
+const deferredOrders = computed(() => orders.value.filter(isSkipped).sort(compareDeferredOrders));
 
 // Шукаємо замовлення, яке я вже почав, але не закінчив
 const myActiveOrder = computed(() => orders.value.find(o => isProcessing(o)));
@@ -522,7 +540,7 @@ const filteredOrders = computed(() => {
     }
     if (isSkipped(a)) {
       // Відкладені залишаємо внизу активного списку, новіші вище.
-      return new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at);
+      return compareDeferredOrders(a, b);
     }
     return 0;
   });
@@ -584,6 +602,8 @@ const clearSearch = () => {
 };
 
 const startPacking = async (id) => {
+  if (isStarting.value) return;
+  isStarting.value = true;
   try {
     const { data } = await axios.post(`/packing/${id}/start`);
     if (data?.success) {
@@ -595,7 +615,41 @@ const startPacking = async (id) => {
     playSound('error');
     alert(err.response?.data?.error || 'Помилка доступу');
     refreshData();
+  } finally {
+    isStarting.value = false;
   }
+};
+
+const continueDeferredPacking = async () => {
+  if (isStarting.value || !deferredRunId.value) return;
+  isStarting.value = true;
+  deferredMessage.value = '';
+  try {
+    const url = await startNextDeferredOrder(deferredRunId.value);
+    if (url) {
+      window.location.href = url;
+    } else {
+      disposeDeferredRun(deferredRunId.value);
+      deferredRunId.value = null;
+      deferredMessage.value = 'Доступних відкладених замовлень більше немає. Список оновлено.';
+      await fetchAll();
+    }
+  } catch (error) {
+    deferredMessage.value = error.response?.data?.error || 'Не вдалося відкрити наступне відкладене замовлення. Спробуйте ще раз.';
+  } finally {
+    isStarting.value = false;
+  }
+};
+
+const startDeferredPacking = async () => {
+  if (isStarting.value || !deferredOrders.value.length) return;
+  try {
+    deferredRunId.value = createDeferredRun(deferredOrders.value);
+  } catch (error) {
+    deferredMessage.value = 'Не вдалося зберегти прохід у браузері. Дозвольте зберігання даних для цього сайту.';
+    return;
+  }
+  await continueDeferredPacking();
 };
 
 const startPackingFirst = () => {
@@ -740,7 +794,8 @@ const normalizeImageUrl = (raw) => {
   return clean.startsWith('storage/') ? `/${clean}` : `/storage/${clean}`;
 };
 
-const itemThumbs = (items = []) => items.slice(0, 3).map(i => ({
+const itemThumbs = (items = []) => (Array.isArray(items) ? items : []).slice(0, 3).map(i => ({
+  title: itemTitle(i),
   src: normalizeImageUrl(
     i?.product?.main_photo_url || i?.product?.main_photo_path || i?.photo_url || i?.image_path || i?.photo || ''
   ),
@@ -756,6 +811,14 @@ const itemSize = (item) => item?.size || item?.variant?.size || '—';
 const itemSku = (item) => item?.sku || item?.variant?.sku || item?.product?.sku || '—';
 const itemType = (item) => item?.variant?.title || item?.product?.category?.name || item?.product?.type || item?.type || '—';
 const itemQty = (item) => Number(item?.qty || 1);
+const orderGoodsSummary = (order) => {
+  const first = order.items?.[0];
+  if (!first) return '';
+  const details = [itemTitle(first), itemColor(first), itemSize(first)].filter(value => value !== '—');
+  details.push(`${itemQty(first)} шт.`);
+  if (order.items.length > 1) details.push(`ще ${order.items.length - 1}`);
+  return details.join(' · ');
+};
 const itemQtyPairs = (item) => {
   const qty = itemQty(item);
   return `${qty} ${declension(qty, ['пара', 'пари', 'пар'])}`;
@@ -780,314 +843,124 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* --- Global --- */
+/* Компактне оформлення списку пакування. */
 .packing-shell {
-  background-color: #f1f5f9;
+  --packing-bg: #f3f5f8;
+  --packing-paper: #fff;
+  --packing-text: #202b3d;
+  --packing-muted: #637187;
+  --packing-line: #dfe5ed;
+  --packing-amber: #a95c04;
+  --packing-mark: #e6a130;
+  background: var(--packing-bg);
   min-height: 100vh;
-  color: #1e293b;
+  color: var(--packing-text);
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  padding-bottom: 3rem;
+  font-size: 0.875rem;
+  padding-bottom: 2rem;
 }
-
-.main-content {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 1.5rem;
-}
-
-/* --- Stats --- */
-.stats-overview {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 1.25rem;
-}
+.main-content { max-width: 1400px; margin: 0 auto; padding: 1.25rem; }
+.packing-shell button:disabled { opacity: .46; cursor: not-allowed; }
+.packing-shell button:focus-visible { outline: 2px solid #2563eb; outline-offset: 3px; }
+.stats-overview { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; margin-bottom: .875rem; }
 .stat-card-modern {
-  background: #fff;
-  padding: 1.5rem;
-  border-radius: 16px;
-  display: flex; justify-content: space-between; align-items: center;
-  position: relative; overflow: hidden;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 2px 4px -1px rgba(0,0,0,0.06);
+  display: flex; align-items: center; justify-content: space-between; gap: .75rem;
+  padding: 1rem; background: var(--packing-paper); border: 1px solid var(--packing-line); border-radius: 12px;
 }
-.stat-info { z-index: 2; position: relative; }
-.stat-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.05em; }
-.stat-value { font-size: 2.25rem; font-weight: 800; line-height: 1.1; margin-top: 0.25rem; }
-.stat-bg-icon { font-size: 3.5rem; opacity: 0.1; position: absolute; right: 10px; bottom: -5px; transform: rotate(-15deg); z-index: 1; }
-.stat-card-modern.success .stat-value, .stat-card-modern.success .stat-bg-icon { color: #059669; }
-.stat-card-modern.primary .stat-value, .stat-card-modern.primary .stat-bg-icon { color: #2563eb; }
-.stat-card-modern.danger .stat-value { color: #dc2626; }
-.stat-card-modern.danger .stat-bg-icon { color: #dc2626; opacity: 0.15; }
-.queue-stat-card {
-  gap: 1rem;
-}
+.stat-info { min-width: 0; }
+.stat-label { color: var(--packing-muted); font-size: .7rem; font-weight: 600; letter-spacing: .035em; text-transform: uppercase; }
+.stat-value { margin-top: .375rem; font-size: 1.875rem; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.stat-bg-icon { display: grid; place-items: center; flex: none; width: 38px; height: 38px; border-radius: 10px; background: #eef2f6; font-size: 1rem; }
+.stat-card-modern.success .stat-value, .stat-card-modern.success .stat-bg-icon { color: #147659; }
+.stat-card-modern.primary .stat-value { color: #2563eb; }
+.urgent-count { margin-top: .375rem; color: #b91c1c; font-size: .75rem; font-weight: 600; }
 .btn-sewing-summary {
-  position: relative;
-  z-index: 2;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.45rem;
-  min-height: 42px;
-  padding: 0.55rem 0.9rem;
-  border: 1px solid #bfdbfe;
-  border-radius: 12px;
-  background: #eff6ff;
-  color: #1d4ed8;
-  font-weight: 800;
-  font-size: 0.92rem;
-  cursor: pointer;
-  transition: 0.2s;
-  white-space: nowrap;
+  display: inline-flex; align-items: center; justify-content: center; gap: .5rem; flex: none;
+  min-height: 42px; padding: .5rem .625rem; border: 1px solid #d3e1f8; border-radius: 8px;
+  background: #eff5ff; color: #2563eb; font-size: .75rem; font-weight: 600; cursor: pointer;
 }
-.btn-sewing-summary:hover {
-  background: #dbeafe;
-  border-color: #93c5fd;
-  color: #1e40af;
-}
-.pulse-icon { animation: pulse 2s infinite; }
-@keyframes pulse { 0% { transform: scale(1) rotate(-15deg); } 50% { transform: scale(1.1) rotate(-15deg); } 100% { transform: scale(1) rotate(-15deg); } }
-
-.order-row-modern.is-skipped {
-  border-style: dashed;
-  border-color: #f59e0b;
-  background: linear-gradient(135deg, #fffaf0 0%, #ffffff 100%);
-}
-
-.badge-status.skipped {
-  background: #fff3cd;
-  color: #9a6700;
-}
-
-.text-skipped {
-  color: #b45309;
-  font-weight: 600;
-}
-
-/* --- Control Panel --- */
-.control-panel {
-  background: #fff; padding: 1rem 1.5rem; border-radius: 16px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
-  border: 1px solid #e2e8f0;
-  display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 1rem;
-}
-.control-left {
-  flex-grow: 1;
-  min-width: 320px;
-}
-.control-copy {
-  margin-bottom: 0.65rem;
-}
-.control-title {
-  font-size: 0.95rem;
-  font-weight: 800;
-  color: #0f172a;
-}
-.control-hint {
-  font-size: 0.8rem;
-  color: #64748b;
-  margin-top: 0.15rem;
-}
-.control-fields {
-  display: flex;
-  align-items: flex-end;
-  gap: 0.9rem;
-  flex-wrap: wrap;
-}
-.field-label {
-  display: inline-block;
-  font-size: 0.76rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #64748b;
-  margin-bottom: 0.35rem;
-}
-.search-wrapper {
-  flex-grow: 1;
-  max-width: 380px;
-}
-.search-input-wrap {
-  position: relative;
-}
-.search-input-wrap i {
-  position: absolute;
-  left: 16px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #94a3b8;
-}
+.btn-sewing-summary:hover { background: #dbeafe; }
+.control-panel { display: grid; gap: .75rem; padding: .875rem; border: 1px solid var(--packing-line); border-radius: 12px; background: var(--packing-paper); }
+.control-left, .search-wrapper { min-width: 0; }
+.control-fields { display: flex; align-items: center; gap: .625rem; flex-wrap: wrap; }
+.search-wrapper { flex: 1; }
+.search-input-wrap { position: relative; }
+.search-input-wrap > .bi-search { position: absolute; top: 50%; left: 12px; transform: translateY(-50%); color: var(--packing-muted); }
 .search-wrapper input {
-  width: 100%; border: 1px solid #94a3b8; padding: 0.7rem 1rem 0.7rem 2.8rem;
-  border-radius: 12px; font-size: 0.95rem; outline: none; transition: 0.2s; background: #f8fafc;
+  width: 100%; min-width: 0; min-height: 42px; padding: .625rem 2.5rem .625rem 2.25rem;
+  border: 1px solid var(--packing-line); border-radius: 8px; background: var(--packing-paper); color: var(--packing-text); font-size: .875rem;
 }
-.search-wrapper input:focus { border-color: #3b82f6; background: #fff; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+.search-wrapper input::placeholder { color: var(--packing-muted); }
+.search-wrapper input:focus { outline: 2px solid #2563eb; outline-offset: 2px; }
 .search-clear {
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
-  background: #fff;
-  color: #64748b;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  position: absolute; right: 3px; top: 50%; transform: translateY(-50%);
+  display: grid; place-items: center; width: 36px; height: 36px; border: 0; border-radius: 6px; color: var(--packing-muted); background: var(--packing-paper);
 }
-.search-clear:hover {
-  background: #f1f5f9;
-  color: #0f172a;
+.search-clear:hover { background: #eef2f6; }
+.settings-group { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; padding-left: .5rem; }
+.auto-refresh-switch { position: relative; display: flex; align-items: center; gap: 7px; min-height: 42px; font-size: .75rem; color: var(--packing-muted); cursor: pointer; }
+.auto-refresh-switch input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.switch-slider { position: relative; width: 32px; height: 18px; border-radius: 18px; background: #94a3b8; transition: background .2s; }
+.switch-slider::before { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .2s; }
+.auto-refresh-switch input:checked + .switch-slider { background: #2563eb; }
+.auto-refresh-switch input:checked + .switch-slider::before { transform: translateX(14px); }
+.auto-refresh-switch input:focus-visible + .switch-slider { outline: 2px solid #2563eb; outline-offset: 3px; }
+.switch-state { font-size: .75rem; color: var(--packing-muted); }
+.switch-state.active { color: #147659; }
+.actions-group { display: flex; gap: .625rem; flex-wrap: wrap; }
+.btn-refresh { display: grid; place-items: center; flex: none; width: 42px; height: 42px; border: 1px solid var(--packing-line); border-radius: 8px; background: var(--packing-paper); color: var(--packing-muted); font-size: 1.1rem; }
+.btn-refresh:hover:not(:disabled) { background: #eef2f6; }
+.btn-main-action, .btn-deferred-action {
+  display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+  min-height: 42px; padding: .5625rem .875rem; border: 1px solid var(--packing-text); border-radius: 8px;
+  background: var(--packing-text); color: #fff; font-size: .875rem; font-weight: 600; line-height: 1.4;
 }
-
-/* Settings Switch */
-.settings-group {
-  min-width: 210px;
-}
-.auto-refresh-switch { display: flex; align-items: center; cursor: pointer; gap: 8px; font-size: 0.85rem; color: #475569; font-weight: 600; }
-.auto-refresh-switch input { display: none; }
-.switch-slider {
-  width: 36px; height: 20px; background: #cbd5e1; border-radius: 20px; position: relative; transition: 0.3s;
-}
-.switch-slider::before {
-  content: ''; position: absolute; width: 16px; height: 16px; background: #fff;
-  border-radius: 50%; top: 2px; left: 2px; transition: 0.3s; box-shadow: 0 1px 2px rgba(0,0,0,0.2);
-}
-.auto-refresh-switch input:checked + .switch-slider { background: #3b82f6; }
-.auto-refresh-switch input:checked + .switch-slider::before { transform: translateX(16px); }
-.switch-state {
-  display: inline-block;
-  margin-top: 0.25rem;
-  font-size: 0.78rem;
-  color: #64748b;
-}
-.switch-state.active {
-  color: #0f766e;
-  font-weight: 700;
-}
-
-/* Actions */
-.actions-group { display: flex; align-items: center; gap: 0.75rem; }
-.btn-refresh {
-  background: #fff; border: 1px solid #cbd5e1; width: 46px; height: 46px;
-  border-radius: 12px; color: #64748b; transition: 0.2s; cursor: pointer;
-  display: flex; align-items: center; justify-content: center; font-size: 1.2rem;
-}
-.btn-refresh:hover { background: #f1f5f9; color: #334155; }
-.btn-main-action {
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  color: #fff; border: none; padding: 0 1.75rem; height: 46px;
-  border-radius: 12px; font-weight: 700; font-size: 1rem;
-  box-shadow: 0 4px 6px -1px rgba(217, 119, 6, 0.3); transition: 0.2s; cursor: pointer;
-}
-.btn-main-action:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 15px -3px rgba(217, 119, 6, 0.4); }
-.btn-main-action:disabled { opacity: 0.7; cursor: not-allowed; filter: grayscale(1); background: #cbd5e1; box-shadow: none; }
-
-/* --- Orders --- */
-.order-row-modern {
-  background: #fff; border-radius: 16px; margin-bottom: 1rem;
-  border: 1px solid #e2e8f0; position: relative; overflow: hidden;
-  transition: 0.25s; box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-}
-.order-row-modern:hover { transform: translateY(-2px); box-shadow: 0 10px 25px -5px rgba(0,0,0,0.06); border-color: #cbd5e1; }
-.order-row-modern.is-packed { background: #f0fdf4; border-color: #86efac; opacity: 0.95; }
-.priority-strip { position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: #ef4444; z-index: 10; }
-
+.btn-main-action:hover:not(:disabled) { background: #334155; }
+.btn-deferred-action { border-color: var(--packing-mark); background: #fff8e8; color: var(--packing-amber); }
+.btn-deferred-action:hover:not(:disabled) { background: #ffedc6; }
+.queue-count, .deferred-count { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; min-height: 22px; padding: 0 .3rem; border-radius: 5px; font-size: .75rem; font-variant-numeric: tabular-nums; }
+.queue-count { background: #ffffff26; }
+.deferred-count { background: #ffe4a5; }
+.orders-list-heading { display: flex; justify-content: space-between; flex-wrap: wrap; gap: .5rem; margin: 1rem .125rem .5rem; font-size: .75rem; color: var(--packing-muted); }
+.order-row-modern { position: relative; margin-bottom: .5625rem; border: 1px solid var(--packing-line); border-left: 3px solid var(--packing-line); border-radius: 10px; background: var(--packing-paper); }
+.order-row-modern:hover { box-shadow: 0 2px 7px #202b3d0a; }
+.order-row-modern.is-skipped { border-left-color: var(--packing-mark); }
+.order-row-modern.is-packed { border-left-color: #52a88a; background: #f6fbf8; }
+.priority-strip { position: absolute; left: -3px; top: 8px; bottom: 8px; width: 3px; background: #dc2626; border-radius: 3px; }
 .order-main-content {
-  display: grid; grid-template-columns: minmax(420px, 1.8fr) minmax(96px, 120px) minmax(140px, auto) 170px;
-  align-items: center; padding: 1.25rem 1.5rem; gap: 1.5rem;
+  display: grid; grid-template-columns: minmax(0, 1fr) 110px minmax(130px, 180px) 120px;
+  grid-template-areas: 'identity preview status actions'; align-items: center; gap: .875rem; padding: 1rem;
 }
-.order-id { font-size: 1.35rem; font-weight: 800; color: #1e293b; letter-spacing: -0.02em; }
-.order-sub {
-  font-size: 0.9rem;
-  color: #64748b;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  white-space: nowrap;
-}
-.order-sub i { margin-right: 6px; color: #94a3b8; }
-.order-sub-text {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.order-contact-compact {
-  margin-top: 0.12rem;
-  display: block;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: #64748b;
-  line-height: 1.2;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.contact-separator {
-  margin: 0 0.28rem;
-  color: #94a3b8;
-}
-.order-items-preview {
-  width: fit-content;
-  justify-self: start;
-}
-.badge-status {
-  font-size: 0.7rem; font-weight: 800; padding: 0.35rem 0.65rem;
-  border-radius: 8px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 5px; margin-left: auto;
-}
-.badge-status.packed { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
-.badge-status.pending { background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; }
-
-.order-items-preview { display: flex; flex-direction: column; justify-content: center; }
-.thumb-stack { display: flex; align-items: center; height: 50px; }
-.avatar {
-  width: 48px; height: 48px; border-radius: 12px; border: 2px solid #fff;
-  margin-left: -14px; background-position: center; background-color: #f1f5f9;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.08); transition: 0.2s;
-}
+.order-identity { grid-area: identity; min-width: 0; }
+.order-id { font-size: 1rem; font-weight: 600; color: var(--packing-text); overflow-wrap: anywhere; }
+.identity-top { flex-wrap: wrap; }
+.order-goods-summary { margin: .25rem 0; font-size: .875rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.order-sub { display: flex; align-items: center; min-width: 0; font-size: .75rem; color: var(--packing-muted); }
+.order-sub i { flex: none; margin-right: 5px; }
+.order-sub-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.order-contact-compact { margin-top: .2rem; color: var(--packing-muted); font-size: .75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.contact-separator { margin: 0 .28rem; }
+.badge-status { display: inline-flex; align-items: center; gap: 5px; padding: .2rem .4rem; border-radius: 5px; font-size: .6875rem; font-weight: 500; }
+.badge-status.packed { background: #e1f3e9; color: #166534; }
+.badge-status.pending { background: #eef2f6; color: var(--packing-muted); }
+.order-items-preview { grid-area: preview; display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 0; }
+.thumb-stack { display: flex; align-items: center; height: 56px; }
+.avatar { display: grid; place-items: center; flex: none; width: 56px; height: 56px; margin-left: -28px; border: 3px solid #fff; border-radius: 14px; background-position: center; background-color: #eef2f6; color: var(--packing-muted); box-shadow: 0 2px 7px #202b3d12; }
 .avatar:first-child { margin-left: 0; }
-.thumb-stack:hover .avatar { margin-left: -5px; transform: scale(1.05); }
-.avatar-more {
-  width: 40px; height: 40px; border-radius: 10px; background: #f1f5f9;
-  border: 2px solid #fff; margin-left: -10px; display: flex; align-items: center; justify-content: center;
-  font-size: 0.8rem; font-weight: 700; color: #64748b; z-index: 5;
-}
-.items-count-label { font-size: 0.8rem; color: #94a3b8; margin-top: 6px; font-weight: 500; }
-.opacity-50 { opacity: 0.6; filter: grayscale(0.5); }
-
-.timing-label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: #94a3b8; margin-bottom: 2px; }
-.timing-val { font-weight: 600; font-size: 0.95rem; }
-.text-waiting { color: #64748b; }
-.text-success { color: #059669; }
-
-.btn-action-primary {
-  background: #1e293b; color: #fff; border: none; padding: 0.75rem 1rem;
-  border-radius: 12px; font-weight: 700; font-size: 0.95rem; transition: 0.2s; width: 100%; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-}
-.btn-action-primary:hover { background: #0f172a; transform: translateY(-1px); box-shadow: 0 5px 12px rgba(0,0,0,0.15); }
-.btn-action-secondary {
-  background: #fff;
-  color: #0f172a;
-  border: 1px solid #cbd5e1;
-  padding: 0.7rem 1rem;
-  border-radius: 12px;
-  font-weight: 700;
-  font-size: 0.95rem;
-  width: 100%;
-  cursor: pointer;
-  transition: 0.2s;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.08);
-}
-.btn-action-secondary:hover { background: #f8fafc; border-color: #94a3b8; }
-.queue-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
-}
+.avatar-more { display: grid; place-items: center; width: 34px; height: 34px; margin-left: -28px; z-index: 1; border: 2px solid #fff; border-radius: 8px; background: #eef2f6; font-size: .75rem; color: var(--packing-muted); }
+.items-count-label { margin-top: 6px; color: var(--packing-muted); font-size: .75rem; }
+.order-timing { grid-area: status; min-width: 0; }
+.timing-label { margin-bottom: 5px; color: var(--packing-muted); font-size: .6875rem; font-weight: 500; letter-spacing: .03em; text-transform: uppercase; }
+.timing-val { font-size: .875rem; font-weight: 500; }
+.text-skipped { color: var(--packing-amber); }
+.text-waiting { color: var(--packing-muted); }
+.text-success { color: #147659; }
+.order-actions { grid-area: actions; min-width: 0; }
+.btn-action-primary, .btn-action-secondary { display: inline-flex; align-items: center; justify-content: center; width: 100%; min-height: 42px; padding: .5625rem .75rem; border: 1px solid var(--packing-text); border-radius: 8px; background: var(--packing-text); color: #fff; font-size: .875rem; font-weight: 600; }
+.btn-action-primary:hover:not(:disabled) { background: #334155; }
+.btn-action-secondary { min-height: 34px; padding: .4375rem .5rem; border-color: transparent; background: transparent; color: var(--packing-muted); font-size: .75rem; font-weight: 500; }
+.btn-action-secondary:hover { background: #eef2f6; color: var(--packing-text); }
+.queue-actions { display: flex; flex-direction: column; gap: 3px; }
 .stamp-done { color: #10b981; font-size: 2.5rem; text-align: center; opacity: 0.5; }
 .spin { animation: rotation 1s infinite linear; }
 @keyframes rotation { from {transform: rotate(0deg);} to {transform: rotate(359deg);} }
@@ -1418,24 +1291,44 @@ onUnmounted(() => {
   }
 }
 
-/* Mobile */
-@media (max-width: 1024px) {
-  .order-main-content { grid-template-columns: 1fr 1fr; gap: 1rem; }
-  .order-actions { grid-column: 2; grid-row: 1 / span 2; display: flex; flex-direction: column; justify-content: center; }
+/* На широкому екрані вільна колонка відділяє фото й статус від кнопок. */
+@media (min-width: 1000px) {
+  .order-main-content {
+    grid-template-columns: minmax(0, 1.6fr) 110px 180px minmax(32px, .65fr) 120px;
+    grid-template-areas: 'identity preview status . actions';
+  }
+}
+
+/* На планшеті статус і фото залишаються поруч із дією. */
+@media (max-width: 760px) {
+  .order-main-content { grid-template-columns: 110px minmax(0, 1fr) 120px; grid-template-areas: 'identity identity identity' 'preview status actions'; gap: .75rem; }
+  .order-items-preview { justify-self: start; }
+  .settings-group { flex-basis: 100%; padding-left: 0; }
+}
+@media (max-width: 600px) {
+  .stats-overview { grid-template-columns: minmax(0, 1fr); gap: .5625rem; }
+}
+@media (max-width: 480px) {
+  .main-content { padding: .625rem; }
+  .stat-card-modern { padding: .8125rem .875rem; }
+  .order-main-content { grid-template-columns: 110px minmax(0, 1fr); grid-template-areas: 'identity identity' 'preview status' 'actions actions'; padding: .875rem; }
+  .queue-actions { flex-direction: row; align-items: center; gap: .5rem; }
+  .btn-action-primary, .btn-action-secondary { width: auto; }
+  .actions-group > button { flex: 1 1 220px; }
+  .search-wrapper input { font-size: 1rem; }
+  .order-contact-compact { white-space: normal; overflow-wrap: anywhere; }
+}
+@media (pointer: coarse) {
+  .packing-shell button, .auto-refresh-switch { min-height: 44px; }
+  .search-clear, .btn-refresh { min-width: 44px; }
+  .search-wrapper input { min-height: 48px; padding-right: 3rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stagger-enter-active, .stagger-leave-active, .fade-enter-active, .fade-leave-active { transition: none; }
+  .switch-slider, .switch-slider::before { transition: none; }
+  .spin { animation: none; }
 }
 @media (max-width: 640px) {
-  .order-main-content { grid-template-columns: 1fr; text-align: center; padding: 1rem; }
-  .order-identity { justify-content: center; flex-direction: column; align-items: center; }
-  .identity-top { width: 100%; justify-content: space-between; }
-  .badge-status { position: relative; margin: 0; }
-  .order-items-preview, .thumb-stack { align-items: center; justify-content: center; }
-  .order-actions { grid-column: 1; grid-row: auto; }
-  .priority-strip { width: 100%; height: 4px; bottom: auto; top: 0; left: 0; }
-  .control-panel { flex-direction: column; align-items: stretch; }
-  .control-fields { flex-direction: column; align-items: stretch; gap: 0.7rem; }
-  .search-wrapper, .actions-group, .settings-group { width: 100%; max-width: none; }
-  .settings-group { min-width: 0; }
-  .btn-main-action { flex: 1; justify-content: center; }
   .details-main { padding: 0.8rem; }
   .details-side { padding: 0.8rem; }
   .product-card {
@@ -1450,12 +1343,6 @@ onUnmounted(() => {
   .product-qty {
     width: 100%;
     justify-self: stretch;
-  }
-  .queue-stat-card {
-    align-items: flex-start;
-  }
-  .btn-sewing-summary {
-    width: 100%;
   }
   .sewing-row {
     grid-template-columns: 1fr;
