@@ -4,7 +4,7 @@ import http from '@/crm/api/http';
 
 const options = [
   { key: 'manual_test', icon: 'bi-send-check', title: 'Тестові повідомлення', text: 'Перевірка зв’язку за вашим натисканням кнопки.' },
-  { key: 'warehouse_reminder', icon: 'bi-hourglass-split', title: 'Зберігання у відділенні', text: 'Нагадати команді передзвонити клієнту, який не забрав посилку.', planned: true },
+  { key: 'warehouse_reminder', icon: 'bi-hourglass-split', title: 'Зберігання у відділенні', text: 'Щодня о 10:00 за Києвом: спільний список замовлень на 5–7-й день від прибуття у відділення. День прибуття — перший.', planned: false },
   { key: 'new_order', icon: 'bi-bag-plus', title: 'Нові замовлення', text: 'Сповіщати команду про нове замовлення в CRM.', planned: true },
   { key: 'return_alert', icon: 'bi-arrow-return-left', title: 'Повернення посилок', text: 'Повідомляти про повернення, які потребують уваги.', planned: true },
 ];
@@ -165,7 +165,7 @@ onMounted(load);
                 <span class="form-check form-switch"><input :id="`permission-${option.key}`" v-model="form.permissions[option.key]" class="form-check-input" type="checkbox" role="switch" :disabled="Boolean(busy)" /></span>
               </label>
             </div>
-            <div class="permissions-note"><i class="bi bi-info-circle" aria-hidden="true"></i><span>Дозволи можна зберегти заздалегідь. Автоматичні нагадування почнуть працювати після налаштування відповідних сценаріїв.</span></div>
+            <div class="permissions-note"><i class="bi bi-info-circle" aria-hidden="true"></i><span>Нагадування про зберігання працюють за увімкненого підключення та дозволу. Використовується дата входу у відділення з історії CRM; посилки без дати або без свіжого трекінгу пропускаються.</span></div>
           </section>
         </div>
 

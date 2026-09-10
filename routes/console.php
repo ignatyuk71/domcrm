@@ -60,3 +60,10 @@ Schedule::command('inbox:prune-media')
     ->withoutOverlapping()
     ->onOneServer()
     ->description('Чистка медіа переписок, старших за 90 днів (теки не ростуть вічно)');
+
+Schedule::command('telegram:warehouse-digest')
+    ->dailyAt('10:00')
+    ->timezone('Europe/Kyiv')
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->description('Telegram: список посилок на 5–7-й день у відділенні');

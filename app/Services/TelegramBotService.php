@@ -55,6 +55,19 @@ class TelegramBotService
         ];
     }
 
+    public function sendWarehouseDigest(TelegramSetting $settings, string $message): void
+    {
+        if (!$settings->allows('warehouse_reminder')) {
+            throw ValidationException::withMessages(['connection' => 'Нагадування про зберігання вимкнені.']);
+        }
+        $this->call($settings->bot_token, 'sendMessage', [
+            'chat_id' => $settings->chat_id,
+            'text' => $message,
+            'parse_mode' => 'HTML',
+            'link_preview_options' => ['is_disabled' => true],
+        ]);
+    }
+
     public function sendTest(TelegramSetting $settings): void
     {
         if (!$settings->allows('manual_test')) {
