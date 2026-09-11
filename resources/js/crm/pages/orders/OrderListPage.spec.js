@@ -54,6 +54,32 @@ afterEach(() => {
 });
 
 describe('оновлення доставки у списку замовлень', () => {
+  it('плитка бронювання показує лише бронювання та скидає несумісний контроль зберігання', async () => {
+    fetchStatuses.mockResolvedValue({ data: { data: [
+      { id: 3, code: 'confirmed', name: 'Підтверджено' },
+      { id: 12, code: 'reserved', name: 'Бронювання', color: '#7c3aed' },
+      { id: 9, code: 'returned', name: 'Повернення' },
+    ] } });
+    wrapper = shallowMount(OrderListPage, { global: { stubs: { OrdersTopbar: false } } });
+    await flushPromises();
+    const topbar = wrapper.findComponent(OrdersTopbar);
+    expect(topbar.get('.status-scroll-area').text()).toContain('Підтверджено');
+    expect(topbar.get('.status-scroll-area').text()).not.toContain('Бронювання');
+    expect(topbar.get('.special-filter-zone').text()).toContain('Повернення');
+    await topbar.get('.alert-toggle-btn').trigger('click');
+    await flushPromises();
+    await topbar.get('.reservation-filter').trigger('click');
+    await flushPromises();
+    expect(listOrders.mock.calls.at(-1)[0]).toMatchObject({ page: 1, status_ids: '12', delivery_hold_days: undefined });
+    expect(topbar.get('.reservation-filter').attributes('aria-pressed')).toBe('true');
+    expect(topbar.props('holdFilterActive')).toBe(false);
+    await topbar.get('.reservation-filter').trigger('click');
+    await flushPromises();
+    expect(listOrders.mock.calls.at(-1)[0].status_ids).toBeUndefined();
+    expect(topbar.get('.reservation-filter').attributes('aria-pressed')).toBe('false');
+    expect(updateOrderStatus).not.toHaveBeenCalled();
+  });
+
   it('змінює статус, час і лічильники без перезавантаження таблиці', async () => {
     const previous = { id: 5, code: 'shipped', name: 'Відправлено' };
     const status = { id: 6, code: 'delivered', name: 'У відділенні', color: '#f59e0b', icon: 'bi-building', status_changed_at: '2026-09-11T12:00:00Z' };

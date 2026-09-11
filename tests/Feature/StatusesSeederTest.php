@@ -25,6 +25,7 @@ class StatusesSeederTest extends TestCase
             'new'            => 'Новий',
             'in_process'     => 'В обробці',
             'confirmed'      => 'Підтверджено',
+            'reserved'       => 'Бронювання',
             'packing'        => 'Упакування',
             'packed'         => 'Запаковано',
             'shipped'        => 'Відправлено',
@@ -71,6 +72,6 @@ class StatusesSeederTest extends TestCase
         $this->seed(StatusesSeeder::class);
         $this->seed(StatusesSeeder::class);
 
-        $this->assertSame(10, Status::where('type', 'order')->count(), 'Повторний сід дублює рядки');
+        $this->assertSame(11, Status::where('type', 'order')->count(), 'Повторний сід дублює рядки');
     }
 }

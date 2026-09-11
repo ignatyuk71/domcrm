@@ -30,7 +30,7 @@
         
         <div class="d-flex flex-wrap gap-2 status-scroll-area">
           <button
-            v-for="opt in statusChips"
+            v-for="opt in mainStatusChips"
             :key="opt.value"
             class="filter-chip"
             :class="{ active: isStatusActive(opt.value) }"
@@ -52,54 +52,83 @@
           </button>
         </div>
 
-        <div v-if="holdFilterEnabled" class="special-filter-zone">
-          <div class="divider-vertical"></div>
-          
-          <div class="alert-toggle-wrapper" v-click-outside="closeDaysDropdown">
-            <button 
-              class="alert-toggle-btn"
-              :class="{ 'is-active': holdFilterActive }"
-              @click="$emit('toggle-hold')"
-              title="Фільтр замовлень, що довго лежать на пошті"
+        <div v-if="reservationChip || returnChip || holdFilterEnabled" class="special-filters-row">
+          <button
+            v-if="reservationChip"
+            type="button"
+            class="reservation-filter"
+            :class="{ 'is-active': isStatusActive(reservationChip.value) }"
+            :aria-pressed="isStatusActive(reservationChip.value)"
+            title="Показати замовлення, які очікують на товар"
+            @click="$emit('toggle-reservation', reservationChip.value)"
+          >
+            <span class="reservation-icon"><i class="bi bi-calendar2-check" aria-hidden="true"></i></span>
+            <span class="reservation-content">
+              <span class="reservation-label">{{ reservationChip.label }}</span>
+              <span class="reservation-description">Очікують на товар</span>
+            </span>
+          </button>
+
+          <div class="special-filter-zone">
+            <button
+              v-if="returnChip"
+              type="button"
+              class="filter-chip return-filter"
+              :class="{ active: isStatusActive(returnChip.value) }"
+              :aria-pressed="isStatusActive(returnChip.value)"
+              @click="$emit('toggle-status', returnChip.value)"
             >
-              <div class="toggle-icon-box">
-                <transition name="icon-swap" mode="out-in">
-                  <i v-if="holdFilterActive" class="bi bi-fire"></i>
-                  <i v-else class="bi bi-hourglass-split"></i>
-                </transition>
-              </div>
-              
-              <div class="toggle-content">
-                <span class="toggle-label">Контроль зберігання</span>
-                
-                <div 
-                  class="toggle-sub-interactive" 
-                  @click.stop="toggleDaysDropdown"
-                >
-                  <span>Понад {{ holdFilterDays }} дн.</span>
-                  <i class="bi bi-caret-down-fill ms-1" :class="{ 'rotate-180': showDaysDropdown }"></i>
-                </div>
-              </div>
-
-              <div class="toggle-switch-ui"></div>
+              <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>
+              <span>{{ returnChip.label }}</span>
             </button>
+            <div v-if="holdFilterEnabled" class="divider-vertical" aria-hidden="true"></div>
 
-            <transition name="dropdown-fade">
-              <div v-if="showDaysDropdown" class="days-dropdown-menu">
-                <div class="dropdown-header">Термін зберігання</div>
-                <div class="days-grid">
-                  <button 
-                    v-for="day in [3, 4, 5, 6, 7, 10]" 
-                    :key="day"
-                    class="day-option"
-                    :class="{ selected: holdFilterDays === day }"
-                    @click.stop="selectDay(day)"
-                  >
-                    {{ day }} дні
-                  </button>
+            <div v-if="holdFilterEnabled" class="alert-toggle-wrapper" v-click-outside="closeDaysDropdown">
+              <button
+                class="alert-toggle-btn"
+                :class="{ 'is-active': holdFilterActive }"
+                @click="$emit('toggle-hold')"
+                title="Фільтр замовлень, що довго лежать на пошті"
+              >
+                <div class="toggle-icon-box">
+                  <transition name="icon-swap" mode="out-in">
+                    <i v-if="holdFilterActive" class="bi bi-fire"></i>
+                    <i v-else class="bi bi-hourglass-split"></i>
+                  </transition>
                 </div>
-              </div>
-            </transition>
+
+                <div class="toggle-content">
+                  <span class="toggle-label">Контроль зберігання</span>
+
+                  <div
+                    class="toggle-sub-interactive"
+                    @click.stop="toggleDaysDropdown"
+                  >
+                    <span>Понад {{ holdFilterDays }} дн.</span>
+                    <i class="bi bi-caret-down-fill ms-1" :class="{ 'rotate-180': showDaysDropdown }"></i>
+                  </div>
+                </div>
+
+                <div class="toggle-switch-ui"></div>
+              </button>
+
+              <transition name="dropdown-fade">
+                <div v-if="showDaysDropdown" class="days-dropdown-menu">
+                  <div class="dropdown-header">Термін зберігання</div>
+                  <div class="days-grid">
+                    <button
+                      v-for="day in [3, 4, 5, 6, 7, 10]"
+                      :key="day"
+                      class="day-option"
+                      :class="{ selected: holdFilterDays === day }"
+                      @click.stop="selectDay(day)"
+                    >
+                      {{ day }} дні
+                    </button>
+                  </div>
+                </div>
+              </transition>
+            </div>
           </div>
         </div>
 
@@ -109,7 +138,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 
 const props = defineProps({
   search: { type: String, default: '' },
@@ -120,7 +149,11 @@ const props = defineProps({
   holdFilterDays: { type: Number, default: 4 },
 });
 
-const emit = defineEmits(['update:search', 'search', 'toggle-status', 'toggle-hold', 'update:hold-days']);
+const emit = defineEmits(['update:search', 'search', 'toggle-status', 'toggle-reservation', 'toggle-hold', 'update:hold-days']);
+
+const reservationChip = computed(() => props.statusChips.find((chip) => chip.code === 'reserved'));
+const returnChip = computed(() => props.statusChips.find((chip) => chip.code === 'returned'));
+const mainStatusChips = computed(() => props.statusChips.filter((chip) => !['reserved', 'returned'].includes(chip.code)));
 
 const showDaysDropdown = ref(false);
 
@@ -187,7 +220,7 @@ const vClickOutside = {
 
 /* STATUS CHIPS AREA */
 .status-scroll-area {
-  flex: 1; /* Займає вільне місце */
+  flex: 1 0 100%;
   min-width: 250px; /* UPDATED: Даємо мінімальну ширину, щоб не стискалось в 0 */
   flex-wrap: nowrap !important;
   gap: 4px;
@@ -205,11 +238,26 @@ const vClickOutside = {
 .filter-chip:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 
 /* --- ALERT TOGGLE BUTTON --- */
+.special-filters-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; width: 100%; padding-top: 12px; border-top: 1px solid #e2e8f0; }
+.reservation-filter { display: flex; align-items: center; gap: 10px; min-height: 46px; padding: 6px 14px 6px 8px; border: 1px solid #ddd6fe; border-radius: 12px; background: #faf8ff; color: #5b21b6; text-align: left; transition: background 0.15s, border-color 0.15s; }
+.reservation-icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; background: #ede9fe; color: #7c3aed; font-size: 16px; }
+.reservation-content { display: flex; flex-direction: column; gap: 1px; line-height: 1.2; }
+.reservation-label { font-size: 12px; font-weight: 700; }
+.reservation-description { font-size: 11px; color: #7c3aed; }
+.reservation-filter:hover { border-color: #a78bfa; background: #f5f3ff; }
+.reservation-filter.is-active { background: #7c3aed; border-color: #7c3aed; color: #fff; }
+.reservation-filter.is-active .reservation-icon { background: #ffffff26; color: #fff; }
+.reservation-filter.is-active .reservation-description { color: #ede9fe; }
+.reservation-filter:focus-visible { outline: 2px solid #7c3aed; outline-offset: 3px; }
+.return-filter .bi { color: #ef4444; }
+.return-filter.active { background: #fef2f2; border-color: #fca5a5; color: #b91c1c; }
 .special-filter-zone {
   display: flex;
   align-items: center;
   gap: 16px;
-  flex-shrink: 0; /* Не стискається */
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-left: auto;
 }
 
 .divider-vertical {
@@ -426,10 +474,12 @@ const vClickOutside = {
 
 /* MOBILE */
 @media (max-width: 768px) {
+  .search-wrapper { min-width: 0; }
   .special-filter-zone {
+    width: 100%;
+    justify-content: space-between;
+    gap: 10px;
     margin-left: 0;
-    border-left: 1px solid #e2e8f0;
-    padding-left: 12px;
   }
   .divider-vertical { display: none; }
   

@@ -32,6 +32,7 @@
       :hold-filter-options="holdFilterOptions"
       @search="handleSearch"
       @toggle-status="toggleStatus"
+      @toggle-reservation="toggleReservation"
       @toggle-hold="toggleHoldFilter"
       @update:hold-days="updateHoldDays"
     />
@@ -117,7 +118,7 @@ const perPageOptions = [15, 30, 60];
 let searchTimer;
 
 const statusChips = ref([{ value: '', label: 'Всі', icon: 'bi-grid', color: null }]);
-const countableStatusCodes = new Set(['new', 'in_process', 'confirmed', 'packing', 'packed', 'shipped', 'delivered']);
+const countableStatusCodes = new Set(['new', 'in_process', 'confirmed', 'reserved', 'packing', 'packed', 'shipped', 'delivered']);
 
 function buildStatusChips() {
   const hiddenStatusCodes = new Set(['cancelled', 'canceled']);
@@ -447,6 +448,16 @@ function toggleStatus(value) {
     }
     filters.statuses = Array.from(next);
   }
+  filters.page = 1;
+  fetchData();
+}
+
+function toggleReservation(value) {
+  if (!value) return;
+  filters.statuses = filters.statuses.length === 1 && filters.statuses[0] === value ? [] : [value];
+  // Бронювання до відправлення не має перетинатися з фільтром зберігання на пошті.
+  holdFilterActive.value = false;
+  filters.delivery_hold_days = null;
   filters.page = 1;
   fetchData();
 }

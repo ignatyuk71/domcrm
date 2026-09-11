@@ -1,6 +1,7 @@
 export const statusLabels = {
   new: 'Новий',
   confirmed: 'Підтверджено',
+  reserved: 'Бронювання',
   pending: 'Очікує підтвердження',
   in_process: 'В обробці',
   packing: 'Упакування',
@@ -30,6 +31,7 @@ export const statusColorMap = {
   in_progress: '#3b82f6',
   in_work: '#3b82f6',
   confirmed: '#a855f7',
+  reserved: '#7c3aed',
   packing: '#78716c',
   packed: '#f97316',
   shipped: '#0ea5e9',
@@ -100,6 +102,7 @@ export function getStatusIcon(status) {
     new: 'bi-circle',
     in_process: 'bi-telephone',
     confirmed: 'bi-person-check-fill',
+    reserved: 'bi-calendar2-check',
     pending: 'bi-hourglass-split',
     packing: 'bi-qr-code',
     packed: 'bi-box-seam',
