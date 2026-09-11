@@ -82,8 +82,11 @@
             title="Бронювання: замовлення, які очікують на товар"
             @click="$emit('toggle-reservation', reservationChip.value)"
           >
-            <i class="bi bi-calendar2-check" aria-hidden="true"></i>
-            <span>{{ reservationChip.label }}</span>
+            <span class="reservation-icon"><i class="bi bi-calendar2-check" aria-hidden="true"></i></span>
+            <span class="reservation-content">
+              <span class="reservation-label">{{ reservationChip.label }}</span>
+              <span class="reservation-description">Очікують на товар</span>
+            </span>
           </button>
 
           <div v-if="holdFilterEnabled" class="alert-toggle-wrapper" v-click-outside="closeDaysDropdown">
@@ -262,9 +265,15 @@ const vClickOutside = {
 
 /* --- ALERT TOGGLE BUTTON --- */
 .status-scroll-area > button { flex-shrink: 0; }
-.reservation-filter { display: flex; align-items: center; gap: 4px; height: 30px; padding: 0 8px; border: 1px solid #ddd6fe; border-radius: 7px; background: #faf8ff; color: #5b21b6; font-size: 12px; font-weight: 600; white-space: nowrap; transition: background 0.15s, border-color 0.15s; }
+.reservation-filter { display: flex; align-items: center; flex-shrink: 0; gap: 10px; min-height: 46px; padding: 6px 14px 6px 8px; border: 1px solid #ddd6fe; border-radius: 12px; background: #faf8ff; color: #5b21b6; text-align: left; white-space: nowrap; transition: background 0.15s, border-color 0.15s; }
+.reservation-icon { display: grid; place-items: center; flex-shrink: 0; width: 32px; height: 32px; border-radius: 8px; background: #ede9fe; color: #7c3aed; font-size: 16px; }
+.reservation-content { display: flex; flex-direction: column; gap: 1px; line-height: 1.2; }
+.reservation-label { font-size: 12px; font-weight: 700; }
+.reservation-description { font-size: 11px; font-weight: 400; color: #7c3aed; }
 .reservation-filter:hover { border-color: #a78bfa; background: #f5f3ff; }
 .reservation-filter.is-active { background: #7c3aed; border-color: #7c3aed; color: #fff; }
+.reservation-filter.is-active .reservation-icon { background: #ffffff26; color: #fff; }
+.reservation-filter.is-active .reservation-description { color: #ede9fe; }
 .reservation-filter:focus-visible { outline: 2px solid #7c3aed; outline-offset: 3px; }
 .return-filter .bi { color: #ef4444; }
 .return-filter.active { background: #fef2f2; border-color: #fca5a5; color: #b91c1c; }
@@ -490,7 +499,8 @@ const vClickOutside = {
 
 /* MOBILE */
 @media (max-width: 1400px) {
-  .filter-chip, .reservation-filter { font-size: 11px; padding-inline: 5px; }
+  .filters-container { gap: 8px; }
+  .filter-chip { font-size: 11px; padding-inline: 5px; }
   .filter-label-full { display: none; }
   .filter-label-compact { display: inline; }
   .status-scroll-area { gap: 3px; }
@@ -502,8 +512,14 @@ const vClickOutside = {
 @media (max-width: 768px) {
   .search-wrapper { min-width: 0; }
   .filters-container { gap: 8px; }
-  .alert-toggle-btn { min-width: 0; }
-  .toggle-label { font-size: 10px; }
+  .reservation-filter { gap: 5px; padding: 4px; }
+  .reservation-icon { width: 24px; height: 28px; font-size: 14px; }
+  .reservation-label { font-size: 10px; }
+  .reservation-description { font-size: 9px; }
+  .alert-toggle-btn { min-width: 0; gap: 4px; padding: 6px; }
+  .toggle-label { font-size: 9px; }
+  .toggle-switch-ui { width: 28px; flex-shrink: 0; }
+  .alert-toggle-btn.is-active .toggle-switch-ui::after { left: 10px; }
   .toggle-icon-box { display: none; }
   .divider-vertical { display: none; }
   
