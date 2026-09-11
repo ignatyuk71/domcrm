@@ -265,16 +265,16 @@ const vClickOutside = {
 
 /* --- ALERT TOGGLE BUTTON --- */
 .status-scroll-area > button { flex-shrink: 0; }
-.reservation-filter { display: flex; align-items: center; flex-shrink: 0; gap: 6px; min-height: 42px; padding: 6px; border: 1px solid #ddd6fe; border-radius: 12px; background: #faf8ff; color: #5b21b6; text-align: left; white-space: nowrap; transition: background 0.15s, border-color 0.15s; }
-.reservation-icon { display: grid; place-items: center; flex-shrink: 0; width: 24px; height: 28px; border-radius: 7px; background: #ede9fe; color: #7c3aed; font-size: 14px; }
+.reservation-filter { display: flex; align-items: center; flex-shrink: 0; gap: 6px; min-height: 42px; padding: 6px; border: 1px solid #99f6e4; border-radius: 12px; background: #f0fdfa; color: #0f766e; text-align: left; white-space: nowrap; transition: background 0.15s, border-color 0.15s; }
+.reservation-icon { display: grid; place-items: center; flex-shrink: 0; width: 24px; height: 28px; border-radius: 7px; background: #ccfbf1; color: #0f766e; font-size: 14px; }
 .reservation-content { display: flex; flex-direction: column; gap: 1px; line-height: 1.2; }
 .reservation-label { font-size: 11px; font-weight: 700; }
-.reservation-description { font-size: 10px; font-weight: 400; color: #7c3aed; }
-.reservation-filter:hover { border-color: #a78bfa; background: #f5f3ff; }
-.reservation-filter.is-active { background: #7c3aed; border-color: #7c3aed; color: #fff; }
+.reservation-description { font-size: 10px; font-weight: 400; color: #0f766e; }
+.reservation-filter:hover { border-color: #2dd4bf; background: #ccfbf1; }
+.reservation-filter.is-active { background: #0f766e; border-color: #0f766e; color: #fff; }
 .reservation-filter.is-active .reservation-icon { background: #ffffff26; color: #fff; }
-.reservation-filter.is-active .reservation-description { color: #ede9fe; }
-.reservation-filter:focus-visible { outline: 2px solid #7c3aed; outline-offset: 3px; }
+.reservation-filter.is-active .reservation-description { color: #ccfbf1; }
+.reservation-filter:focus-visible { outline: 2px solid #0f766e; outline-offset: 3px; }
 .return-filter .bi { color: #ef4444; }
 .return-filter.active { background: #fef2f2; border-color: #fca5a5; color: #b91c1c; }
 .special-filter-zone {

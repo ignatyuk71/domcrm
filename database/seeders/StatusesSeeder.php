@@ -26,7 +26,7 @@ class StatusesSeeder extends Seeder
             ['code' => 'new',            'name' => 'Новий',             'icon' => 'bi-circle',                 'color' => '#fbbf24', 'sort_order' => 10, 'is_default' => true],
             ['code' => 'in_process',     'name' => 'В обробці',         'icon' => 'bi-telephone',              'color' => '#3b82f6', 'sort_order' => 20, 'is_default' => false],
             ['code' => 'confirmed',      'name' => 'Підтверджено',      'icon' => 'bi-person-check-fill',      'color' => '#a855f7', 'sort_order' => 30, 'is_default' => false],
-            ['code' => 'reserved',       'name' => 'Бронювання',        'icon' => 'bi-calendar2-check',       'color' => '#7c3aed', 'sort_order' => 35, 'is_default' => false],
+            ['code' => 'reserved',       'name' => 'Бронювання',        'icon' => 'bi-calendar2-check',       'color' => '#0f766e', 'sort_order' => 35, 'is_default' => false],
             ['code' => 'packing',        'name' => 'Упакування',        'icon' => 'bi-qr-code',                'color' => '#78716c', 'sort_order' => 40, 'is_default' => false],
             ['code' => 'packed',         'name' => 'Запаковано',        'icon' => 'bi-box-seam',               'color' => '#f97316', 'sort_order' => 45, 'is_default' => false],
             ['code' => 'shipped',        'name' => 'Відправлено',       'icon' => 'bi-truck',                  'color' => '#0ea5e9', 'sort_order' => 50, 'is_default' => false],

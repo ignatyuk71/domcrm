@@ -31,7 +31,7 @@ export const statusColorMap = {
   in_progress: '#3b82f6',
   in_work: '#3b82f6',
   confirmed: '#a855f7',
-  reserved: '#7c3aed',
+  reserved: '#0f766e',
   packing: '#78716c',
   packed: '#f97316',
   shipped: '#0ea5e9',

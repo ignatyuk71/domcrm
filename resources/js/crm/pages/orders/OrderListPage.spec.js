@@ -57,7 +57,7 @@ describe('оновлення доставки у списку замовлень
   it('плитка бронювання показує лише бронювання та скидає несумісний контроль зберігання', async () => {
     fetchStatuses.mockResolvedValue({ data: { data: [
       { id: 3, code: 'confirmed', name: 'Підтверджено' },
-      { id: 12, code: 'reserved', name: 'Бронювання', color: '#7c3aed' },
+      { id: 12, code: 'reserved', name: 'Бронювання', color: '#0f766e' },
       { id: 9, code: 'returned', name: 'Повернення' },
     ] } });
     wrapper = shallowMount(OrderListPage, { global: { stubs: { OrdersTopbar: false } } });
