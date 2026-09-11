@@ -64,8 +64,10 @@ describe('оновлення доставки у списку замовлень
     await flushPromises();
     const topbar = wrapper.findComponent(OrdersTopbar);
     expect(topbar.get('.status-scroll-area').text()).toContain('Підтверджено');
-    expect(topbar.get('.status-scroll-area').text()).not.toContain('Бронювання');
-    expect(topbar.get('.special-filter-zone').text()).toContain('Повернення');
+    expect(topbar.findAll('.reservation-filter')).toHaveLength(1);
+    expect(topbar.find('.status-scroll-area .reservation-filter').exists()).toBe(false);
+    expect(topbar.find('.special-filter-zone .reservation-filter').exists()).toBe(true);
+    expect(topbar.get('.status-scroll-area').text()).toContain('Повернення');
     await topbar.get('.alert-toggle-btn').trigger('click');
     await flushPromises();
     await topbar.get('.reservation-filter').trigger('click');

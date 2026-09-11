@@ -26,9 +26,9 @@
     </div>
 
     <div class="toolbar-filters px-4 pb-3">
-      <div class="filters-container d-flex flex-wrap align-items-center justify-content-between gap-3">
+      <div class="filters-container">
         
-        <div class="d-flex flex-wrap gap-2 status-scroll-area">
+        <div class="status-scroll-area">
           <button
             v-for="opt in mainStatusChips"
             :key="opt.value"
@@ -41,6 +41,8 @@
               boxShadow: `0 4px 12px ${opt.color}40`
             } : {}"
             :aria-pressed="isStatusActive(opt.value)"
+            :aria-label="opt.label"
+            :title="opt.label"
             @click="$emit('toggle-status', opt.value)"
           >
             <i 
@@ -48,87 +50,87 @@
               :class="`bi ${opt.icon}`"
               :style="!isStatusActive(opt.value) && opt.color ? { color: opt.color } : {}"
             ></i>
-            <span>{{ opt.label }}</span>
+            <span class="filter-label-full" aria-hidden="true">{{ opt.label }}</span>
+            <span class="filter-label-compact" aria-hidden="true">{{ compactLabel(opt.label) }}</span>
+          </button>
+
+
+          <button
+            v-if="returnChip"
+            type="button"
+            class="filter-chip return-filter"
+            :class="{ active: isStatusActive(returnChip.value) }"
+            :aria-pressed="isStatusActive(returnChip.value)"
+            :aria-label="returnChip.label"
+            :title="returnChip.label"
+            @click="$emit('toggle-status', returnChip.value)"
+          >
+            <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>
+            <span class="filter-label-full" aria-hidden="true">{{ returnChip.label }}</span>
+            <span class="filter-label-compact" aria-hidden="true">{{ compactLabel(returnChip.label) }}</span>
           </button>
         </div>
+        <div v-if="reservationChip || holdFilterEnabled" class="special-filter-zone">
+          <div v-if="holdFilterEnabled" class="divider-vertical" aria-hidden="true"></div>
 
-        <div v-if="reservationChip || returnChip || holdFilterEnabled" class="special-filters-row">
           <button
             v-if="reservationChip"
             type="button"
             class="reservation-filter"
             :class="{ 'is-active': isStatusActive(reservationChip.value) }"
             :aria-pressed="isStatusActive(reservationChip.value)"
-            title="Показати замовлення, які очікують на товар"
+            title="Бронювання: замовлення, які очікують на товар"
             @click="$emit('toggle-reservation', reservationChip.value)"
           >
-            <span class="reservation-icon"><i class="bi bi-calendar2-check" aria-hidden="true"></i></span>
-            <span class="reservation-content">
-              <span class="reservation-label">{{ reservationChip.label }}</span>
-              <span class="reservation-description">Очікують на товар</span>
-            </span>
+            <i class="bi bi-calendar2-check" aria-hidden="true"></i>
+            <span>{{ reservationChip.label }}</span>
           </button>
 
-          <div class="special-filter-zone">
+          <div v-if="holdFilterEnabled" class="alert-toggle-wrapper" v-click-outside="closeDaysDropdown">
             <button
-              v-if="returnChip"
-              type="button"
-              class="filter-chip return-filter"
-              :class="{ active: isStatusActive(returnChip.value) }"
-              :aria-pressed="isStatusActive(returnChip.value)"
-              @click="$emit('toggle-status', returnChip.value)"
+              class="alert-toggle-btn"
+              :class="{ 'is-active': holdFilterActive }"
+              @click="$emit('toggle-hold')"
+              title="Фільтр замовлень, що довго лежать на пошті"
             >
-              <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i>
-              <span>{{ returnChip.label }}</span>
+              <div class="toggle-icon-box">
+                <transition name="icon-swap" mode="out-in">
+                  <i v-if="holdFilterActive" class="bi bi-fire"></i>
+                  <i v-else class="bi bi-hourglass-split"></i>
+                </transition>
+              </div>
+
+              <div class="toggle-content">
+                <span class="toggle-label">Контроль зберігання</span>
+
+                <div
+                  class="toggle-sub-interactive"
+                  @click.stop="toggleDaysDropdown"
+                >
+                  <span>Понад {{ holdFilterDays }} дн.</span>
+                  <i class="bi bi-caret-down-fill ms-1" :class="{ 'rotate-180': showDaysDropdown }"></i>
+                </div>
+              </div>
+
+              <div class="toggle-switch-ui"></div>
             </button>
-            <div v-if="holdFilterEnabled" class="divider-vertical" aria-hidden="true"></div>
 
-            <div v-if="holdFilterEnabled" class="alert-toggle-wrapper" v-click-outside="closeDaysDropdown">
-              <button
-                class="alert-toggle-btn"
-                :class="{ 'is-active': holdFilterActive }"
-                @click="$emit('toggle-hold')"
-                title="Фільтр замовлень, що довго лежать на пошті"
-              >
-                <div class="toggle-icon-box">
-                  <transition name="icon-swap" mode="out-in">
-                    <i v-if="holdFilterActive" class="bi bi-fire"></i>
-                    <i v-else class="bi bi-hourglass-split"></i>
-                  </transition>
-                </div>
-
-                <div class="toggle-content">
-                  <span class="toggle-label">Контроль зберігання</span>
-
-                  <div
-                    class="toggle-sub-interactive"
-                    @click.stop="toggleDaysDropdown"
+            <transition name="dropdown-fade">
+              <div v-if="showDaysDropdown" class="days-dropdown-menu">
+                <div class="dropdown-header">Термін зберігання</div>
+                <div class="days-grid">
+                  <button
+                    v-for="day in [3, 4, 5, 6, 7, 10]"
+                    :key="day"
+                    class="day-option"
+                    :class="{ selected: holdFilterDays === day }"
+                    @click.stop="selectDay(day)"
                   >
-                    <span>Понад {{ holdFilterDays }} дн.</span>
-                    <i class="bi bi-caret-down-fill ms-1" :class="{ 'rotate-180': showDaysDropdown }"></i>
-                  </div>
+                    {{ day }} дні
+                  </button>
                 </div>
-
-                <div class="toggle-switch-ui"></div>
-              </button>
-
-              <transition name="dropdown-fade">
-                <div v-if="showDaysDropdown" class="days-dropdown-menu">
-                  <div class="dropdown-header">Термін зберігання</div>
-                  <div class="days-grid">
-                    <button
-                      v-for="day in [3, 4, 5, 6, 7, 10]"
-                      :key="day"
-                      class="day-option"
-                      :class="{ selected: holdFilterDays === day }"
-                      @click.stop="selectDay(day)"
-                    >
-                      {{ day }} дні
-                    </button>
-                  </div>
-                </div>
-              </transition>
-            </div>
+              </div>
+            </transition>
           </div>
         </div>
 
@@ -154,6 +156,21 @@ const emit = defineEmits(['update:search', 'search', 'toggle-status', 'toggle-re
 const reservationChip = computed(() => props.statusChips.find((chip) => chip.code === 'reserved'));
 const returnChip = computed(() => props.statusChips.find((chip) => chip.code === 'returned'));
 const mainStatusChips = computed(() => props.statusChips.filter((chip) => !['reserved', 'returned'].includes(chip.code)));
+
+const shortLabels = {
+  'Підтверджено': 'Підтв.',
+  'Упакування': 'Пакув.',
+  'Запаковано': 'Запак.',
+  'Відправлено': 'Відпр.',
+  'У відділенні': 'Відділ.',
+  'Завершено': 'Заверш.',
+  'Повернення': 'Поверн.',
+};
+
+function compactLabel(label) {
+  // Зберігаємо лічильник і повну назву в підказці; скорочення потрібні лише для вузького рядка.
+  return label.replace(/^(Підтверджено|Упакування|Запаковано|Відправлено|У відділенні|Завершено|Повернення)(?= ·|$)/, (name) => shortLabels[name]);
+}
 
 const showDaysDropdown = ref(false);
 
@@ -214,15 +231,20 @@ const vClickOutside = {
 /* --- FILTERS CONTAINER --- */
 .filters-container {
   position: relative;
-  flex-wrap: wrap;
+  display: flex;
+  flex-wrap: nowrap;
   align-items: center;
+  gap: 12px;
+  min-width: 0;
 }
 
 /* STATUS CHIPS AREA */
 .status-scroll-area {
-  flex: 1 0 100%;
-  min-width: 250px; /* UPDATED: Даємо мінімальну ширину, щоб не стискалось в 0 */
-  flex-wrap: nowrap !important;
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-wrap: nowrap;
   gap: 4px;
   overflow-x: auto;
   overflow-y: hidden;
@@ -236,18 +258,13 @@ const vClickOutside = {
 .filter-chip:hover { background: #f8fafc; border-color: #cbd5e1; color: #334155; }
 .filter-chip.active { border-color: transparent; transform: translateY(-1px); }
 .filter-chip:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.filter-label-compact { display: none; }
 
 /* --- ALERT TOGGLE BUTTON --- */
-.special-filters-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; width: 100%; padding-top: 12px; border-top: 1px solid #e2e8f0; }
-.reservation-filter { display: flex; align-items: center; gap: 10px; min-height: 46px; padding: 6px 14px 6px 8px; border: 1px solid #ddd6fe; border-radius: 12px; background: #faf8ff; color: #5b21b6; text-align: left; transition: background 0.15s, border-color 0.15s; }
-.reservation-icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; background: #ede9fe; color: #7c3aed; font-size: 16px; }
-.reservation-content { display: flex; flex-direction: column; gap: 1px; line-height: 1.2; }
-.reservation-label { font-size: 12px; font-weight: 700; }
-.reservation-description { font-size: 11px; color: #7c3aed; }
+.status-scroll-area > button { flex-shrink: 0; }
+.reservation-filter { display: flex; align-items: center; gap: 4px; height: 30px; padding: 0 8px; border: 1px solid #ddd6fe; border-radius: 7px; background: #faf8ff; color: #5b21b6; font-size: 12px; font-weight: 600; white-space: nowrap; transition: background 0.15s, border-color 0.15s; }
 .reservation-filter:hover { border-color: #a78bfa; background: #f5f3ff; }
 .reservation-filter.is-active { background: #7c3aed; border-color: #7c3aed; color: #fff; }
-.reservation-filter.is-active .reservation-icon { background: #ffffff26; color: #fff; }
-.reservation-filter.is-active .reservation-description { color: #ede9fe; }
 .reservation-filter:focus-visible { outline: 2px solid #7c3aed; outline-offset: 3px; }
 .return-filter .bi { color: #ef4444; }
 .return-filter.active { background: #fef2f2; border-color: #fca5a5; color: #b91c1c; }
@@ -255,9 +272,8 @@ const vClickOutside = {
   display: flex;
   align-items: center;
   gap: 16px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  margin-left: auto;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
 }
 
 .divider-vertical {
@@ -473,14 +489,22 @@ const vClickOutside = {
 }
 
 /* MOBILE */
+@media (max-width: 1400px) {
+  .filter-chip, .reservation-filter { font-size: 11px; padding-inline: 5px; }
+  .filter-label-full { display: none; }
+  .filter-label-compact { display: inline; }
+  .status-scroll-area { gap: 3px; }
+  .special-filter-zone { gap: 10px; }
+  .alert-toggle-btn { gap: 6px; min-width: 190px; }
+  .toggle-icon-box { width: 24px; height: 28px; font-size: 14px; }
+  .toggle-label { font-size: 11px; }
+}
 @media (max-width: 768px) {
   .search-wrapper { min-width: 0; }
-  .special-filter-zone {
-    width: 100%;
-    justify-content: space-between;
-    gap: 10px;
-    margin-left: 0;
-  }
+  .filters-container { gap: 8px; }
+  .alert-toggle-btn { min-width: 0; }
+  .toggle-label { font-size: 10px; }
+  .toggle-icon-box { display: none; }
   .divider-vertical { display: none; }
   
   .days-dropdown-menu {
