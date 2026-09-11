@@ -265,11 +265,11 @@ const vClickOutside = {
 
 /* --- ALERT TOGGLE BUTTON --- */
 .status-scroll-area > button { flex-shrink: 0; }
-.reservation-filter { display: flex; align-items: center; flex-shrink: 0; gap: 10px; min-height: 46px; padding: 6px 14px 6px 8px; border: 1px solid #ddd6fe; border-radius: 12px; background: #faf8ff; color: #5b21b6; text-align: left; white-space: nowrap; transition: background 0.15s, border-color 0.15s; }
-.reservation-icon { display: grid; place-items: center; flex-shrink: 0; width: 32px; height: 32px; border-radius: 8px; background: #ede9fe; color: #7c3aed; font-size: 16px; }
+.reservation-filter { display: flex; align-items: center; flex-shrink: 0; gap: 6px; min-height: 42px; padding: 6px; border: 1px solid #ddd6fe; border-radius: 12px; background: #faf8ff; color: #5b21b6; text-align: left; white-space: nowrap; transition: background 0.15s, border-color 0.15s; }
+.reservation-icon { display: grid; place-items: center; flex-shrink: 0; width: 24px; height: 28px; border-radius: 7px; background: #ede9fe; color: #7c3aed; font-size: 14px; }
 .reservation-content { display: flex; flex-direction: column; gap: 1px; line-height: 1.2; }
-.reservation-label { font-size: 12px; font-weight: 700; }
-.reservation-description { font-size: 11px; font-weight: 400; color: #7c3aed; }
+.reservation-label { font-size: 11px; font-weight: 700; }
+.reservation-description { font-size: 10px; font-weight: 400; color: #7c3aed; }
 .reservation-filter:hover { border-color: #a78bfa; background: #f5f3ff; }
 .reservation-filter.is-active { background: #7c3aed; border-color: #7c3aed; color: #fff; }
 .reservation-filter.is-active .reservation-icon { background: #ffffff26; color: #fff; }
@@ -280,7 +280,7 @@ const vClickOutside = {
 .special-filter-zone {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 8px;
   flex-wrap: nowrap;
   flex-shrink: 0;
 }
@@ -298,29 +298,31 @@ const vClickOutside = {
 .alert-toggle-btn {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 8px 6px 8px;
+  gap: 4px;
+  padding: 6px;
   border: 1px solid #e2e8f0;
   background: #fff;
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  min-width: 210px;
+  min-width: 0;
+  min-height: 42px;
   position: relative;
   overflow: visible;
 }
 
 /* Іконка зліва */
 .toggle-icon-box {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  width: 24px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 7px;
   background: #f1f5f9;
   color: #64748b;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: 14px;
   transition: all 0.3s ease;
 }
 
@@ -335,14 +337,15 @@ const vClickOutside = {
 }
 
 .toggle-label {
-  font-size: 12px;
+  font-size: 11px;
+  white-space: nowrap;
   font-weight: 700;
   color: #334155;
 }
 
 /* Інтерактивний підзаголовок */
 .toggle-sub-interactive {
-  font-size: 11px;
+  font-size: 10px;
   color: #6366f1;
   font-weight: 600;
   display: flex;
@@ -364,7 +367,8 @@ const vClickOutside = {
 
 /* Слайдер справа */
 .toggle-switch-ui {
-  width: 36px;
+  width: 28px;
+  flex-shrink: 0;
   height: 20px;
   background: #e2e8f0;
   border-radius: 20px;
@@ -417,7 +421,7 @@ const vClickOutside = {
 }
 
 .alert-toggle-btn.is-active .toggle-switch-ui::after {
-  left: 18px;
+  left: 10px;
 }
 
 /* --- DAYS DROPDOWN MENU --- */
@@ -504,10 +508,6 @@ const vClickOutside = {
   .filter-label-full { display: none; }
   .filter-label-compact { display: inline; }
   .status-scroll-area { gap: 3px; }
-  .special-filter-zone { gap: 10px; }
-  .alert-toggle-btn { gap: 6px; min-width: 190px; }
-  .toggle-icon-box { width: 24px; height: 28px; font-size: 14px; }
-  .toggle-label { font-size: 11px; }
 }
 @media (max-width: 768px) {
   .search-wrapper { min-width: 0; }
