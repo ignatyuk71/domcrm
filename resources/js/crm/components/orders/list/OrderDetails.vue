@@ -9,6 +9,9 @@
   } from '@/crm/utils/orderDisplay';
   import FiscalBlock from '@/crm/components/orders/list/FiscalBlock.vue';
   import DeliveryStatusLabel from '@/crm/components/orders/list/DeliveryStatusLabel.vue';
+  import ProductPhotoModal from '@/crm/components/ui/ProductPhotoModal.vue';
+
+  const selectedPhoto = ref(null);
   
   const paymentLabels = {
     cod: 'Накладений платіж',
@@ -427,9 +430,11 @@
                 <tbody>
                   <tr v-for="item in order.items" :key="item.id">
                     <td class="ps-3 ps-md-4">
-                      <div class="product-thumb-lg">
-                        <img v-if="item.photo" :src="item.photo" alt="product" />
-                        <i v-else class="bi bi-image text-muted fs-6"></i>
+                      <button v-if="item.photo" type="button" class="product-thumb-lg product-photo-trigger" :aria-label="`Збільшити фото: ${item.title || item.sku || 'товар'}`" @click.stop="selectedPhoto = { src: item.photo, alt: item.title || item.sku || 'Фото товару' }">
+                        <img :src="item.photo" :alt="item.title || item.sku || 'Фото товару'" />
+                      </button>
+                      <div v-else class="product-thumb-lg">
+                        <i class="bi bi-image text-muted fs-6"></i>
                       </div>
                     </td>
                     <td>
@@ -526,6 +531,7 @@
         </div>
       </div>
     </div>
+    <ProductPhotoModal v-if="selectedPhoto" :key="selectedPhoto.src" :src="selectedPhoto.src" :alt="selectedPhoto.alt" @close="selectedPhoto = null" />
   </template>
   
   <style scoped>
@@ -716,6 +722,9 @@
   .clean-table td { padding: 8px 12px; border-bottom: 1px solid #f8fafc; font-size: 0.85rem; }
   .product-thumb-lg { width: 50px; height: 50px; border-radius: 8px; background: #ffffff; border: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
   .product-thumb-lg img { width: 100%; height: 100%; object-fit: cover; }
+  .product-photo-trigger { padding: 0; cursor: zoom-in; }
+  .product-photo-trigger:hover { border-color: #3b82f6; }
+  .product-photo-trigger:focus-visible { outline: 2px solid #3b82f6; outline-offset: 2px; }
   
   /* FOOTER */
   .products-footer { display: grid; grid-template-columns: minmax(180px, 0.65fr) 1.35fr; gap: 16px; padding: 10px 12px 12px; border-top: 1px solid #e2e8f0; background: #ffffff; align-items: start; }
