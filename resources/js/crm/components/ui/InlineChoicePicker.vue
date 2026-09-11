@@ -74,12 +74,12 @@ onBeforeUnmount(() => {
   <div ref="container" class="choice-picker" :aria-busy="loading || saving" @click.stop>
     <div ref="measurement" class="choice-measurement" aria-hidden="true" inert>
       <span v-for="tag in allOptions" :key="tag.id" class="choice-option">
-        <i class="bi bi-check-lg choice-icon"></i><span class="choice-name">{{ tag.name }}</span>
+        <i class="bi bi-check-lg choice-icon"></i><span class="choice-name">{{ tag.shortName || tag.name }}</span>
       </span>
     </div>
     <div class="choice-first-row" role="group" :aria-label="groupLabel">
       <button v-for="tag in firstRow" :key="tag.id" type="button" class="choice-option" :class="{ 'is-selected': selectedIds.has(String(tag.id)) }" :style="optionStyle(tag)" :aria-pressed="selectedIds.has(String(tag.id))" :aria-label="tag.name" :title="tag.name" :disabled="disabled" @click="emit('toggle', tag)">
-        <i class="bi choice-icon" :class="selectedIds.has(String(tag.id)) ? 'bi-check-lg' : (tag.icon || fallbackIcon)" aria-hidden="true"></i><span class="choice-name">{{ tag.name }}</span>
+        <i class="bi choice-icon" :class="selectedIds.has(String(tag.id)) ? 'bi-check-lg' : (tag.icon || fallbackIcon)" aria-hidden="true"></i><span class="choice-name">{{ tag.shortName || tag.name }}</span>
       </button>
       <button v-if="extraOptions.length" type="button" class="choice-more" :aria-expanded="expanded" :aria-label="expanded ? collapseLabel : `Показати ще ${extraOptions.length} ${itemNoun}`" @click="expanded = !expanded">
         {{ expanded ? 'Згорнути' : `Ще +${extraOptions.length}` }}<i class="bi" :class="expanded ? 'bi-chevron-up' : 'bi-chevron-down'" aria-hidden="true"></i>
@@ -88,7 +88,7 @@ onBeforeUnmount(() => {
     </div>
     <div v-if="expanded && extraOptions.length" class="choice-extra-row" role="group" :aria-label="extraLabel">
       <button v-for="tag in extraOptions" :key="tag.id" type="button" class="choice-option" :class="{ 'is-selected': selectedIds.has(String(tag.id)) }" :style="optionStyle(tag)" :aria-pressed="selectedIds.has(String(tag.id))" :aria-label="tag.name" :title="tag.name" :disabled="disabled" @click="emit('toggle', tag)">
-        <i class="bi choice-icon" :class="selectedIds.has(String(tag.id)) ? 'bi-check-lg' : (tag.icon || fallbackIcon)" aria-hidden="true"></i><span class="choice-name">{{ tag.name }}</span>
+        <i class="bi choice-icon" :class="selectedIds.has(String(tag.id)) ? 'bi-check-lg' : (tag.icon || fallbackIcon)" aria-hidden="true"></i><span class="choice-name">{{ tag.shortName || tag.name }}</span>
       </button>
     </div>
     <span v-if="loading || saving" class="choice-feedback text-muted" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span>{{ loading ? 'Завантаження…' : 'Збереження…' }}</span>

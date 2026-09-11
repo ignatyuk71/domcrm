@@ -5,7 +5,6 @@
     formatDate,
     getPaymentClass,
     getPaymentIcon,
-    getStatusStyle,
   } from '@/crm/utils/orderDisplay';
   import FiscalBlock from '@/crm/components/orders/list/FiscalBlock.vue';
   import DeliveryStatusLabel from '@/crm/components/orders/list/DeliveryStatusLabel.vue';
@@ -135,23 +134,12 @@
         </div>
   
         <div class="order-summary-right">
-          <span
-            class="current-status-pill"
-            :style="getStatusStyle(order)"
-          >
-            <i v-if="order.status_icon" :class="order.status_icon" class="me-1"></i>
-            <span v-else class="status-dot"></span>
-            <span class="status-label">{{ order.status }}</span>
-          </span>
+          <OrderStatusPicker v-if="statusEditor" :key="order.id" :order="order" :editor="statusEditor" />
   
           <span class="payment-pill" :class="getPaymentClass(order.payment_status)">
             <i class="bi me-1" :class="getPaymentIcon(order.payment_status)"></i>
             {{ order.payment_status_label }}
           </span>
-        </div>
-        <div v-if="statusEditor" class="order-status-options">
-          <span class="label-text">Статуси</span>
-          <OrderStatusPicker :key="order.id" :order="order" :editor="statusEditor" />
         </div>
       </div>
   
@@ -535,10 +523,10 @@
   
   /* HEADER */
   .order-summary-bar {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    gap: 12px;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    gap: 6px 16px;
     padding: 12px 14px;
     background: #ffffff;
     border: 1px solid #e2e8f0;
@@ -547,20 +535,18 @@
     box-shadow: 0 1px 3px rgba(0,0,0,0.02);
   }
   
-  .order-summary-left { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-  .order-id-line { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+  .order-summary-left { display: contents; }
+  .order-id-line { grid-column: 1; grid-row: 1; display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
   .summary-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.12em; opacity: 0.6; font-weight: 700; color: #64748b; }
   .summary-number { font-size: 1rem; font-weight: 800; padding: 0 8px; border-radius: 6px; background: #f1f5f9; color: #0f172a; border: 1px solid #e2e8f0; }
   
-  .order-meta-line { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 0.8rem; }
+  .order-meta-line { grid-column: 1 / -1; grid-row: 2; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 0.8rem; }
   .meta-item { display: inline-flex; align-items: center; gap: 4px; color: #475569; }
   .source-pill { border-radius: 999px; padding: 2px 10px; border: 1px solid transparent; font-size: 0.75rem; font-weight: 600; }
   
-  .order-summary-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
-  .current-status-pill { background: #fff; color: #334155; border: 1px solid #cbd5e1; padding: 4px 10px; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 0.8rem; }
-  .order-status-options { display: flex; flex-direction: column; gap: 6px; width: 100%; min-width: 0; padding-top: 10px; border-top: 1px solid #f1f5f9; }
-  .status-dot { width: 7px; height: 7px; border-radius: 999px; background: currentColor; }
-  .payment-pill { display: inline-flex; align-items: center; gap: 4px; font-size: 0.8rem; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: #f1f5f9; border: 1px solid #e2e8f0; color: #475569; }
+  .order-summary-right { grid-column: 2; grid-row: 1; display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+  .order-summary-right :deep(.status-picker) { flex: 1; min-width: 0; }
+  .payment-pill { display: inline-flex; align-items: center; flex-shrink: 0; gap: 4px; min-height: 28px; font-size: 0.8rem; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: #f1f5f9; border: 1px solid #e2e8f0; color: #475569; white-space: nowrap; }
   
   /* TAGS */
   .order-tags-bar { margin-top: 8px; padding: 8px 12px; background: rgba(255, 255, 255, 0.6); border-radius: 10px; border: 1px dashed #cbd5e1; display: grid; grid-template-columns: minmax(0, 2fr) minmax(230px, 1fr); gap: 10px 16px; }
@@ -724,8 +710,8 @@
   @media (max-width: 991.98px) { .products-footer { grid-template-columns: 1fr; } }
   @media (max-width: 767.98px) {
     .details-wrapper { padding: 0; margin-top: -1px; }
-    .order-summary-bar { flex-direction: column; align-items: stretch; gap: 8px; border-radius: 0; border: none; border-bottom: 1px solid #e2e8f0; }
-    .order-summary-right { justify-content: space-between; width: 100%; border-top: 1px solid #f1f5f9; padding-top: 8px; }
+    .order-summary-bar { grid-template-columns: minmax(0, 1fr); gap: 8px; border-radius: 0; border: none; border-bottom: 1px solid #e2e8f0; }
+    .order-summary-right { grid-column: 1; grid-row: 3; width: 100%; }
     .panel-card { border-radius: 0; border-left: none; border-right: none; box-shadow: none; }
     .clean-table th, .clean-table td { padding: 6px 6px; font-size: 0.75rem; }
     .product-thumb-lg { width: 42px; height: 42px; }

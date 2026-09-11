@@ -8,9 +8,23 @@ const props = defineProps({
   editor: { type: Object, required: true },
 });
 
+// Скорочуємо лише підписи кнопок; назви в довіднику та підказках залишаються повними.
+const shortNames = {
+  'Підтверджено': 'Підтв.',
+  'Упакування': 'Пакування',
+  'Комплектується': 'Пакування',
+  'Запаковано': 'Запак.',
+  'Відправлено': 'Відправ.',
+  'У відділенні': 'Відділення',
+  'Завершено': 'Заверш.',
+  'Повернення': 'Поверн.',
+  'Очікує оплату': 'Очік. оплати',
+};
+
 function option(status) {
   return {
     ...status,
+    shortName: shortNames[status.name] || status.name,
     color: getStatusStyle({ status_color: status.color, status_key: status.code }).color,
     icon: status.icon || getStatusIcon(status.code),
   };
@@ -48,3 +62,7 @@ const selected = computed(() => {
     @retry="editor.loadStatuses()"
   />
 </template>
+
+<style scoped>
+.status-picker :deep(.choice-option) { max-width: 112px; padding-inline: 6px; gap: 4px; font-size: 11px; }
+</style>
