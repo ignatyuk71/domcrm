@@ -3,7 +3,8 @@ import { flushPromises, shallowMount } from '@vue/test-utils';
 import axios from 'axios';
 import OrderListPage from './OrderListPage.vue';
 import OrdersTable from '@/crm/components/orders/list/OrdersTable.vue';
-import { listOrders, updateOrderTags } from '@/crm/api/orders';
+import OrdersTopbar from '@/crm/components/orders/list/OrdersTopbar.vue';
+import { listOrders, updateOrderTags, updateOrderStatus } from '@/crm/api/orders';
 import { fetchStatuses } from '@/crm/api/statuses';
 import { fetchTags } from '@/crm/api/tags';
 
@@ -25,6 +26,7 @@ beforeEach(() => {
   fetchStatuses.mockResolvedValue({ data: { data: [] } });
   listOrders.mockResolvedValue({
     data: {
+      status_counts: { 5: 3, 6: 2 },
       data: [{
         id: 5980,
         status: 'shipped',
@@ -52,6 +54,24 @@ afterEach(() => {
 });
 
 describe('оновлення доставки у списку замовлень', () => {
+  it('змінює статус, час і лічильники без перезавантаження таблиці', async () => {
+    const previous = { id: 5, code: 'shipped', name: 'Відправлено' };
+    const status = { id: 6, code: 'delivered', name: 'У відділенні', color: '#f59e0b', icon: 'bi-building', status_changed_at: '2026-09-11T12:00:00Z' };
+    fetchStatuses.mockResolvedValue({ data: { data: [previous, status] } });
+    updateOrderStatus.mockResolvedValue({ data: { data: status } });
+    wrapper = shallowMount(OrderListPage);
+    await flushPromises();
+    const table = wrapper.findComponent(OrdersTable);
+    const editor = table.props('statusEditor');
+    await editor.selectStatus(table.props('orders')[0], status);
+    expect(table.props('orders')[0]).toMatchObject({ status_id: 6, status: 'У відділенні', status_color: '#f59e0b', status_icon: 'bi-building', status_changed_at: status.status_changed_at });
+    const chips = wrapper.findComponent(OrdersTopbar).props('statusChips');
+    expect(chips.find((chip) => chip.value === 5).label).toBe('Відправлено · 2');
+    expect(chips.find((chip) => chip.value === 6).label).toBe('У відділенні · 3');
+    expect(updateOrderStatus).toHaveBeenCalledWith(5980, 6);
+    expect(listOrders).toHaveBeenCalledTimes(1);
+  });
+
   it('автоматично оновлює теги в таблиці без повторного завантаження замовлень', async () => {
     const tag = { id: 1, name: 'Терміново', color: 'red' };
     fetchTags.mockResolvedValue({ data: { data: [tag] } });

@@ -47,7 +47,7 @@
         :tag-editor="tagEditor"
         @toggle-row="toggleRow"
         @delete="handleDelete"
-        @open-statuses="openStatusesModal"
+        :status-editor="statusEditor"
         @copy-ttn="copyTtn"
         @generate-ttn="generateTtn"
         @print-ttn="printTtn"
@@ -66,14 +66,6 @@
       />
     </div>
 
-    <OrderStatusesModal
-      v-model="selectedStatusId"
-      :open="statusesModalOpen"
-      :loading="statusesModalLoading"
-      :statuses="statuses"
-      @close="closeStatusesModal"
-      @save="saveStatus"
-    />
 
     <CustomerQuickView
       :open="customerPanelOpen"
@@ -86,16 +78,15 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue';
+import { onMounted, reactive, ref, watch } from 'vue';
 import axios from 'axios';
 import OrdersTable from '@/crm/components/orders/list/OrdersTable.vue';
 import OrdersTopbar from '@/crm/components/orders/list/OrdersTopbar.vue';
 import OrdersPagination from '@/crm/components/orders/list/OrdersPagination.vue';
-import OrderStatusesModal from '@/crm/components/orders/list/OrderStatusesModal.vue';
 import CustomerQuickView from '@/crm/components/orders/list/CustomerQuickView.vue';
-import { listOrders, deleteOrder, updateOrderStatus, updateOrderComment } from '@/crm/api/orders';
+import { listOrders, deleteOrder, updateOrderComment } from '@/crm/api/orders';
 import { useOrderTags } from '@/crm/composables/useOrderTags';
-import { fetchStatuses } from '@/crm/api/statuses';
+import { applyOrderStatus, useOrderStatuses } from '@/crm/composables/useOrderStatuses';
 import { getCustomer } from '@/crm/api/customers';
 import { useTtnCopy } from '@/crm/composables/useTtnCopy';
 import {
@@ -105,6 +96,7 @@ import {
 } from '@/crm/utils/orderDisplay';
 
 const orders = ref([]);
+const statusEditor = useOrderStatuses((id) => orders.value.find((order) => String(order.id) === String(id)), updateStatusCounts);
 const tagEditor = useOrderTags((id) => orders.value.find((order) => String(order.id) === String(id)));
 const { copiedTtn, copyTtn } = useTtnCopy();
 const expandedRows = ref(new Set());
@@ -114,11 +106,6 @@ const customerPanelOpen = ref(false);
 const customerLoading = ref(false);
 const customerError = ref('');
 const customerData = ref(null);
-const statusesModalOpen = ref(false);
-const statusesModalLoading = ref(false);
-const statuses = ref([]);
-const statusesOrder = ref(null);
-const selectedStatusId = ref(null);
 const commentNotice = reactive({ type: 'success', message: '' });
 const meta = ref({ current_page: 1, last_page: 1, total: 0 });
 const statusCounts = ref({});
@@ -138,7 +125,7 @@ function buildStatusChips() {
 
   statusChips.value = [
     { value: '', label: 'Всі', icon: 'bi-grid', color: null },
-    ...statuses.value
+    ...statusEditor.statuses
       .filter((status) => !hiddenStatusCodes.has(status.code) && !hiddenStatusNames.has(status.name))
       .map((status) => {
         const count = countableStatusCodes.has(status.code)
@@ -301,7 +288,7 @@ async function fetchData() {
 
     const countsPayload = data.status_counts || data?.data?.status_counts || {};
     statusCounts.value = countsPayload || {};
-    if (statuses.value.length) {
+    if (statusEditor.statuses.length) {
       buildStatusChips();
     }
   } catch (error) {
@@ -338,6 +325,7 @@ function mapOrder(order) {
     source_name: sourceRef.name || order.source || '—',
     source_icon: sourceRef.icon ? `bi ${sourceRef.icon}` : '',
     source_color: sourceRef.color || '',
+    status_id: order.status_id || statusRef.id || null,
     status_key: statusRef.code || order.status || 'new',
     status: statusRef.name || statusLabels[order.status] || order.status || '—',
     status_icon: statusRef.icon || '',
@@ -510,59 +498,11 @@ async function handleDelete(order) {
   }
 }
 
-async function openStatusesModal(order) {
-  if (!order) return;
-  statusesOrder.value = order;
-  selectedStatusId.value = order.status_id || null;
-  statusesModalOpen.value = true;
-  if (!statuses.value.length) {
-    await loadStatuses();
-  }
-}
-
-async function loadStatuses() {
-  statusesModalLoading.value = true;
-  try {
-    const { data } = await fetchStatuses({ type: 'order' });
-    const list = data?.data || data || [];
-    statuses.value = Array.isArray(list) ? list : [];
-    buildStatusChips();
-  } catch (e) {
-    console.error('Не вдалося завантажити статуси', e);
-    statuses.value = [];
-  } finally {
-    statusesModalLoading.value = false;
-  }
-}
-
-function closeStatusesModal() {
-  statusesModalOpen.value = false;
-  statusesOrder.value = null;
-  selectedStatusId.value = null;
-}
-
-function applyOrderStatus(order, status) {
-  order.status_id = status.id;
-  order.status_key = status.code;
-  order.status = status.name;
-  order.status_icon = status.icon;
-  order.status_color = status.color;
-  order.status_changed_at = status.status_changed_at ?? null;
-}
-
-async function saveStatus() {
-  if (!statusesOrder.value || !selectedStatusId.value) return;
-  try {
-    const { data } = await updateOrderStatus(statusesOrder.value.id, selectedStatusId.value);
-    const status = data?.data || data || {};
-    const idx = orders.value.findIndex((o) => o.id === statusesOrder.value.id);
-    const target = idx !== -1 ? orders.value[idx] : statusesOrder.value;
-    applyOrderStatus(target, status);
-    closeStatusesModal();
-  } catch (e) {
-    console.error('Не вдалося оновити статус', e);
-    alert('Не вдалося оновити статус');
-  }
+function updateStatusCounts(previousId, status) {
+  if (String(previousId) === String(status.id)) return;
+  if (previousId != null) statusCounts.value[previousId] = Math.max(0, Number(statusCounts.value[previousId] || 0) - 1);
+  statusCounts.value[status.id] = Number(statusCounts.value[status.id] || 0) + 1;
+  buildStatusChips();
 }
 
 async function openCustomer(order) {
@@ -596,7 +536,8 @@ function toggleRow(id) {
 }
 
 onMounted(fetchData);
-onMounted(loadStatuses);
+watch(() => statusEditor.statuses, buildStatusChips);
+onMounted(statusEditor.loadStatuses);
 onMounted(tagEditor.loadTags);
 </script>
 

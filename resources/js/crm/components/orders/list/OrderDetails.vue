@@ -11,6 +11,7 @@
   import DeliveryStatusLabel from '@/crm/components/orders/list/DeliveryStatusLabel.vue';
   import ProductPhotoModal from '@/crm/components/ui/ProductPhotoModal.vue';
   import OrderTagPicker from '@/crm/components/orders/list/OrderTagPicker.vue';
+  import OrderStatusPicker from '@/crm/components/orders/list/OrderStatusPicker.vue';
 
   const selectedPhoto = ref(null);
   
@@ -30,10 +31,10 @@
     order: { type: Object, required: true },
     copiedTtn: { type: String, default: '' },
     tagEditor: { type: Object, default: null },
+    statusEditor: { type: Object, default: null },
   });
   
   const emit = defineEmits([
-    'open-statuses',
     'copy-ttn',
     'generate-ttn',
     'print-ttn',
@@ -134,21 +135,23 @@
         </div>
   
         <div class="order-summary-right">
-          <button
-            class="status-pill-btn"
+          <span
+            class="current-status-pill"
             :style="getStatusStyle(order)"
-            @click.prevent.stop="$emit('open-statuses')"
           >
             <i v-if="order.status_icon" :class="order.status_icon" class="me-1"></i>
             <span v-else class="status-dot"></span>
             <span class="status-label">{{ order.status }}</span>
-            <i class="bi bi-chevron-down ms-1 opacity-50" style="font-size: 0.75em;"></i>
-          </button>
+          </span>
   
           <span class="payment-pill" :class="getPaymentClass(order.payment_status)">
             <i class="bi me-1" :class="getPaymentIcon(order.payment_status)"></i>
             {{ order.payment_status_label }}
           </span>
+        </div>
+        <div v-if="statusEditor" class="order-status-options">
+          <span class="label-text">Статуси</span>
+          <OrderStatusPicker :key="order.id" :order="order" :editor="statusEditor" />
         </div>
       </div>
   
@@ -533,6 +536,7 @@
   /* HEADER */
   .order-summary-bar {
     display: flex;
+    flex-wrap: wrap;
     justify-content: space-between;
     gap: 12px;
     padding: 12px 14px;
@@ -553,8 +557,8 @@
   .source-pill { border-radius: 999px; padding: 2px 10px; border: 1px solid transparent; font-size: 0.75rem; font-weight: 600; }
   
   .order-summary-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
-  .status-pill-btn { background: #fff; color: #334155; border: 1px solid #cbd5e1; padding: 4px 10px; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 0.8rem; cursor: pointer; transition: all 0.15s; }
-  .status-pill-btn:hover { background: #f8fafc; border-color: #94a3b8; }
+  .current-status-pill { background: #fff; color: #334155; border: 1px solid #cbd5e1; padding: 4px 10px; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 0.8rem; }
+  .order-status-options { display: flex; flex-direction: column; gap: 6px; width: 100%; min-width: 0; padding-top: 10px; border-top: 1px solid #f1f5f9; }
   .status-dot { width: 7px; height: 7px; border-radius: 999px; background: currentColor; }
   .payment-pill { display: inline-flex; align-items: center; gap: 4px; font-size: 0.8rem; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: #f1f5f9; border: 1px solid #e2e8f0; color: #475569; }
   

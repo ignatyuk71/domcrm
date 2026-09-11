@@ -3,7 +3,7 @@ import { flushPromises, shallowMount } from '@vue/test-utils';
 import axios from 'axios';
 import OrderShowPage from './OrderShowPage.vue';
 import OrderDetails from '@/crm/components/orders/list/OrderDetails.vue';
-import { getOrder, updateOrderTags } from '@/crm/api/orders';
+import { getOrder, updateOrderTags, updateOrderStatus } from '@/crm/api/orders';
 import { fetchStatuses } from '@/crm/api/statuses';
 import { fetchTags } from '@/crm/api/tags';
 
@@ -50,6 +50,20 @@ afterEach(() => {
 });
 
 describe('оновлення доставки у перегляді замовлення', () => {
+  it('оновлює статус і час зміни в картці після вибору без модального вікна', async () => {
+    const status = { id: 11, code: 'delivered_paid', name: 'Завершено', color: '#16a34a', icon: 'bi-check-all', status_changed_at: '2026-09-11T12:00:00Z' };
+    fetchStatuses.mockResolvedValue({ data: { data: [status] } });
+    updateOrderStatus.mockResolvedValue({ data: { data: status } });
+    wrapper = shallowMount(OrderShowPage, { props: { initialOrderId: 5980 } });
+    await flushPromises();
+    const details = wrapper.findComponent(OrderDetails);
+    await details.props('statusEditor').selectStatus(details.props('order'), status);
+    expect(details.props('order')).toMatchObject({ status_id: 11, status: 'Завершено', status_color: '#16a34a', status_icon: 'bi-check-all', status_changed_at: status.status_changed_at });
+    expect(wrapper.get('.status-chip').text()).toBe('Завершено');
+    expect(updateOrderStatus).toHaveBeenCalledWith(5980, 11);
+    expect(getOrder).toHaveBeenCalledTimes(1);
+  });
+
   it('автоматично зберігає тег у деталях без повторного завантаження картки', async () => {
     const tag = { id: 1, name: 'Терміново', color: 'red' };
     fetchTags.mockResolvedValue({ data: { data: [tag] } });

@@ -125,7 +125,7 @@
               :order="order"
               :copied-ttn="copiedTtn"
               :tag-editor="tagEditor"
-              @open-statuses="openStatusesModal"
+              :status-editor="statusEditor"
               @copy-ttn="copyTtn(order.ttn)"
               @generate-ttn="generateTtn(order)"
               @print-ttn="printTtn(order)"
@@ -138,26 +138,17 @@
       </div>
     </div>
 
-    <OrderStatusesModal
-      v-model="selectedStatusId"
-      :open="statusesModalOpen"
-      :loading="statusesModalLoading"
-      :statuses="statuses"
-      @close="closeStatusesModal"
-      @save="saveStatus"
-    />
   </section>
 </template>
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import axios from 'axios';
-import { getOrder, updateOrderComment, updateOrderStatus } from '@/crm/api/orders';
+import { getOrder, updateOrderComment } from '@/crm/api/orders';
 import { useOrderTags } from '@/crm/composables/useOrderTags';
-import { fetchStatuses } from '@/crm/api/statuses';
+import { useOrderStatuses } from '@/crm/composables/useOrderStatuses';
 import { useTtnCopy } from '@/crm/composables/useTtnCopy';
 import OrderDetails from '@/crm/components/orders/list/OrderDetails.vue';
-import OrderStatusesModal from '@/crm/components/orders/list/OrderStatusesModal.vue';
 import { buildPhotoUrl, formatCurrency, formatDate, getStatusStyle, paymentLabels, statusLabels } from '@/crm/utils/orderDisplay';
 
 const props = defineProps({
@@ -168,13 +159,10 @@ const loading = ref(true);
 const reloading = ref(false);
 const error = ref('');
 const order = ref(null);
+const statusEditor = useOrderStatuses((id) => String(order.value?.id) === String(id) ? order.value : null);
 const tagEditor = useOrderTags((id) => String(order.value?.id) === String(id) ? order.value : null);
 const { copiedTtn, copyTtn } = useTtnCopy();
 
-const statusesModalOpen = ref(false);
-const statusesModalLoading = ref(false);
-const statuses = ref([]);
-const selectedStatusId = ref(null);
 
 const notice = reactive({ type: 'success', message: '' });
 let noticeTimer = null;
@@ -336,53 +324,8 @@ async function loadOrder({ silent = false } = {}) {
   }
 }
 
-async function ensureStatusesLoaded() {
-  if (statuses.value.length) return;
-  statusesModalLoading.value = true;
-  try {
-    const { data } = await fetchStatuses({ type: 'order' });
-    const list = data?.data || data || [];
-    statuses.value = Array.isArray(list) ? list : [];
-  } catch (e) {
-    console.error('Не вдалося завантажити статуси', e);
-    statuses.value = [];
-  } finally {
-    statusesModalLoading.value = false;
-  }
-}
-
 async function preloadDictionaries() {
-  await Promise.allSettled([tagEditor.loadTags(), ensureStatusesLoaded()]);
-}
-
-async function openStatusesModal() {
-  if (!order.value) return;
-  statusesModalOpen.value = true;
-  selectedStatusId.value = order.value.status_id || null;
-  await ensureStatusesLoaded();
-}
-
-function closeStatusesModal() {
-  statusesModalOpen.value = false;
-  selectedStatusId.value = null;
-}
-
-async function saveStatus() {
-  if (!order.value?.id || !selectedStatusId.value) return;
-  try {
-    const { data } = await updateOrderStatus(order.value.id, selectedStatusId.value);
-    const status = data?.data || data || {};
-    order.value.status_id = status.id || order.value.status_id;
-    order.value.status_key = status.code || order.value.status_key;
-    order.value.status = status.name || order.value.status;
-    order.value.status_icon = status.icon || '';
-    order.value.status_color = status.color || '';
-    showNotice('Статус оновлено');
-    closeStatusesModal();
-  } catch (e) {
-    console.error('Не вдалося оновити статус', e);
-    showNotice('Не вдалося оновити статус', 'danger');
-  }
+  await Promise.allSettled([tagEditor.loadTags(), statusEditor.loadStatuses()]);
 }
 
 async function saveComment(comment) {
