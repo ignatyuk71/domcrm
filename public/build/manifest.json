@@ -37,7 +37,7 @@
     ]
   },
   "resources/js/crm/index.js": {
-    "file": "assets/index-CsLBT5oQ.js",
+    "file": "assets/index-DxYfaWqf.js",
     "name": "index",
     "src": "resources/js/crm/index.js",
     "isEntry": true,
@@ -49,11 +49,11 @@
       "resources/js/crm/pages/settings/SettingsTelegramPage.vue"
     ],
     "css": [
-      "assets/index-CYIO6uTa.css"
+      "assets/index-C1XdEjVq.css"
     ]
   },
   "resources/js/crm/pages/analytics/SalesAnalyticsPage.vue": {
-    "file": "assets/SalesAnalyticsPage-DUVWsgRJ.js",
+    "file": "assets/SalesAnalyticsPage-OFglGTXu.js",
     "name": "SalesAnalyticsPage",
     "src": "resources/js/crm/pages/analytics/SalesAnalyticsPage.vue",
     "isDynamicEntry": true,
@@ -66,7 +66,7 @@
     ]
   },
   "resources/js/crm/pages/settings/SettingsTelegramPage.vue": {
-    "file": "assets/SettingsTelegramPage-BQtislOi.js",
+    "file": "assets/SettingsTelegramPage-wGUqXpIb.js",
     "name": "SettingsTelegramPage",
     "src": "resources/js/crm/pages/settings/SettingsTelegramPage.vue",
     "isDynamicEntry": true,

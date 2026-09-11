@@ -124,7 +124,7 @@
             <OrderDetails
               :order="order"
               :copied-ttn="copiedTtn"
-              @open-tags="openTagsModal"
+              :tag-editor="tagEditor"
               @open-statuses="openStatusesModal"
               @copy-ttn="copyTtn(order.ttn)"
               @generate-ttn="generateTtn(order)"
@@ -137,15 +137,6 @@
         </template>
       </div>
     </div>
-
-    <OrderTagsModal
-      v-model="selectedTags"
-      :open="tagsModalOpen"
-      :loading="tagsModalLoading"
-      :available-tags="availableTags"
-      @close="closeTagsModal"
-      @save="saveTags"
-    />
 
     <OrderStatusesModal
       v-model="selectedStatusId"
@@ -161,12 +152,11 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import axios from 'axios';
-import { getOrder, updateOrderComment, updateOrderStatus, updateOrderTags } from '@/crm/api/orders';
-import { fetchTags } from '@/crm/api/tags';
+import { getOrder, updateOrderComment, updateOrderStatus } from '@/crm/api/orders';
+import { useOrderTags } from '@/crm/composables/useOrderTags';
 import { fetchStatuses } from '@/crm/api/statuses';
 import { useTtnCopy } from '@/crm/composables/useTtnCopy';
 import OrderDetails from '@/crm/components/orders/list/OrderDetails.vue';
-import OrderTagsModal from '@/crm/components/orders/list/OrderTagsModal.vue';
 import OrderStatusesModal from '@/crm/components/orders/list/OrderStatusesModal.vue';
 import { buildPhotoUrl, formatCurrency, formatDate, getStatusStyle, paymentLabels, statusLabels } from '@/crm/utils/orderDisplay';
 
@@ -178,12 +168,8 @@ const loading = ref(true);
 const reloading = ref(false);
 const error = ref('');
 const order = ref(null);
+const tagEditor = useOrderTags((id) => String(order.value?.id) === String(id) ? order.value : null);
 const { copiedTtn, copyTtn } = useTtnCopy();
-
-const tagsModalOpen = ref(false);
-const tagsModalLoading = ref(false);
-const availableTags = ref([]);
-const selectedTags = ref([]);
 
 const statusesModalOpen = ref(false);
 const statusesModalLoading = ref(false);
@@ -334,9 +320,6 @@ async function loadOrder({ silent = false } = {}) {
     const { data } = await getOrder(props.initialOrderId);
     const payload = data?.data || data || {};
     order.value = mapOrder(payload);
-    if (tagsModalOpen.value) {
-      selectedTags.value = order.value.tags.map((tag) => tag.id);
-    }
   } catch (e) {
     const message = e.response?.status === 404
       ? 'Замовлення не знайдено.'
@@ -350,21 +333,6 @@ async function loadOrder({ silent = false } = {}) {
   } finally {
     loading.value = false;
     reloading.value = false;
-  }
-}
-
-async function ensureTagsLoaded() {
-  if (availableTags.value.length) return;
-  tagsModalLoading.value = true;
-  try {
-    const { data } = await fetchTags();
-    const list = data?.data || data || [];
-    availableTags.value = Array.isArray(list) ? list : [];
-  } catch (e) {
-    console.error('Не вдалося завантажити теги', e);
-    availableTags.value = [];
-  } finally {
-    tagsModalLoading.value = false;
   }
 }
 
@@ -384,33 +352,7 @@ async function ensureStatusesLoaded() {
 }
 
 async function preloadDictionaries() {
-  await Promise.allSettled([ensureTagsLoaded(), ensureStatusesLoaded()]);
-}
-
-async function openTagsModal() {
-  if (!order.value) return;
-  tagsModalOpen.value = true;
-  selectedTags.value = order.value.tags.map((tag) => tag.id);
-  await ensureTagsLoaded();
-}
-
-function closeTagsModal() {
-  tagsModalOpen.value = false;
-  selectedTags.value = [];
-}
-
-async function saveTags() {
-  if (!order.value?.id) return;
-  try {
-    const { data } = await updateOrderTags(order.value.id, selectedTags.value);
-    const updated = data?.data || data || [];
-    order.value.tags = Array.isArray(updated) ? updated : [];
-    showNotice('Теги оновлено');
-    closeTagsModal();
-  } catch (e) {
-    console.error('Не вдалося оновити теги', e);
-    showNotice('Не вдалося оновити теги', 'danger');
-  }
+  await Promise.allSettled([tagEditor.loadTags(), ensureStatusesLoaded()]);
 }
 
 async function openStatusesModal() {

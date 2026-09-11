@@ -10,6 +10,7 @@
   import FiscalBlock from '@/crm/components/orders/list/FiscalBlock.vue';
   import DeliveryStatusLabel from '@/crm/components/orders/list/DeliveryStatusLabel.vue';
   import ProductPhotoModal from '@/crm/components/ui/ProductPhotoModal.vue';
+  import OrderTagPicker from '@/crm/components/orders/list/OrderTagPicker.vue';
 
   const selectedPhoto = ref(null);
   
@@ -28,10 +29,10 @@
   const props = defineProps({
     order: { type: Object, required: true },
     copiedTtn: { type: String, default: '' },
+    tagEditor: { type: Object, default: null },
   });
   
   const emit = defineEmits([
-    'open-tags',
     'open-statuses',
     'copy-ttn',
     'generate-ttn',
@@ -51,20 +52,6 @@
   const saveComment = () => {
     const trimmed = (localComment.value || '').trim();
     emit('save-comment', trimmed === '' ? null : trimmed);
-  };
-
-  const isHexColor = (value) => {
-    return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(String(value || '').trim());
-  };
-
-  const getTagClass = (color) => {
-    if (!color) return 'tag-gray';
-    return isHexColor(color) ? '' : `tag-${color}`;
-  };
-
-  const getTagStyle = (color) => {
-    if (!isHexColor(color)) return {};
-    return { backgroundColor: color + '15', color: color, borderColor: color + '40' };
   };
 
   watch(
@@ -168,21 +155,18 @@
       <div class="order-tags-bar">
         <div class="tags-col">
           <span class="label-text">Теги</span>
-          <div class="tags-wrapper">
-            <span
-              v-for="tag in order.tags"
-              :key="tag.id"
-              class="tag-chip"
-              :class="getTagClass(tag.color)"
-              :style="getTagStyle(tag.color)"
-            >
-              <i :class="'bi ' + tag.icon"></i>
-              {{ tag.name }}
-            </span>
-            <button class="btn-add-tag" @click.stop="$emit('open-tags')">
-              <i class="bi bi-plus-lg me-1"></i> Додати
-            </button>
-          </div>
+          <OrderTagPicker
+            v-if="tagEditor"
+            :key="order.id"
+            :tags="tagEditor.tags"
+            :selected="order.tags"
+            :loading="tagEditor.loading"
+            :saving="!!tagEditor.saving[order.id]"
+            :load-error="tagEditor.loadError"
+            :error="tagEditor.errors[order.id] || ''"
+            @toggle="tagEditor.toggleTag(order, $event)"
+            @retry="tagEditor.loadTags()"
+          />
         </div>
 
         <div class="notes-col">
@@ -575,18 +559,9 @@
   .payment-pill { display: inline-flex; align-items: center; gap: 4px; font-size: 0.8rem; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: #f1f5f9; border: 1px solid #e2e8f0; color: #475569; }
   
   /* TAGS */
-  .order-tags-bar { margin-top: 8px; padding: 8px 12px; background: rgba(255, 255, 255, 0.6); border-radius: 10px; border: 1px dashed #cbd5e1; display: grid; grid-template-columns: 1fr 2fr; gap: 10px 16px; }
+  .order-tags-bar { margin-top: 8px; padding: 8px 12px; background: rgba(255, 255, 255, 0.6); border-radius: 10px; border: 1px dashed #cbd5e1; display: grid; grid-template-columns: minmax(0, 2fr) minmax(230px, 1fr); gap: 10px 16px; }
   .label-text { font-size: 0.7rem; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
-  .tags-col, .notes-col { display: flex; flex-direction: column; gap: 6px; }
-  .tags-wrapper { display: flex; flex-wrap: wrap; gap: 6px; }
-  .tag-chip { font-size: 0.7rem; padding: 3px 9px; border-radius: 999px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; background: #fff; border: 1px solid #e2e8f0; color: #64748b; }
-  .tag-red { background: #fee2e2; color: #b91c1c; border-color: #fecaca; }
-  .tag-blue { background: #dbeafe; color: #1d4ed8; border-color: #bfdbfe; }
-  .tag-green { background: #dcfce7; color: #15803d; border-color: #bbf7d0; }
-  .tag-amber { background: #fef3c7; color: #b45309; border-color: #fde68a; }
-  .tag-gray { background: #f3f4f6; color: #4b5563; border-color: #e5e7eb; }
-  .btn-add-tag { font-size: 0.7rem; padding: 3px 10px; border-radius: 999px; border: 1px dashed #cbd5e1; background: #fff; color: #64748b; cursor: pointer; transition: all 0.15s; }
-  .btn-add-tag:hover { border-color: #6366f1; color: #6366f1; background: #eef2ff; }
+  .tags-col, .notes-col { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 
   .notes-row { display: flex; align-items: center; gap: 6px; }
   .note-input { flex: 1; min-width: 160px; height: 32px; border-radius: 8px; border: 1px solid #cbd5e1; padding: 4px 10px; font-size: 0.8rem; color: #334155; background: #fff; }

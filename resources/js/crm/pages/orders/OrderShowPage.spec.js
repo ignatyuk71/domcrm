@@ -3,7 +3,7 @@ import { flushPromises, shallowMount } from '@vue/test-utils';
 import axios from 'axios';
 import OrderShowPage from './OrderShowPage.vue';
 import OrderDetails from '@/crm/components/orders/list/OrderDetails.vue';
-import { getOrder } from '@/crm/api/orders';
+import { getOrder, updateOrderTags } from '@/crm/api/orders';
 import { fetchStatuses } from '@/crm/api/statuses';
 import { fetchTags } from '@/crm/api/tags';
 
@@ -50,6 +50,21 @@ afterEach(() => {
 });
 
 describe('оновлення доставки у перегляді замовлення', () => {
+  it('автоматично зберігає тег у деталях без повторного завантаження картки', async () => {
+    const tag = { id: 1, name: 'Терміново', color: 'red' };
+    fetchTags.mockResolvedValue({ data: { data: [tag] } });
+    updateOrderTags.mockResolvedValue({ data: { data: [tag] } });
+    wrapper = shallowMount(OrderShowPage, { props: { initialOrderId: 5980 } });
+    await flushPromises();
+    const details = wrapper.findComponent(OrderDetails);
+    const editor = details.props('tagEditor');
+    expect(editor.tags).toEqual([tag]);
+    await editor.toggleTag(details.props('order'), tag);
+    expect(details.props('order').tags).toEqual([tag]);
+    expect(updateOrderTags).toHaveBeenCalledWith(5980, [1]);
+    expect(getOrder).toHaveBeenCalledTimes(1);
+  });
+
   it('оновлює статус замовлення разом із доставкою у картці та деталях без перезавантаження', async () => {
     const post = vi.spyOn(axios, 'post').mockResolvedValue({
       data: {

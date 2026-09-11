@@ -3,8 +3,9 @@ import { flushPromises, shallowMount } from '@vue/test-utils';
 import axios from 'axios';
 import OrderListPage from './OrderListPage.vue';
 import OrdersTable from '@/crm/components/orders/list/OrdersTable.vue';
-import { listOrders } from '@/crm/api/orders';
+import { listOrders, updateOrderTags } from '@/crm/api/orders';
 import { fetchStatuses } from '@/crm/api/statuses';
+import { fetchTags } from '@/crm/api/tags';
 
 vi.mock('@/crm/api/orders', () => ({
   listOrders: vi.fn(),
@@ -14,11 +15,13 @@ vi.mock('@/crm/api/orders', () => ({
   updateOrderComment: vi.fn(),
 }));
 vi.mock('@/crm/api/statuses', () => ({ fetchStatuses: vi.fn() }));
+vi.mock('@/crm/api/tags', () => ({ fetchTags: vi.fn() }));
 
 let wrapper;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  fetchTags.mockResolvedValue({ data: { data: [] } });
   fetchStatuses.mockResolvedValue({ data: { data: [] } });
   listOrders.mockResolvedValue({
     data: {
@@ -49,6 +52,21 @@ afterEach(() => {
 });
 
 describe('оновлення доставки у списку замовлень', () => {
+  it('автоматично оновлює теги в таблиці без повторного завантаження замовлень', async () => {
+    const tag = { id: 1, name: 'Терміново', color: 'red' };
+    fetchTags.mockResolvedValue({ data: { data: [tag] } });
+    updateOrderTags.mockResolvedValue({ data: { data: [tag] } });
+    wrapper = shallowMount(OrderListPage);
+    await flushPromises();
+    const table = wrapper.findComponent(OrdersTable);
+    const editor = table.props('tagEditor');
+    expect(editor.tags).toEqual([tag]);
+    await editor.toggleTag(table.props('orders')[0], tag);
+    expect(table.props('orders')[0].tags).toEqual([tag]);
+    expect(updateOrderTags).toHaveBeenCalledWith(5980, [1]);
+    expect(listOrders).toHaveBeenCalledTimes(1);
+  });
+
   it('показує галочку в рядку лише після успішного копіювання та не розгортає замовлення', async () => {
     let finishCopy;
     const writeText = vi.fn(() => new Promise((resolve) => { finishCopy = resolve; }));

@@ -17,12 +17,12 @@
     deletingId: { type: [Number, String, null], default: null },
     loading: { type: Boolean, default: false },
     holdFilterDays: { type: Number, default: 3 },
+    tagEditor: { type: Object, default: null },
   });
   
   const emit = defineEmits({
     'toggle-row': null,
     delete: null,
-    'open-tags': null,
     'open-statuses': null,
     'copy-ttn': null,
     'generate-ttn': null,
@@ -508,7 +508,7 @@
                   <OrderDetails
                     :order="order"
                     :copied-ttn="copiedTtn"
-                    @open-tags="$emit('open-tags', order)"
+                    :tag-editor="tagEditor"
                     @open-statuses="$emit('open-statuses', order)"
                     @copy-ttn="$emit('copy-ttn', order.ttn)"
                     @generate-ttn="$emit('generate-ttn', order)"

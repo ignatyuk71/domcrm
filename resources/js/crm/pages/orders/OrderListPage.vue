@@ -44,9 +44,9 @@
         :deleting-id="deletingId"
         :loading="loading"
         :hold-filter-days="holdFilterDays"
+        :tag-editor="tagEditor"
         @toggle-row="toggleRow"
         @delete="handleDelete"
-        @open-tags="openTagsModal"
         @open-statuses="openStatusesModal"
         @copy-ttn="copyTtn"
         @generate-ttn="generateTtn"
@@ -65,15 +65,6 @@
         @update:per-page="updatePerPage"
       />
     </div>
-
-    <OrderTagsModal
-      v-model="selectedTags"
-      :open="tagsModalOpen"
-      :loading="tagsModalLoading"
-      :available-tags="availableTags"
-      @close="closeTagsModal"
-      @save="saveTags"
-    />
 
     <OrderStatusesModal
       v-model="selectedStatusId"
@@ -100,11 +91,10 @@ import axios from 'axios';
 import OrdersTable from '@/crm/components/orders/list/OrdersTable.vue';
 import OrdersTopbar from '@/crm/components/orders/list/OrdersTopbar.vue';
 import OrdersPagination from '@/crm/components/orders/list/OrdersPagination.vue';
-import OrderTagsModal from '@/crm/components/orders/list/OrderTagsModal.vue';
 import OrderStatusesModal from '@/crm/components/orders/list/OrderStatusesModal.vue';
 import CustomerQuickView from '@/crm/components/orders/list/CustomerQuickView.vue';
-import { listOrders, deleteOrder, updateOrderTags, updateOrderStatus, updateOrderComment } from '@/crm/api/orders';
-import { fetchTags } from '@/crm/api/tags';
+import { listOrders, deleteOrder, updateOrderStatus, updateOrderComment } from '@/crm/api/orders';
+import { useOrderTags } from '@/crm/composables/useOrderTags';
 import { fetchStatuses } from '@/crm/api/statuses';
 import { getCustomer } from '@/crm/api/customers';
 import { useTtnCopy } from '@/crm/composables/useTtnCopy';
@@ -115,6 +105,7 @@ import {
 } from '@/crm/utils/orderDisplay';
 
 const orders = ref([]);
+const tagEditor = useOrderTags((id) => orders.value.find((order) => String(order.id) === String(id)));
 const { copiedTtn, copyTtn } = useTtnCopy();
 const expandedRows = ref(new Set());
 const loading = ref(false);
@@ -123,11 +114,6 @@ const customerPanelOpen = ref(false);
 const customerLoading = ref(false);
 const customerError = ref('');
 const customerData = ref(null);
-const tagsModalOpen = ref(false);
-const tagsModalLoading = ref(false);
-const tagsModalOrder = ref(null);
-const availableTags = ref([]);
-const selectedTags = ref([]);
 const statusesModalOpen = ref(false);
 const statusesModalLoading = ref(false);
 const statuses = ref([]);
@@ -483,51 +469,6 @@ function changePage(page) {
   fetchData();
 }
 
-async function openTagsModal(order) {
-  if (!order) return;
-  tagsModalOrder.value = order;
-  selectedTags.value = order.tags.map((t) => t.id);
-  tagsModalOpen.value = true;
-  if (!availableTags.value.length) {
-    await loadTags();
-  }
-}
-
-async function loadTags() {
-  tagsModalLoading.value = true;
-  try {
-    const { data } = await fetchTags();
-    const list = data?.data || data || [];
-    availableTags.value = Array.isArray(list) ? list : [];
-  } catch (e) {
-    console.error('Не вдалося завантажити теги', e);
-    availableTags.value = [];
-  } finally {
-    tagsModalLoading.value = false;
-  }
-}
-
-function closeTagsModal() {
-  tagsModalOpen.value = false;
-  tagsModalOrder.value = null;
-  selectedTags.value = [];
-}
-
-async function saveTags() {
-  if (!tagsModalOrder.value) return;
-  try {
-    const { data } = await updateOrderTags(tagsModalOrder.value.id, selectedTags.value);
-    const updatedTags = data?.data || data || [];
-    tagsModalOrder.value.tags = updatedTags;
-    const idx = orders.value.findIndex((o) => o.id === tagsModalOrder.value.id);
-    if (idx !== -1) orders.value[idx].tags = updatedTags;
-    closeTagsModal();
-  } catch (e) {
-    console.error('Не вдалося оновити теги', e);
-    alert('Не вдалося оновити теги');
-  }
-}
-
 async function saveComment({ order, comment }) {
   if (!order?.id) return;
   const trimmed = typeof comment === 'string' ? comment.trim() : '';
@@ -656,6 +597,7 @@ function toggleRow(id) {
 
 onMounted(fetchData);
 onMounted(loadStatuses);
+onMounted(tagEditor.loadTags);
 </script>
 
 <style scoped>
