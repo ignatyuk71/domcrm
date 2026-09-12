@@ -113,6 +113,17 @@ class PackingController extends Controller
     }
 
     /**
+     * API: Повернути власні незавершені пакування при вході до списку.
+     */
+    public function returnToQueue(PackingService $packing): JsonResponse
+    {
+        return response()->json([
+            'success' => true,
+            'released' => $packing->returnOwnOrdersToQueue(Auth::id()),
+        ]);
+    }
+
+    /**
      * API: Отримати історію запакованих за сьогодні.
      */
     public function history(PackingService $packing): JsonResponse
@@ -227,8 +238,8 @@ class PackingController extends Controller
                 return $response;
             }
             if ((int) $locked->packer_id !== $userId) return response()->json(['error' => 'Немає доступу'], 403);
-            if ($deferredQueue && ($locked->packing_status !== 'processing'
-                || !in_array((int) $locked->status_id, $packing->queueStatusIds(), true))) {
+            if ($locked->packing_status !== 'processing'
+                || !in_array((int) $locked->status_id, $packing->queueStatusIds(), true)) {
                 return response()->json(['error' => 'Замовлення вже опрацьоване або його статус змінено. Поверніться до списку.'], 409);
             }
 
@@ -304,8 +315,8 @@ class PackingController extends Controller
             if ($sessionId !== null && ($response = $this->deferredSessionResponse($locked, $sessionId, $userId, 'problem'))) {
                 return $response;
             }
-            if ($deferredQueue && ((int) $locked->packer_id !== $userId || $locked->packing_status !== 'processing'
-                || !in_array((int) $locked->status_id, $packing->queueStatusIds(), true))) {
+            if ((int) $locked->packer_id !== $userId || $locked->packing_status !== 'processing'
+                || !in_array((int) $locked->status_id, $packing->queueStatusIds(), true)) {
                 return response()->json(['error' => 'Замовлення вже опрацьоване або його статус змінено. Поверніться до списку.'], 409);
             }
 

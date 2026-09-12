@@ -18,6 +18,7 @@ async function showList(orders, history = []) {
   axios.get.mockImplementation(async (url) => ({ data: url === '/api/packing/list' ? orders : history }));
   wrapper = mount(PackingList);
   await flushPromises();
+  axios.post.mockClear();
   return wrapper;
 }
 
@@ -44,13 +45,14 @@ describe('кнопка пакування відкладених', () => {
       : Promise.resolve({ data: [] }));
     wrapper = mount(PackingList);
     expect(wrapper.get('.btn-deferred-action').attributes('disabled')).toBeDefined();
+    await flushPromises();
     resolveList({ data: [order(1, 'pending')] });
     await flushPromises();
 
     expect(wrapper.get('.btn-deferred-action').attributes('disabled')).toBeDefined();
     expect(wrapper.get('.btn-main-action').attributes('disabled')).toBeUndefined();
     await wrapper.get('.btn-deferred-action').trigger('click');
-    expect(axios.post).not.toHaveBeenCalled();
+    expect(axios.post.mock.calls).toEqual([['/packing/return-to-queue']]);
   });
 
   it('бере всі жовті замовлення у видимому порядку незалежно від пошуку', async () => {
@@ -114,5 +116,56 @@ describe('кнопка пакування відкладених', () => {
     expect(window.location.pathname).toBe('/packing/12');
     expect(window.location.search).toBe('');
     expect(sessionStorage.length).toBe(0);
+  });
+});
+
+
+describe('повернення незавершеного пакування в чергу', () => {
+  it('відновлює чергу до завантаження списку та знову вмикає кнопку', async () => {
+    let release;
+    axios.post.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+    axios.get.mockResolvedValue({ data: [order(1, 'pending')] });
+    wrapper = mount(PackingList);
+    expect(axios.get).not.toHaveBeenCalled();
+    expect(wrapper.get('.btn-main-action').attributes('disabled')).toBeDefined();
+    release({ data: { success: true, released: 7 } });
+    await flushPromises();
+    expect(axios.post).toHaveBeenCalledWith('/packing/return-to-queue');
+    expect(wrapper.get('.btn-main-action').attributes('disabled')).toBeUndefined();
+    expect(wrapper.text()).not.toContain('У роботі');
+  });
+
+  it('повторно відновлює чергу при поверненні браузером із кешу сторінки', async () => {
+    await showList([order(1, 'pending')]);
+    const event = new Event('pageshow');
+    Object.defineProperty(event, 'persisted', { value: true });
+    window.dispatchEvent(event);
+    await flushPromises();
+    expect(axios.post.mock.calls).toEqual([['/packing/return-to-queue']]);
+    expect(wrapper.get('.btn-main-action').attributes('disabled')).toBeUndefined();
+  });
+
+  it('показує помилку та дозволяє повторити відновлення після втрати мережі', async () => {
+    axios.post.mockRejectedValueOnce(new Error('offline'));
+    await showList([order(1, 'pending')]);
+    expect(wrapper.get('[role="alert"]').text()).toContain('Не вдалося повернути');
+    expect(wrapper.get('.btn-main-action').attributes('disabled')).toBeDefined();
+    expect(axios.get).not.toHaveBeenCalled();
+    await wrapper.get('[role="alert"] button').trigger('click');
+    await flushPromises();
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+    expect(wrapper.get('.btn-main-action').attributes('disabled')).toBeUndefined();
+  });
+
+  it('фонове оновлення не закриває поточне пакування', async () => {
+    vi.useFakeTimers();
+    try {
+      await showList([order(1, 'pending')]);
+      await vi.advanceTimersByTimeAsync(30000);
+      expect(axios.post).not.toHaveBeenCalled();
+      expect(axios.get).toHaveBeenCalledTimes(4);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

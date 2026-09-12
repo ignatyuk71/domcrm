@@ -74,7 +74,7 @@
         </div>
 
         <div class="actions-group">
-          <button type="button" class="btn-main-action" :disabled="loading || pendingOrdersCount === 0 || isStarting" @click="startPackingFirst">
+          <button type="button" class="btn-main-action" :disabled="!queueReady || loading || pendingOrdersCount === 0 || isStarting" @click="startPackingFirst">
             <i class="bi bi-play-fill" aria-hidden="true"></i>
             <span>Пакувати чергу</span>
             <span class="queue-count">{{ pendingOrdersCount }}</span>
@@ -82,7 +82,7 @@
           <button
             type="button"
             class="btn-deferred-action"
-            :disabled="loading || isStarting || deferredOrders.length === 0"
+            :disabled="!queueReady || loading || isStarting || deferredOrders.length === 0"
             @click="startDeferredPacking"
           >
             <i class="bi bi-box-seam" aria-hidden="true"></i>
@@ -90,6 +90,11 @@
             <span class="deferred-count">{{ deferredOrders.length }}</span>
           </button>
         </div>
+      </div>
+
+      <div v-if="queueError" class="alert alert-warning" role="alert">
+        {{ queueError }}
+        <button class="btn btn-sm btn-outline-dark ms-2" :disabled="loading" @click="restoreQueue">Спробувати ще раз</button>
       </div>
 
       <div v-if="deferredMessage" class="alert alert-warning d-flex flex-wrap align-items-center gap-2" role="status">
@@ -185,7 +190,7 @@
                   <i class="bi bi-info-circle me-1"></i> Деталі
                 </button>
                 <div v-else class="queue-actions">
-                  <button class="btn-action-primary" :disabled="isStarting" @click="startPacking(order.id)">
+                  <button class="btn-action-primary" :disabled="!queueReady || loading || isStarting" @click="startPacking(order.id)">
                     Пакувати
                   </button>
                   <button class="btn-action-secondary" @click.stop="openDetails(order)">
@@ -386,6 +391,9 @@ import { createDeferredRun, startNextDeferredOrder, disposeDeferredRun } from '.
 const orders = ref([]);
 const historyOrders = ref([]); // Запаковані сьогодні (але ще не відправлені)
 const loading = ref(true);
+const queueReady = ref(false);
+const queueError = ref('');
+let restoringQueue = false;
 const searchQuery = ref('');
 const autoRefreshEnabled = ref(true);
 const showDetailsModal = ref(false);
@@ -409,9 +417,6 @@ const compareDeferredOrders = (a, b) => (
 );
 // Кнопка запускає всі жовті замовлення, незалежно від поточного пошуку.
 const deferredOrders = computed(() => orders.value.filter(isSkipped).sort(compareDeferredOrders));
-
-// Шукаємо замовлення, яке я вже почав, але не закінчив
-const myActiveOrder = computed(() => orders.value.find(o => isProcessing(o)));
 
 const queueOrdersCount = computed(() => orders.value.filter(o => !isPacked(o)).length);
 const pendingOrdersCount = computed(() => orders.value.filter(o => isPending(o)).length);
@@ -589,20 +594,49 @@ const fetchAll = async () => {
     ]);
     orders.value = Array.isArray(resList.data) ? resList.data : [];
     historyOrders.value = Array.isArray(resHistory.data) ? resHistory.data : [];
+    return true;
   } catch (e) {
     console.error('Помилка завантаження', e);
+    return false;
   } finally {
     loading.value = false;
   }
 };
 
-const refreshData = () => fetchAll();
+// Відновлюємо чергу лише при вході, а не під час фонового опитування.
+const restoreQueue = async () => {
+  if (restoringQueue) return;
+  restoringQueue = true;
+  queueReady.value = false;
+  loading.value = true;
+  queueError.value = '';
+  isStarting.value = false;
+  deferredRunId.value = null;
+  deferredMessage.value = '';
+  try {
+    await axios.post('/packing/return-to-queue');
+    if (!await fetchAll()) throw new Error('queue_load_failed');
+    queueReady.value = true;
+  } catch (error) {
+    queueError.value = 'Не вдалося повернути замовлення в чергу. Спробуйте ще раз.';
+  } finally {
+    restoringQueue = false;
+    loading.value = false;
+  }
+};
+
+const handlePageShow = (event) => {
+  // Кнопка браузера «Назад» може відновити сторінку без повторного монтування Vue.
+  if (event.persisted) restoreQueue();
+};
+
+const refreshData = () => queueReady.value ? fetchAll() : restoreQueue();
 const clearSearch = () => {
   searchQuery.value = '';
 };
 
 const startPacking = async (id) => {
-  if (isStarting.value) return;
+  if (!queueReady.value || loading.value || isStarting.value) return;
   isStarting.value = true;
   try {
     const { data } = await axios.post(`/packing/${id}/start`);
@@ -642,7 +676,7 @@ const continueDeferredPacking = async () => {
 };
 
 const startDeferredPacking = async () => {
-  if (isStarting.value || !deferredOrders.value.length) return;
+  if (!queueReady.value || loading.value || isStarting.value || !deferredOrders.value.length) return;
   try {
     deferredRunId.value = createDeferredRun(deferredOrders.value);
   } catch (error) {
@@ -653,7 +687,7 @@ const startDeferredPacking = async () => {
 };
 
 const startPackingFirst = () => {
-  const next = myActiveOrder.value || filteredOrders.value.find(o => isPending(o));
+  const next = filteredOrders.value.find(isPending) || orders.value.find(isPending);
   if (next) startPacking(next.id);
 };
 
@@ -699,6 +733,7 @@ const setupAutoRefresh = () => {
   if (refreshInterval) clearInterval(refreshInterval);
   if (autoRefreshEnabled.value) {
     refreshInterval = setInterval(() => {
+      if (!queueReady.value || loading.value || isStarting.value) return;
       // Тихе оновлення
       axios.get('/api/packing/list').then(res => {
         if(Array.isArray(res.data)) orders.value = res.data;
@@ -833,11 +868,13 @@ const itemImage = (item) => normalizeImageUrl(
 );
 
 onMounted(() => {
-  fetchAll();
+  window.addEventListener('pageshow', handlePageShow);
+  restoreQueue();
   setupAutoRefresh();
 });
 
 onUnmounted(() => {
+  window.removeEventListener('pageshow', handlePageShow);
   if (refreshInterval) clearInterval(refreshInterval);
 });
 </script>

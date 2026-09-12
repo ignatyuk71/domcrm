@@ -37,6 +37,30 @@ class PackingService
     }
 
     /**
+     * Повернення до списку завершує незакінчені пакування поточного працівника.
+     * Відкладені, запаковані та замовлення поза чергою не змінюються.
+     */
+    public function returnOwnOrdersToQueue(int $userId): int
+    {
+        return DB::transaction(function () use ($userId) {
+            $orders = Order::query()
+                ->where('packer_id', $userId)
+                ->where('packing_status', 'processing')
+                ->whereIn('status_id', $this->queueStatusIds())
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($orders as $order) {
+                $this->closeSession($order, $userId, 'returned_to_queue');
+                $order->update(['packer_id' => null, 'packing_status' => 'pending']);
+            }
+
+            return $orders->count();
+        });
+    }
+
+    /**
      * Автоматично розблоковує завислі пакування.
      */
     public function releaseStaleOrders(): int

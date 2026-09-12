@@ -472,6 +472,66 @@ class DeferredPackingTest extends TestCase
         $this->assertSame($savedState, $this->persistedOrderState($order));
     }
 
+    public function test_return_to_list_recovers_all_own_unfinished_orders_without_waiting(): void
+    {
+        $worker = $this->worker();
+        $this->actingAs($worker);
+        $orders = [];
+        for ($i = 0; $i < 7; $i++) {
+            $order = $this->order(['packing_status' => 'pending']);
+            $this->postJson("/packing/{$order->id}/start")->assertOk();
+            $orders[] = $order;
+        }
+        $this->postJson('/packing/return-to-queue')->assertOk()->assertJsonPath('released', 7);
+        foreach ($orders as $order) {
+            $this->assertSame('pending', $order->fresh()->packing_status);
+            $this->assertNull($order->fresh()->packer_id);
+            $this->assertSame($this->queueStatus->id, $order->fresh()->status_id);
+            $this->assertSame('returned_to_queue', $order->packingSessions()->firstOrFail()->close_reason);
+            $this->assertSame(0, $order->activePackingSession()->count());
+        }
+        $this->postJson('/packing/return-to-queue')->assertOk()->assertJsonPath('released', 0);
+        $this->postJson("/packing/{$orders[0]->id}/start")->assertOk();
+        $this->assertSame('processing', $orders[0]->fresh()->packing_status);
+    }
+
+    public function test_return_to_queue_preserves_deferred_finished_other_worker_and_shipped_orders(): void
+    {
+        $worker = $this->worker();
+        $this->actingAs($worker);
+        $deferred = $this->order();
+        $packed = $this->order();
+        $this->postJson("/packing/{$packed->id}/start")->assertOk();
+        $this->postJson("/packing/{$packed->id}/finish")->assertOk();
+        $shipped = $this->order(['packing_status' => 'processing', 'packer_id' => $worker->id,
+            'status_id' => $this->shippedStatus->id, 'status' => 'shipped']);
+        $other = $this->order(['packing_status' => 'processing', 'packer_id' => $this->worker()->id]);
+        $before = collect([$deferred, $packed, $shipped, $other])->map(fn ($order) => $this->persistedOrderState($order))->all();
+        $this->postJson('/packing/return-to-queue')->assertOk()->assertJsonPath('released', 0);
+        $after = collect([$deferred, $packed, $shipped, $other])->map(fn ($order) => $this->persistedOrderState($order))->all();
+        $this->assertSame($before, $after);
+    }
+
+    public function test_only_explicit_problem_action_defers_an_order_and_old_workspace_cannot_change_released_order(): void
+    {
+        $this->actingAs($this->worker());
+        $order = $this->order(['packing_status' => 'pending']);
+        $this->postJson("/packing/{$order->id}/start")->assertOk();
+        $this->postJson('/packing/return-to-queue')->assertOk();
+        $this->postJson("/packing/{$order->id}/problem")->assertStatus(409);
+        $this->postJson("/packing/{$order->id}/finish")->assertForbidden();
+        $this->assertSame('pending', $order->fresh()->packing_status);
+        $this->postJson("/packing/{$order->id}/start")->assertOk();
+        $this->postJson("/packing/{$order->id}/problem")->assertOk();
+        $this->postJson('/packing/return-to-queue')->assertOk()->assertJsonPath('released', 0);
+        $this->assertSame('skipped', $order->fresh()->packing_status);
+    }
+
+    public function test_return_to_queue_requires_authentication(): void
+    {
+        $this->postJson('/packing/return-to-queue')->assertUnauthorized();
+    }
+
     private function persistedOrderState(Order $order): array
     {
         return [

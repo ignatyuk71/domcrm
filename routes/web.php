@@ -334,6 +334,7 @@ Route::middleware('auth')->group(function () {
     // --- ПАКУВАННЯ ---
     Route::middleware('role:owner,operator,packer')->prefix('packing')->name('packing.')->controller(PackingController::class)->group(function () {
         Route::get('/list', 'index')->name('list');
+        Route::post('/return-to-queue', 'returnToQueue')->name('return-to-queue');
         Route::get('/{order}', 'show')->name('show');
         Route::post('/{order}/start', 'start')->name('start');
         Route::post('/{order}/finish', 'finish')->name('finish');
