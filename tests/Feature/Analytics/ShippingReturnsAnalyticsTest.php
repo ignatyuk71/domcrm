@@ -20,7 +20,7 @@ class ShippingReturnsAnalyticsTest extends TestCase
         $this->travelTo(\Carbon\Carbon::parse('2026-09-15 12:00:00', 'Europe/Kyiv'));
     }
 
-    public function test_return_statuses_use_outcome_dates_and_fixed_cost_without_changing_fiscal_revenue(): void
+    public function test_return_statuses_use_outcome_dates_and_fallback_cost_without_changing_fiscal_revenue(): void
     {
         $returned = $this->shipment('returned', '2026-09-05 10:00:00');
         $this->history($returned, 'refusal', '2026-09-03 14:00:00');
@@ -42,8 +42,12 @@ class ShippingReturnsAnalyticsTest extends TestCase
             ->assertJsonPath('shipping_returns.totals.completed', 5)
             ->assertJsonPath('shipping_returns.totals.return_rate', 40)
             ->assertJsonPath('shipping_returns.totals.estimated_cost', 200)
-            ->assertJsonPath('shipping_returns.totals.average_estimated_cost', 100)
-            ->assertJsonPath('shipping_returns.cost_basis', 'fixed_estimate')
+            ->assertJsonPath('shipping_returns.totals.total_cost', 200)
+            ->assertJsonPath('shipping_returns.totals.api_cost', 0)
+            ->assertJsonPath('shipping_returns.totals.estimated_shipments', 2)
+            ->assertJsonPath('shipping_returns.totals.average_cost', 100)
+            ->assertJsonPath('shipping_returns.cost_basis', 'api_with_fallback')
+            ->assertJsonPath('shipping_returns.cost_source', 'nova_poshta.DocumentCost')
             ->assertJsonPath('shipping_returns.currency', 'UAH')
             ->assertJsonPath('shipping_returns.estimated_cost_per_return', 100)
             ->assertJsonPath('shipping_returns.trend.returned.2', 1)
@@ -54,6 +58,92 @@ class ShippingReturnsAnalyticsTest extends TestCase
             ->assertJsonPath('fiscal.totals.refunds', 0);
         $this->assertEquals(200, array_sum($response->json('shipping_returns.trend.estimated_cost')));
         $this->assertEquals(2, array_sum($response->json('shipping_returns.trend.returned')));
+    }
+
+    public function test_api_prices_include_recipient_paid_returns_and_zero_with_fallback_only_for_missing_prices(): void
+    {
+        $recipient = $this->shipment('returned', '2026-09-02 10:00:00', [], ['ttn' => '20451532364466', 'delivery_cost' => 900]);
+        $this->snapshot($recipient, 96.25, ['np_payer_type' => 'recipient']);
+        $sender = $this->shipment('returned', '2026-09-03 10:00:00', [], ['delivery_payer' => 'sender']);
+        $this->snapshot($sender, 82.50, ['np_payer_type' => 'sender']);
+        $zero = $this->shipment('returned', '2026-09-04 10:00:00');
+        $this->snapshot($zero, 0, ['np_payer_type' => null]);
+        $this->shipment('returned', '2026-09-05 10:00:00', [], ['delivery_cost' => 777]);
+        $received = $this->shipment('delivered_paid', '2026-09-02 10:00:00');
+        $this->snapshot($received, 500);
+
+        $response = $this->report()->assertOk()
+            ->assertJsonPath('shipping_returns.totals.returned', 4)
+            ->assertJsonPath('shipping_returns.totals.received', 1)
+            ->assertJsonPath('shipping_returns.totals.return_rate', 80)
+            ->assertJsonPath('shipping_returns.totals.priced', 3)
+            ->assertJsonPath('shipping_returns.totals.estimated_shipments', 1)
+            ->assertJsonPath('shipping_returns.totals.api_cost', 178.75)
+            ->assertJsonPath('shipping_returns.totals.estimated_cost', 100)
+            ->assertJsonPath('shipping_returns.totals.total_cost', 278.75)
+            ->assertJsonPath('shipping_returns.totals.average_cost', 69.69)
+            ->assertJsonPath('shipping_returns.trend.total_cost.1', 96.25)
+            ->assertJsonPath('shipping_returns.trend.total_cost.3', 0)
+            ->assertJsonPath('shipping_returns.trend.estimated_shipments.3', 0)
+            ->assertJsonPath('shipping_returns.trend.estimated_shipments.4', 1)
+            ->assertJsonPath('fiscal.totals.revenue', 0)
+            ->assertJsonPath('fiscal.totals.refunds', 0);
+        $this->assertEquals(278.75, array_sum($response->json('shipping_returns.trend.total_cost')));
+        $this->assertEquals(178.75, array_sum($response->json('shipping_returns.trend.api_cost')));
+        $this->assertEquals(100, array_sum($response->json('shipping_returns.trend.estimated_cost')));
+        $this->report(['date_from' => '2026-09-04', 'date_to' => '2026-09-04'])->assertOk()
+            ->assertJsonPath('shipping_returns.totals.priced', 1)
+            ->assertJsonPath('shipping_returns.totals.estimated_shipments', 0)
+            ->assertJsonPath('shipping_returns.totals.average_cost', 0)
+            ->assertJsonPath('shipping_returns.totals.total_cost', 0);
+    }
+
+    public function test_latest_snapshot_is_used_once_per_ttn_without_moving_the_return_date(): void
+    {
+        $ttn = '59000000000001';
+        $first = $this->shipment('returned', '2026-09-03 10:00:00', [], ['ttn' => $ttn]);
+        $this->snapshot($first, 125, ['np_cost_checked_at' => '2026-09-14 10:00:00']);
+        $duplicate = $this->shipment('returned', '2026-09-07 10:00:00', [], ['ttn' => " {$ttn} "]);
+        $this->snapshot($duplicate, 96.25);
+        $stale = $this->shipment('delivered_paid', '2026-09-01 10:00:00', [], ['ttn' => $ttn]);
+        $this->snapshot($stale, 999, ['np_cost_ttn' => '59000000000002', 'np_cost_checked_at' => '2026-09-15 11:00:00']);
+
+        $this->report()->assertOk()
+            ->assertJsonPath('shipping_returns.totals.returned', 1)
+            ->assertJsonPath('shipping_returns.totals.received', 0)
+            ->assertJsonPath('shipping_returns.totals.priced', 1)
+            ->assertJsonPath('shipping_returns.totals.estimated_shipments', 0)
+            ->assertJsonPath('shipping_returns.totals.total_cost', 96.25)
+            ->assertJsonPath('shipping_returns.trend.total_cost.2', 96.25)
+            ->assertJsonPath('shipping_returns.trend.total_cost.6', 0);
+
+        // Нова відповідь «не знайдено» не дозволяє повернути стару ціну з дубля.
+        $this->snapshot($duplicate, null, ['np_cost_status_code' => '3']);
+        $this->report()->assertOk()
+            ->assertJsonPath('shipping_returns.totals.priced', 0)
+            ->assertJsonPath('shipping_returns.totals.estimated_shipments', 1)
+            ->assertJsonPath('shipping_returns.totals.total_cost', 100);
+    }
+
+    public function test_unverified_wrong_ttn_and_other_carrier_prices_cannot_replace_the_fallback(): void
+    {
+        foreach ([
+            ['np_cost_ttn' => 'old-ttn'],
+            ['np_cost_checked_at' => null],
+            ['np_cost_status_code' => '2'],
+            ['np_cost_status_code' => '3'],
+            ['np_document_cost' => null],
+            ['np_document_cost' => -1],
+            ['carrier' => 'ukrposhta'],
+        ] as $invalid) {
+            $delivery = $this->shipment('returned', '2026-09-03 10:00:00', [], ['delivery_cost' => 700]);
+            $this->snapshot($delivery, 96.25, $invalid);
+        }
+        $this->report()->assertOk()
+            ->assertJsonPath('shipping_returns.totals.returned', 7)
+            ->assertJsonPath('shipping_returns.totals.priced', 0)
+            ->assertJsonPath('shipping_returns.totals.estimated_shipments', 7)
+            ->assertJsonPath('shipping_returns.totals.total_cost', 700);
     }
 
     public function test_missing_dates_and_tracking_are_excluded_instead_of_using_order_update_time(): void
@@ -112,11 +202,16 @@ class ShippingReturnsAnalyticsTest extends TestCase
         $this->report(['date_to' => '2026-09-30'])->assertOk()
             ->assertJsonPath('shipping_returns.totals.returned', 0)
             ->assertJsonPath('shipping_returns.totals.return_rate', null)
-            ->assertJsonPath('shipping_returns.totals.average_estimated_cost', null)
+            ->assertJsonPath('shipping_returns.totals.average_cost', null)
             ->assertJsonPath('shipping_returns.totals.estimated_cost', 0)
+            ->assertJsonPath('shipping_returns.totals.api_cost', 0)
+            ->assertJsonPath('shipping_returns.totals.total_cost', 0)
             ->assertJsonPath('shipping_returns.trend.returned.14', 0)
             ->assertJsonPath('shipping_returns.trend.returned.15', null)
-            ->assertJsonPath('shipping_returns.trend.estimated_cost.29', null);
+            ->assertJsonPath('shipping_returns.trend.estimated_cost.29', null)
+            ->assertJsonPath('shipping_returns.trend.api_cost.29', null)
+            ->assertJsonPath('shipping_returns.trend.total_cost.29', null)
+            ->assertJsonPath('shipping_returns.trend.estimated_shipments.29', null);
         $this->report(['date_from' => '2026-09-20', 'date_to' => '2026-09-21'])->assertOk()
             ->assertJsonPath('shipping_returns.trend.returned', [null, null])
             ->assertJsonPath('shipping_returns.totals.completed', 0);
@@ -150,5 +245,14 @@ class ShippingReturnsAnalyticsTest extends TestCase
         DB::table('order_delivery_status_histories')->insert([
             'order_delivery_id' => $delivery, 'status_code' => $status, 'entered_at' => $date,
         ]);
+    }
+
+    private function snapshot(int $delivery, ?float $cost, array $overrides = []): void
+    {
+        $ttn = DB::table('order_deliveries')->where('id', $delivery)->value('ttn');
+        DB::table('order_deliveries')->where('id', $delivery)->update(array_merge([
+            'np_cost_ttn' => trim($ttn), 'np_cost_checked_at' => '2026-09-15 10:00:00',
+            'np_cost_status_code' => '102', 'np_document_cost' => $cost, 'np_payer_type' => 'recipient',
+        ], $overrides));
     }
 }

@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\DB;
 
 class ShippingReturnsAnalyticsService
 {
-    // Погоджена оцінка всіх витрат на одну повернену посилку, не тариф за напрямок.
+    // Запасна оцінка лише для посилок без відомої вартості за поточною ТТН.
     private const ESTIMATED_COST_UAH = 100;
 
     public function report(array $filters): array
@@ -48,38 +48,72 @@ class ShippingReturnsAnalyticsService
 
         $undated = DB::query()->fromSub(clone $shipments, 'shipments')->whereNull('occurred_at')->count();
         $daily = DB::query()->fromSub($shipments, 'shipments')
+            ->leftJoinSub($this->costSnapshots(), 'costs', fn ($join) => $join
+                ->on('costs.carrier', '=', 'shipments.carrier')->on('costs.ttn', '=', 'shipments.ttn')
+                ->where('costs.snapshot_row', 1))
             ->whereBetween('occurred_at', [$start, $end->min($now)])
             ->selectRaw('DATE(occurred_at) as day, SUM(is_returned) as returned, SUM(1 - is_returned) as received')
+            ->selectRaw('SUM(CASE WHEN is_returned = 1 AND costs.cost IS NOT NULL THEN 1 ELSE 0 END) as priced')
+            ->selectRaw('SUM(CASE WHEN is_returned = 1 THEN COALESCE(costs.cost, 0) ELSE 0 END) as api_cost')
             ->groupByRaw('DATE(occurred_at)')->get()->keyBy('day');
 
         $returned = (int) $daily->sum('returned');
         $received = (int) $daily->sum('received');
         $completed = $returned + $received;
-        $trend = ['dates' => [], 'returned' => [], 'estimated_cost' => []];
+        $priced = (int) $daily->sum('priced');
+        $apiCost = round((float) $daily->sum('api_cost'), 2);
+        $estimatedCost = ($returned - $priced) * self::ESTIMATED_COST_UAH;
+        $totalCost = round($apiCost + $estimatedCost, 2);
+        $trend = ['dates' => [], 'returned' => [], 'total_cost' => [], 'api_cost' => [], 'estimated_cost' => [], 'estimated_shipments' => []];
         for ($day = $start->copy(); $day->lte($end); $day->addDay()) {
             $date = $day->toDateString();
-            $count = $date > $now->toDateString() ? null : (int) ($daily->get($date)->returned ?? 0);
+            $row = $daily->get($date);
+            $count = $date > $now->toDateString() ? null : (int) ($row->returned ?? 0);
+            $dayApiCost = $count === null ? null : round((float) ($row->api_cost ?? 0), 2);
+            $dayEstimated = $count === null ? null : $count - (int) ($row->priced ?? 0);
+            $dayEstimatedCost = $dayEstimated === null ? null : $dayEstimated * self::ESTIMATED_COST_UAH;
             $trend['dates'][] = $date;
             $trend['returned'][] = $count;
-            $trend['estimated_cost'][] = $count === null ? null : $count * self::ESTIMATED_COST_UAH;
+            $trend['api_cost'][] = $dayApiCost;
+            $trend['estimated_shipments'][] = $dayEstimated;
+            $trend['estimated_cost'][] = $dayEstimatedCost;
+            $trend['total_cost'][] = $count === null ? null : round($dayApiCost + $dayEstimatedCost, 2);
         }
 
         return [
             'currency' => 'UAH',
-            'cost_basis' => 'fixed_estimate',
+            'cost_basis' => 'api_with_fallback',
+            'cost_source' => 'nova_poshta.DocumentCost',
             'estimated_cost_per_return' => self::ESTIMATED_COST_UAH,
             'totals' => [
                 'returned' => $returned,
                 'received' => $received,
                 'completed' => $completed,
                 'return_rate' => $completed > 0 ? round($returned / $completed * 100, 1) : null,
-                'estimated_cost' => $returned * self::ESTIMATED_COST_UAH,
-                'average_estimated_cost' => $returned > 0 ? self::ESTIMATED_COST_UAH : null,
+                'priced' => $priced,
+                'estimated_shipments' => $returned - $priced,
+                'api_cost' => $apiCost,
+                'estimated_cost' => $estimatedCost,
+                'total_cost' => $totalCost,
+                'average_cost' => $returned > 0 ? round($totalCost / $returned, 2) : null,
             ],
             'trend' => $trend,
             // Без дати/ТТН не можна достовірно розподілити старі записи за періодами.
             'quality' => ['undated_shipments' => $undated, 'missing_tracking_orders' => $missingTracking],
         ];
+    }
+
+    private function costSnapshots(): Builder
+    {
+        // Збережені відповіді НП: без запитів до API під час відкриття аналітики.
+        // Для повернень початковий платник не обмежує витрати; нуль є відомою ціною.
+        return DB::table('order_deliveries')
+            ->where('carrier', 'nova_poshta')->whereNotNull('np_cost_checked_at')
+            ->whereRaw('np_cost_ttn = TRIM(ttn)')
+            ->selectRaw('carrier, TRIM(ttn) as ttn')
+            ->selectRaw("CASE WHEN np_document_cost >= 0 AND np_cost_status_code NOT IN ('2', '3') THEN np_document_cost END as cost")
+            // Найсвіжіша відповідь по поточній ТТН, без повторного додавання дублів.
+            ->selectRaw('ROW_NUMBER() OVER (PARTITION BY carrier, TRIM(ttn) ORDER BY np_cost_checked_at DESC, id DESC) as snapshot_row');
     }
 
     private function orders(array $filters): Builder

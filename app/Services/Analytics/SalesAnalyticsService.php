@@ -16,7 +16,7 @@ class SalesAnalyticsService
     {
         $filters = $this->normalizeFilters($input);
         $cacheFilters = array_diff_key($filters, array_flip(['page', 'per_page', 'fresh', 'sender_delivery_page']));
-        $cacheKey = 'sales-analytics:v5:'.sha1(json_encode($cacheFilters));
+        $cacheKey = 'sales-analytics:v6:'.sha1(json_encode($cacheFilters));
 
         if ($filters['fresh']) {
             Cache::forget($cacheKey);

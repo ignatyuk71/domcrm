@@ -10,18 +10,23 @@
     </article>
 
     <article class="returns-summary" aria-label="Показники та витрати на повернення">
-      <header><h3>Підсумок повернень</h3><span class="estimate-badge">Орієнтовні витрати</span></header>
+      <header><h3>Підсумок повернень</h3><span class="estimate-badge" :class="{ 'api-badge': !hasEstimates }">{{ hasEstimates ? 'Частина витрат — оцінка' : 'Вартість за API НП' }}</span></header>
       <dl class="returns-metrics">
         <div><dt>Повернено посилок</dt><dd>{{ integer(totals.returned) }}</dd></div>
         <div><dt>Частка повернень</dt><dd>{{ percentage(totals.return_rate) }}</dd></div>
       </dl>
       <p class="rate-base">Отримано: {{ integer(totals.received) }} · Повернено: {{ integer(totals.returned) }}. Частка серед цих {{ integer(totals.completed) }} посилок.</p>
-      <div class="estimated-total"><span>Орієнтовні витрати на повернення</span><strong>≈ {{ money(totals.estimated_cost) }}</strong><small>{{ integer(totals.returned) }} × {{ money(data.estimated_cost_per_return) }} за посилку</small></div>
-      <p class="average-cost">Середні витрати на повернення: <strong>{{ totals.average_estimated_cost == null ? '—' : '≈ ' + money(totals.average_estimated_cost) }}</strong></p>
+      <div class="estimated-total">
+        <span>Витрати на доставку повернень</span><strong>{{ hasEstimates ? '≈ ' : '' }}{{ money(totals.total_cost) }}</strong>
+        <small>За API НП: {{ money(totals.api_cost) }} · {{ integer(totals.priced) }} посилок</small>
+        <small v-if="hasEstimates">Без ціни: {{ integer(totals.estimated_shipments) }} × {{ money(data.estimated_cost_per_return) }} = ≈ {{ money(totals.estimated_cost) }}</small>
+      </div>
+      <p class="average-cost">Середні витрати на повернення: <strong>{{ totals.average_cost == null ? '—' : (hasEstimates ? '≈ ' : '') + money(totals.average_cost) }}</strong></p>
       <div class="returns-explanation">
         <p>Рахуємо поточні статуси «Повернення» та «Успішно завершено», лише з ТТН. Одна ТТН — одна посилка. У дорозі, на відділенні та скасовані не входять.</p>
         <p>Період — за першою фіксацією відповідного результату в історії доставки, а за її відсутності — за датою зміни статусу CRM. Це не дата створення замовлення й не порівняння посилок однієї дати відправлення.</p>
-        <p>{{ money(data.estimated_cost_per_return) }} — погоджена оцінка загальних витрат на одну повернену посилку, а не фактичний тариф з API. Ця сума не віднімається від виручки Checkbox.</p>
+        <p>Вартість доставки — з останньої збереженої відповіді API НП за ТТН у замовленні, незалежно від початкового платника. Лише якщо ціна невідома, підставляємо {{ money(data.estimated_cost_per_return) }}. Ціна 0 грн залишається нульовою.</p>
+        <p>Окрема зворотна накладна поки не врахована. Це вартість доставки за ТТН, а не підтвердження списання коштів. Ця сума не віднімається від виручки Checkbox.</p>
       </div>
       <p v-if="data.quality?.undated_shipments || data.quality?.missing_tracking_orders" class="returns-warning">
         Не включено у розподіл за періодами: без дати статусу — {{ integer(data.quality?.undated_shipments) }} посилок; без ТТН — {{ integer(data.quality?.missing_tracking_orders) }} замовлень. Це всі такі записи за вибраними бізнес-фільтрами, незалежно від періоду.
@@ -36,8 +41,9 @@ import ApexChart from 'vue3-apexcharts';
 
 const props = defineProps({ data: { type: Object, required: true } });
 const totals = computed(() => props.data.totals || {});
+const hasEstimates = computed(() => Number(totals.value.estimated_shipments || 0) > 0);
 const integer = (value) => new Intl.NumberFormat('uk-UA', { maximumFractionDigits: 0 }).format(Number(value || 0));
-const money = (value) => new Intl.NumberFormat('uk-UA', { style: 'currency', currency: 'UAH', maximumFractionDigits: 0 }).format(Number(value || 0));
+const money = (value) => new Intl.NumberFormat('uk-UA', { style: 'currency', currency: 'UAH', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value || 0));
 const percentage = (value) => value == null ? '—' : new Intl.NumberFormat('uk-UA', { maximumFractionDigits: 1 }).format(value) + '%';
 const series = computed(() => [{ name: 'Повернено посилок', data: props.data.trend?.returned || [] }]);
 const chartOptions = computed(() => ({
@@ -59,7 +65,12 @@ const chartOptions = computed(() => ({
   tooltip: {
     shared: true, intersect: false,
     x: { formatter: (value, context) => props.data.trend?.dates?.[context.dataPointIndex] || value },
-    y: { formatter: (value, context) => value == null ? 'Немає даних' : `${integer(value)} · витрати ≈ ${money(props.data.trend?.estimated_cost?.[context.dataPointIndex])}` },
+    y: { formatter: (value, context) => {
+      if (value == null) return 'Немає даних';
+      const index = context.dataPointIndex;
+      const estimated = props.data.trend?.estimated_shipments?.[index] || 0;
+      return `${integer(value)} · витрати ${estimated > 0 ? '≈ ' : ''}${money(props.data.trend?.total_cost?.[index])}${estimated > 0 ? ` · без ціни: ${integer(estimated)}` : ''}`;
+    } },
   },
   noData: { text: 'Немає даних про повернення' },
   responsive: [{ breakpoint: 600, options: { xaxis: { tickAmount: Math.min(4, props.data.trend?.dates?.length || 1) } } }],
@@ -71,6 +82,7 @@ const chartOptions = computed(() => ({
 .returns-chart,.returns-summary{min-width:0;background:#fff;border:1px solid #e7ecf3;border-radius:14px;overflow:hidden}
 .returns-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:20px 22px 8px}.returns-heading h2{font-size:1.08rem;font-weight:750;margin:6px 0 0}.returns-eyebrow{font-size:.7rem;font-weight:700;color:#be4560}.returns-heading>span{font-size:.73rem;color:#8b929e;white-space:nowrap}.empty-note{font-size:.78rem;text-align:center;color:#64748b;padding:0 20px 16px;margin:0}
 .returns-summary{padding:20px}.returns-summary header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:18px}.returns-summary h3{font-size:.95rem;font-weight:750;margin:0}.estimate-badge{font-size:.65rem;line-height:1.3;background:#fff7e6;color:#94600f;border-radius:6px;padding:5px 7px}
+.api-badge{background:#eaf8f5;color:#147d6b}
 .returns-metrics{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:0}.returns-metrics dt{font-size:.75rem;color:#64748b;font-weight:400}.returns-metrics dd{font-size:1.6rem;font-weight:750;line-height:1.2;letter-spacing:-.025em;margin:5px 0 0}.rate-base{font-size:.7rem;color:#64748b;line-height:1.5;margin:10px 0 14px}
 .estimated-total{display:flex;flex-direction:column;gap:5px;border-radius:10px;background:#fff4f6;padding:14px 16px}.estimated-total>span{font-size:.75rem;color:#9d4054}.estimated-total strong{font-size:1.6rem;line-height:1.2;color:#be4560;overflow-wrap:anywhere}.estimated-total small{font-size:.7rem;color:#9d4054}.average-cost{font-size:.72rem;color:#64748b;margin:10px 0 14px}.average-cost strong{font-weight:650;color:#334155}
 .returns-explanation{border-top:1px solid #edf0f4;padding-top:10px}.returns-explanation p{font-size:.7rem;color:#64748b;line-height:1.5;margin:0 0 6px}.returns-explanation p:last-child{margin-bottom:0}.returns-warning{font-size:.7rem;line-height:1.5;color:#94600f;background:#fffbeb;border-radius:8px;padding:10px;margin:12px 0 0}
