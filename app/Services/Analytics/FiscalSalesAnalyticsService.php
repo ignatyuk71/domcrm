@@ -88,13 +88,13 @@ class FiscalSalesAnalyticsService
             }
         }
 
-        $trend = ['dates' => [], 'labels' => [], 'revenue' => [], 'cash' => [], 'cashless' => [], 'other' => [], 'receipts' => [], 'average_check' => [], 'refunds' => []];
+        $trend = ['dates' => [], 'labels' => [], 'sales' => [], 'revenue' => [], 'cash' => [], 'cashless' => [], 'other' => [], 'receipts' => [], 'average_check' => [], 'refunds' => []];
         $today = now(config('app.timezone'))->toDateString();
         foreach ($days as $date => $values) {
             $values = $this->moneyValues($values);
             $trend['dates'][] = $date;
             $trend['labels'][] = Carbon::parse($date)->format('d.m');
-            foreach (['revenue', 'cash', 'cashless', 'other', 'receipts', 'average_check', 'refunds'] as $key) {
+            foreach (['sales', 'revenue', 'cash', 'cashless', 'other', 'receipts', 'average_check', 'refunds'] as $key) {
                 // Майбутні дні — немає даних, а не падіння продажів до нуля.
                 $trend[$key][] = $date > $today ? null : $values[$key];
             }

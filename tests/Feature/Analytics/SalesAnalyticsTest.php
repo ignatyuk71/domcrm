@@ -134,12 +134,18 @@ class SalesAnalyticsTest extends TestCase
             ->assertJsonPath('fiscal.totals.refund_receipts', 1)
             ->assertJsonPath('fiscal.totals.cash', 200)
             ->assertJsonPath('fiscal.totals.cashless', 500)
+            ->assertJsonPath('fiscal.trend.sales.2', 200)
+            ->assertJsonPath('fiscal.trend.sales.3', 800)
+            ->assertJsonPath('fiscal.trend.sales.4', 0)
+            ->assertJsonPath('fiscal.trend.refunds.4', 300)
             ->assertJsonPath('fiscal.trend.revenue.4', -300)
             ->assertJsonPath('fiscal.trend.revenue.2', 200)
             ->assertJsonPath('fiscal.trend.receipts.3', 1)
             ->assertJsonPath('fiscal.trend.average_check.3', 800)
             ->assertJsonPath('audit.total', 0);
         $this->assertEquals(700, array_sum($response->json('fiscal.trend.revenue')));
+        $this->assertEquals(1000, array_sum($response->json('fiscal.trend.sales')));
+        $this->assertEquals(300, array_sum($response->json('fiscal.trend.refunds')));
     }
 
     public function test_refund_is_counted_in_its_own_month_and_receipt_time_is_converted_to_kyiv(): void
@@ -158,6 +164,8 @@ class SalesAnalyticsTest extends TestCase
             ->assertJsonPath('fiscal.totals.receipts', 0)
             ->assertJsonPath('fiscal.totals.average_check', 0)
             ->assertJsonPath('fiscal.trend.revenue.0', -350)
+            ->assertJsonPath('fiscal.trend.sales.0', 0)
+            ->assertJsonPath('fiscal.trend.refunds.0', 350)
             ->assertJsonPath('meta.comparison_from', '2026-07-01')
             ->assertJsonPath('meta.comparison_to', '2026-07-31')
             ->assertJsonPath('fiscal.kpis.revenue.previous', 1000);
@@ -226,7 +234,9 @@ class SalesAnalyticsTest extends TestCase
             ->assertOk()->assertJsonPath('fiscal.quality.fallback_date_receipts', 1)
             ->assertJsonPath('fiscal.trend.revenue.9', 100)
             ->assertJsonPath('fiscal.trend.revenue.14', 0)
-            ->assertJsonPath('fiscal.trend.revenue.15', null);
+            ->assertJsonPath('fiscal.trend.revenue.15', null)
+            ->assertJsonPath('fiscal.trend.sales.15', null)
+            ->assertJsonPath('fiscal.trend.refunds.15', null);
         $this->travelBack();
     }
 

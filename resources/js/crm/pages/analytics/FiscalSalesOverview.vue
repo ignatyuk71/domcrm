@@ -34,21 +34,21 @@
     </div>
     <p v-if="currency !== 'UAH'" class="data-warning">Checkbox обліковується у гривнях. Виберіть UAH, щоб побачити фіскальні продажі.</p>
     <p v-if="fiscal.quality?.fallback_date_receipts" class="data-warning">Для {{ fiscal.quality.fallback_date_receipts }} чеків немає дати у відповіді Checkbox: використано дату створення запису чека в CRM.</p>
-    <p v-if="fiscal.quality?.unknown_payment_receipts" class="data-warning">Для {{ fiscal.quality.unknown_payment_receipts }} чеків спосіб оплати неповний або не зіставлений. Суми включено в «Інше / невідомо», загальна виручка не змінена.</p>
+    <p v-if="fiscal.quality?.unknown_payment_receipts" class="data-warning">Для {{ fiscal.quality.unknown_payment_receipts }} чеків спосіб оплати неповний або не зіставлений. Ці чеки враховано в сумах продажів і повернень; невідомий спосіб оплати не змінює виручку.</p>
 
-    <article class="fiscal-chart">
-      <div class="chart-heading"><h3>Виручка</h3><span>Продажі мінус повернення за кожен день</span></div>
-      <ApexChart type="area" height="350" :options="revenueOptions" :series="revenueSeries" />
+    <article class="fiscal-chart" aria-label="Продажі, повернення та виручка за днями">
+      <div class="chart-heading"><h3>Продажі та повернення</h3><span>Стовпчики — продажі й повернення; лінія — виручка після повернень</span></div>
+      <ApexChart type="line" height="370" :options="revenueOptions" :series="revenueSeries" />
       <p v-if="!fiscal.totals?.receipts && !fiscal.totals?.refund_receipts" class="empty-note">За вибраний період і фільтри фіскальних чеків немає.</p>
     </article>
     <div class="small-charts">
       <article class="fiscal-chart">
         <div class="chart-heading"><h3>Чеки продажу</h3><span>Без чеків повернення</span></div>
-        <ApexChart type="area" height="240" :options="receiptOptions" :series="[{ name: 'Чеки продажу', data: fiscal.trend?.receipts || [] }]" />
+        <ApexChart type="bar" height="240" :options="receiptOptions" :series="[{ name: 'Чеки продажу', data: fiscal.trend?.receipts || [] }]" />
       </article>
       <article class="fiscal-chart">
         <div class="chart-heading"><h3>Середній чек</h3><span>Сума продажів / кількість чеків продажу</span></div>
-        <ApexChart type="area" height="240" :options="averageOptions" :series="[{ name: 'Середній чек', data: fiscal.trend?.average_check || [] }]" />
+        <ApexChart type="line" height="240" :options="averageOptions" :series="[{ name: 'Середній чек', data: fiscal.trend?.average_check || [] }]" />
       </article>
     </div>
   </section>
@@ -68,32 +68,39 @@ const cards = computed(() => [
 ]);
 const revenueSeries = computed(() => {
   const trend = props.fiscal.trend || {};
-  const series = [
-    { name: 'Вся виручка', data: trend.revenue || [] },
-    { name: 'Готівка', data: trend.cash || [] },
-    { name: 'Безготівкова / картка', data: trend.cashless || [] },
+  return [
+    { name: 'Продажі', type: 'column', data: trend.sales || [] },
+    // Знак змінюємо лише для відображення нижче нуля; майбутні дні залишаються null.
+    { name: 'Повернення', type: 'column', data: (trend.refunds || []).map(value => value === null ? null : value === 0 ? 0 : -value) },
+    { name: 'Виручка після повернень', type: 'line', data: trend.revenue || [] },
   ];
-  if (trend.other?.some((value) => value !== null && value !== 0)) series.push({ name: 'Інше / невідомо', data: trend.other });
-  return series;
 });
-function options(colors, count = false, legend = false) {
+function options(colors, count = false, legend = false, type = 'line') {
   return {
-    chart: { type: 'area', fontFamily: 'inherit', toolbar: { show: false }, zoom: { enabled: false }, animations: { enabled: false } },
+    chart: { type, fontFamily: 'inherit', toolbar: { show: false }, zoom: { enabled: false }, animations: { enabled: false }, stacked: false },
     colors, dataLabels: { enabled: false },
-    stroke: { curve: 'straight', width: 2.5 },
-    fill: { type: 'gradient', gradient: { opacityFrom: 0.3, opacityTo: 0.03, stops: [0, 100] } },
-    grid: { borderColor: '#e5e7eb', strokeDashArray: 6, padding: { left: 14, right: 18 } },
+    stroke: { curve: 'straight', width: type === 'bar' ? 0 : 2.8 },
+    fill: { type: 'solid', opacity: 1 },
+    markers: { size: 0, hover: { sizeOffset: 4 } },
+    plotOptions: { bar: { columnWidth: '58%', borderRadius: 3, borderRadiusApplication: 'end' } },
+    grid: { borderColor: '#e6edf0', strokeDashArray: 4, padding: { left: 14, right: 18 } },
     legend: { show: legend, position: 'top', horizontalAlign: 'right', fontSize: '12px', markers: { size: 5 } },
     xaxis: { categories: props.fiscal.trend?.dates || [], tickAmount: Math.min(15, props.fiscal.trend?.dates?.length || 1), axisBorder: { show: false }, axisTicks: { show: false }, labels: { rotate: 0, hideOverlappingLabels: true, formatter: (value) => typeof value === 'string' ? `${value.slice(8, 10)}.${value.slice(5, 7)}` : '', style: { colors: '#9399a3', fontSize: '11px' } } },
-    yaxis: { forceNiceScale: true, decimalsInFloat: count ? 0 : 2, labels: { formatter: count ? integer : (value) => new Intl.NumberFormat('uk-UA', { maximumFractionDigits: 0 }).format(value), style: { colors: '#9399a3' } } },
+    yaxis: { forceNiceScale: true, decimalsInFloat: count ? 0 : 2, title: { text: count ? 'Чеків' : 'грн', style: { color: '#667788', fontWeight: 400 } }, labels: { formatter: count ? integer : (value) => new Intl.NumberFormat('uk-UA', { maximumFractionDigits: 0 }).format(value), style: { colors: '#9399a3' } } },
     tooltip: { shared: true, intersect: false, x: { formatter: (value, context) => props.fiscal.trend?.dates?.[context.dataPointIndex] || value }, y: { formatter: count ? integer : money } },
     noData: { text: 'Немає фіскальних чеків' },
+    responsive: [{ breakpoint: 600, options: { xaxis: { tickAmount: Math.min(4, props.fiscal.trend?.dates?.length || 1) }, legend: { position: 'bottom', horizontalAlign: 'center' } } }],
   };
 }
 // Прямі відрізки не вигадують проміжних сум і не згладжують від’ємні повернення.
-const revenueOptions = computed(() => options(['#08afd0', '#ff2452', '#3cc9b5', '#94a3b8'], false, true));
-const receiptOptions = computed(() => options(['#08afd0'], true));
-const averageOptions = computed(() => options(['#3cc9b5']));
+const revenueOptions = computed(() => ({
+  ...options(['#b7c9d5', '#e44b6c', '#0eaa99'], false, true),
+  stroke: { curve: 'straight', width: [0, 0, 2.8] },
+  plotOptions: { bar: { columnWidth: '65%', borderRadius: 3, borderRadiusApplication: 'end' } },
+  annotations: { yaxis: [{ y: 0, borderColor: '#cbd5e1', strokeDashArray: 0 }] },
+}));
+const receiptOptions = computed(() => options(['#0eaa99'], true, false, 'bar'));
+const averageOptions = computed(() => options(['#0eaa99']));
 </script>
 
 <style scoped>

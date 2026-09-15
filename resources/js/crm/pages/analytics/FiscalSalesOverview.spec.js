@@ -11,7 +11,7 @@ import { fetchSalesAnalytics } from '@/crm/services/salesAnalyticsApi';
 const fiscal = () => ({
   kpis: { revenue: { value: 173517, delta: 4 }, receipts: { value: 316, delta: -2 }, average_check: { value: 549.10, delta: null } },
   totals: { sales: 174017, refunds: 500, revenue: 173517, receipts: 316, refund_receipts: 1 },
-  trend: { dates: ['2026-09-01', '2026-09-02', '2026-09-03'], revenue: [174017, -500, null], cash: [0, 0, null], cashless: [174017, -500, null], other: [0, 0, null], receipts: [316, 0, null], average_check: [550.69, 0, null] },
+  trend: { dates: ['2026-09-01', '2026-09-02', '2026-09-03'], sales: [174017, 0, null], refunds: [0, 500, null], revenue: [174017, -500, null], cash: [0, 0, null], cashless: [174017, -500, null], other: [0, 0, null], receipts: [316, 0, null], average_check: [550.69, 0, null] },
   quality: { fallback_date_receipts: 0, unknown_payment_receipts: 0 },
 });
 
@@ -35,11 +35,36 @@ describe('Фіскальна аналітика', () => {
     data.quality.fallback_date_receipts = 2;
     const wrapper = mount(FiscalSalesOverview, { props: { fiscal: data } });
     const chart = wrapper.findComponent({ name: 'ApexChart' });
-    expect(chart.props('series')[0].data).toEqual([174017, -500, null]);
-    expect(chart.props('series')[3].name).toBe('Інше / невідомо');
+    expect(chart.props('series')).toEqual([
+      { name: 'Продажі', type: 'column', data: [174017, 0, null] },
+      { name: 'Повернення', type: 'column', data: [0, -500, null] },
+      { name: 'Виручка після повернень', type: 'line', data: [174017, -500, null] },
+    ]);
+    expect(chart.props('options').chart.type).toBe('line');
+    expect(chart.props('options').chart.stacked).toBe(false);
+    expect(chart.props('options').stroke.width).toEqual([0, 0, 2.8]);
     expect(chart.props('options').yaxis.min).toBeUndefined();
+    expect(chart.props('options').annotations.yaxis[0].y).toBe(0);
     expect(wrapper.text()).toContain('Для 2 чеків немає дати');
     expect(wrapper.text()).toContain('Для 1 чеків спосіб оплати');
+    expect(wrapper.text()).not.toContain('Інше / невідомо');
+    expect(data.trend.refunds).toEqual([0, 500, null]);
+    wrapper.unmount();
+  });
+
+  it('показує чеки стовпчиками, середній чек лінією та не змінює копійки при поверненні', () => {
+    const data = fiscal();
+    data.trend.sales = [500.01, 0, null];
+    data.trend.refunds = [125.5, 200.01, null];
+    data.trend.revenue = [374.51, -200.01, null];
+    const wrapper = mount(FiscalSalesOverview, { props: { fiscal: data } });
+    const charts = wrapper.findAllComponents({ name: 'ApexChart' });
+    const [sales, refunds, net] = charts[0].props('series');
+    expect(sales.data).toEqual([500.01, 0, null]);
+    expect(refunds.data).toEqual([-125.5, -200.01, null]);
+    expect(net.data).toEqual([374.51, -200.01, null]);
+    expect(charts[1].props('options').chart.type).toBe('bar');
+    expect(charts[2].props('options').chart.type).toBe('line');
     wrapper.unmount();
   });
 
