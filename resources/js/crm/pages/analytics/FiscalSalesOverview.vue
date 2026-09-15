@@ -36,19 +36,19 @@
     <p v-if="fiscal.quality?.fallback_date_receipts" class="data-warning">Для {{ fiscal.quality.fallback_date_receipts }} чеків немає дати у відповіді Checkbox: використано дату створення запису чека в CRM.</p>
     <p v-if="fiscal.quality?.unknown_payment_receipts" class="data-warning">Для {{ fiscal.quality.unknown_payment_receipts }} чеків спосіб оплати неповний або не зіставлений. Ці чеки враховано в сумах продажів і повернень; невідомий спосіб оплати не змінює виручку.</p>
 
-    <article class="fiscal-chart" aria-label="Продажі, повернення та виручка за днями">
-      <div class="chart-heading"><h3>Продажі та повернення</h3><span>Стовпчики — продажі й повернення; лінія — виручка після повернень</span></div>
-      <ApexChart type="line" height="370" :options="revenueOptions" :series="revenueSeries" />
+    <article class="fiscal-chart" aria-label="Виручка після повернень за днями">
+      <div class="chart-heading"><h3>Виручка після повернень</h3><span>Продажі мінус повернення за кожен день</span></div>
+      <ApexChart type="area" height="370" :options="revenueOptions" :series="revenueSeries" />
       <p v-if="!fiscal.totals?.receipts && !fiscal.totals?.refund_receipts" class="empty-note">За вибраний період і фільтри фіскальних чеків немає.</p>
     </article>
     <div class="small-charts">
       <article class="fiscal-chart">
         <div class="chart-heading"><h3>Чеки продажу</h3><span>Без чеків повернення</span></div>
-        <ApexChart type="bar" height="240" :options="receiptOptions" :series="[{ name: 'Чеки продажу', data: fiscal.trend?.receipts || [] }]" />
+        <ApexChart type="area" height="240" :options="receiptOptions" :series="[{ name: 'Чеки продажу', data: fiscal.trend?.receipts || [] }]" />
       </article>
       <article class="fiscal-chart">
         <div class="chart-heading"><h3>Середній чек</h3><span>Сума продажів / кількість чеків продажу</span></div>
-        <ApexChart type="line" height="240" :options="averageOptions" :series="[{ name: 'Середній чек', data: fiscal.trend?.average_check || [] }]" />
+        <ApexChart type="area" height="240" :options="averageOptions" :series="[{ name: 'Середній чек', data: fiscal.trend?.average_check || [] }]" />
       </article>
     </div>
   </section>
@@ -66,40 +66,31 @@ const cards = computed(() => [
   { key: 'receipts', label: 'Чеки продажу', value: integer(props.fiscal.kpis?.receipts?.value), delta: props.fiscal.kpis?.receipts?.delta, icon: 'bi bi-receipt', note: 'Окремі чеки, не кількість замовлень' },
   { key: 'average_check', label: 'Середній чек', value: money(props.fiscal.kpis?.average_check?.value), delta: props.fiscal.kpis?.average_check?.delta, icon: 'bi bi-percent', note: 'Середня сума одного чека продажу' },
 ]);
-const revenueSeries = computed(() => {
-  const trend = props.fiscal.trend || {};
-  return [
-    { name: 'Продажі', type: 'column', data: trend.sales || [] },
-    // Знак змінюємо лише для відображення нижче нуля; майбутні дні залишаються null.
-    { name: 'Повернення', type: 'column', data: (trend.refunds || []).map(value => value === null ? null : value === 0 ? 0 : -value) },
-    { name: 'Виручка після повернень', type: 'line', data: trend.revenue || [] },
-  ];
-});
-function options(colors, count = false, legend = false, type = 'line') {
+const revenueSeries = computed(() => [
+  { name: 'Виручка після повернень', data: props.fiscal.trend?.revenue || [] },
+]);
+function options(colors, count = false) {
   return {
-    chart: { type, fontFamily: 'inherit', toolbar: { show: false }, zoom: { enabled: false }, animations: { enabled: false }, stacked: false },
+    chart: { type: 'area', fontFamily: 'inherit', toolbar: { show: false }, zoom: { enabled: false }, animations: { enabled: false }, stacked: false },
     colors, dataLabels: { enabled: false },
-    stroke: { curve: 'straight', width: type === 'bar' ? 0 : 2.8 },
-    fill: { type: 'solid', opacity: 1 },
+    // Монотонне згладжування зберігає денні значення та не додає штучних піків.
+    stroke: { curve: 'monotoneCubic', width: 2.8 },
+    fill: { type: 'gradient', gradient: { opacityFrom: 0.32, opacityTo: 0.015, stops: [0, 100] } },
     markers: { size: 0, hover: { sizeOffset: 4 } },
-    plotOptions: { bar: { columnWidth: '58%', borderRadius: 3, borderRadiusApplication: 'end' } },
     grid: { borderColor: '#e6edf0', strokeDashArray: 4, padding: { left: 14, right: 18 } },
-    legend: { show: legend, position: 'top', horizontalAlign: 'right', fontSize: '12px', markers: { size: 5 } },
+    legend: { show: false },
     xaxis: { categories: props.fiscal.trend?.dates || [], tickAmount: Math.min(15, props.fiscal.trend?.dates?.length || 1), axisBorder: { show: false }, axisTicks: { show: false }, labels: { rotate: 0, hideOverlappingLabels: true, formatter: (value) => typeof value === 'string' ? `${value.slice(8, 10)}.${value.slice(5, 7)}` : '', style: { colors: '#9399a3', fontSize: '11px' } } },
     yaxis: { forceNiceScale: true, decimalsInFloat: count ? 0 : 2, title: { text: count ? 'Чеків' : 'грн', style: { color: '#667788', fontWeight: 400 } }, labels: { formatter: count ? integer : (value) => new Intl.NumberFormat('uk-UA', { maximumFractionDigits: 0 }).format(value), style: { colors: '#9399a3' } } },
     tooltip: { shared: true, intersect: false, x: { formatter: (value, context) => props.fiscal.trend?.dates?.[context.dataPointIndex] || value }, y: { formatter: count ? integer : money } },
     noData: { text: 'Немає фіскальних чеків' },
-    responsive: [{ breakpoint: 600, options: { xaxis: { tickAmount: Math.min(4, props.fiscal.trend?.dates?.length || 1) }, legend: { position: 'bottom', horizontalAlign: 'center' } } }],
+    responsive: [{ breakpoint: 600, options: { xaxis: { tickAmount: Math.min(4, props.fiscal.trend?.dates?.length || 1) } } }],
   };
 }
-// Прямі відрізки не вигадують проміжних сум і не згладжують від’ємні повернення.
 const revenueOptions = computed(() => ({
-  ...options(['#b7c9d5', '#e44b6c', '#0eaa99'], false, true),
-  stroke: { curve: 'straight', width: [0, 0, 2.8] },
-  plotOptions: { bar: { columnWidth: '65%', borderRadius: 3, borderRadiusApplication: 'end' } },
+  ...options(['#0eaa99']),
   annotations: { yaxis: [{ y: 0, borderColor: '#cbd5e1', strokeDashArray: 0 }] },
 }));
-const receiptOptions = computed(() => options(['#0eaa99'], true, false, 'bar'));
+const receiptOptions = computed(() => options(['#0eaa99'], true));
 const averageOptions = computed(() => options(['#0eaa99']));
 </script>
 

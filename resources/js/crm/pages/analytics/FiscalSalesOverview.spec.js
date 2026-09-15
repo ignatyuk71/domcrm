@@ -36,13 +36,12 @@ describe('Фіскальна аналітика', () => {
     const wrapper = mount(FiscalSalesOverview, { props: { fiscal: data } });
     const chart = wrapper.findComponent({ name: 'ApexChart' });
     expect(chart.props('series')).toEqual([
-      { name: 'Продажі', type: 'column', data: [174017, 0, null] },
-      { name: 'Повернення', type: 'column', data: [0, -500, null] },
-      { name: 'Виручка після повернень', type: 'line', data: [174017, -500, null] },
+      { name: 'Виручка після повернень', data: [174017, -500, null] },
     ]);
-    expect(chart.props('options').chart.type).toBe('line');
+    expect(chart.props('options').chart.type).toBe('area');
     expect(chart.props('options').chart.stacked).toBe(false);
-    expect(chart.props('options').stroke.width).toEqual([0, 0, 2.8]);
+    expect(chart.props('options').stroke.curve).toBe('monotoneCubic');
+    expect(chart.props('options').fill.type).toBe('gradient');
     expect(chart.props('options').yaxis.min).toBeUndefined();
     expect(chart.props('options').annotations.yaxis[0].y).toBe(0);
     expect(wrapper.text()).toContain('Для 2 чеків немає дати');
@@ -52,19 +51,25 @@ describe('Фіскальна аналітика', () => {
     wrapper.unmount();
   });
 
-  it('показує чеки стовпчиками, середній чек лінією та не змінює копійки при поверненні', () => {
+  it('застосовує перший варіант до всіх графіків і не змінює копійки при поверненні', () => {
     const data = fiscal();
     data.trend.sales = [500.01, 0, null];
     data.trend.refunds = [125.5, 200.01, null];
     data.trend.revenue = [374.51, -200.01, null];
     const wrapper = mount(FiscalSalesOverview, { props: { fiscal: data } });
     const charts = wrapper.findAllComponents({ name: 'ApexChart' });
-    const [sales, refunds, net] = charts[0].props('series');
-    expect(sales.data).toEqual([500.01, 0, null]);
-    expect(refunds.data).toEqual([-125.5, -200.01, null]);
+    const [net] = charts[0].props('series');
     expect(net.data).toEqual([374.51, -200.01, null]);
-    expect(charts[1].props('options').chart.type).toBe('bar');
-    expect(charts[2].props('options').chart.type).toBe('line');
+    for (const chart of charts) {
+      expect(chart.props('options').chart.type).toBe('area');
+      expect(chart.props('options').stroke.curve).toBe('monotoneCubic');
+      expect(chart.props('options').fill.gradient).toEqual({ opacityFrom: 0.32, opacityTo: 0.015, stops: [0, 100] });
+      expect(chart.props('options').colors).toEqual(['#0eaa99']);
+      expect(chart.props('options').plotOptions).toBeUndefined();
+    }
+    expect(charts[1].props('series')[0].data).toEqual(data.trend.receipts);
+    expect(charts[2].props('series')[0].data).toEqual(data.trend.average_check);
+    expect(data.trend.refunds).toEqual([125.5, 200.01, null]);
     wrapper.unmount();
   });
 
@@ -72,7 +77,7 @@ describe('Фіскальна аналітика', () => {
     const wrapper = mount(FiscalSalesOverview, { props: { fiscal: { totals: {}, trend: {} }, currency: 'PLN' } });
     expect(wrapper.text()).toContain('Виберіть UAH');
     expect(wrapper.text()).toContain('фіскальних чеків немає');
-    expect(wrapper.findComponent({ name: 'ApexChart' }).props('series')).toHaveLength(3);
+    expect(wrapper.findComponent({ name: 'ApexChart' }).props('series')).toEqual([{ name: 'Виручка після повернень', data: [] }]);
     wrapper.unmount();
   });
 
