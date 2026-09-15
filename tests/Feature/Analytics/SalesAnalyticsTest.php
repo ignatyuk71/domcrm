@@ -101,7 +101,7 @@ class SalesAnalyticsTest extends TestCase
         $this->receipt($oldOrder, 'return', 30000, '2026-08-05T08:00:00+00:00');
         $this->receipt($inTransit, 'sell', 900000, '2026-08-02T08:00:00+00:00', 'CASHLESS', ['status' => 'error']);
         $this->receipt($inTransit, 'sell', 900000, '2026-08-02T08:00:00+00:00', 'CASHLESS', ['status' => 'processing']);
-        $this->receipt($inTransit, 'sell', 900000, '2026-08-02T08:00:00+00:00', 'CASHLESS', ['fiscal_code' => null]);
+        $this->receipt($inTransit, 'sell', 900000, '2026-08-02T08:00:00+00:00', 'CASHLESS', ['fiscal_code' => null], ['status' => 'ERROR']);
         $this->receipt($inTransit, 'sell', 900000, '2026-08-02T08:00:00+00:00', 'CASHLESS', [], ['is_test' => true]);
         $this->receipt($oldOrder, 'service_in', 100000, '2026-08-02T08:00:00+00:00');
 
@@ -142,6 +142,20 @@ class SalesAnalyticsTest extends TestCase
             ->assertJsonPath('meta.comparison_from', '2026-07-01')
             ->assertJsonPath('meta.comparison_to', '2026-07-31')
             ->assertJsonPath('fiscal.kpis.revenue.previous', 1000);
+    }
+
+    public function test_initial_successful_checkbox_response_is_counted_before_fiscal_code_is_available(): void
+    {
+        $owner = User::factory()->create(['role' => User::ROLE_OWNER]);
+        [$source, $done] = $this->dictionaryRows();
+        $order = $this->order($source, $owner->id, $done, 'delivered_paid', 'retail', 'paid', '2026-08-10 10:00:00');
+        $this->receipt($order, 'sell', 39900, '2026-08-10T05:30:06.019847+00:00', 'CASHLESS', ['fiscal_code' => null], [
+            'status' => 'CREATED', 'fiscal_code' => null, 'is_sent_dps' => false, 'is_test' => false,
+        ]);
+        $this->actingAs($owner)->getJson('/api/analytics/sales?date_from=2026-08-01&date_to=2026-08-31')
+            ->assertOk()->assertJsonPath('fiscal.totals.revenue', 399)
+            ->assertJsonPath('fiscal.totals.receipts', 1)
+            ->assertJsonPath('fiscal.totals.cashless', 399);
     }
 
     public function test_receipt_totals_mixed_payments_change_and_unknown_payments_are_reconciled(): void

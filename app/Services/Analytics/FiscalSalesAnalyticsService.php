@@ -43,7 +43,6 @@ class FiscalSalesAnalyticsService
         $query = DB::table('fiscal_receipts as fr')->join('orders as o', 'o.id', '=', 'fr.order_id')
             ->where('fr.status', FiscalReceipt::STATUS_SUCCESS)
             ->whereIn('fr.type', [FiscalReceipt::TYPE_SELL, FiscalReceipt::TYPE_RETURN])
-            ->whereNotNull('fr.fiscal_code')->where('fr.fiscal_code', '!=', '')
             ->where(fn ($q) => $q->whereBetween('fr.fiscalized_at', [$start, $end])->orWhereNull('fr.fiscalized_at'))
             ->where('o.currency', 'UAH')
             ->when($filters['currency'] !== 'UAH', fn ($q) => $q->whereRaw('1 = 0'))
@@ -55,6 +54,10 @@ class FiscalSalesAnalyticsService
         foreach ($query->lazyById(500, 'fr.id', 'id') as $receipt) {
             $meta = json_decode($receipt->meta ?? '{}', true) ?: [];
             if (filter_var($meta['is_test'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+                continue;
+            }
+            // Первинна успішна відповідь Checkbox має CREATED і ще не містить fiscal_code.
+            if (isset($meta['status']) && ! in_array(strtoupper($meta['status']), ['CREATED', 'DONE', 'SUCCESS'], true)) {
                 continue;
             }
             $metaDate = FiscalReceipt::dateFromMeta($meta);
