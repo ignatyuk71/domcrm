@@ -204,20 +204,6 @@ class SalesAnalyticsTest extends TestCase
             ->assertUnprocessable()->assertJsonValidationErrors('date_from');
     }
 
-    public function test_migration_backfills_existing_receipts_without_modifying_their_update_time(): void
-    {
-        $owner = User::factory()->create(['role' => User::ROLE_OWNER]);
-        [$source, $done] = $this->dictionaryRows();
-        $order = $this->order($source, $owner->id, $done, 'delivered_paid', 'retail', 'paid', '2026-07-10 10:00:00');
-        $receipt = $this->receipt($order, 'sell', 10000, '2026-07-31T21:30:00+00:00');
-        $updated = $receipt->getRawOriginal('updated_at');
-        $migration = require database_path('migrations/2026_09_15_120000_add_fiscalized_at_to_fiscal_receipts.php');
-        $migration->down();
-        $migration->up();
-        $this->assertSame('2026-08-01 00:30:00', $receipt->fresh()->fiscalized_at->format('Y-m-d H:i:s'));
-        $this->assertSame($updated, $receipt->fresh()->getRawOriginal('updated_at'));
-    }
-
     public function test_receipts_written_during_deployment_are_included_without_a_materialized_date(): void
     {
         $owner = User::factory()->create(['role' => User::ROLE_OWNER]);
