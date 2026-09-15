@@ -60,6 +60,7 @@
       </div>
       <FiscalSalesOverview :fiscal="fiscal" :currency="meta.currency" />
       <ShippingReturnsOverview v-if="shippingReturns" :data="shippingReturns" />
+      <SenderPaidDeliveryOverview v-if="senderDelivery" :data="senderDelivery" :loading="loading" @page="load(false, $event)" />
     </template>
     <div v-if="loading && !hasLoaded" class="loading-grid" role="status" aria-label="Завантаження аналітики">
       <div v-for="index in 3" :key="index" class="skeleton"></div>
@@ -72,6 +73,7 @@ import { onMounted, reactive, ref } from 'vue';
 import { fetchSalesAnalytics } from '@/crm/services/salesAnalyticsApi';
 import FiscalSalesOverview from './FiscalSalesOverview.vue';
 import ShippingReturnsOverview from './ShippingReturnsOverview.vue';
+import SenderPaidDeliveryOverview from './SenderPaidDeliveryOverview.vue';
 
 const toDateInput = (date) => date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
 const today = new Date();
@@ -91,21 +93,23 @@ const error = ref('');
 const meta = ref({});
 const fiscal = ref({});
 const shippingReturns = ref(null);
+const senderDelivery = ref(null);
 const filterOptions = reactive({ sources: [], managers: [], sale_types: [] });
 let requestSequence = 0;
 
-async function load(fresh = false) {
+async function load(fresh = false, senderPage = 1) {
   const sequence = ++requestSequence;
   const selected = Object.fromEntries(Object.entries(filters).filter(([, value]) => value !== '' && value !== null));
   loading.value = true;
   error.value = '';
   try {
     // Старі розрахунки за замовленнями не завантажуємо; Checkbox ведеться в UAH.
-    const { data } = await fetchSalesAnalytics({ ...selected, currency: 'UAH', fiscal_only: 1, ...(fresh ? { fresh: 1 } : {}) });
+    const { data } = await fetchSalesAnalytics({ ...selected, currency: 'UAH', fiscal_only: 1, ...(senderPage > 1 ? { sender_delivery_page: senderPage } : {}), ...(fresh ? { fresh: 1 } : {}) });
     if (sequence !== requestSequence) return;
     meta.value = data.meta || {};
     fiscal.value = data.fiscal || {};
     shippingReturns.value = data.shipping_returns || null;
+    senderDelivery.value = data.sender_delivery || null;
     Object.assign(filterOptions, data.filters || {});
     hasLoaded.value = true;
     window.history.replaceState({}, '', window.location.pathname + '?' + new URLSearchParams(selected));

@@ -27,6 +27,7 @@ class SalesAnalyticsRequest extends FormRequest
             'status_id' => ['nullable', 'integer', 'exists:statuses,id'],
             'payment_status' => ['nullable', Rule::in(['unpaid', 'prepayment', 'paid', 'refund'])],
             'page' => ['nullable', 'integer', 'min:1'],
+            'sender_delivery_page' => ['nullable', 'integer', 'min:1', 'max:100000'],
             'per_page' => ['nullable', 'integer', 'min:10', 'max:100'],
             'fresh' => ['nullable', 'boolean'],
             'fiscal_only' => ['nullable', 'boolean'],

@@ -114,6 +114,7 @@ class SyncDeliveryStatuses extends Command
                 $normalized = DeliveryStatusMapper::map($row);
                 $entry = $mapByTtn[$ttn];
                 $delivery = $entry['delivery'];
+                app(\App\Services\NovaPoshtaDeliveryCosts::class)->store($delivery, $row, $now);
                 
                 // Оновлюємо інформацію про доставку (текст, іконку)
                 $delivery->forceFill([

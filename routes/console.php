@@ -25,6 +25,13 @@ Schedule::command('fiscal:delivered')
     ->onOneServer()
     ->description('Автофіскалізація доставлених замовлень кожні 5 хвилин');
 
+// Добираємо ціни старих/завершених ТТН; звичайний трекінг їх уже не опитує.
+Schedule::command('delivery:sync-costs --limit=500')
+    ->hourly()
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->description('Отримання вартості накладних із API Нової пошти');
+
 Schedule::command('fiscal:shift-manager')
     ->everyFiveMinutes()
     ->withoutOverlapping()

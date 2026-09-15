@@ -15,7 +15,7 @@ class SalesAnalyticsService
     public function report(array $input): array
     {
         $filters = $this->normalizeFilters($input);
-        $cacheFilters = array_diff_key($filters, array_flip(['page', 'per_page', 'fresh']));
+        $cacheFilters = array_diff_key($filters, array_flip(['page', 'per_page', 'fresh', 'sender_delivery_page']));
         $cacheKey = 'sales-analytics:v5:'.sha1(json_encode($cacheFilters));
 
         if ($filters['fresh']) {
@@ -34,7 +34,9 @@ class SalesAnalyticsService
                 'generated_at' => Carbon::now(config('app.timezone'))->toIso8601String(),
             ],
             'filters' => $this->filterOptions($filters['fiscal_only']),
-        ], $filters['fiscal_only'] ? [] : ['audit' => $this->audit($filters)]);
+        ], $filters['fiscal_only']
+            ? ['sender_delivery' => app(SenderPaidDeliveryAnalyticsService::class)->report($filters)]
+            : ['audit' => $this->audit($filters)]);
     }
 
     public function normalizeFilters(array $input): array
@@ -59,6 +61,7 @@ class SalesAnalyticsService
             'status_id' => $this->nullableInt($input['status_id'] ?? null),
             'payment_status' => $this->nullableString($input['payment_status'] ?? null),
             'page' => max(1, (int) ($input['page'] ?? 1)),
+            'sender_delivery_page' => max(1, (int) ($input['sender_delivery_page'] ?? 1)),
             'per_page' => min(100, max(10, (int) ($input['per_page'] ?? 20))),
             'fresh' => filter_var($input['fresh'] ?? false, FILTER_VALIDATE_BOOLEAN),
             'fiscal_only' => filter_var($input['fiscal_only'] ?? false, FILTER_VALIDATE_BOOLEAN),

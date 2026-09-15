@@ -552,6 +552,7 @@ class OrderController extends Controller
         }
 
         $normalized = DeliveryStatusMapper::map($data);
+        app(\App\Services\NovaPoshtaDeliveryCosts::class)->store($delivery, $data, now());
         $delivery->forceFill([
             'delivery_status_code' => $normalized['code'],
             'delivery_status_label' => $normalized['label'],
