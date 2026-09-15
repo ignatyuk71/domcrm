@@ -29,6 +29,7 @@ class SalesAnalyticsRequest extends FormRequest
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:10', 'max:100'],
             'fresh' => ['nullable', 'boolean'],
+            'fiscal_only' => ['nullable', 'boolean'],
         ];
     }
 

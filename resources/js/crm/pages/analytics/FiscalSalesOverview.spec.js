@@ -51,8 +51,8 @@ describe('Фіскальна аналітика', () => {
     wrapper.unmount();
   });
 
-  it('відокремлює замовлення та не підміняє валюту даних незастосованим фільтром', async () => {
-    window.history.replaceState({}, '', '/analytics');
+  it('залишає тільки чеки та ігнорує старі фільтри зі збереженого посилання', async () => {
+    window.history.replaceState({}, '', '/analytics?scope=all&status_id=8&payment_status=refund&currency=PLN&page=3');
     fetchSalesAnalytics.mockResolvedValue({ data: {
       fiscal: fiscal(), meta: { currency: 'UAH', date_from: '2026-09-01', date_to: '2026-09-15' },
       kpis: { revenue: { value: 240000 }, returns: { count: 30, rate: 30 } },
@@ -60,13 +60,30 @@ describe('Фіскальна аналітика', () => {
     } });
     const wrapper = mount(SalesAnalyticsPage);
     await flushPromises();
-    expect(wrapper.find('.operational-section').attributes('open')).toBeUndefined();
-    expect(wrapper.find('.operational-section summary').text()).toContain('не фіскальна виручка');
+    expect(wrapper.find('.operational-section').exists()).toBe(false);
+    expect(wrapper.find('.audit-card').exists()).toBe(false);
+    expect(wrapper.find('.btn-export').exists()).toBe(false);
+    expect(wrapper.find('.currency-field').exists()).toBe(false);
     expect(wrapper.find('.fiscal-overview').text().replace(/\s/g, '')).not.toContain('240000');
-    expect(wrapper.find('.mini-kpi-grid').text()).not.toContain('30%');
-    await wrapper.find('.currency-field select').setValue('PLN');
+    expect(wrapper.text()).not.toContain('30%');
+    expect(wrapper.text()).not.toContain('операційний блок');
+    expect(fetchSalesAnalytics).toHaveBeenLastCalledWith(expect.objectContaining({ currency: 'UAH', fiscal_only: 1 }));
+    expect(fetchSalesAnalytics.mock.lastCall[0]).not.toHaveProperty('scope');
+    expect(fetchSalesAnalytics.mock.lastCall[0]).not.toHaveProperty('status_id');
+    expect(window.location.search).not.toContain('payment_status');
     expect(wrapper.findComponent(FiscalSalesOverview).props('currency')).toBe('UAH');
-    expect(wrapper.find('.btn-export').attributes('href')).toContain('currency=UAH');
+    wrapper.unmount();
+  });
+
+  it('зберігає фільтри чеків і дозволяє оновити дані без кешу', async () => {
+    window.history.replaceState({}, '', '/analytics?date_from=2026-09-01&date_to=2026-09-14&sale_type=retail&source_id=2&manager_id=3');
+    fetchSalesAnalytics.mockResolvedValue({ data: { fiscal: fiscal(), meta: { currency: 'UAH' }, filters: {} } });
+    const wrapper = mount(SalesAnalyticsPage);
+    await flushPromises();
+    expect(fetchSalesAnalytics).toHaveBeenLastCalledWith({ date_from: '2026-09-01', date_to: '2026-09-14', sale_type: 'retail', source_id: '2', manager_id: '3', currency: 'UAH', fiscal_only: 1 });
+    await wrapper.find('.btn-refresh').trigger('click');
+    await flushPromises();
+    expect(fetchSalesAnalytics).toHaveBeenLastCalledWith(expect.objectContaining({ fresh: 1, source_id: '2', fiscal_only: 1 }));
     wrapper.unmount();
   });
 });

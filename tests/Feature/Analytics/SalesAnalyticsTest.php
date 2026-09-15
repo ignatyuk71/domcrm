@@ -72,6 +72,25 @@ class SalesAnalyticsTest extends TestCase
 
         $this->actingAs($operator)->get('/analytics')->assertForbidden();
         $this->actingAs($operator)->getJson('/api/analytics/sales')->assertForbidden();
+        $this->actingAs($operator)->getJson('/api/analytics/sales?fiscal_only=1')->assertForbidden();
+    }
+
+    public function test_fiscal_only_response_does_not_load_operational_analytics(): void
+    {
+        $owner = User::factory()->create(['role' => User::ROLE_OWNER]);
+        [$source, $done] = $this->dictionaryRows();
+        $order = $this->order($source, $owner->id, $done, 'delivered_paid', 'retail', 'paid', '2026-07-10 10:00:00');
+        $this->receipt($order, 'sell', 39900, '2026-08-10T05:30:06+00:00');
+
+        DB::enableQueryLog();
+        $response = $this->actingAs($owner)->getJson('/api/analytics/sales?date_from=2026-08-01&date_to=2026-08-31&fiscal_only=1');
+        $queries = DB::getQueryLog();
+        DB::disableQueryLog();
+        $response->assertOk()->assertJsonPath('fiscal.totals.revenue', 399)
+            ->assertJsonMissingPath('audit')->assertJsonMissingPath('kpis')
+            ->assertJsonMissingPath('top_products')->assertJsonMissingPath('statuses')
+            ->assertJsonMissingPath('filters.scopes')->assertJsonMissingPath('filters.statuses');
+        $this->assertFalse(collect($queries)->contains(fn ($query) => str_contains($query['query'], 'order_items')));
     }
 
     public function test_owner_can_export_filtered_audit_as_csv(): void

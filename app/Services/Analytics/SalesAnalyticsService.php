@@ -33,9 +33,8 @@ class SalesAnalyticsService
                 'scope' => $filters['scope'],
                 'generated_at' => Carbon::now(config('app.timezone'))->toIso8601String(),
             ],
-            'filters' => $this->filterOptions(),
-            'audit' => $this->audit($filters),
-        ]);
+            'filters' => $this->filterOptions($filters['fiscal_only']),
+        ], $filters['fiscal_only'] ? [] : ['audit' => $this->audit($filters)]);
     }
 
     public function normalizeFilters(array $input): array
@@ -62,6 +61,7 @@ class SalesAnalyticsService
             'page' => max(1, (int) ($input['page'] ?? 1)),
             'per_page' => min(100, max(10, (int) ($input['per_page'] ?? 20))),
             'fresh' => filter_var($input['fresh'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            'fiscal_only' => filter_var($input['fiscal_only'] ?? false, FILTER_VALIDATE_BOOLEAN),
         ];
     }
 
@@ -84,6 +84,14 @@ class SalesAnalyticsService
             'date_from' => $previousStart->toDateString(),
             'date_to' => $previousEnd->toDateString(),
         ]);
+
+        // Нова сторінка не рахує невикористані суми, собівартість і аудит замовлень.
+        if ($filters['fiscal_only']) {
+            return [
+                'fiscal' => app(FiscalSalesAnalyticsService::class)->report($filters, $previousFilters),
+                'comparison' => ['date_from' => $previousStart->toDateString(), 'date_to' => $previousEnd->toDateString()],
+            ];
+        }
 
         $current = $this->summary($filters);
         $previous = $this->summary($previousFilters);
@@ -580,8 +588,19 @@ class SalesAnalyticsService
         return $paginator->toArray();
     }
 
-    private function filterOptions(): array
+    private function filterOptions(bool $fiscalOnly = false): array
     {
+        if ($fiscalOnly) {
+            return [
+                'sources' => DB::table('order_sources')->orderBy('sort_order')->orderBy('name')->get(['id', 'code', 'name'])->all(),
+                'managers' => DB::table('users')->whereIn('id', DB::table('orders')->whereNotNull('manager_id')->select('manager_id'))->orderBy('name')->get(['id', 'name'])->all(),
+                'sale_types' => [
+                    ['value' => 'retail', 'label' => 'Роздріб'],
+                    ['value' => 'wholesale', 'label' => 'Опт'],
+                ],
+            ];
+        }
+
         $currencies = DB::table('orders')->whereNotNull('currency')->distinct()->orderBy('currency')->pluck('currency')->all();
         if (! in_array('UAH', $currencies, true)) {
             array_unshift($currencies, 'UAH');
