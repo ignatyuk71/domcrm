@@ -4,7 +4,7 @@
       <div>
         <div class="eyebrow"><i class="bi bi-receipt"></i> Продажі за чеками Checkbox</div>
         <h1>Аналітика продажів</h1>
-        <p>Фактична виручка, повернення коштів і середній чек.</p>
+        <p>Фактична виручка за чеками та повернення посилок за статусами.</p>
       </div>
       <button type="button" class="btn-refresh" :disabled="loading" aria-label="Оновити аналітику" @click="load(true)">
         <i class="bi bi-arrow-clockwise" :class="{ spinning: loading }"></i> Оновити
@@ -59,6 +59,7 @@
         <span>Порівняння: {{ formatPeriod(meta.comparison_from, meta.comparison_to) }}</span>
       </div>
       <FiscalSalesOverview :fiscal="fiscal" :currency="meta.currency" />
+      <ShippingReturnsOverview v-if="shippingReturns" :data="shippingReturns" />
     </template>
     <div v-if="loading && !hasLoaded" class="loading-grid" role="status" aria-label="Завантаження аналітики">
       <div v-for="index in 3" :key="index" class="skeleton"></div>
@@ -70,6 +71,7 @@
 import { onMounted, reactive, ref } from 'vue';
 import { fetchSalesAnalytics } from '@/crm/services/salesAnalyticsApi';
 import FiscalSalesOverview from './FiscalSalesOverview.vue';
+import ShippingReturnsOverview from './ShippingReturnsOverview.vue';
 
 const toDateInput = (date) => date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
 const today = new Date();
@@ -88,6 +90,7 @@ const hasLoaded = ref(false);
 const error = ref('');
 const meta = ref({});
 const fiscal = ref({});
+const shippingReturns = ref(null);
 const filterOptions = reactive({ sources: [], managers: [], sale_types: [] });
 let requestSequence = 0;
 
@@ -102,6 +105,7 @@ async function load(fresh = false) {
     if (sequence !== requestSequence) return;
     meta.value = data.meta || {};
     fiscal.value = data.fiscal || {};
+    shippingReturns.value = data.shipping_returns || null;
     Object.assign(filterOptions, data.filters || {});
     hasLoaded.value = true;
     window.history.replaceState({}, '', window.location.pathname + '?' + new URLSearchParams(selected));

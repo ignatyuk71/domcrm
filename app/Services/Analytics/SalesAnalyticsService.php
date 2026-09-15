@@ -16,7 +16,7 @@ class SalesAnalyticsService
     {
         $filters = $this->normalizeFilters($input);
         $cacheFilters = array_diff_key($filters, array_flip(['page', 'per_page', 'fresh']));
-        $cacheKey = 'sales-analytics:v4:'.sha1(json_encode($cacheFilters));
+        $cacheKey = 'sales-analytics:v5:'.sha1(json_encode($cacheFilters));
 
         if ($filters['fresh']) {
             Cache::forget($cacheKey);
@@ -89,6 +89,7 @@ class SalesAnalyticsService
         if ($filters['fiscal_only']) {
             return [
                 'fiscal' => app(FiscalSalesAnalyticsService::class)->report($filters, $previousFilters),
+                'shipping_returns' => app(ShippingReturnsAnalyticsService::class)->report($filters),
                 'comparison' => ['date_from' => $previousStart->toDateString(), 'date_to' => $previousEnd->toDateString()],
             ];
         }
