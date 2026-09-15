@@ -16,7 +16,7 @@ class SalesAnalyticsService
     {
         $filters = $this->normalizeFilters($input);
         $cacheFilters = array_diff_key($filters, array_flip(['page', 'per_page', 'fresh']));
-        $cacheKey = 'sales-analytics:v2:'.sha1(json_encode($cacheFilters));
+        $cacheKey = 'sales-analytics:v3:'.sha1(json_encode($cacheFilters));
 
         if ($filters['fresh']) {
             Cache::forget($cacheKey);
@@ -76,7 +76,7 @@ class SalesAnalyticsService
     private function buildAggregates(array $filters): array
     {
         [$rangeStart, $rangeEnd] = $this->range($filters);
-        $periodDays = $rangeStart->diffInDays($rangeEnd) + 1;
+        $periodDays = (int) $rangeStart->diffInDays($rangeEnd->copy()->startOfDay()) + 1;
         $previousEnd = $rangeStart->copy()->subSecond();
         $previousStart = $previousEnd->copy()->startOfDay()->subDays($periodDays - 1);
 
@@ -93,6 +93,7 @@ class SalesAnalyticsService
         $saleTypes = $this->saleTypeBreakdown($filters, $current['revenue']);
 
         return [
+            'fiscal' => app(FiscalSalesAnalyticsService::class)->report($filters, $previousFilters),
             'comparison' => [
                 'date_from' => $previousStart->toDateString(),
                 'date_to' => $previousEnd->toDateString(),
@@ -526,10 +527,10 @@ class SalesAnalyticsService
         }
 
         $insights[] = [
-            'type' => $issues['return_rate'] > 10 ? 'warning' : 'neutral',
+            'type' => 'neutral',
             'icon' => 'bi-arrow-return-left',
-            'title' => 'Повернення — '.$issues['return_rate'].'%',
-            'description' => $issues['returned_orders'].' із '.$issues['total_orders'].' замовлень за період.',
+            'title' => 'Повернені замовлення — '.$issues['returned_orders'],
+            'description' => 'Поточний стан замовлень, створених за період. Це не повернення коштів за датою чека.',
         ];
 
         if (count($saleTypes) === 1 && ($saleTypes[0]['key'] ?? null) === 'retail') {

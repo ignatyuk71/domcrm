@@ -35,7 +35,7 @@ class SalesAnalyticsRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator) {
-            if (! $this->filled('date_from') || ! $this->filled('date_to')) {
+            if ($validator->errors()->hasAny(['date_from', 'date_to']) || ! $this->filled('date_from') || ! $this->filled('date_to')) {
                 return;
             }
 

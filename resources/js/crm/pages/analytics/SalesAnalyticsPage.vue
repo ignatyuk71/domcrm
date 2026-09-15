@@ -4,11 +4,11 @@
       <div>
         <div class="eyebrow"><i class="bi bi-stars"></i> Центр управління продажами</div>
         <h1>Аналітика продажів</h1>
-        <p>Виторг, реальний валовий прибуток, маржа та аудит кожного замовлення.</p>
+        <p>Фактична виручка за чеками Checkbox. Замовлення та планові суми — окремо.</p>
       </div>
       <div class="header-actions">
         <a :href="exportUrl" class="btn-export">
-          <i class="bi bi-download"></i><span>Експорт CSV</span>
+          <i class="bi bi-download"></i><span>CSV замовлень</span>
         </a>
         <button type="button" class="btn-refresh" :disabled="loading" @click="load(filters.page, true)">
           <i class="bi bi-arrow-clockwise" :class="{ spinning: loading }"></i>
@@ -38,7 +38,7 @@
           <input v-model="filters.date_to" type="date" class="form-control" @change="activePreset = 'custom'">
         </label>
         <label class="filter-field">
-          <span>Залік продажів</span>
+          <span>Залік замовлень</span>
           <select v-model="filters.scope" class="form-select">
             <option v-for="option in filterOptions.scopes" :key="option.value" :value="option.value">{{ option.label }}</option>
           </select>
@@ -67,14 +67,14 @@
           </select>
         </label>
         <label class="filter-field">
-          <span>Статус</span>
+          <span>Статус замовлень</span>
           <select v-model="filters.status_id" class="form-select">
             <option value="">Усі статуси</option>
             <option v-for="status in filterOptions.statuses" :key="status.id" :value="String(status.id)">{{ status.name }}</option>
           </select>
         </label>
         <label class="filter-field">
-          <span>Оплата</span>
+          <span>Оплата замовлень</span>
           <select v-model="filters.payment_status" class="form-select">
             <option value="">Усі статуси оплати</option>
             <option v-for="option in filterOptions.payment_statuses" :key="option.value" :value="option.value">{{ option.label }}</option>
@@ -109,6 +109,11 @@
         <span>Порівняння: {{ formatPeriod(meta.comparison_from, meta.comparison_to) }}</span>
       </div>
 
+      <FiscalSalesOverview :fiscal="fiscal" :currency="meta.currency" />
+
+      <details class="operational-section">
+        <summary>Замовлення та планові суми — не фіскальна виручка</summary>
+        <p class="operational-note">Нижче — замовлення за датою створення та їхнім поточним станом. Суми можуть включати товари в дорозі й на відділенні. Прибуток і маржа тут розрахункові, а повернені та скасовані замовлення не є фіскальними поверненнями коштів.</p>
       <section class="kpi-grid">
         <article v-for="card in primaryKpis" :key="card.key" class="kpi-card" :class="`tone-${card.tone}`">
           <div class="kpi-top">
@@ -150,7 +155,7 @@
       <section class="content-grid chart-grid">
         <article class="data-card revenue-card">
           <div class="card-head">
-            <div><h2>Динаміка продажів</h2><p>Виторг, собівартість та валовий прибуток за днями</p></div>
+            <div><h2>Динаміка створених замовлень</h2><p>Планові суми за датою створення, не виручка за чеками</p></div>
             <div class="chart-legend">
               <span><i class="legend-dot revenue"></i>Виторг</span>
               <span><i class="legend-dot profit"></i>Прибуток</span>
@@ -285,6 +290,7 @@
         <i class="bi bi-calculator"></i>
         <span><strong>Формула:</strong> валовий прибуток = виторг позицій із відомою собівартістю − їхня собівартість. Маржа = валовий прибуток / покритий виторг × 100%.</span>
       </footer>
+      </details>
     </template>
 
     <div v-if="loading && !hasLoaded" class="loading-grid">
@@ -296,6 +302,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue';
 import ApexChart from 'vue3-apexcharts';
+import FiscalSalesOverview from './FiscalSalesOverview.vue';
 import { fetchSalesAnalytics } from '@/crm/services/salesAnalyticsApi';
 
 const today = new Date();
@@ -325,6 +332,8 @@ let requestSequence = 0;
 
 const meta = ref({});
 const kpis = ref({});
+const fiscal = ref({});
+const appliedParams = ref({});
 const trend = ref({ labels: [], revenue: [], cogs: [], profit: [], orders: [] });
 const saleTypes = ref([]);
 const sources = ref([]);
@@ -349,6 +358,8 @@ async function load(page = 1, fresh = false) {
     if (sequence !== requestSequence) return;
     meta.value = data.meta || {};
     kpis.value = data.kpis || {};
+    fiscal.value = data.fiscal || {};
+    appliedParams.value = { ...requestParams };
     trend.value = data.trend || trend.value;
     saleTypes.value = data.sale_types || [];
     sources.value = data.sources || [];
@@ -399,27 +410,27 @@ function syncUrl() {
   window.history.replaceState({}, '', `${window.location.pathname}?${query.toString()}`);
 }
 
-const exportUrl = computed(() => `/analytics/export?${new URLSearchParams(params()).toString()}`);
+const exportUrl = computed(() => `/analytics/export?${new URLSearchParams(appliedParams.value).toString()}`);
 const costCoverageWarning = computed(() => kpis.value.cost_coverage?.value !== null && Number(kpis.value.cost_coverage?.value) < 99.9);
 const scopeNote = computed(() => ({
   valid: 'без скасованих і повернень',
   completed: 'лише завершені або оплачені',
   all: 'усі замовлення',
-}[filters.scope] || 'за вибраним режимом'));
+}[appliedParams.value.scope] || 'за вибраним режимом'));
 
 const primaryKpis = computed(() => [
-  { key: 'revenue', label: 'Виторг', value: formatMoney(kpis.value.revenue?.value), delta: kpis.value.revenue?.delta ?? null, note: scopeNote.value, icon: 'bi bi-cash-stack', tone: 'indigo' },
-  { key: 'profit', label: 'Валовий прибуток', value: formatMoney(kpis.value.gross_profit?.value), delta: kpis.value.gross_profit?.delta ?? null, note: costCoverageWarning.value ? 'за позиціями з відомою закупкою' : 'виторг мінус собівартість', icon: 'bi bi-graph-up-arrow', tone: 'green' },
+  { key: 'revenue', label: 'Сума замовлень', value: formatMoney(kpis.value.revenue?.value), delta: kpis.value.revenue?.delta ?? null, note: scopeNote.value, icon: 'bi bi-cash-stack', tone: 'indigo' },
+  { key: 'profit', label: 'Розрахунковий валовий прибуток', value: formatMoney(kpis.value.gross_profit?.value), delta: kpis.value.gross_profit?.delta ?? null, note: costCoverageWarning.value ? 'за позиціями з відомою закупкою' : 'сума замовлень мінус собівартість', icon: 'bi bi-graph-up-arrow', tone: 'green' },
   { key: 'margin', label: 'Маржинальність', value: formatPercent(kpis.value.gross_margin?.value), delta: kpis.value.gross_margin?.delta_pp ?? null, deltaSuffix: ' в.п.', note: kpis.value.gross_margin?.delta_pp == null ? 'частка прибутку у виторгу' : `${signed(kpis.value.gross_margin.delta_pp)} в.п. до попереднього`, icon: 'bi bi-percent', tone: 'violet' },
   { key: 'orders', label: 'Замовлень', value: formatNumber(kpis.value.orders?.value), delta: kpis.value.orders?.delta ?? null, note: `середній чек ${formatMoney(kpis.value.average_check?.value)}`, icon: 'bi bi-bag-check-fill', tone: 'amber' },
 ]);
 
 const secondaryKpis = computed(() => [
-  { label: 'Отримано / оплачено', value: formatMoney(kpis.value.paid_revenue?.value), note: 'за статусом оплати', icon: 'bi bi-check2-circle', tone: 'green' },
+  { label: 'Замовлення зі статусом оплати', value: formatMoney(kpis.value.paid_revenue?.value), note: 'не підтвердження фіскальної виручки', icon: 'bi bi-check2-circle', tone: 'green' },
   { label: 'Собівартість', value: formatMoney(kpis.value.cogs?.value), note: `покриття ${formatPercent(kpis.value.cost_coverage?.value)}`, icon: 'bi bi-box-seam', tone: 'blue' },
-  { label: 'Продано одиниць', value: formatNumber(kpis.value.units?.value), note: 'товарних позицій', icon: 'bi bi-boxes', tone: 'violet' },
-  { label: 'Повернення', value: formatPercent(kpis.value.returns?.rate), note: `${kpis.value.returns?.count || 0} зам. · ${formatMoney(kpis.value.returns?.revenue)}`, icon: 'bi bi-arrow-return-left', tone: 'red' },
-  { label: 'Скасування', value: formatPercent(kpis.value.cancellations?.rate), note: `${kpis.value.cancellations?.count || 0} зам. · ${formatMoney(kpis.value.cancellations?.revenue)}`, icon: 'bi bi-x-octagon', tone: 'slate' },
+  { label: 'Одиниць у замовленнях', value: formatNumber(kpis.value.units?.value), note: 'за вибраним заліком замовлень', icon: 'bi bi-boxes', tone: 'violet' },
+  { label: 'Повернених замовлень', value: formatNumber(kpis.value.returns?.count), note: 'поточний стан створених за період', icon: 'bi bi-arrow-return-left', tone: 'red' },
+  { label: 'Скасованих замовлень', value: formatNumber(kpis.value.cancellations?.count), note: 'поточний стан створених за період', icon: 'bi bi-x-octagon', tone: 'slate' },
 ]);
 
 const trendSeries = computed(() => [
@@ -451,8 +462,8 @@ const visiblePages = computed(() => {
   return Array.from({ length: Math.max(0, end - start + 1) }, (_, index) => start + index);
 });
 
-const currencyLocale = computed(() => filters.currency === 'PLN' ? 'pl-PL' : 'uk-UA');
-function formatMoney(value) { return new Intl.NumberFormat(currencyLocale.value, { style: 'currency', currency: filters.currency || 'UAH', maximumFractionDigits: 0 }).format(Number(value || 0)); }
+const currencyLocale = computed(() => meta.value.currency === 'PLN' ? 'pl-PL' : 'uk-UA');
+function formatMoney(value) { return new Intl.NumberFormat(currencyLocale.value, { style: 'currency', currency: meta.value.currency || 'UAH', maximumFractionDigits: 0 }).format(Number(value || 0)); }
 function compactMoney(value) { return new Intl.NumberFormat('uk-UA', { notation: 'compact', maximumFractionDigits: 1 }).format(Number(value || 0)); }
 function formatNumber(value) { return new Intl.NumberFormat('uk-UA').format(Number(value || 0)); }
 function formatPercent(value) { return value === null || value === undefined ? '—' : `${new Intl.NumberFormat('uk-UA', { maximumFractionDigits: 1 }).format(Number(value))}%`; }
@@ -480,6 +491,7 @@ onMounted(() => { hydrateFromUrl(); load(filters.page); });
 </script>
 
 <style scoped>
+.operational-section{border-top:1px solid #dfe5ee;padding-top:20px}.operational-section>summary{font-size:1rem;font-weight:750;color:#475569;cursor:pointer;padding:8px 0 16px}.operational-note{background:#fffbeb;border-radius:10px;color:#78716c;padding:14px 16px;font-size:.8rem;margin-bottom:18px;line-height:1.5}
 .analytics-page { --ink:#0f172a; --muted:#64748b; --line:#e7ecf3; --canvas:#f5f7fb; color:var(--ink); max-width:1800px; margin:0 auto; }
 .analytics-header { display:flex; justify-content:space-between; align-items:flex-end; gap:24px; margin-bottom:22px; }
 .eyebrow { display:flex; align-items:center; gap:7px; color:#4f46e5; font-size:.72rem; font-weight:800; letter-spacing:.08em; text-transform:uppercase; margin-bottom:8px; }
