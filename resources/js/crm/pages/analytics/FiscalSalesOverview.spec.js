@@ -23,6 +23,12 @@ describe('Фіскальна аналітика', () => {
     expect(cards[0].text().replace(/\s/g, '')).toContain('173517,00');
     expect(cards[1].text()).toContain('316');
     expect(cards[2].text().replace(/\s/g, '')).toContain('549,10');
+    for (const card of cards) {
+      expect(card.findAll('i')).toHaveLength(1);
+      expect(card.find('i').attributes('aria-hidden')).toBe('true');
+      expect(card.find('strong').exists()).toBe(true);
+      expect(card.find('small').text()).not.toBe('');
+    }
     expect(wrapper.findAllComponents({ name: 'ApexChart' })).toHaveLength(3);
     expect(wrapper.text()).toContain('Виручка — не прибуток');
     wrapper.unmount();

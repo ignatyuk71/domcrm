@@ -7,7 +7,7 @@
 
     <div class="fiscal-kpis">
       <article v-for="card in cards" :key="card.key" class="fiscal-kpi">
-        <i :class="card.icon"></i>
+        <i :class="card.icon" aria-hidden="true"></i>
         <span>{{ card.label }}</span>
         <strong>{{ card.value }}</strong>
         <p><span v-if="card.delta != null" :class="card.delta >= 0 ? 'positive' : 'negative'">{{ card.delta >= 0 ? '↑' : '↓' }} {{ Math.abs(card.delta) }}%</span> {{ card.delta == null ? 'Немає бази для порівняння' : 'до попереднього періоду' }}</p>
@@ -95,7 +95,27 @@ const averageOptions = computed(() => options(['#0eaa99']));
 </script>
 
 <style scoped>
-.fiscal-overview{margin-bottom:24px}.section-heading{display:flex;align-items:end;justify-content:space-between;gap:16px;margin:22px 0 16px}.section-heading h2{font-size:1.3rem;font-weight:800;margin:7px 0 0}.section-heading>span{font-size:.75rem;color:#64748b}.verified{color:#0d9488;font-size:.74rem;font-weight:700}.fiscal-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}.fiscal-kpi{background:#f0f2f3;border-radius:14px;padding:23px;display:flex;flex-direction:column;align-items:flex-start}.fiscal-kpi>i{font-size:1.5rem;margin-bottom:16px}.fiscal-kpi>span{color:#7b8290;font-size:.86rem}.fiscal-kpi>strong{font-size:clamp(1.5rem,2.3vw,2rem);letter-spacing:-.035em;margin:3px 0 12px;line-height:1.2}.fiscal-kpi p{font-size:.75rem;color:#888e98;margin:0 0 5px}.fiscal-kpi p span{font-weight:750;margin-right:5px}.fiscal-kpi small{font-size:.7rem;color:#6b7280}.positive{color:#0d9488}.negative{color:#ed2450}.reconciliation{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 24px;margin:16px 0;border:1px solid #e4e9ed;border-radius:13px;background:#fff}.reconciliation div{display:flex;flex-direction:column;gap:5px}.reconciliation div>span{font-size:.76rem;color:#64748b}.reconciliation strong{font-size:1rem}.operator{color:#94a3b8;font-size:1.4rem}.fiscal-note{display:flex;align-items:flex-start;gap:12px;background:#f0fdfa;border:1px solid #ccfbf1;border-radius:12px;padding:16px 20px;margin-bottom:18px;color:#31534e;font-size:.77rem;line-height:1.55}.fiscal-note>i{color:#0d9488;font-size:1.1rem}.fiscal-note p{margin:5px 0 0}.data-warning{font-size:.77rem;padding:12px 16px;border-radius:10px;background:#fffbeb;color:#92400e}.fiscal-chart{background:#fff;border:1px solid #e7ecf3;border-radius:14px;overflow:hidden;margin-bottom:16px;min-width:0}.chart-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:22px 22px 6px}.chart-heading h3{font-size:1.08rem;font-weight:750;margin:0}.chart-heading span{font-size:.73rem;color:#8b929e}.small-charts{display:grid;grid-template-columns:1fr 1fr;gap:16px}.empty-note{text-align:center;color:#64748b;font-size:.8rem;padding:0 16px 14px}
-@media(max-width:991.98px){.fiscal-kpis{gap:12px}.fiscal-kpi{padding:18px}.chart-heading{align-items:flex-start;flex-direction:column}}
-@media(max-width:767.98px){.fiscal-kpis,.small-charts{grid-template-columns:1fr}.section-heading{align-items:flex-start;flex-direction:column}.reconciliation{flex-direction:column;align-items:flex-start;gap:8px}.operator{display:none}.fiscal-note{padding:14px}.fiscal-kpi>strong{font-size:1.85rem}}
+.fiscal-overview{margin-bottom:24px}.section-heading{display:flex;align-items:end;justify-content:space-between;gap:16px;margin:22px 0 16px}.section-heading h2{font-size:1.3rem;font-weight:800;margin:7px 0 0}.section-heading>span{font-size:.75rem;color:#64748b}.verified{color:#0d9488;font-size:.74rem;font-weight:700}
+.fiscal-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.fiscal-kpi{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 36px;
+  grid-template-areas:"label icon" "value icon" "comparison comparison" "note note";
+  align-content:start;
+  gap:4px 12px;
+  min-width:0;
+  padding:16px 18px;
+  background:#f0f2f3;
+  border-radius:12px;
+}
+/* Іконка займає окрему колонку праворуч і не збільшує висоту картки. */
+.fiscal-kpi>i{grid-area:icon;align-self:center;display:grid;place-items:center;width:36px;height:36px;border-radius:10px;background:#e0eeeb;color:#0d9488;font-size:1.2rem}
+.fiscal-kpi>span{grid-area:label;color:#7b8290;font-size:.8rem;line-height:1.35}
+.fiscal-kpi>strong{grid-area:value;min-width:0;overflow-wrap:anywhere;font-size:clamp(1.25rem,1.8vw,1.6rem);letter-spacing:-.025em;margin:0;line-height:1.2}
+.fiscal-kpi p{grid-area:comparison;font-size:.72rem;color:#888e98;margin:4px 0 0;line-height:1.4}
+.fiscal-kpi p span{font-weight:750;margin-right:5px}
+.fiscal-kpi small{grid-area:note;font-size:.7rem;color:#6b7280;line-height:1.4}
+.positive{color:#0d9488}.negative{color:#ed2450}.reconciliation{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 24px;margin:16px 0;border:1px solid #e4e9ed;border-radius:13px;background:#fff}.reconciliation div{display:flex;flex-direction:column;gap:5px}.reconciliation div>span{font-size:.76rem;color:#64748b}.reconciliation strong{font-size:1rem}.operator{color:#94a3b8;font-size:1.4rem}.fiscal-note{display:flex;align-items:flex-start;gap:12px;background:#f0fdfa;border:1px solid #ccfbf1;border-radius:12px;padding:16px 20px;margin-bottom:18px;color:#31534e;font-size:.77rem;line-height:1.55}.fiscal-note>i{color:#0d9488;font-size:1.1rem}.fiscal-note p{margin:5px 0 0}.data-warning{font-size:.77rem;padding:12px 16px;border-radius:10px;background:#fffbeb;color:#92400e}.fiscal-chart{background:#fff;border:1px solid #e7ecf3;border-radius:14px;overflow:hidden;margin-bottom:16px;min-width:0}.chart-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:22px 22px 6px}.chart-heading h3{font-size:1.08rem;font-weight:750;margin:0}.chart-heading span{font-size:.73rem;color:#8b929e}.small-charts{display:grid;grid-template-columns:1fr 1fr;gap:16px}.empty-note{text-align:center;color:#64748b;font-size:.8rem;padding:0 16px 14px}
+@media(max-width:991.98px){.fiscal-kpi{padding:14px}.chart-heading{align-items:flex-start;flex-direction:column}}
+@media(max-width:767.98px){.fiscal-kpis,.small-charts{grid-template-columns:1fr}.section-heading{align-items:flex-start;flex-direction:column}.reconciliation{flex-direction:column;align-items:flex-start;gap:8px}.operator{display:none}.fiscal-note{padding:14px}}
 </style>
