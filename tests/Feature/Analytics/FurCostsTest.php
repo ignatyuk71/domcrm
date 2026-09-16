@@ -31,6 +31,98 @@ class FurCostsTest extends TestCase
         $this->actingAs(User::factory()->create(['role' => User::ROLE_OWNER]));
     }
 
+    private function localPayload(array $replace = []): array
+    {
+        $payload = array_diff_key($this->payload(), array_flip(['goods_cny', 'china_shipping_cny', 'commission_percent', 'international_shipping_usd', 'cny_rate', 'usd_rate']));
+
+        return array_replace($payload, ['purchase_source' => 'ukraine', 'goods_uah' => '3000'], $replace);
+    }
+
+    public function test_local_purchase_uses_only_uah_and_no_currency_or_commission(): void
+    {
+        $this->owner();
+        $response = $this->postJson(self::URL, $this->localPayload(['goods_uah' => '3000,00', 'ukraine_shipping_uah' => '100,00', 'other_costs_uah' => '20']))->assertCreated()
+            ->assertJsonPath('inputs.purchase_source', 'ukraine')->assertJsonPath('inputs.goods_uah', '3000.00')
+            ->assertJsonPath('calculation.total_uah', 3120)->assertJsonPath('calculation.unit_cost_uah', 4.68)
+            ->assertJsonPath('calculation.linear_metre_cost_uah', 312)->assertJsonPath('calculation.square_metre_cost_uah', 156)
+            ->assertJsonCount(3, 'calculation.breakdown')->assertJsonPath('calculation.breakdown.0.total_uah', 3000)
+            ->assertJsonPath('calculation.ukraine_shipping_included', true);
+        foreach (['goods_cny', 'cny_rate', 'usd_rate', 'commission_percent'] as $field) {
+            $this->assertArrayNotHasKey($field, $response->json('inputs'));
+        }
+        $this->assertArrayNotHasKey('commission_cny', $response->json('calculation'));
+        $this->assertDatabaseCount('sole_inventory_batches', 0);
+    }
+
+    public function test_local_delivery_unknown_zero_and_yards_remain_distinct(): void
+    {
+        $this->owner();
+        $this->postJson(self::URL, $this->localPayload())->assertCreated()
+            ->assertJsonPath('inputs.ukraine_shipping_uah', null)->assertJsonPath('calculation.ukraine_shipping_included', false)
+            ->assertJsonPath('calculation.unit_cost_uah', 4.5);
+        $this->postJson(self::URL, $this->localPayload(['ukraine_shipping_uah' => '0']))->assertCreated()->assertJsonPath('calculation.ukraine_shipping_included', true);
+        $this->postJson(self::URL, $this->localPayload(['goods_uah' => '0.10', 'other_costs_uah' => '0.20']))->assertCreated()->assertJsonPath('calculation.total_uah', 0.3);
+        $response = $this->postJson(self::URL, $this->localPayload(['length_unit' => 'yard']))->assertCreated()->assertJsonPath('calculation.unit_cost_uah', 4.92126);
+        $this->assertEqualsWithDelta(9.144, $response->json('calculation.length_metres'), 0.00000001);
+    }
+
+    public function test_source_specific_validation_rejects_hidden_foreign_costs(): void
+    {
+        $this->owner();
+        foreach ([['purchase_source', 'unknown'], ['purchase_source', ''], ['goods_uah', ''], ['goods_uah', '-1'], ['goods_uah', '2.001'], ['goods_uah', '1e2'], ['goods_uah', '1000001'],
+            ['goods_cny', '100'], ['china_shipping_cny', '1'], ['commission_percent', '10'], ['international_shipping_usd', '2'], ['cny_rate', '7'], ['usd_rate', '40']] as [$field, $value]) {
+            $this->postJson(self::URL, $this->localPayload([$field => $value]))->assertUnprocessable()->assertJsonValidationErrors($field);
+        }
+        $missing = $this->localPayload();
+        unset($missing['goods_uah']);
+        $this->postJson(self::URL, $missing)->assertUnprocessable()->assertJsonValidationErrors('goods_uah');
+        $this->postJson(self::URL, $this->payload(['goods_uah' => '100']))->assertUnprocessable()->assertJsonValidationErrors('goods_uah');
+        $this->assertDatabaseCount('production_cost_batches', 0);
+    }
+
+    public function test_source_edits_are_versioned_and_old_china_records_are_read_without_rewrite(): void
+    {
+        $this->owner();
+        $china = $this->payload();
+        $id = $this->postJson(self::URL, $china)->assertCreated()->json('id');
+        $row = DB::table('production_cost_batches')->where('id', $id)->first();
+        $inputs = json_decode($row->inputs, true);
+        unset($inputs['purchase_source']);
+        DB::table('production_cost_batches')->where('id', $id)->update(['inputs' => json_encode($inputs)]);
+        $this->getJson(self::URL)->assertOk()->assertJsonPath('data.0.inputs.purchase_source', 'china')->assertJsonPath('data.0.calculation.total_uah', 1126);
+        $this->assertArrayNotHasKey('purchase_source', json_decode(DB::table('production_cost_batches')->where('id', $id)->value('inputs'), true));
+        $this->postJson(self::URL, $china)->assertCreated()->assertJsonPath('id', $id);
+
+        $local = $this->localPayload(['version' => 1]);
+        unset($local['request_key']);
+        $this->putJson(self::URL.'/'.$id, $local)->assertOk()->assertJsonPath('version', 2)->assertJsonPath('calculation.total_uah', 3000);
+        $this->putJson(self::URL.'/'.$id, $local)->assertConflict();
+        $stored = json_decode(DB::table('production_cost_batches')->where('id', $id)->value('inputs'), true);
+        $this->assertArrayNotHasKey('goods_cny', $stored);
+        $this->assertSame('ukraine', $stored['purchase_source']);
+
+        $china['version'] = 2;
+        unset($china['request_key']);
+        $this->putJson(self::URL.'/'.$id, $china)->assertOk()->assertJsonPath('version', 3)->assertJsonPath('inputs.purchase_source', 'china')->assertJsonPath('calculation.total_uah', 1126);
+        $this->assertDatabaseCount('production_cost_batches', 1);
+        $this->assertDatabaseCount('production_cost_batch_revisions', 3);
+    }
+
+    public function test_local_import_and_api_retries_do_not_duplicate_batches(): void
+    {
+        Storage::fake('local');
+        $payload = $this->localPayload();
+        Storage::disk('local')->put('local-fur.json', json_encode($payload));
+        $path = Storage::disk('local')->path('local-fur.json');
+        $this->artisan('production-costs:import-fur', ['--file' => $path])->assertSuccessful();
+        $this->artisan('production-costs:import-fur', ['--file' => $path])->assertSuccessful();
+        $this->owner();
+        $this->postJson(self::URL, $payload)->assertCreated()->assertJsonPath('inputs.purchase_source', 'ukraine');
+        $this->postJson(self::URL, array_replace($payload, ['goods_uah' => '3001']))->assertConflict();
+        $this->assertDatabaseCount('production_cost_batches', 1);
+        $this->assertDatabaseCount('production_cost_batch_revisions', 1);
+    }
+
     public function test_owner_only_routes_and_get_has_no_side_effects(): void
     {
         $this->getJson(self::URL)->assertUnauthorized();

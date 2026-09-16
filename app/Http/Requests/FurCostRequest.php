@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Services\Costs\FurCostCalculator;
+use App\Services\Costs\SoleCostCalculator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
@@ -12,7 +13,7 @@ class FurCostRequest extends SoleCostBatchRequest
     {
         parent::prepareForValidation();
         $values = [];
-        foreach (array_keys(FurCostCalculator::GEOMETRY) as $field) {
+        foreach ([...array_keys(FurCostCalculator::GEOMETRY), 'goods_uah'] as $field) {
             if (is_string($this->input($field))) {
                 $values[$field] = str_replace(',', '.', trim($this->input($field)));
             }
@@ -27,9 +28,17 @@ class FurCostRequest extends SoleCostBatchRequest
     {
         $rules = array_replace(parent::rules(), [
             'quantity' => ['prohibited'],
+            'purchase_source' => ['sometimes', 'required', Rule::in(['china', 'ukraine'])],
+            'goods_uah' => ['prohibited'],
             'length_unit' => ['required', Rule::in(['yard', 'metre'])],
             'ukraine_shipping_uah' => ['nullable', 'numeric', 'min:0', 'max:1000000', 'regex:/^\d+(?:\.\d{1,2})?$/D'],
         ]);
+        if ($this->input('purchase_source', 'china') === 'ukraine') {
+            foreach (array_diff(array_keys(SoleCostCalculator::FIELDS), FurCostCalculator::LOCAL_FIELDS) as $field) {
+                $rules[$field] = ['prohibited'];
+            }
+            $rules['goods_uah'] = ['required', 'numeric', 'min:0', 'max:1000000', 'regex:/^\d+(?:\.\d{1,2})?$/D'];
+        }
         foreach (FurCostCalculator::GEOMETRY as $field => $precision) {
             $rules[$field] = ['required', 'numeric', 'min:'.($field === 'fabric_length' ? '0.0001' : '0.01'),
                 'max:'.($field === 'fabric_length' ? '1000000' : '1000'), 'regex:/^\d+(?:\.\d{1,'.$precision.'})?$/D'];
@@ -56,7 +65,7 @@ class FurCostRequest extends SoleCostBatchRequest
                 $calculator = app(FurCostCalculator::class);
                 // Не допускаємо переповнення спільної DECIMAL(16,6) навіть на граничних сумах.
                 if ($calculator->calculate(1, $calculator->normalize($data))['unit_cost_uah'] >= 10000000000) {
-                    $validator->errors()->add('goods_cny', 'Завелика вартість на пару. Перевірте суми, курси та розміри полотна.');
+                    $validator->errors()->add(($data['purchase_source'] ?? 'china') === 'ukraine' ? 'goods_uah' : 'goods_cny', 'Завелика вартість на пару. Перевірте суми, курси та розміри полотна.');
                 }
             }
         }];
@@ -65,6 +74,7 @@ class FurCostRequest extends SoleCostBatchRequest
     public function attributes(): array
     {
         return array_replace(parent::attributes(), [
+            'purchase_source' => 'Де купуєте хутро', 'goods_uah' => 'Сума за всю партію хутра',
             'goods_cny' => 'Сума лише за хутро', 'fabric_length' => 'Довжина хутра', 'length_unit' => 'Одиниця довжини',
             'fabric_width_cm' => 'Ширина полотна', 'top_width_cm' => 'Верхня основа', 'bottom_width_cm' => 'Нижня основа', 'height_cm' => 'Висота деталі',
         ]);
@@ -75,6 +85,8 @@ class FurCostRequest extends SoleCostBatchRequest
         return array_replace(parent::messages(), [
             'fabric_length.regex' => 'Довжина хутра: до 4 знаків після коми.',
             'length_unit.in' => 'Виберіть ярди або погонні метри.',
+            'purchase_source.in' => 'Виберіть закупівлю в Китаї або Україні.',
+            'prohibited' => 'Поле «:attribute» не використовується для цього розрахунку.',
             'regex' => 'Перевірте поле «:attribute»: суми й сантиметри — до 2 знаків, курси — до 4.',
         ]);
     }

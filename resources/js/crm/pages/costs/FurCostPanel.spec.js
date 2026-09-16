@@ -3,15 +3,15 @@ import { flushPromises, mount } from '@vue/test-utils';
 import FurCostPanel from './FurCostPanel.vue';
 import ProductionCostPage from './ProductionCostPage.vue';
 import { fetchFurBatches, createFurBatch, updateFurBatch, fetchCostBatches } from '@/crm/services/productionCostsApi';
-import { calculateFurCost, furFields, furGeometry } from '@/crm/utils/furCosts';
+import { calculateFurCost, activeFurFields, furGeometry } from '@/crm/utils/furCosts';
 import { costFields } from '@/crm/utils/soleCosts';
 
 vi.mock('@/crm/services/productionCostsApi', async importOriginal => ({ ...await importOriginal(), fetchFurBatches: vi.fn(), createFurBatch: vi.fn(), updateFurBatch: vi.fn(), fetchCostBatches: vi.fn() }));
 const inputs = { fabric_length: '10', length_unit: 'yard', fabric_width_cm: '200', top_width_cm: '20', bottom_width_cm: '10', height_cm: '10', goods_cny: '100', china_shipping_cny: '10', commission_percent: '10', international_shipping_usd: '10', ukraine_shipping_uah: null, other_costs_uah: '0', cny_rate: '6', usd_rate: '40' };
 const record = (changes = {}) => {
-  const values = { ...inputs, ...changes }, precision = { ...costFields, ...furGeometry };
+  const values = { ...inputs, ...changes }, precision = { ...costFields, ...furGeometry, goods_uah: 2 };
   return { id: 4, version: 1, name: 'Тестове хутро', quantity: 1, purchased_on: null, note: null, ...changes,
-    inputs: { ...Object.fromEntries(furFields.map(key => [key, values[key] === null ? null : Number(values[key]).toFixed(precision[key])])), length_unit: values.length_unit }, calculation: calculateFurCost(values) };
+    inputs: { ...Object.fromEntries(activeFurFields(values).map(key => [key, values[key] === null ? null : Number(values[key]).toFixed(precision[key])])), length_unit: values.length_unit, ...(values.purchase_source ? { purchase_source: values.purchase_source } : {}) }, calculation: calculateFurCost(values) };
 };
 const listing = rows => ({ data: { data: rows, current_page: 1, last_page: 1, total: rows.length } });
 let wrapper;
@@ -26,6 +26,60 @@ beforeEach(() => {
 afterEach(() => { wrapper?.unmount(); vi.restoreAllMocks(); });
 
 describe('Форма хутра', () => {
+  it('перемикання на Україну прибирає курси й комісію та надсилає тільки українські поля', async () => {
+    await open();
+    await wrapper.get('[name="purchase_source"][value="ukraine"]').setValue();
+    expect(wrapper.find('[name="usd_rate"]').exists()).toBe(false);
+    expect(wrapper.find('[name="goods_cny"]').exists()).toBe(false);
+    expect(wrapper.find('.commission').exists()).toBe(false);
+    expect(wrapper.get('[name="length_unit"]').element.value).toBe('yard');
+    expect(wrapper.get('[data-testid="fur-unit-cost"]').text()).toContain('—');
+    await wrapper.get('[name="length_unit"]').setValue('metre');
+    await wrapper.get('[name="goods_uah"]').setValue('3000,00');
+    await wrapper.get('[name="ukraine_shipping_uah"]').setValue('100');
+    await wrapper.get('[name="other_costs_uah"]').setValue('20');
+    expect(wrapper.get('[data-testid="fur-unit-cost"]').text()).toContain('4,68');
+    await wrapper.get('form').trigger('submit'); await flushPromises();
+    const payload = updateFurBatch.mock.calls[0][1];
+    expect(payload).toMatchObject({ purchase_source: 'ukraine', goods_uah: '3000.00', ukraine_shipping_uah: '100', other_costs_uah: '20', version: 1 });
+    for (const field of ['goods_cny', 'cny_rate', 'usd_rate', 'commission_percent', 'international_shipping_usd']) expect(payload).not.toHaveProperty(field);
+    expect(button('Зберегти зміни').attributes('disabled')).toBeDefined();
+  });
+  it('обидві чернетки цін переживають перемикання постачальника, зміни не зберігаються автоматично', async () => {
+    await open(); await wrapper.get('[name="goods_cny"]').setValue('123');
+    await wrapper.get('[name="purchase_source"][value="ukraine"]').setValue();
+    await wrapper.get('[name="goods_uah"]').setValue('2500');
+    await wrapper.get('[name="purchase_source"][value="china"]').setValue();
+    expect(wrapper.get('[name="goods_cny"]').element.value).toBe('123');
+    expect(wrapper.find('[name="goods_uah"]').exists()).toBe(false);
+    await wrapper.get('[name="purchase_source"][value="ukraine"]').setValue();
+    expect(wrapper.get('[name="goods_uah"]').element.value).toBe('2500');
+    await button('Скасувати зміни').trigger('click');
+    expect(wrapper.get('[name="purchase_source"][value="china"]').element.checked).toBe(true);
+    expect(wrapper.get('[name="goods_cny"]').element.value).toBe('100.00');
+    expect(updateFurBatch).not.toHaveBeenCalled(); expect(createFurBatch).not.toHaveBeenCalled();
+  });
+  it('відкриває українську партію, показує джерело в історії та не переносить оплату в нову', async () => {
+    fetchFurBatches.mockResolvedValue(listing([record({ purchase_source: 'ukraine', goods_uah: '3000', length_unit: 'metre' })]));
+    await open();
+    expect(wrapper.get('[name="purchase_source"][value="ukraine"]').element.checked).toBe(true);
+    expect(wrapper.get('[name="goods_uah"]').element.value).toBe('3000.00');
+    expect(wrapper.get('tbody').text()).toContain('Україна');
+    await button('Нова партія').trigger('click');
+    expect(wrapper.get('[name="purchase_source"][value="ukraine"]').element.checked).toBe(true);
+    expect(wrapper.get('[name="goods_uah"]').element.value).toBe('');
+    expect(wrapper.get('[name="fabric_length"]').element.value).toBe('');
+    expect(wrapper.get('[name="fabric_width_cm"]').element.value).toBe('200.00');
+  });
+  it('нова українська закупівля починається в метрах і не вимагає валютних курсів', async () => {
+    fetchFurBatches.mockResolvedValue(listing([])); await open();
+    await wrapper.get('[name="purchase_source"][value="ukraine"]').setValue();
+    expect(wrapper.get('[name="length_unit"]').element.value).toBe('metre');
+    for (const [field, value] of Object.entries({ fabric_length: '10', fabric_width_cm: '200', top_width_cm: '20', bottom_width_cm: '10', height_cm: '10', goods_uah: '3000' })) await wrapper.get(`[name="${field}"]`).setValue(value);
+    expect(wrapper.get('[data-testid="fur-unit-cost"]').text()).toContain('4,50');
+    await wrapper.get('form').trigger('submit'); await flushPromises();
+    expect(createFurBatch).toHaveBeenCalledWith(expect.objectContaining({ purchase_source: 'ukraine', goods_uah: '3000', ukraine_shipping_uah: null }));
+  });
   it('показує дані з бази, ярди та дві трапеції, нічого не записує при відкритті', async () => {
     await open();
     expect(wrapper.get('[name="fabric_length"]').element.value).toBe('10.0000');

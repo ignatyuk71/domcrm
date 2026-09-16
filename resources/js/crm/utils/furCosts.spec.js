@@ -1,8 +1,30 @@
 import { describe, expect, it } from 'vitest';
-import { calculateFurCost, emptyFurForm } from './furCosts';
+import { calculateFurCost, emptyFurForm, activeFurFields } from './furCosts';
 
 const inputs = { fabric_length: '10', length_unit: 'metre', fabric_width_cm: '200', top_width_cm: '20', bottom_width_cm: '10', height_cm: '10', goods_cny: '100', china_shipping_cny: '10', commission_percent: '10', international_shipping_usd: '10', ukraine_shipping_uah: '', other_costs_uah: '0', cny_rate: '6', usd_rate: '40' };
 describe('Собівартість хутра', () => {
+  it('українська закупівля не додає приховані китайські суми та курси', () => {
+    const form = { ...inputs, purchase_source: 'ukraine', goods_uah: '3000,00', ukraine_shipping_uah: '100,00', other_costs_uah: '20' };
+    const result = calculateFurCost(form);
+    expect(result).toMatchObject({ total_uah: 3120, unit_cost_uah: 4.68, linear_metre_cost_uah: 312, square_metre_cost_uah: 156 });
+    expect(result.breakdown).toHaveLength(3); expect(result).not.toHaveProperty('commission_cny');
+    expect(activeFurFields(form)).toContain('goods_uah'); expect(activeFurFields(form)).not.toContain('goods_cny');
+    expect(activeFurFields(inputs)).not.toContain('goods_uah');
+  });
+  it('місцеві суми складає в копійках, доставка залишається невідомою до введення', () => {
+    const local = { ...inputs, purchase_source: 'ukraine', goods_uah: '3000', cny_rate: '', usd_rate: '' };
+    expect(calculateFurCost(local)).toMatchObject({ total_uah: 3000, unit_cost_uah: 4.5, ukraine_shipping_included: false });
+    expect(calculateFurCost({ ...local, ukraine_shipping_uah: '0' }).ukraine_shipping_included).toBe(true);
+    expect(calculateFurCost({ ...local, length_unit: 'yard' }).unit_cost_uah).toBe(4.92126);
+    expect(calculateFurCost({ ...local, goods_uah: '0.10', other_costs_uah: '0.20' }).total_uah).toBe(0.3);
+  });
+  it.each(['', '-1', '1.001', '1e2', '1000001'])('не підміняє некоректну українську суму %s нулем', goods_uah => {
+    expect(calculateFurCost({ ...inputs, purchase_source: 'ukraine', goods_uah })).toBeNull();
+  });
+  it('зберігає обране джерело для нової партії, але не стару оплату', () => {
+    expect(emptyFurForm({ purchase_source: 'ukraine', goods_uah: '3000' })).toMatchObject({ purchase_source: 'ukraine', length_unit: 'metre', goods_uah: '', ukraine_shipping_uah: '' });
+    expect(calculateFurCost({ ...inputs, purchase_source: 'unknown' })).toBeNull();
+  });
   it('дві трапеції, не прямокутники; комісія включає доставку Китаєм', () => {
     const result = calculateFurCost(inputs);
     expect(result).toMatchObject({ total_uah: 1126, commission_cny: 11, total_cny: 121, length_metres: 10, total_area_m2: 20, pair_area_m2: 0.03, linear_metre_cost_uah: 112.6, square_metre_cost_uah: 56.3, unit_cost_uah: 1.689, ukraine_shipping_included: false });
