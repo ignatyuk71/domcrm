@@ -1,0 +1,173 @@
+<?php
+
+namespace Tests\Feature\Analytics;
+
+use App\Models\User;
+use App\Services\Costs\ProductionCostService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Tests\TestCase;
+
+class FurCostsTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private const URL = '/api/production-costs/fur-batches';
+
+    private function payload(array $replace = []): array
+    {
+        // Вигадані суми: приватні закупівлі не потрапляють у відкриті тести.
+        return array_replace(['request_key' => (string) Str::uuid(), 'name' => 'Тестове хутро', 'purchased_on' => null, 'note' => null,
+            'fabric_length' => '10', 'length_unit' => 'metre', 'fabric_width_cm' => '200',
+            'top_width_cm' => '20', 'bottom_width_cm' => '10', 'height_cm' => '10',
+            'goods_cny' => '100', 'china_shipping_cny' => '10', 'commission_percent' => '10', 'international_shipping_usd' => '10',
+            'ukraine_shipping_uah' => null, 'other_costs_uah' => '0', 'cny_rate' => '6', 'usd_rate' => '40'], $replace);
+    }
+
+    private function owner(): void
+    {
+        $this->actingAs(User::factory()->create(['role' => User::ROLE_OWNER]));
+    }
+
+    public function test_owner_only_routes_and_get_has_no_side_effects(): void
+    {
+        $this->getJson(self::URL)->assertUnauthorized();
+        $this->postJson(self::URL, $this->payload())->assertUnauthorized();
+        $this->putJson(self::URL.'/1', [])->assertUnauthorized();
+        foreach ([User::ROLE_OPERATOR, User::ROLE_PACKER] as $role) {
+            $this->actingAs(User::factory()->create(['role' => $role]));
+            $this->getJson(self::URL)->assertForbidden();
+            $this->postJson(self::URL, $this->payload())->assertForbidden();
+            $this->putJson(self::URL.'/1', [])->assertForbidden();
+        }
+        $this->owner();
+        $this->getJson(self::URL)->assertOk()->assertJsonPath('total', 0)->assertJsonPath('data', []);
+        $this->getJson(self::URL.'?page=0')->assertUnprocessable();
+        $this->assertDatabaseCount('production_cost_batches', 0);
+        $this->assertDatabaseCount('production_cost_batch_revisions', 0);
+    }
+
+    public function test_metre_price_includes_commission_and_shipping_and_uses_two_trapezoids(): void
+    {
+        $this->owner();
+        $this->postJson(self::URL, $this->payload())->assertCreated()->assertJsonPath('quantity', 1)
+            ->assertJsonPath('inputs.fabric_length', '10.0000')->assertJsonPath('inputs.length_unit', 'metre')
+            ->assertJsonPath('inputs.ukraine_shipping_uah', null)->assertJsonPath('purchased_on', null)
+            ->assertJsonPath('calculation.commission_cny', 11)->assertJsonPath('calculation.total_cny', 121)
+            ->assertJsonPath('calculation.total_uah', 1126)->assertJsonPath('calculation.length_metres', 10)
+            ->assertJsonPath('calculation.total_area_m2', 20)->assertJsonPath('calculation.pair_area_m2', 0.03)
+            ->assertJsonPath('calculation.linear_metre_cost_uah', 112.6)->assertJsonPath('calculation.square_metre_cost_uah', 56.3)
+            ->assertJsonPath('calculation.unit_cost_uah', 1.689)->assertJsonPath('calculation.breakdown.0.label', 'Хутро')
+            ->assertJsonPath('calculation.breakdown.0.unit_uah', 0.9)->assertJsonPath('calculation.ukraine_shipping_included', false);
+        $this->assertDatabaseCount('sole_inventory_batches', 0);
+        $this->assertDatabaseCount('production_cost_batch_revisions', 1);
+    }
+
+    public function test_yards_are_converted_exactly_and_fractional_lengths_are_preserved(): void
+    {
+        $this->owner();
+        $response = $this->postJson(self::URL, $this->payload(['length_unit' => 'yard']))->assertCreated()
+            ->assertJsonPath('calculation.unit_cost_uah', 1.847113)->assertJsonPath('calculation.total_uah', 1126);
+        $this->assertEqualsWithDelta(9.144, $response->json('calculation.length_metres'), 0.00000001);
+        $this->assertEqualsWithDelta(18.288, $response->json('calculation.total_area_m2'), 0.00000001);
+        $response = $this->postJson(self::URL, $this->payload(['length_unit' => 'yard', 'fabric_length' => '10,1250', 'cny_rate' => '6,0000']))->assertCreated()
+            ->assertJsonPath('inputs.fabric_length', '10.1250');
+        $this->assertEqualsWithDelta(10.125 * 0.9144, $response->json('calculation.length_metres'), 0.00000001);
+    }
+
+    public function test_unknown_domestic_delivery_is_not_reported_as_free_and_currency_rounding_matches_soles(): void
+    {
+        $this->owner();
+        $this->postJson(self::URL, $this->payload(['ukraine_shipping_uah' => '100,00', 'other_costs_uah' => '20']))->assertCreated()
+            ->assertJsonPath('calculation.total_uah', 1246)->assertJsonPath('calculation.unit_cost_uah', 1.869)
+            ->assertJsonPath('calculation.ukraine_shipping_included', true);
+        $this->postJson(self::URL, $this->payload(['ukraine_shipping_uah' => '0']))->assertCreated()->assertJsonPath('calculation.ukraine_shipping_included', true);
+        $this->postJson(self::URL, $this->payload(['ukraine_shipping_uah' => '']))->assertCreated()->assertJsonPath('inputs.ukraine_shipping_uah', null);
+        $payload = $this->payload(['goods_cny' => '0.05', 'china_shipping_cny' => '0', 'international_shipping_usd' => '0', 'cny_rate' => '7.1234']);
+        unset($payload['ukraine_shipping_uah']);
+        $this->postJson(self::URL, $payload)->assertCreated()->assertJsonPath('calculation.commission_cny', 0.01)
+            ->assertJsonPath('calculation.total_uah', 0.43)->assertJsonPath('calculation.unit_cost_uah', 0.000645);
+    }
+
+    public function test_invalid_lengths_geometry_and_client_totals_are_rejected(): void
+    {
+        $this->owner();
+        foreach ([['fabric_length', 0], ['fabric_length', '1.00001'], ['fabric_length', '1e2'], ['fabric_length', 1000001],
+            ['length_unit', 'cm'], ['length_unit', ''], ['fabric_width_cm', 0], ['fabric_width_cm', 15], ['height_cm', 0], ['height_cm', 1001],
+            ['top_width_cm', -1], ['bottom_width_cm', 0], ['goods_cny', '1.001'], ['commission_percent', 101], ['usd_rate', 0],
+            ['ukraine_shipping_uah', -1], ['purchased_on', '2026-02-30'], ['name', ''], ['quantity', 10], ['total_uah', 1], ['unit_cost_uah', 1], ['component', 'soles']] as [$field, $value]) {
+            $this->postJson(self::URL, $this->payload([$field => $value]))->assertUnprocessable()->assertJsonValidationErrors($field);
+        }
+        $this->postJson(self::URL, $this->payload(['fabric_length' => '0.05']))->assertUnprocessable()->assertJsonValidationErrors('height_cm');
+        $this->postJson(self::URL, $this->payload(['fabric_length' => 1, 'fabric_width_cm' => 1, 'top_width_cm' => 1, 'bottom_width_cm' => 1, 'height_cm' => 100,
+            'goods_cny' => 1000000, 'china_shipping_cny' => 1000000, 'commission_percent' => 100, 'international_shipping_usd' => 1000000,
+            'ukraine_shipping_uah' => 1000000, 'other_costs_uah' => 1000000, 'cny_rate' => 1000, 'usd_rate' => 1000]))->assertUnprocessable()->assertJsonValidationErrors('goods_cny');
+        $this->assertDatabaseCount('production_cost_batches', 0);
+    }
+
+    public function test_idempotent_creation_versioned_edits_and_new_batches_remain_independent(): void
+    {
+        $this->owner();
+        $payload = $this->payload();
+        $id = $this->postJson(self::URL, $payload)->assertCreated()->json('id');
+        $this->postJson(self::URL, array_replace($payload, ['fabric_length' => '10.0000']))->assertCreated()->assertJsonPath('id', $id);
+        $this->postJson(self::URL, array_replace($payload, ['length_unit' => 'yard']))->assertConflict();
+        $edit = array_replace($payload, ['version' => 1, 'length_unit' => 'yard']);
+        unset($edit['request_key']);
+        $this->putJson(self::URL.'/'.$id, $edit)->assertOk()->assertJsonPath('version', 2)->assertJsonPath('calculation.unit_cost_uah', 1.847113);
+        $this->putJson(self::URL.'/'.$id, $edit)->assertConflict();
+        $this->putJson(self::URL.'/999999', $edit)->assertNotFound();
+        $this->postJson(self::URL, $this->payload(['goods_cny' => 200]))->assertCreated();
+        $this->assertDatabaseHas('production_cost_batches', ['id' => $id, 'total_uah' => 1126, 'version' => 2]);
+        $this->assertDatabaseCount('production_cost_batch_revisions', 3);
+    }
+
+    public function test_fur_cannot_change_other_materials_or_reuse_their_request_keys(): void
+    {
+        $this->owner();
+        $key = (string) Str::uuid();
+        $foam = app(ProductionCostService::class)->save(['request_key' => $key, 'name' => 'Тестова вставка',
+            'sheet_price_usd' => 4.5, 'usd_rate' => 40, 'sheet_length_cm' => 120, 'sheet_width_cm' => 200,
+            'blank_length_cm' => 25, 'blank_width_cm' => 10], null, null, 'foam');
+        $this->postJson(self::URL, $this->payload(['request_key' => $key]))->assertConflict();
+        $edit = $this->payload(['version' => 1]);
+        unset($edit['request_key']);
+        $this->putJson(self::URL.'/'.$foam['id'], $edit)->assertNotFound();
+        $this->getJson(self::URL)->assertOk()->assertJsonPath('total', 0);
+        $this->assertDatabaseHas('production_cost_batches', ['id' => $foam['id'], 'component' => 'foam', 'total_uah' => 180]);
+    }
+
+    public function test_private_import_preserves_future_edits_and_rejects_bad_geometry(): void
+    {
+        Storage::fake('local');
+        $payload = $this->payload();
+        Storage::disk('local')->put('fur.json', json_encode($payload));
+        $path = Storage::disk('local')->path('fur.json');
+        $this->artisan('production-costs:import-fur', ['--file' => $path])->assertSuccessful();
+        $this->artisan('production-costs:import-fur', ['--file' => $path])->assertSuccessful();
+        $id = DB::table('production_cost_batches')->value('id');
+        $this->owner();
+        $edit = array_replace($payload, ['usd_rate' => 41, 'version' => 1]);
+        unset($edit['request_key']);
+        $this->putJson(self::URL.'/'.$id, $edit)->assertOk();
+        $this->artisan('production-costs:import-fur', ['--file' => $path])->assertSuccessful();
+        $this->assertDatabaseHas('production_cost_batches', ['id' => $id, 'version' => 2, 'total_uah' => 1136, 'user_id' => null]);
+        Storage::disk('local')->put('fur.json', json_encode($this->payload(['fabric_width_cm' => 1])));
+        $this->artisan('production-costs:import-fur', ['--file' => $path])->assertFailed();
+        $this->assertDatabaseCount('production_cost_batches', 1);
+        $this->assertDatabaseCount('production_cost_batch_revisions', 2);
+        $this->assertDatabaseCount('sole_inventory_batches', 0);
+    }
+
+    public function test_history_is_paginated_and_shows_latest_batches_first(): void
+    {
+        $this->owner();
+        for ($i = 1; $i <= 21; $i++) {
+            $this->postJson(self::URL, $this->payload(['name' => 'Хутро '.$i]))->assertCreated();
+        }
+        $this->getJson(self::URL)->assertOk()->assertJsonCount(20, 'data')->assertJsonPath('data.0.name', 'Хутро 21');
+        $this->getJson(self::URL.'?page=2')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('total', 21);
+    }
+}

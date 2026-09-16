@@ -112,7 +112,7 @@ describe('Форма картону', () => {
     await button('Картон').trigger('click'); await flushPromises();
     expect(fetchCardboardBatches).toHaveBeenCalledTimes(1);
     await wrapper.get('[name="goods_uah"]').setValue('4000');
-    await button('Хутро').trigger('click');
+    await button('Нитки').trigger('click');
     await button('Картон').trigger('click');
     expect(wrapper.get('[name="goods_uah"]').element.value).toBe('4000');
     expect(fetchCardboardBatches).toHaveBeenCalledTimes(1);

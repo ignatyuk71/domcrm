@@ -9,6 +9,9 @@ export const updateCardboardBatch = (id, data) => http.put(`/api/production-cost
 export const fetchFoamCosts = (page = 1) => http.get('/api/production-costs/foam-calculations', { params: { page } });
 export const createFoamCost = data => http.post('/api/production-costs/foam-calculations', data);
 export const updateFoamCost = (id, data) => http.put(`/api/production-costs/foam-calculations/${id}`, data);
+export const fetchFurBatches = (page = 1) => http.get('/api/production-costs/fur-batches', { params: { page } });
+export const createFurBatch = data => http.post('/api/production-costs/fur-batches', data);
+export const updateFurBatch = (id, data) => http.put(`/api/production-costs/fur-batches/${id}`, data);
 export function costError(error) {
   const errors = error.response?.data?.errors;
   return errors ? Object.values(errors).flat().join(' ') : error.response?.data?.message || 'Не вдалося виконати запит. Перевірте з’єднання та спробуйте ще раз.';

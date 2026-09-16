@@ -1,0 +1,81 @@
+<?php
+
+namespace App\Http\Requests;
+
+use App\Services\Costs\FurCostCalculator;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
+
+class FurCostRequest extends SoleCostBatchRequest
+{
+    protected function prepareForValidation(): void
+    {
+        parent::prepareForValidation();
+        $values = [];
+        foreach (array_keys(FurCostCalculator::GEOMETRY) as $field) {
+            if (is_string($this->input($field))) {
+                $values[$field] = str_replace(',', '.', trim($this->input($field)));
+            }
+        }
+        if ($this->input('ukraine_shipping_uah') === '') {
+            $values['ukraine_shipping_uah'] = null;
+        }
+        $this->merge($values);
+    }
+
+    public function rules(): array
+    {
+        $rules = array_replace(parent::rules(), [
+            'quantity' => ['prohibited'],
+            'length_unit' => ['required', Rule::in(['yard', 'metre'])],
+            'ukraine_shipping_uah' => ['nullable', 'numeric', 'min:0', 'max:1000000', 'regex:/^\d+(?:\.\d{1,2})?$/D'],
+        ]);
+        foreach (FurCostCalculator::GEOMETRY as $field => $precision) {
+            $rules[$field] = ['required', 'numeric', 'min:'.($field === 'fabric_length' ? '0.0001' : '0.01'),
+                'max:'.($field === 'fabric_length' ? '1000000' : '1000'), 'regex:/^\d+(?:\.\d{1,'.$precision.'})?$/D'];
+        }
+
+        return $rules;
+    }
+
+    public function after(): array
+    {
+        return [function (Validator $validator) {
+            if ($validator->errors()->isNotEmpty()) {
+                return;
+            }
+            $data = $validator->getData();
+            $lengthCm = (float) $data['fabric_length'] * ($data['length_unit'] === 'yard' ? 91.44 : 100);
+            if (max((float) $data['top_width_cm'], (float) $data['bottom_width_cm']) > (float) $data['fabric_width_cm']) {
+                $validator->errors()->add('fabric_width_cm', 'Ширина полотна має вміщати обидві основи трапеції.');
+            }
+            if ((float) $data['height_cm'] > $lengthCm) {
+                $validator->errors()->add('height_cm', 'Висота деталі не може перевищувати довжину придбаного полотна.');
+            }
+            if ($validator->errors()->isEmpty()) {
+                $calculator = app(FurCostCalculator::class);
+                // Не допускаємо переповнення спільної DECIMAL(16,6) навіть на граничних сумах.
+                if ($calculator->calculate(1, $calculator->normalize($data))['unit_cost_uah'] >= 10000000000) {
+                    $validator->errors()->add('goods_cny', 'Завелика вартість на пару. Перевірте суми, курси та розміри полотна.');
+                }
+            }
+        }];
+    }
+
+    public function attributes(): array
+    {
+        return array_replace(parent::attributes(), [
+            'goods_cny' => 'Сума лише за хутро', 'fabric_length' => 'Довжина хутра', 'length_unit' => 'Одиниця довжини',
+            'fabric_width_cm' => 'Ширина полотна', 'top_width_cm' => 'Верхня основа', 'bottom_width_cm' => 'Нижня основа', 'height_cm' => 'Висота деталі',
+        ]);
+    }
+
+    public function messages(): array
+    {
+        return array_replace(parent::messages(), [
+            'fabric_length.regex' => 'Довжина хутра: до 4 знаків після коми.',
+            'length_unit.in' => 'Виберіть ярди або погонні метри.',
+            'regex' => 'Перевірте поле «:attribute»: суми й сантиметри — до 2 знаків, курси — до 4.',
+        ]);
+    }
+}
