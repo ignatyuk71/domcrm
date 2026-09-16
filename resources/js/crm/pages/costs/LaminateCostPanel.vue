@@ -43,7 +43,7 @@
         <div class="panel-card metre-price">
           <div><h3>1 погонний метр полотна</h3><p>Плюш + павутинка + поролон · 100 × {{ form.cut_width_cm ? number(decimalInput(form.cut_width_cm)) : '…' }} см</p></div>
           <strong data-testid="laminate-metre-cost">{{ money(preview?.linear_metre_cost_uah) }} <small>грн</small></strong>
-          <p class="hint">Дві схеми нижче — незалежні варіанти витрати цього метра, не змішаний розкрій.</p>
+          <p class="hint">Дві незалежні схеми: цілий метр тільки на устілки або тільки на внутрішній верх. Ціни не додаємо.</p>
           <span v-if="dirty" class="draft-label">Попередній розрахунок · ще не збережено</span>
           <details v-if="preview" class="extra-fields"><summary>Ціна кожного шару за погонний метр</summary><dl><div v-for="row in preview.breakdown" :key="row.key"><dt>{{ row.label }}</dt><dd>{{ money(row.linear_metre_cost_uah) }} грн</dd></div></dl></details>
         </div>

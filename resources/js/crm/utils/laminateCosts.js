@@ -1,5 +1,5 @@
 import { decimalInput } from './soleCosts';
-import { trapezoidRows } from './trapezoidRows';
+import { laminateRows } from './laminateRows';
 
 export const laminatePrecision = {
   plush_price_metre_uah: 2, plush_width_cm: 2, plush_shipping_metre_uah: 2,
@@ -42,8 +42,8 @@ export function calculateLaminateCost(form) {
   const insoleArea = 2 * values.insole_length_cm * values.insole_width_cm / 10000;
   const upperArea = (values.upper_top_cm + values.upper_bottom_cm) * values.upper_height_cm / 10000;
   const squareMetreCost = layers.reduce((sum, row) => sum + row.cost / row.area, 0);
-  const insoleLayout = values.cut_width_cm === null ? null : trapezoidRows(100, values.cut_width_cm, 100, values.insole_length_cm, values.insole_length_cm, values.insole_width_cm);
-  const upperLayout = values.cut_width_cm === null ? null : trapezoidRows(100, values.cut_width_cm, 100, values.upper_top_cm, values.upper_bottom_cm, values.upper_height_cm);
+  const insoleLayout = values.cut_width_cm === null ? null : laminateRows(100, values.cut_width_cm, values.insole_length_cm, values.insole_length_cm, values.insole_width_cm);
+  const upperLayout = values.cut_width_cm === null ? null : laminateRows(100, values.cut_width_cm, values.upper_top_cm, values.upper_bottom_cm, values.upper_height_cm);
   const metreArea = values.cut_width_cm === null ? null : values.cut_width_cm / 100;
   const metreCost = metreArea === null ? null : squareMetreCost * metreArea;
   const insoleCost = insoleLayout?.pairs ? round(metreCost / insoleLayout.pairs) : null;
@@ -51,7 +51,7 @@ export function calculateLaminateCost(form) {
   if (Math.round(squareMetreCost * 100) / 100 >= 1000000000000 || insoleCost >= 10000000000 || upperCost >= 10000000000) return null;
   // Ціну м² округлюємо для показу, а не перед множенням на площу заготовок.
   return {
-    method: 'separate_metre_rows_v1', total_uah: Math.round(squareMetreCost * 100) / 100, square_metre_cost_uah: round(squareMetreCost), unit_cost_uah: null,
+    method: 'separate_metre_rows_v2', total_uah: Math.round(squareMetreCost * 100) / 100, square_metre_cost_uah: round(squareMetreCost), unit_cost_uah: null,
     linear_metre_cost_uah: metreCost === null ? null : round(metreCost), cut_area_m2: metreArea,
     insole_layout: insoleLayout, upper_layout: upperLayout, insole_pair_area_m2: insoleArea, upper_pair_area_m2: upperArea,
     insole_pair_cost_uah: insoleCost, upper_pair_cost_uah: upperCost, foam_sheet_uah: foamCents / 100,

@@ -25,30 +25,51 @@ beforeEach(() => {
 afterEach(() => { wrapper?.unmount(); vi.restoreAllMocks(); });
 
 describe('Форма склеєного полотна', () => {
-  it('малює дві незалежні схеми, перевертає лише трапеції й перераховує змінену ширину', async () => {
+  it('малює дві незалежні схеми з поперечними деталями у залишках і перераховує ширину', async () => {
     fetchLaminateCosts.mockResolvedValue(listing([record({ cut_width_cm: '150', insole_length_cm: '27', insole_width_cm: '11.5', upper_top_cm: '20', upper_bottom_cm: '13', upper_height_cm: '7' })]));
     await open();
     const rectangles = wrapper.get('[data-testid="laminate-insole-layout"]');
     const trapezoids = wrapper.get('[data-testid="laminate-upper-layout"]');
-    expect(rectangles.findAll('polygon')).toHaveLength(39);
-    expect(trapezoids.findAll('polygon')).toHaveLength(105);
+    expect(rectangles.findAll('polygon')).toHaveLength(44);
+    expect(trapezoids.findAll('polygon')).toHaveLength(121);
+    expect(rectangles.findAll('polygon[data-rotated="true"]')).toHaveLength(5);
+    expect(trapezoids.findAll('polygon[data-rotated="true"]')).toHaveLength(16);
+    expect(rectangles.get('[data-testid="laminate-insole-rotated"]').text()).toBe('+5');
+    expect(trapezoids.get('[data-testid="laminate-upper-rotated"]').text()).toBe('+16');
+    expect(rectangles.get('polygon[data-rotated="true"]').attributes('points')).toBe('92.5,0 92.5,27 81,27 81,0');
+    expect(trapezoids.get('polygon[data-rotated="true"]').attributes('points')).toBe('100,0 100,20 93,16.5 93,3.5');
+    expect(trapezoids.get('polygon[data-rotated="true"]').attributes('fill')).toBe('#f5cd8c');
     expect(rectangles.get('polygon').attributes('points')).toBe('0,0 27,0 27,11.5 0,11.5');
     expect(trapezoids.findAll('polygon')[0].attributes('points')).toBe('0,0 20,0 16.5,7 3.5,7');
     expect(trapezoids.findAll('polygon')[1].attributes('points')).toBe('20,0 33,0 36.5,7 16.5,7');
     expect(rectangles.get('[role="img"]').attributes('aria-label')).toContain('3 у ряду, 13 рядів');
     expect(trapezoids.get('[role="img"]').attributes('aria-label')).toContain('5 у ряду, 21 рядів');
-    expect(wrapper.get('[data-testid="laminate-insole-cost"]').text()).toContain('12,63');
-    expect(wrapper.get('[data-testid="laminate-upper-cost"]').text()).toContain('4,62');
+    expect(wrapper.get('[data-testid="laminate-insole-cost"]').text()).toContain('10,91');
+    expect(wrapper.get('[data-testid="laminate-upper-cost"]').text()).toContain('4,00');
     expect(wrapper.get('thead').text()).toContain('2 устілки'); expect(wrapper.get('thead').text()).toContain('2 деталі верху');
     expect(wrapper.text()).not.toContain('Разом');
+    await wrapper.get('[name="upper_height_cm"]').setValue('8');
+    expect(trapezoids.findAll('polygon')).toHaveLength(98);
+    expect(trapezoids.findAll('polygon[data-rotated="true"]')).toHaveLength(8);
+    expect(wrapper.get('[data-testid="laminate-upper-cost"]').text()).toContain('4,90');
+    expect(rectangles.findAll('polygon')).toHaveLength(44);
+    await wrapper.get('[name="upper_height_cm"]').setValue('7');
     await wrapper.get('[name="cut_width_cm"]').setValue('100');
     expect(wrapper.get('[data-testid="laminate-metre-cost"]').text()).toContain('160,00');
-    expect(rectangles.findAll('polygon')).toHaveLength(24); expect(trapezoids.findAll('polygon')).toHaveLength(70);
-    expect(wrapper.get('[data-testid="laminate-insole-cost"]').text()).toContain('13,33');
-    expect(wrapper.get('[data-testid="laminate-upper-cost"]').text()).toContain('4,57');
+    expect(rectangles.findAll('polygon')).toHaveLength(27); expect(trapezoids.findAll('polygon')).toHaveLength(80);
+    expect(wrapper.get('[data-testid="laminate-insole-cost"]').text()).toContain('12,31');
+    expect(wrapper.get('[data-testid="laminate-upper-cost"]').text()).toContain('4,00');
     expect(updateLaminateCost).not.toHaveBeenCalled();
     await wrapper.get('form').trigger('submit'); await flushPromises();
     expect(updateLaminateCost).toHaveBeenCalledWith(6, expect.objectContaining({ cut_width_cm: '100' }));
+  });
+  it('показує фрагмент для дрібних деталей без необмеженого SVG', async () => {
+    fetchLaminateCosts.mockResolvedValue(listing([record({ insole_length_cm: '0.01', insole_width_cm: '0.01', upper_top_cm: '0.01', upper_bottom_cm: '0.01', upper_height_cm: '0.01' })]));
+    await open();
+    expect(wrapper.get('[data-testid="laminate-insole-layout"]').findAll('polygon')).toHaveLength(576);
+    expect(wrapper.get('[data-testid="laminate-upper-layout"]').findAll('polygon')).toHaveLength(576);
+    expect(wrapper.get('[data-testid="laminate-upper-layout"]').text()).toContain('Фрагмент розкладки');
+    expect(wrapper.get('[data-testid="laminate-upper-layout"] [role="img"]').attributes('aria-label')).toContain('Показано фрагмент');
   });
   it('старий запис без ширини не показує нуль або стару спільну суму', async () => {
     fetchLaminateCosts.mockResolvedValue(listing([record({ cut_width_cm: null })]));

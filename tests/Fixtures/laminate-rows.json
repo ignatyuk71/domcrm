@@ -1,0 +1,18 @@
+[
+  {"name":"Прямокутники: п’ять додаткових поперек", "input":[100,150,27,27,11.5], "expected":{"primary_pieces":39,"rotated_pieces":5,"total_pieces":44,"pairs":22,"unpaired_pieces":0,"offcut_percent":8.92}},
+  {"name":"Трапеції: дві поперечні смуги", "input":[100,150,20,13,7], "expected":{"primary_pieces":105,"rotated_pieces":16,"total_pieces":121,"pairs":60,"unpaired_pieces":1,"offcut_percent":6.83}},
+  {"name":"Зміна висоти забирає одну поперечну смугу", "input":[100,150,20,13,8], "expected":{"primary_pieces":90,"rotated_pieces":8,"total_pieces":98,"pairs":49}},
+  {"name":"Вужче полотно для прямокутників", "input":[100,100,27,27,11.5], "expected":{"primary_pieces":24,"rotated_pieces":3,"total_pieces":27,"pairs":13}},
+  {"name":"Вужче полотно для трапецій", "input":[100,100,20,13,7], "expected":{"primary_pieces":70,"rotated_pieces":10,"total_pieces":80,"pairs":40}},
+  {"name":"Точне заповнення без залишків", "input":[100,100,25,25,10], "expected":{"primary_pieces":40,"rotated_pieces":0,"total_pieces":40,"pairs":20,"offcut_percent":0}},
+  {"name":"Залишок на сантиметр вужчий за дві смуги", "input":[99,150,20,13,7], "expected":{"primary_pieces":105,"rotated_pieces":8,"total_pieces":113,"pairs":56}},
+  {"name":"Похибка не додає смугу у 13,99 см", "input":[99.99,150,20,13,7], "expected":{"primary_pieces":105,"rotated_pieces":8,"total_pieces":113,"pairs":56}},
+  {"name":"Перестановка основ не змінює розкрій", "input":[100,150,13,20,7], "expected":{"primary_pieces":105,"rotated_pieces":16,"total_pieces":121,"pairs":60}},
+  {"name":"Поперечні деталі лише у нижній смузі", "input":[100,83,10,8,14], "expected":{"primary_pieces":55,"rotated_pieces":7,"total_pieces":62,"pairs":31}},
+  {"name":"Кут належить нижній смузі для кращого виходу", "input":[100,90,7,7,50], "expected":{"primary_pieces":14,"rotated_pieces":10,"total_pieces":24,"pairs":12}},
+  {"name":"Деталі поміщаються тільки поперек", "input":[100,150,101,101,10], "expected":{"primary_pieces":0,"rotated_pieces":10,"total_pieces":10,"pairs":5}},
+  {"name":"Жодна орієнтація не поміщається", "input":[100,100,101,101,10], "expected":{"primary_pieces":0,"rotated_pieces":0,"total_pieces":0,"pairs":0,"consumed_pair_area_m2":null}},
+  {"name":"Одна деталь не є парою", "input":[100,100,90,90,90], "expected":{"primary_pieces":1,"rotated_pieces":0,"total_pieces":1,"pairs":0,"unpaired_pieces":1}},
+  {"name":"Дробові сантиметри без зайвого ряду", "input":[100,100,25,25,10.25], "expected":{"primary_pieces":36,"rotated_pieces":0,"total_pieces":36,"pairs":18}},
+  {"name":"Граничні дрібні деталі без перебору", "input":[100,1000,0.01,0.01,0.01], "expected":{"primary_pieces":1000000000,"rotated_pieces":0,"total_pieces":1000000000,"pairs":500000000}}
+]

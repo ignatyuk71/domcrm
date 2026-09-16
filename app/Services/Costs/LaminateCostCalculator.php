@@ -14,7 +14,7 @@ class LaminateCostCalculator
 
     public const SHIPPING = ['plush_shipping_metre_uah', 'web_shipping_roll_uah', 'foam_shipping_sheet_uah'];
 
-    public function __construct(private TrapezoidRowLayout $rowLayout) {}
+    public function __construct(private LaminateRowLayout $rowLayout) {}
 
     public function normalize(array $data): array
     {
@@ -48,7 +48,7 @@ class LaminateCostCalculator
         return [
             // У спільній таблиці total_uah — розцінка 1 м², не сума закупівлі трьох різних упаковок.
             'total_uah' => round($squareMetreCost, 2), 'square_metre_cost_uah' => round($squareMetreCost, 6),
-            'method' => 'separate_metre_rows_v1', 'unit_cost_uah' => null,
+            'method' => 'separate_metre_rows_v2', 'unit_cost_uah' => null,
             'linear_metre_cost_uah' => $metreCost === null ? null : round($metreCost, 6), 'cut_area_m2' => $metreArea,
             'insole_layout' => $layouts['insole'], 'upper_layout' => $layouts['upper'],
             'insole_pair_area_m2' => $insoleArea, 'upper_pair_area_m2' => $upperArea,
@@ -72,9 +72,9 @@ class LaminateCostCalculator
         $width = (float) $data['cut_width_cm'];
 
         return [
-            // Прямокутник — окремий випадок рівних основ, без перевертання й автоматичного повороту.
-            'insole' => $this->rowLayout->calculate(100, $width, 100, (float) $data['insole_length_cm'], (float) $data['insole_length_cm'], (float) $data['insole_width_cm']),
-            'upper' => $this->rowLayout->calculate(100, $width, 100, (float) $data['upper_top_cm'], (float) $data['upper_bottom_cm'], (float) $data['upper_height_cm']),
+            // Обидва варіанти окремі; у залишках кожного дозволено поворот деталей на 90°.
+            'insole' => $this->rowLayout->calculate(100, $width, (float) $data['insole_length_cm'], (float) $data['insole_length_cm'], (float) $data['insole_width_cm']),
+            'upper' => $this->rowLayout->calculate(100, $width, (float) $data['upper_top_cm'], (float) $data['upper_bottom_cm'], (float) $data['upper_height_cm']),
         ];
     }
 

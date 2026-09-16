@@ -5,11 +5,12 @@ const inputs = { cut_width_cm: '100', plush_price_metre_uah: '120', plush_width_
 describe('Склеєне полотно', () => {
   it('100 × 150 см: окремі ряди прямокутників і трапецій, а не сума їх площ', () => {
     const example = { ...inputs, cut_width_cm: '150', insole_length_cm: '27', insole_width_cm: '11.5', upper_top_cm: '20', upper_bottom_cm: '13', upper_height_cm: '7' };
-    expect(calculateLaminateCost(example)).toMatchObject({ linear_metre_cost_uah: 240, unit_cost_uah: null, insole_pair_cost_uah: 12.631579, upper_pair_cost_uah: 4.615385,
-      insole_layout: { pieces_per_row: 3, rows_per_cut: 13, total_pieces: 39, pairs: 19, unpaired_pieces: 1 }, upper_layout: { pieces_per_row: 5, rows_per_cut: 21, total_pieces: 105, pairs: 52, unpaired_pieces: 1 } });
-    expect(calculateLaminateCost({ ...example, upper_height_cm: '8' })).toMatchObject({ insole_pair_cost_uah: 12.631579, upper_pair_cost_uah: 5.333333, upper_layout: { total_pieces: 90 } });
-    expect(calculateLaminateCost({ ...example, cut_width_cm: '100' })).toMatchObject({ linear_metre_cost_uah: 160, insole_pair_cost_uah: 13.333333, upper_pair_cost_uah: 4.571429 });
-    expect(calculateLaminateCost({ ...example, insole_length_cm: '101' }).insole_pair_cost_uah).toBeNull();
+    expect(calculateLaminateCost(example)).toMatchObject({ linear_metre_cost_uah: 240, unit_cost_uah: null, insole_pair_cost_uah: 10.909091, upper_pair_cost_uah: 4,
+      insole_layout: { pieces_per_row: 3, rows_per_cut: 13, primary_pieces: 39, rotated_pieces: 5, total_pieces: 44, pairs: 22, unpaired_pieces: 0 }, upper_layout: { pieces_per_row: 5, rows_per_cut: 21, primary_pieces: 105, rotated_pieces: 16, total_pieces: 121, pairs: 60, unpaired_pieces: 1 } });
+    expect(calculateLaminateCost({ ...example, upper_height_cm: '8' })).toMatchObject({ insole_pair_cost_uah: 10.909091, upper_pair_cost_uah: 4.897959, upper_layout: { total_pieces: 98 } });
+    expect(calculateLaminateCost({ ...example, cut_width_cm: '100' })).toMatchObject({ linear_metre_cost_uah: 160, insole_pair_cost_uah: 12.307692, upper_pair_cost_uah: 4 });
+    expect(calculateLaminateCost({ ...example, insole_length_cm: '101' })).toMatchObject({ insole_layout: { primary_pieces: 0, rotated_pieces: 8, pairs: 4 }, insole_pair_cost_uah: 60 });
+    expect(calculateLaminateCost({ ...example, cut_width_cm: '100', insole_length_cm: '101' }).insole_pair_cost_uah).toBeNull();
     expect(emptyLaminateForm(example).cut_width_cm).toBe('150');
   });
   it.each([undefined, null, ''])('невідома ширина %s не підміняється шириною одного шару', cut_width_cm => {

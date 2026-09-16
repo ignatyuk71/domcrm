@@ -39,15 +39,22 @@ class LaminateCostsTest extends TestCase
         $id = $this->postJson(self::URL, $payload)->assertCreated()->assertJsonPath('inputs.cut_width_cm', '150.00')
             ->assertJsonPath('calculation.linear_metre_cost_uah', 240)->assertJsonPath('calculation.cut_area_m2', 1.5)
             ->assertJsonPath('calculation.insole_layout.pieces_per_row', 3)->assertJsonPath('calculation.insole_layout.rows_per_cut', 13)
-            ->assertJsonPath('calculation.insole_layout.total_pieces', 39)->assertJsonPath('calculation.insole_layout.pairs', 19)->assertJsonPath('calculation.insole_layout.unpaired_pieces', 1)
+            ->assertJsonPath('calculation.insole_layout.primary_pieces', 39)->assertJsonPath('calculation.insole_layout.rotated_pieces', 5)
+            ->assertJsonPath('calculation.insole_layout.total_pieces', 44)->assertJsonPath('calculation.insole_layout.pairs', 22)->assertJsonPath('calculation.insole_layout.unpaired_pieces', 0)
             ->assertJsonPath('calculation.upper_layout.pieces_per_row', 5)->assertJsonPath('calculation.upper_layout.rows_per_cut', 21)
-            ->assertJsonPath('calculation.upper_layout.total_pieces', 105)->assertJsonPath('calculation.upper_layout.pairs', 52)->assertJsonPath('calculation.upper_layout.unpaired_pieces', 1)
-            ->assertJsonPath('calculation.insole_pair_cost_uah', 12.631579)->assertJsonPath('calculation.upper_pair_cost_uah', 4.615385)
+            ->assertJsonPath('calculation.upper_layout.primary_pieces', 105)->assertJsonPath('calculation.upper_layout.rotated_pieces', 16)
+            ->assertJsonPath('calculation.upper_layout.total_pieces', 121)->assertJsonPath('calculation.upper_layout.pairs', 60)->assertJsonPath('calculation.upper_layout.unpaired_pieces', 1)
+            ->assertJsonPath('calculation.insole_pair_cost_uah', 10.909091)->assertJsonPath('calculation.upper_pair_cost_uah', 4)
             ->assertJsonPath('calculation.unit_cost_uah', null)->json('id');
+        $before = DB::table('production_cost_batches')->where('id', $id)->first();
+        $this->getJson(self::URL)->assertOk()->assertJsonPath('data.0.calculation.insole_layout.total_pieces', 44)
+            ->assertJsonPath('data.0.calculation.upper_layout.total_pieces', 121)->assertJsonPath('data.0.calculation.method', 'separate_metre_rows_v2');
+        $this->assertEquals($before, DB::table('production_cost_batches')->where('id', $id)->first());
+        $this->assertDatabaseCount('production_cost_batch_revisions', 1);
         $edit = array_replace($payload, ['version' => 1, 'upper_height_cm' => 8]);
         unset($edit['request_key']);
-        $this->putJson(self::URL.'/'.$id, $edit)->assertOk()->assertJsonPath('calculation.insole_layout.total_pieces', 39)
-            ->assertJsonPath('calculation.insole_pair_cost_uah', 12.631579)->assertJsonPath('calculation.upper_layout.total_pieces', 90)->assertJsonPath('calculation.upper_pair_cost_uah', 5.333333);
+        $this->putJson(self::URL.'/'.$id, $edit)->assertOk()->assertJsonPath('calculation.insole_layout.total_pieces', 44)
+            ->assertJsonPath('calculation.insole_pair_cost_uah', 10.909091)->assertJsonPath('calculation.upper_layout.total_pieces', 98)->assertJsonPath('calculation.upper_pair_cost_uah', 4.897959);
     }
 
     public function test_old_records_do_not_guess_laminated_width_or_rewrite_prices_on_read(): void
@@ -70,6 +77,14 @@ class LaminateCostsTest extends TestCase
         $this->putJson(self::URL.'/'.$id, $edit)->assertOk()->assertJsonPath('version', 2)->assertJsonPath('calculation.linear_metre_cost_uah', 240);
         $this->assertDatabaseHas('production_cost_batches', ['id' => $id, 'unit_cost_uah' => null]);
         $this->assertDatabaseCount('production_cost_batch_revisions', 2);
+    }
+
+    public function test_rotated_only_details_are_valid_when_they_fit_a_whole_pair(): void
+    {
+        $this->owner();
+        $this->postJson(self::URL, $this->payload(['cut_width_cm' => 150, 'insole_length_cm' => 101]))->assertCreated()
+            ->assertJsonPath('calculation.insole_layout.primary_pieces', 0)->assertJsonPath('calculation.insole_layout.rotated_pieces', 10)
+            ->assertJsonPath('calculation.insole_layout.pairs', 5)->assertJsonPath('calculation.insole_pair_cost_uah', 48);
     }
 
     public function test_both_cutting_options_must_yield_a_whole_pair_and_width_is_required(): void
