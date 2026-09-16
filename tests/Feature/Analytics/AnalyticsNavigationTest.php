@@ -16,13 +16,14 @@ class AnalyticsNavigationTest extends TestCase
     {
         $this->actingAs(User::factory()->create(['role' => User::ROLE_OWNER]));
 
-        foreach (['/analytics' => 'sales', '/sole-inventory' => 'soles'] as $path => $tab) {
+        foreach (['/analytics' => 'sales', '/sole-inventory' => 'soles', '/analytics/costs' => 'costs'] as $path => $tab) {
             $response = $this->get($path)->assertOk()->assertSessionHas('analytics.last_tab', $tab);
             $xpath = $this->xpath($response->getContent());
             $links = $xpath->query('//nav[@aria-label="Розділи аналітики"]/a');
-            $this->assertCount(2, $links);
+            $this->assertCount(3, $links);
             $this->assertSame(url('/analytics'), $links->item(0)->getAttribute('href'));
             $this->assertSame(url('/sole-inventory'), $links->item(1)->getAttribute('href'));
+            $this->assertSame(url('/analytics/costs'), $links->item(2)->getAttribute('href'));
             $activeTabs = $xpath->query('//nav[@aria-label="Розділи аналітики"]/a[@aria-current="page"]');
             $this->assertCount(1, $activeTabs);
             $this->assertSame(url($path), $activeTabs->item(0)->getAttribute('href'));
@@ -41,7 +42,7 @@ class AnalyticsNavigationTest extends TestCase
     {
         $this->actingAs(User::factory()->create(['role' => User::ROLE_OWNER]));
 
-        foreach (['/sole-inventory' => 'soles', '/analytics' => 'sales'] as $path => $tab) {
+        foreach (['/sole-inventory' => 'soles', '/analytics/costs' => 'costs', '/analytics' => 'sales'] as $path => $tab) {
             $this->get($path)->assertOk();
             $response = $this->get('/orders')->assertOk()->assertSessionHas('analytics.last_tab', $tab);
             $menu = $this->xpath($response->getContent())->query('//a[@data-analytics-menu]')->item(0);
@@ -76,6 +77,7 @@ class AnalyticsNavigationTest extends TestCase
             $this->actingAs(User::factory()->create(['role' => $role]));
             $this->get('/analytics')->assertForbidden();
             $this->get('/sole-inventory')->assertForbidden();
+            $this->get('/analytics/costs')->assertForbidden();
             $this->view('layouts.sidebar')->assertDontSee('data-analytics-menu', false);
         }
     }
@@ -84,6 +86,7 @@ class AnalyticsNavigationTest extends TestCase
     {
         $this->get('/analytics')->assertRedirect(route('login'));
         $this->get('/sole-inventory')->assertRedirect(route('login'));
+        $this->get('/analytics/costs')->assertRedirect(route('login'));
     }
 
     private function xpath(string $html): DOMXPath

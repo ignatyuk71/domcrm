@@ -401,7 +401,7 @@
         </a>
 
         @if($isOwner)
-            <a href="{{ route(session('analytics.last_tab') === 'soles' ? 'inventory.soles' : 'analytics.sales') }}"
+            <a href="{{ route(match (session('analytics.last_tab')) { 'soles' => 'inventory.soles', 'costs' => 'analytics.costs', default => 'analytics.sales' }) }}"
                class="sidebar-link {{ request()->routeIs('analytics.*', 'inventory.soles') ? 'active' : '' }}"
                data-analytics-menu
                @if(request()->routeIs('analytics.*', 'inventory.soles')) aria-current="page" @endif>

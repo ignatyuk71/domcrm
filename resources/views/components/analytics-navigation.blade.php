@@ -1,6 +1,6 @@
 @props(['active' => 'sales'])
 
-<nav @class(['analytics-section-nav', 'analytics-section-nav--soles' => $active === 'soles']) aria-label="Розділи аналітики">
+<nav @class(['analytics-section-nav', 'analytics-section-nav--soles' => in_array($active, ['soles', 'costs'])]) aria-label="Розділи аналітики">
     <a href="{{ route('analytics.sales') }}" @class(['analytics-section-link', 'active' => $active === 'sales'])
        @if($active === 'sales') aria-current="page" @endif>
         <i class="bi bi-graph-up-arrow" aria-hidden="true"></i>
@@ -11,6 +11,11 @@
         <i class="bi bi-layers" aria-hidden="true"></i>
         <span>Запас підошви</span>
     </a>
+    <a href="{{ route('analytics.costs') }}" @class(['analytics-section-link', 'active' => $active === 'costs'])
+       @if($active === 'costs') aria-current="page" @endif>
+        <i class="bi bi-calculator" aria-hidden="true"></i>
+        <span>Собівартість</span>
+    </a>
 </nav>
 
 <style>
@@ -20,6 +25,7 @@
         max-width: 1800px;
         margin: 0 auto 24px;
         border-bottom: 1px solid #e2e8f0;
+        overflow-x: auto;
     }
     .analytics-section-nav--soles { max-width: 1720px; }
     .analytics-section-link {
@@ -44,6 +50,6 @@
     .analytics-section-link:focus-visible { outline: 3px solid #a5b4fc; outline-offset: 3px; }
     @media (max-width: 575.98px) {
         .analytics-section-nav { gap: 4px; margin-bottom: 20px; }
-        .analytics-section-link { flex: 1; padding: 10px 8px; font-size: 13px; }
+        .analytics-section-link { flex: 0 0 auto; padding: 10px 8px; font-size: 13px; }
     }
 </style>

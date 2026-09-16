@@ -18,6 +18,7 @@ use App\Http\Controllers\FiscalController;
 use App\Http\Controllers\FinanceController;
 use App\Http\Controllers\SalesAnalyticsController;
 use App\Http\Controllers\SoleInventoryController;
+use App\Http\Controllers\ProductionCostController;
 use App\Http\Controllers\PackingController;
 use App\Http\Controllers\SavedFileController;
 use App\Http\Controllers\NovaPoshtaSettingsController;
@@ -64,6 +65,10 @@ Route::middleware('auth')->group(function () {
         Route::get('/analytics', [SalesAnalyticsController::class, 'index'])->name('analytics.sales');
         Route::get('/api/analytics/sales', [SalesAnalyticsController::class, 'data'])->name('analytics.sales.data');
         Route::get('/analytics/export', [SalesAnalyticsController::class, 'export'])->name('analytics.sales.export');
+        Route::get('/analytics/costs', [ProductionCostController::class, 'index'])->name('analytics.costs');
+        Route::get('/api/production-costs/sole-batches', [ProductionCostController::class, 'data']);
+        Route::post('/api/production-costs/sole-batches', [ProductionCostController::class, 'save']);
+        Route::put('/api/production-costs/sole-batches/{batch}', [ProductionCostController::class, 'save'])->whereNumber('batch');
         Route::get('/sole-inventory', [SoleInventoryController::class, 'index'])->name('inventory.soles');
         Route::get('/api/sole-inventory', [SoleInventoryController::class, 'data']);
         Route::put('/api/sole-inventory/{category}/plan', [SoleInventoryController::class, 'savePlan'])->whereNumber('category');

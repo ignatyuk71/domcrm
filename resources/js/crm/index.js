@@ -46,6 +46,13 @@ export async function mountSoleInventory(selector = '#crm-sole-inventory') {
     return createApp(page).mount(el);
 }
 
+export async function mountProductionCosts(selector = '#crm-production-costs') {
+    const el = document.querySelector(selector);
+    if (!el) return;
+    const { default: page } = await import('./pages/costs/ProductionCostPage.vue');
+    return createApp(page).mount(el);
+}
+
 export function mountOrderCreate(selector = '#crm-order-create') {
     const el = document.querySelector(selector);
     if (!el) return;
@@ -212,6 +219,7 @@ function autoMount() {
     mountDashboard();
     mountSalesAnalytics();
     mountSoleInventory();
+    mountProductionCosts();
     mountOrderCreate();
     mountOrderEdit();
     mountOrderList();
