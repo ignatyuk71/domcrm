@@ -33,6 +33,7 @@ class LaminateCostRequest extends FormRequest
             'request_key' => $this->isMethod('POST') ? ['required', 'uuid'] : ['prohibited'],
             'version' => $this->isMethod('PUT') ? ['required', 'integer', 'min:1'] : ['prohibited'],
             'quantity' => ['prohibited'], 'total_uah' => ['prohibited'], 'unit_cost_uah' => ['prohibited'], 'component' => ['prohibited'],
+            'insole_pair_cost_uah' => ['prohibited'], 'upper_pair_cost_uah' => ['prohibited'], 'insole_layout' => ['prohibited'], 'upper_layout' => ['prohibited'],
         ];
         foreach (LaminateCostCalculator::FIELDS as $field => $precision) {
             $dimension = str_ends_with($field, '_cm');
@@ -59,7 +60,12 @@ class LaminateCostRequest extends FormRequest
                 return;
             }
             $calculation = $calculator->calculate(1, $calculator->normalize($data));
-            if ($calculation['total_uah'] >= 1000000000000 || $calculation['unit_cost_uah'] >= 10000000000) {
+            foreach (['insole' => 'insole_length_cm', 'upper' => 'upper_top_cm'] as $part => $field) {
+                if ($calculation[$part.'_layout']['pairs'] === 0) {
+                    $validator->errors()->add($field, 'З відрізу 100 см × ширина полотна має виходити хоча б 2 цілі деталі цього типу. Перевірте напрям рядів і розміри.');
+                }
+            }
+            if ($calculation['total_uah'] >= 1000000000000 || $calculation['insole_pair_cost_uah'] >= 10000000000 || $calculation['upper_pair_cost_uah'] >= 10000000000) {
                 $validator->errors()->add('plush_price_metre_uah', 'Завелика вартість. Перевірте ціни та розміри матеріалів.');
             }
         }];
@@ -67,7 +73,7 @@ class LaminateCostRequest extends FormRequest
 
     public function attributes(): array
     {
-        return ['name' => 'Назва розрахунку', 'purchased_on' => 'Дата розцінки', 'note' => 'Примітка',
+        return ['name' => 'Назва розрахунку', 'purchased_on' => 'Дата розцінки', 'note' => 'Примітка', 'cut_width_cm' => 'Ширина склеєного полотна на розкрої',
             'plush_price_metre_uah' => 'Ціна плюшу за погонний метр', 'plush_width_cm' => 'Ширина плюшу', 'plush_shipping_metre_uah' => 'Доставка плюшу на погонний метр',
             'web_roll_price_uah' => 'Ціна рулону павутинки', 'web_roll_length_m' => 'Довжина рулону павутинки', 'web_width_cm' => 'Ширина павутинки', 'web_shipping_roll_uah' => 'Доставка рулону павутинки',
             'foam_sheet_price_usd' => 'Ціна листа поролону', 'usd_rate' => 'Курс долара', 'foam_sheet_length_cm' => 'Довжина листа поролону', 'foam_sheet_width_cm' => 'Ширина листа поролону', 'foam_shipping_sheet_uah' => 'Доставка на лист поролону',

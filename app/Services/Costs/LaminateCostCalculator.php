@@ -9,15 +9,18 @@ class LaminateCostCalculator
         'web_roll_price_uah' => 2, 'web_roll_length_m' => 4, 'web_width_cm' => 2, 'web_shipping_roll_uah' => 2,
         'foam_sheet_price_usd' => 2, 'usd_rate' => 4, 'foam_sheet_length_cm' => 2, 'foam_sheet_width_cm' => 2, 'foam_shipping_sheet_uah' => 2,
         'insole_length_cm' => 2, 'insole_width_cm' => 2, 'upper_top_cm' => 2, 'upper_bottom_cm' => 2, 'upper_height_cm' => 2,
+        'cut_width_cm' => 2,
     ];
 
     public const SHIPPING = ['plush_shipping_metre_uah', 'web_shipping_roll_uah', 'foam_shipping_sheet_uah'];
+
+    public function __construct(private TrapezoidRowLayout $rowLayout) {}
 
     public function normalize(array $data): array
     {
         $inputs = [];
         foreach (self::FIELDS as $field => $precision) {
-            $inputs[$field] = in_array($field, self::SHIPPING, true) && ($data[$field] ?? null) === null
+            $inputs[$field] = in_array($field, [...self::SHIPPING, 'cut_width_cm'], true) && ($data[$field] ?? null) === null
                 ? null : number_format((float) $data[$field], $precision, '.', '');
         }
 
@@ -36,21 +39,42 @@ class LaminateCostCalculator
         ];
         $insoleArea = 2 * (float) $inputs['insole_length_cm'] * (float) $inputs['insole_width_cm'] / 10000;
         $upperArea = ((float) $inputs['upper_top_cm'] + (float) $inputs['upper_bottom_cm']) * (float) $inputs['upper_height_cm'] / 10000;
-        $pairArea = $insoleArea + $upperArea;
         $squareMetreCost = array_sum(array_map(fn ($row) => $row['cost'] / $row['area'], $layers));
+        $layouts = $this->layouts($inputs);
+        $metreArea = ($inputs['cut_width_cm'] ?? null) === null ? null : (float) $inputs['cut_width_cm'] / 100;
+        $metreCost = $metreArea === null ? null : $squareMetreCost * $metreArea;
+        $partCost = fn ($layout) => ($layout['pairs'] ?? 0) > 0 ? round($metreCost / $layout['pairs'], 6) : null;
 
         return [
             // У спільній таблиці total_uah — розцінка 1 м², не сума закупівлі трьох різних упаковок.
             'total_uah' => round($squareMetreCost, 2), 'square_metre_cost_uah' => round($squareMetreCost, 6),
-            'unit_cost_uah' => round($squareMetreCost * $pairArea, 6), 'pair_area_m2' => $pairArea,
+            'method' => 'separate_metre_rows_v1', 'unit_cost_uah' => null,
+            'linear_metre_cost_uah' => $metreCost === null ? null : round($metreCost, 6), 'cut_area_m2' => $metreArea,
+            'insole_layout' => $layouts['insole'], 'upper_layout' => $layouts['upper'],
             'insole_pair_area_m2' => $insoleArea, 'upper_pair_area_m2' => $upperArea,
-            'insole_pair_cost_uah' => round($squareMetreCost * $insoleArea, 6), 'upper_pair_cost_uah' => round($squareMetreCost * $upperArea, 6),
+            'insole_pair_cost_uah' => $partCost($layouts['insole']), 'upper_pair_cost_uah' => $partCost($layouts['upper']),
             'foam_sheet_uah' => $foamCents / 100,
             'breakdown' => array_map(fn ($row) => [
                 'key' => $row['key'], 'label' => $row['label'], 'purchase_unit_uah' => $row['cost'], 'purchase_area_m2' => $row['area'],
-                'square_metre_cost_uah' => round($row['cost'] / $row['area'], 6), 'unit_cost_uah' => round($row['cost'] / $row['area'] * $pairArea, 6),
+                'square_metre_cost_uah' => round($row['cost'] / $row['area'], 6),
+                'linear_metre_cost_uah' => $metreArea === null ? null : round($row['cost'] / $row['area'] * $metreArea, 6),
                 'shipping_included' => $inputs[$row['shipping']] !== null,
             ], $layers),
+        ];
+    }
+
+    public function layouts(array $data): array
+    {
+        // Ширина склеєного полотна невідома зі самих розмірів окремих шарів.
+        if (($data['cut_width_cm'] ?? null) === null) {
+            return ['insole' => null, 'upper' => null];
+        }
+        $width = (float) $data['cut_width_cm'];
+
+        return [
+            // Прямокутник — окремий випадок рівних основ, без перевертання й автоматичного повороту.
+            'insole' => $this->rowLayout->calculate(100, $width, 100, (float) $data['insole_length_cm'], (float) $data['insole_length_cm'], (float) $data['insole_width_cm']),
+            'upper' => $this->rowLayout->calculate(100, $width, 100, (float) $data['upper_top_cm'], (float) $data['upper_bottom_cm'], (float) $data['upper_height_cm']),
         ];
     }
 

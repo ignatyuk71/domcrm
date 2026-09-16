@@ -1,24 +1,42 @@
 import { describe, expect, it } from 'vitest';
 import { calculateLaminateCost, emptyLaminateForm, laminateFields } from './laminateCosts';
 
-const inputs = { plush_price_metre_uah: '120', plush_width_cm: '200', plush_shipping_metre_uah: '', web_roll_price_uah: '800', web_roll_length_m: '40', web_width_cm: '100', web_shipping_roll_uah: '', foam_sheet_price_usd: '4', usd_rate: '40', foam_sheet_length_cm: '200', foam_sheet_width_cm: '100', foam_shipping_sheet_uah: '', insole_length_cm: '25', insole_width_cm: '10', upper_top_cm: '20', upper_bottom_cm: '10', upper_height_cm: '10' };
+const inputs = { cut_width_cm: '100', plush_price_metre_uah: '120', plush_width_cm: '200', plush_shipping_metre_uah: '', web_roll_price_uah: '800', web_roll_length_m: '40', web_width_cm: '100', web_shipping_roll_uah: '', foam_sheet_price_usd: '4', usd_rate: '40', foam_sheet_length_cm: '200', foam_sheet_width_cm: '100', foam_shipping_sheet_uah: '', insole_length_cm: '25', insole_width_cm: '10', upper_top_cm: '20', upper_bottom_cm: '10', upper_height_cm: '10' };
 describe('Склеєне полотно', () => {
+  it('100 × 150 см: окремі ряди прямокутників і трапецій, а не сума їх площ', () => {
+    const example = { ...inputs, cut_width_cm: '150', insole_length_cm: '27', insole_width_cm: '11.5', upper_top_cm: '20', upper_bottom_cm: '13', upper_height_cm: '7' };
+    expect(calculateLaminateCost(example)).toMatchObject({ linear_metre_cost_uah: 240, unit_cost_uah: null, insole_pair_cost_uah: 12.631579, upper_pair_cost_uah: 4.615385,
+      insole_layout: { pieces_per_row: 3, rows_per_cut: 13, total_pieces: 39, pairs: 19, unpaired_pieces: 1 }, upper_layout: { pieces_per_row: 5, rows_per_cut: 21, total_pieces: 105, pairs: 52, unpaired_pieces: 1 } });
+    expect(calculateLaminateCost({ ...example, upper_height_cm: '8' })).toMatchObject({ insole_pair_cost_uah: 12.631579, upper_pair_cost_uah: 5.333333, upper_layout: { total_pieces: 90 } });
+    expect(calculateLaminateCost({ ...example, cut_width_cm: '100' })).toMatchObject({ linear_metre_cost_uah: 160, insole_pair_cost_uah: 13.333333, upper_pair_cost_uah: 4.571429 });
+    expect(calculateLaminateCost({ ...example, insole_length_cm: '101' }).insole_pair_cost_uah).toBeNull();
+    expect(emptyLaminateForm(example).cut_width_cm).toBe('150');
+  });
+  it.each([undefined, null, ''])('невідома ширина %s не підміняється шириною одного шару', cut_width_cm => {
+    expect(calculateLaminateCost({ ...inputs, cut_width_cm })).toMatchObject({ square_metre_cost_uah: 160, linear_metre_cost_uah: null, insole_layout: null, upper_layout: null, insole_pair_cost_uah: null, upper_pair_cost_uah: null, unit_cost_uah: null });
+  });
+  it.each(['0', '-1', '100.001', '1e2', '1001'])('відхиляє некоректну ширину розкрою %s', cut_width_cm => {
+    expect(calculateLaminateCost({ ...inputs, cut_width_cm })).toBeNull();
+  });
   it('рахує по два прямокутники й трапеції, три шари лише один раз', () => {
     const result = calculateLaminateCost(inputs);
-    expect(result).toMatchObject({ total_uah: 160, square_metre_cost_uah: 160, unit_cost_uah: 12.8, insole_pair_area_m2: 0.05, upper_pair_area_m2: 0.03, pair_area_m2: 0.08, insole_pair_cost_uah: 8, upper_pair_cost_uah: 4.8, foam_sheet_uah: 160 });
+    expect(result).toMatchObject({ total_uah: 160, square_metre_cost_uah: 160, unit_cost_uah: null, linear_metre_cost_uah: 160, insole_pair_area_m2: 0.05, upper_pair_area_m2: 0.03, insole_pair_cost_uah: 8, upper_pair_cost_uah: 5.333333, foam_sheet_uah: 160 });
+    expect(result).not.toHaveProperty('pair_area_m2');
     expect(result.breakdown.map(row => row.square_metre_cost_uah)).toEqual([60, 20, 80]);
-    expect(result.breakdown.map(row => row.unit_cost_uah)).toEqual([4.8, 1.6, 6.4]);
+    expect(result.breakdown.map(row => row.linear_metre_cost_uah)).toEqual([60, 20, 80]);
+    expect(result.breakdown.every(row => !('unit_cost_uah' in row))).toBe(true);
     expect(result.breakdown.every(row => !row.shipping_included)).toBe(true);
   });
   it('розподіляє доставку на метр плюшу, рулон павутинки й лист поролону', () => {
-    expect(calculateLaminateCost({ ...inputs, plush_shipping_metre_uah: '20,00', web_shipping_roll_uah: '400', foam_shipping_sheet_uah: '20' })).toMatchObject({ square_metre_cost_uah: 190, unit_cost_uah: 15.2 });
+    expect(calculateLaminateCost({ ...inputs, plush_shipping_metre_uah: '20,00', web_shipping_roll_uah: '400', foam_shipping_sheet_uah: '20' })).toMatchObject({ square_metre_cost_uah: 190, linear_metre_cost_uah: 190, insole_pair_cost_uah: 9.5, upper_pair_cost_uah: 6.333333 });
     expect(calculateLaminateCost({ ...inputs, plush_shipping_metre_uah: '0' }).breakdown[0].shipping_included).toBe(true);
     expect(calculateLaminateCost({ ...inputs, plush_shipping_metre_uah: null }).breakdown[0].shipping_included).toBe(false);
   });
   it('округлює валюту в копійках, але не ціну м² перед множенням', () => {
-    expect(calculateLaminateCost({ ...inputs, foam_sheet_price_usd: '0,05', usd_rate: '7,1234' })).toMatchObject({ foam_sheet_uah: 0.36, unit_cost_uah: 6.4144 });
+    expect(calculateLaminateCost({ ...inputs, foam_sheet_price_usd: '0,05', usd_rate: '7,1234' })).toMatchObject({ foam_sheet_uah: 0.36, insole_pair_cost_uah: 4.009, upper_pair_cost_uah: 2.672667 });
     const result = calculateLaminateCost({ ...inputs, plush_width_cm: '150', web_roll_length_m: '37,1250', insole_width_cm: '10,25' });
-    expect(result.unit_cost_uah).toBeCloseTo((120 / 1.5 + 800 / 37.125 + 160 / 2) * (2 * 25 * 10.25 / 10000 + 0.03), 6);
+    expect(result.insole_pair_cost_uah).toBeCloseTo((120 / 1.5 + 800 / 37.125 + 160 / 2) / 18, 6);
+    expect(result.upper_pair_cost_uah).toBeCloseTo((120 / 1.5 + 800 / 37.125 + 160 / 2) / 30, 6);
   });
   it.each([{ plush_price_metre_uah: '' }, { plush_price_metre_uah: '-1' }, { plush_price_metre_uah: '1.001' }, { plush_price_metre_uah: '1000001' }, { plush_width_cm: '0' }, { plush_width_cm: '5' }, { web_roll_length_m: '0' }, { web_roll_length_m: '1e2' }, { web_roll_length_m: '1.00001' }, { web_roll_length_m: '0.01' }, { web_width_cm: '1001' }, { foam_sheet_width_cm: '5' }, { foam_sheet_price_usd: '1001' }, { usd_rate: '0' }, { usd_rate: '1.00001' }, { insole_width_cm: '-1' }, { upper_top_cm: '0' }, { upper_height_cm: '0' }, { plush_shipping_metre_uah: '-1' }])('відхиляє некоректні поля %j', change => {
     expect(calculateLaminateCost({ ...inputs, ...change })).toBeNull();

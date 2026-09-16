@@ -6,7 +6,7 @@ import { fetchLaminateCosts, createLaminateCost, updateLaminateCost, fetchCostBa
 import { calculateLaminateCost, laminateFields, laminatePrecision } from '@/crm/utils/laminateCosts';
 
 vi.mock('@/crm/services/productionCostsApi', async importOriginal => ({ ...await importOriginal(), fetchLaminateCosts: vi.fn(), createLaminateCost: vi.fn(), updateLaminateCost: vi.fn(), fetchCostBatches: vi.fn() }));
-const inputs = { plush_price_metre_uah: '120', plush_width_cm: '200', plush_shipping_metre_uah: null, web_roll_price_uah: '800', web_roll_length_m: '40', web_width_cm: '100', web_shipping_roll_uah: null, foam_sheet_price_usd: '4', usd_rate: '40', foam_sheet_length_cm: '200', foam_sheet_width_cm: '100', foam_shipping_sheet_uah: null, insole_length_cm: '25', insole_width_cm: '10', upper_top_cm: '20', upper_bottom_cm: '10', upper_height_cm: '10' };
+const inputs = { cut_width_cm: '100', plush_price_metre_uah: '120', plush_width_cm: '200', plush_shipping_metre_uah: null, web_roll_price_uah: '800', web_roll_length_m: '40', web_width_cm: '100', web_shipping_roll_uah: null, foam_sheet_price_usd: '4', usd_rate: '40', foam_sheet_length_cm: '200', foam_sheet_width_cm: '100', foam_shipping_sheet_uah: null, insole_length_cm: '25', insole_width_cm: '10', upper_top_cm: '20', upper_bottom_cm: '10', upper_height_cm: '10' };
 const record = (changes = {}) => {
   const values = { ...inputs, ...changes };
   return { id: 6, version: 1, quantity: 1, name: 'Тестове полотно', purchased_on: null, note: null, ...changes,
@@ -25,15 +25,54 @@ beforeEach(() => {
 afterEach(() => { wrapper?.unmount(); vi.restoreAllMocks(); });
 
 describe('Форма склеєного полотна', () => {
+  it('малює дві незалежні схеми, перевертає лише трапеції й перераховує змінену ширину', async () => {
+    fetchLaminateCosts.mockResolvedValue(listing([record({ cut_width_cm: '150', insole_length_cm: '27', insole_width_cm: '11.5', upper_top_cm: '20', upper_bottom_cm: '13', upper_height_cm: '7' })]));
+    await open();
+    const rectangles = wrapper.get('[data-testid="laminate-insole-layout"]');
+    const trapezoids = wrapper.get('[data-testid="laminate-upper-layout"]');
+    expect(rectangles.findAll('polygon')).toHaveLength(39);
+    expect(trapezoids.findAll('polygon')).toHaveLength(105);
+    expect(rectangles.get('polygon').attributes('points')).toBe('0,0 27,0 27,11.5 0,11.5');
+    expect(trapezoids.findAll('polygon')[0].attributes('points')).toBe('0,0 20,0 16.5,7 3.5,7');
+    expect(trapezoids.findAll('polygon')[1].attributes('points')).toBe('20,0 33,0 36.5,7 16.5,7');
+    expect(rectangles.get('[role="img"]').attributes('aria-label')).toContain('3 у ряду, 13 рядів');
+    expect(trapezoids.get('[role="img"]').attributes('aria-label')).toContain('5 у ряду, 21 рядів');
+    expect(wrapper.get('[data-testid="laminate-insole-cost"]').text()).toContain('12,63');
+    expect(wrapper.get('[data-testid="laminate-upper-cost"]').text()).toContain('4,62');
+    expect(wrapper.get('thead').text()).toContain('2 устілки'); expect(wrapper.get('thead').text()).toContain('2 деталі верху');
+    expect(wrapper.text()).not.toContain('Разом');
+    await wrapper.get('[name="cut_width_cm"]').setValue('100');
+    expect(wrapper.get('[data-testid="laminate-metre-cost"]').text()).toContain('160,00');
+    expect(rectangles.findAll('polygon')).toHaveLength(24); expect(trapezoids.findAll('polygon')).toHaveLength(70);
+    expect(wrapper.get('[data-testid="laminate-insole-cost"]').text()).toContain('13,33');
+    expect(wrapper.get('[data-testid="laminate-upper-cost"]').text()).toContain('4,57');
+    expect(updateLaminateCost).not.toHaveBeenCalled();
+    await wrapper.get('form').trigger('submit'); await flushPromises();
+    expect(updateLaminateCost).toHaveBeenCalledWith(6, expect.objectContaining({ cut_width_cm: '100' }));
+  });
+  it('старий запис без ширини не показує нуль або стару спільну суму', async () => {
+    fetchLaminateCosts.mockResolvedValue(listing([record({ cut_width_cm: null })]));
+    await open();
+    expect(wrapper.get('[name="cut_width_cm"]').element.value).toBe('');
+    expect(wrapper.get('[data-testid="laminate-insole-cost"]').text()).toContain('—');
+    expect(wrapper.get('[data-testid="laminate-upper-cost"]').text()).toContain('—');
+    expect(wrapper.find('[data-testid="laminate-unit-cost"]').exists()).toBe(false);
+    await wrapper.get('form').trigger('submit'); await flushPromises();
+    expect(updateLaminateCost).not.toHaveBeenCalled();
+    await wrapper.get('[name="cut_width_cm"]').setValue('150');
+    expect(wrapper.get('[data-testid="laminate-insole-cost"]').text()).toContain('8,00');
+  });
   it('заповнює форму з БД, показує три шари та окремі витрати без записів', async () => {
     await open();
     expect(wrapper.get('[name="plush_price_metre_uah"]').element.value).toBe('120.00');
     expect(wrapper.get('[name="web_roll_length_m"]').element.value).toBe('40.0000');
     expect(wrapper.get('[name="purchased_on"]').element.value).toBe('');
-    expect(wrapper.get('[data-testid="laminate-unit-cost"]').text()).toContain('12,80');
+    expect(wrapper.get('[data-testid="laminate-metre-cost"]').text()).toContain('160,00');
     expect(wrapper.get('[data-testid="laminate-insole-cost"]').text()).toContain('8,00');
-    expect(wrapper.get('[data-testid="laminate-upper-cost"]').text()).toContain('4,80');
-    expect(wrapper.get('[data-testid="laminate-area"]').text()).toContain('0,08');
+    expect(wrapper.get('[data-testid="laminate-upper-cost"]').text()).toContain('5,33');
+    expect(wrapper.find('[data-testid="laminate-unit-cost"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="laminate-area"]').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain('Разом на пару');
     expect(wrapper.text()).toContain('Клейова павутинка'); expect(wrapper.text()).toContain('Менша поролонова вставка рахується окремо');
     expect(wrapper.text()).toContain('Доставка не врахована');
     expect(wrapper.find('[name="quantity"]').exists()).toBe(false);
@@ -41,9 +80,11 @@ describe('Форма склеєного полотна', () => {
   });
   it('ціни й геометрія одразу змінюють підсумок, запис тільки за кнопкою', async () => {
     await open(); await wrapper.get('[name="foam_sheet_price_usd"]').setValue('5,00');
-    expect(wrapper.get('[data-testid="laminate-unit-cost"]').text()).toContain('14,40');
+    expect(wrapper.get('[data-testid="laminate-insole-cost"]').text()).toContain('9,00');
+    expect(wrapper.get('[data-testid="laminate-upper-cost"]').text()).toContain('6,00');
     await wrapper.get('[name="insole_length_cm"]').setValue('50');
-    expect(wrapper.get('[data-testid="laminate-unit-cost"]').text()).toContain('23,40');
+    expect(wrapper.get('[data-testid="laminate-insole-cost"]').text()).toContain('18,00');
+    expect(wrapper.get('[data-testid="laminate-upper-cost"]').text()).toContain('6,00');
     expect(updateLaminateCost).not.toHaveBeenCalled();
     await wrapper.get('form').trigger('submit'); await flushPromises();
     const payload = updateLaminateCost.mock.calls[0][1];
@@ -58,11 +99,12 @@ describe('Форма склеєного полотна', () => {
     await wrapper.get('[name="plush_shipping_metre_uah"]').setValue('20');
     await wrapper.get('[name="web_shipping_roll_uah"]').setValue('400');
     await wrapper.get('[name="foam_shipping_sheet_uah"]').setValue('20');
-    expect(wrapper.get('[data-testid="laminate-unit-cost"]').text()).toContain('15,20');
+    expect(wrapper.get('[data-testid="laminate-insole-cost"]').text()).toContain('9,50');
+    expect(wrapper.get('[data-testid="laminate-upper-cost"]').text()).toContain('6,33');
   });
   it.each([['usd_rate', '0'], ['web_roll_length_m', '0'], ['plush_width_cm', '5'], ['upper_height_cm', '0']])('не зберігає некоректне поле %s', async (field, value) => {
     await open(); await wrapper.get(`[name="${field}"]`).setValue(value);
-    expect(wrapper.get('[data-testid="laminate-unit-cost"]').text()).toContain('—');
+    expect(wrapper.get('[data-testid="laminate-insole-cost"]').text()).toContain('—');
     await wrapper.get('form').trigger('submit'); await flushPromises();
     expect(updateLaminateCost).not.toHaveBeenCalled();
   });
@@ -102,7 +144,7 @@ describe('Форма склеєного полотна', () => {
     expect(wrapper.find('form').exists()).toBe(false);
     fetchLaminateCosts.mockResolvedValueOnce(listing([])); await button('Оновити список').trigger('click'); await flushPromises();
     expect(wrapper.get('[name="plush_price_metre_uah"]').element.value).toBe('');
-    expect(wrapper.get('[data-testid="laminate-unit-cost"]').text()).toContain('—');
+    expect(wrapper.get('[data-testid="laminate-insole-cost"]').text()).toContain('—');
     expect(createLaminateCost).not.toHaveBeenCalled();
   });
   it('ліниве завантаження та збереження чернетки між вкладками матеріалів', async () => {

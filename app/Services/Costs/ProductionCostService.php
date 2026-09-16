@@ -38,7 +38,7 @@ class ProductionCostService
             'name' => trim($data['name']), 'purchased_on' => $data['purchased_on'] ?? null, 'quantity' => $quantity,
             'inputs' => json_encode($inputs, JSON_THROW_ON_ERROR), 'note' => $data['note'] ?? null,
             'total_uah' => number_format($calculation['total_uah'], 2, '.', ''),
-            'unit_cost_uah' => number_format($calculation['unit_cost_uah'], 6, '.', ''),
+            'unit_cost_uah' => $calculation['unit_cost_uah'] === null ? null : number_format($calculation['unit_cost_uah'], 6, '.', ''),
         ];
         try {
             $id = DB::transaction(function () use ($data, $values, $userId, $batchId, $component) {
