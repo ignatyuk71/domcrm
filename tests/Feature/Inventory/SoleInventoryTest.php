@@ -70,7 +70,9 @@ class SoleInventoryTest extends TestCase
             ->assertJsonPath('categories.0.rows.0.reorder_date', null)
             ->assertJsonPath('categories.0.rate_days', 15)
             ->assertJsonPath('categories.0.months.0.total', 30);
-        $this->assertDatabaseHas('sole_inventory_plans', ['basis' => 'receipts', 'opening_balances' => '[]']);
+        $this->assertDatabaseHas('sole_inventory_plans', ['category_id' => $this->category, 'basis' => 'receipts']);
+        // JSON порівнюємо за вмістом: MySQL не прирівнює JSON-масив до SQL-рядка '[]'.
+        $this->assertSame([], json_decode(DB::table('sole_inventory_plans')->where('category_id', $this->category)->value('opening_balances'), true));
     }
 
     public function test_later_batch_adds_stock_without_resetting_consumption_or_daily_rate(): void
