@@ -90,9 +90,9 @@ describe('Калькулятор виробництва', () => {
   });
   it('інші складові не видає за пораховані й зберігає форму при перемиканні вкладок', async () => {
     await open(); await wrapper.get('[name="usd_rate"]').setValue('46');
-    await button('Плюш + поролон').trigger('click');
+    await button('Нитки').trigger('click');
     expect(wrapper.text()).toContain('Ще не пораховано');
-    expect(wrapper.text()).toContain('клейова павутинка');
+    expect(wrapper.text()).toContain('Нитки для зшивання');
     expect(wrapper.find('[data-testid="unit-cost"]').exists()).toBe(false);
     await button('Підошва').trigger('click');
     expect(wrapper.get('[name="usd_rate"]').element.value).toBe('46');

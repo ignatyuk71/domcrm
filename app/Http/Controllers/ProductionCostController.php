@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\CardboardCostBatchRequest;
 use App\Http\Requests\FoamCostRequest;
 use App\Http\Requests\FurCostRequest;
+use App\Http\Requests\LaminateCostRequest;
 use App\Http\Requests\SoleCostBatchRequest;
 use App\Services\Costs\ProductionCostService;
 use Illuminate\Http\JsonResponse;
@@ -65,5 +66,17 @@ class ProductionCostController extends Controller
     public function saveFur(FurCostRequest $request, ProductionCostService $service, ?int $batch = null): JsonResponse
     {
         return response()->json($service->save($request->validated(), $request->user()->id, $batch, 'fur'), $batch ? 200 : 201);
+    }
+
+    public function laminateData(Request $request, ProductionCostService $service): JsonResponse
+    {
+        $request->validate(['page' => ['sometimes', 'integer', 'min:1', 'max:100000']]);
+
+        return response()->json($service->listing('laminate'));
+    }
+
+    public function saveLaminate(LaminateCostRequest $request, ProductionCostService $service, ?int $batch = null): JsonResponse
+    {
+        return response()->json($service->save($request->validated(), $request->user()->id, $batch, 'laminate'), $batch ? 200 : 201);
     }
 }

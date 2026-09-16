@@ -1,10 +1,10 @@
 <template>
-  <section class="cost-page" :aria-busy="loading || saving || cardboardSaving || foamSaving || furSaving">
+  <section class="cost-page" :aria-busy="loading || saving || cardboardSaving || foamSaving || furSaving || laminateSaving">
     <header class="cost-heading">
       <div><h1>Собівартість виробництва</h1><p>Рахуємо складові однієї пари капців. Кожен матеріал — окремий розрахунок.</p></div>
     </header>
     <nav class="cost-components" aria-label="Складові собівартості">
-      <button v-for="item in components" :key="item.key" type="button" :aria-pressed="activeComponent === item.key" :class="{ active: activeComponent === item.key }" :disabled="saving || cardboardSaving || foamSaving || furSaving" @click="activeComponent = item.key">
+      <button v-for="item in components" :key="item.key" type="button" :aria-pressed="activeComponent === item.key" :class="{ active: activeComponent === item.key }" :disabled="saving || cardboardSaving || foamSaving || furSaving || laminateSaving" @click="activeComponent = item.key">
         <i :class="`bi bi-${item.icon}`" aria-hidden="true"></i>{{ item.label }}
       </button>
     </nav>
@@ -58,13 +58,14 @@
         <footer v-if="lastPage > 1"><button class="btn cost-button" :disabled="page <= 1 || loading || saving" @click="load(page - 1)">Назад</button><span>{{ page }} / {{ lastPage }}</span><button class="btn cost-button" :disabled="page >= lastPage || loading || saving" @click="load(page + 1)">Далі</button></footer>
       </section>
     </template>
-    <section v-else-if="!['cardboard', 'foam', 'fur'].includes(activeComponent)" class="cost-card cost-placeholder">
+    <section v-else-if="!['cardboard', 'foam', 'fur', 'laminate'].includes(activeComponent)" class="cost-card cost-placeholder">
       <span class="cost-placeholder-icon"><i :class="`bi bi-${component.icon}`" aria-hidden="true"></i></span>
       <h2>{{ component.label }}</h2><p>{{ component.description }}</p><span class="cost-state pending">Ще не пораховано</span><p class="cost-placeholder-note">Додамо розрахунок, коли узгодимо витрату та ціни цього матеріалу. Відсутні дані не вважаємо нульовою собівартістю.</p>
     </section>
     <SheetMaterialCostPanel v-if="cardboardOpened" v-show="activeComponent === 'cardboard'" material="cardboard" @saving="cardboardSaving = $event" />
     <SheetMaterialCostPanel v-if="foamOpened" v-show="activeComponent === 'foam'" material="foam" @saving="foamSaving = $event" />
     <FurCostPanel v-if="furOpened" v-show="activeComponent === 'fur'" @saving="furSaving = $event" />
+    <LaminateCostPanel v-if="laminateOpened" v-show="activeComponent === 'laminate'" @saving="laminateSaving = $event" />
   </section>
 </template>
 
@@ -72,12 +73,13 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import SheetMaterialCostPanel from './SheetMaterialCostPanel.vue';
 import FurCostPanel from './FurCostPanel.vue';
+import LaminateCostPanel from './LaminateCostPanel.vue';
 import { fetchCostBatches, createCostBatch, updateCostBatch, costError } from '@/crm/services/productionCostsApi';
 import { calculateSoleCost, costFields, decimalInput, emptyCostForm } from '@/crm/utils/soleCosts';
 
 const components = [
   { key: 'soles', label: 'Підошва', icon: 'box-seam' },
-  { key: 'laminate', label: 'Плюш + поролон', icon: 'layers', description: 'Плюш вельбо, клейова павутинка та поролон 5 мм склеюються в полотно. З нього вирізаються заготовки устілки та внутрішньої частини верху. Рахуватимемо витрачені заготовки разом з обрізками.' },
+  { key: 'laminate', label: 'Плюш + поролон', icon: 'layers' },
   { key: 'cardboard', label: 'Картон', icon: 'file-earmark' },
   { key: 'foam', label: 'Поролон-вставка', icon: 'square' },
   { key: 'fur', label: 'Хутро', icon: 'scissors' },
@@ -105,10 +107,12 @@ const activeComponent = ref('soles');
 const cardboardOpened = ref(false), cardboardSaving = ref(false);
 const foamOpened = ref(false), foamSaving = ref(false);
 const furOpened = ref(false), furSaving = ref(false);
+const laminateOpened = ref(false), laminateSaving = ref(false);
 watch(activeComponent, value => {
   if (value === 'cardboard') cardboardOpened.value = true;
   if (value === 'foam') foamOpened.value = true;
   if (value === 'fur') furOpened.value = true;
+  if (value === 'laminate') laminateOpened.value = true;
 });
 const component = computed(() => components.find(item => item.key === activeComponent.value));
 const batches = ref([]), page = ref(1), lastPage = ref(1), total = ref(0), ready = ref(false), loading = ref(false), saving = ref(false);

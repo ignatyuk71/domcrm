@@ -78,6 +78,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/api/production-costs/fur-batches', [ProductionCostController::class, 'furData']);
         Route::post('/api/production-costs/fur-batches', [ProductionCostController::class, 'saveFur']);
         Route::put('/api/production-costs/fur-batches/{batch}', [ProductionCostController::class, 'saveFur'])->whereNumber('batch');
+        Route::get('/api/production-costs/laminate-calculations', [ProductionCostController::class, 'laminateData']);
+        Route::post('/api/production-costs/laminate-calculations', [ProductionCostController::class, 'saveLaminate']);
+        Route::put('/api/production-costs/laminate-calculations/{batch}', [ProductionCostController::class, 'saveLaminate'])->whereNumber('batch');
         Route::get('/sole-inventory', [SoleInventoryController::class, 'index'])->name('inventory.soles');
         Route::get('/api/sole-inventory', [SoleInventoryController::class, 'data']);
         Route::put('/api/sole-inventory/{category}/plan', [SoleInventoryController::class, 'savePlan'])->whereNumber('category');
