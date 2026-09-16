@@ -7,11 +7,20 @@ use Illuminate\Support\Facades\DB;
 
 class ProductionCostService
 {
-    public function __construct(private SoleCostCalculator $calculator) {}
+    public function __construct(private SoleCostCalculator $soles, private CardboardCostCalculator $cardboard) {}
 
-    public function listing(): array
+    private function calculator(string $component): SoleCostCalculator|CardboardCostCalculator
     {
-        $page = DB::table('production_cost_batches')->where('component', 'soles')->orderByDesc('id')->paginate(20);
+        return match ($component) {
+            'soles' => $this->soles, 'cardboard' => $this->cardboard,
+            default => abort(404),
+        };
+    }
+
+    public function listing(string $component = 'soles'): array
+    {
+        $this->calculator($component);
+        $page = DB::table('production_cost_batches')->where('component', $component)->orderByDesc('id')->paginate(20);
 
         return [
             'data' => array_map(fn ($row) => $this->present($row), $page->items()),
@@ -19,10 +28,11 @@ class ProductionCostService
         ];
     }
 
-    public function save(array $data, ?int $userId, ?int $batchId = null): array
+    public function save(array $data, ?int $userId, ?int $batchId = null, string $component = 'soles'): array
     {
-        $inputs = $this->calculator->normalize($data);
-        $calculation = $this->calculator->calculate((int) $data['quantity'], $inputs);
+        $calculator = $this->calculator($component);
+        $inputs = $calculator->normalize($data);
+        $calculation = $calculator->calculate((int) $data['quantity'], $inputs);
         $values = [
             'name' => trim($data['name']), 'purchased_on' => $data['purchased_on'] ?? null, 'quantity' => (int) $data['quantity'],
             'inputs' => json_encode($inputs, JSON_THROW_ON_ERROR), 'note' => $data['note'] ?? null,
@@ -30,14 +40,14 @@ class ProductionCostService
             'unit_cost_uah' => number_format($calculation['unit_cost_uah'], 6, '.', ''),
         ];
         try {
-            $id = DB::transaction(function () use ($data, $values, $userId, $batchId) {
+            $id = DB::transaction(function () use ($data, $values, $userId, $batchId, $component) {
                 $previous = null;
                 if ($batchId) {
-                    $previous = DB::table('production_cost_batches')->where('component', 'soles')->where('id', $batchId)->lockForUpdate()->first();
+                    $previous = DB::table('production_cost_batches')->where('component', $component)->where('id', $batchId)->lockForUpdate()->first();
                     abort_unless($previous, 404);
                     abort_if((int) $previous->version !== (int) $data['version'], 409, 'Цю партію вже змінили. Оновіть список і відкрийте її ще раз.');
                 } elseif ($existing = DB::table('production_cost_batches')->where('request_key', $data['request_key'])->first()) {
-                    return $this->sameRetry($existing, $values);
+                    return $this->sameRetry($existing, $values, $component);
                 }
                 $write = $values + ['version' => (int) ($previous->version ?? 0) + 1, 'updated_at' => now()];
                 if ($previous) {
@@ -45,7 +55,7 @@ class ProductionCostService
                     $id = $batchId;
                 } else {
                     $id = DB::table('production_cost_batches')->insertGetId($write + [
-                        'component' => 'soles', 'request_key' => $data['request_key'], 'user_id' => $userId, 'created_at' => now(),
+                        'component' => $component, 'request_key' => $data['request_key'], 'user_id' => $userId, 'created_at' => now(),
                     ]);
                 }
                 DB::table('production_cost_batch_revisions')->insert([
@@ -61,20 +71,22 @@ class ProductionCostService
             if (! $existing) {
                 throw $exception;
             }
-            $id = $this->sameRetry($existing, $values);
+            $id = $this->sameRetry($existing, $values, $component);
         }
 
         return $this->present(DB::table('production_cost_batches')->where('id', $id)->first());
     }
 
-    private function sameRetry(object $existing, array $values): int
+    private function sameRetry(object $existing, array $values, string $component): int
     {
-        $same = $existing->component === 'soles';
+        abort_unless($existing->component === $component, 409, 'Цей запит належить іншій складовій. Створіть новий розрахунок.');
+        $calculator = $this->calculator($component);
+        $same = true;
         foreach (['name', 'purchased_on', 'quantity', 'note'] as $field) {
             $same = $same && (string) $existing->$field === (string) $values[$field];
         }
         // Порядок ключів JSON у MySQL може відрізнятися від SQLite.
-        $same = $same && $this->calculator->normalize(json_decode($existing->inputs, true)) === $this->calculator->normalize(json_decode($values['inputs'], true));
+        $same = $same && $calculator->normalize(json_decode($existing->inputs, true)) === $calculator->normalize(json_decode($values['inputs'], true));
         abort_unless($same, 409, 'Цей запит уже збережений з іншими даними. Оновіть список партій.');
 
         return (int) $existing->id;
@@ -82,13 +94,14 @@ class ProductionCostService
 
     private function present(object $row): array
     {
-        $inputs = $this->calculator->normalize(json_decode($row->inputs, true));
+        $calculator = $this->calculator($row->component);
+        $inputs = $calculator->normalize(json_decode($row->inputs, true));
 
         return [
             'id' => (int) $row->id, 'name' => $row->name, 'purchased_on' => $row->purchased_on,
             'quantity' => (int) $row->quantity, 'inputs' => $inputs, 'note' => $row->note,
             'version' => (int) $row->version, 'updated_at' => $row->updated_at,
-            'calculation' => $this->calculator->calculate((int) $row->quantity, $inputs),
+            'calculation' => $calculator->calculate((int) $row->quantity, $inputs),
         ];
     }
 }

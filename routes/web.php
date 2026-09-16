@@ -69,6 +69,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/api/production-costs/sole-batches', [ProductionCostController::class, 'data']);
         Route::post('/api/production-costs/sole-batches', [ProductionCostController::class, 'save']);
         Route::put('/api/production-costs/sole-batches/{batch}', [ProductionCostController::class, 'save'])->whereNumber('batch');
+        Route::get('/api/production-costs/cardboard-batches', [ProductionCostController::class, 'cardboardData']);
+        Route::post('/api/production-costs/cardboard-batches', [ProductionCostController::class, 'saveCardboard']);
+        Route::put('/api/production-costs/cardboard-batches/{batch}', [ProductionCostController::class, 'saveCardboard'])->whereNumber('batch');
         Route::get('/sole-inventory', [SoleInventoryController::class, 'index'])->name('inventory.soles');
         Route::get('/api/sole-inventory', [SoleInventoryController::class, 'data']);
         Route::put('/api/sole-inventory/{category}/plan', [SoleInventoryController::class, 'savePlan'])->whereNumber('category');

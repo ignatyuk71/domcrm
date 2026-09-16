@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\CardboardCostBatchRequest;
 use App\Http\Requests\SoleCostBatchRequest;
 use App\Services\Costs\ProductionCostService;
 use Illuminate\Http\JsonResponse;
@@ -26,5 +27,17 @@ class ProductionCostController extends Controller
     public function save(SoleCostBatchRequest $request, ProductionCostService $service, ?int $batch = null): JsonResponse
     {
         return response()->json($service->save($request->validated(), $request->user()->id, $batch), $batch ? 200 : 201);
+    }
+
+    public function cardboardData(Request $request, ProductionCostService $service): JsonResponse
+    {
+        $request->validate(['page' => ['sometimes', 'integer', 'min:1', 'max:100000']]);
+
+        return response()->json($service->listing('cardboard'));
+    }
+
+    public function saveCardboard(CardboardCostBatchRequest $request, ProductionCostService $service, ?int $batch = null): JsonResponse
+    {
+        return response()->json($service->save($request->validated(), $request->user()->id, $batch, 'cardboard'), $batch ? 200 : 201);
     }
 }
