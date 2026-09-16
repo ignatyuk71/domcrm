@@ -35,62 +35,113 @@ class SoleInventoryTest extends TestCase
             $this->actingAs(User::factory()->create(['role' => $role]));
             $this->getJson('/api/sole-inventory')->assertForbidden();
             $this->get('/sole-inventory')->assertForbidden();
-            $this->putJson("/api/sole-inventory/{$this->category}/plan", $this->plan())->assertForbidden();
-            $this->postJson("/api/sole-inventory/{$this->category}/movements", $this->movement())->assertForbidden();
+            $this->postJson("/api/sole-inventory/{$this->category}/batches", $this->batch())->assertForbidden();
+            $this->putJson("/api/sole-inventory/{$this->category}/batches/1", [])->assertForbidden();
+            $this->putJson("/api/sole-inventory/{$this->category}/plan", [])->assertForbidden();
         }
         $this->actingAs($this->owner)->get('/sole-inventory')->assertOk()->assertSee('crm-sole-inventory');
     }
 
-    public function test_unconfigured_inventory_does_not_invent_balances_or_write_on_read(): void
+    public function test_read_does_not_invent_stock_or_create_plans_and_does_not_return_recent_order_table(): void
     {
-        $this->shipment($this->category, '36/37р - 24-24,5см', 3, 'shipped', '2026-09-15 10:00:00');
-        $this->report()->assertOk()->assertJsonPath('categories.0.rows.0.remaining', null)
-            ->assertJsonPath('categories.0.rows.0.shipped_in_window', 3)
+        $response = $this->report()->assertOk()->assertJsonPath('categories.0.rows.0.remaining', null)
             ->assertJsonPath('categories.0.rows.0.status', 'unconfigured')
             ->assertJsonPath('categories.0.settings.lead_time_days', null)
+            ->assertJsonPath('categories.0.settings.lookback_days', 0)
             ->assertJsonPath('totals.configured_sizes', 0)->assertJsonPath('totals.total_sizes', 7);
+        $this->assertArrayNotHasKey('recent_shipments', $response->json('categories.0'));
+        $this->assertArrayNotHasKey('opening_balances', $response->json('categories.0.settings'));
         $this->assertDatabaseCount('sole_inventory_plans', 0);
-        $this->assertDatabaseCount('sole_inventory_movements', 0);
+        $this->assertDatabaseCount('sole_inventory_batches', 0);
     }
 
-    public function test_consumes_actual_quantities_once_and_returns_do_not_restore_raw_soles(): void
+    public function test_first_batch_starts_calculation_without_manually_entered_stock_or_setup(): void
     {
-        $this->savePlan();
-        [$order, $delivery] = $this->shipment($this->category, '36-37-24 см', 5, 'returned', '2026-09-15 10:00:00');
+        $this->shipment($this->category, '36/37р - 24-24,5см', 30, 'shipped', '2026-09-03 10:00:00');
+        $this->shipment($this->category, '36/37', 70, 'shipped', '2026-08-31 23:59:59');
+        $this->receive();
+        $this->report()->assertJsonPath('categories.0.counting_from', '2026-09-01')
+            ->assertJsonPath('categories.0.rows.0.received_quantity', 100)
+            ->assertJsonPath('categories.0.rows.0.consumed', 30)
+            ->assertJsonPath('categories.0.rows.0.remaining', 70)
+            ->assertJsonPath('categories.0.rows.0.daily_rate', 2)
+            ->assertJsonPath('categories.0.rows.0.days_remaining', 35)
+            ->assertJsonPath('categories.0.rows.0.status', 'missing_lead')
+            ->assertJsonPath('categories.0.rows.0.reorder_date', null)
+            ->assertJsonPath('categories.0.rate_days', 15)
+            ->assertJsonPath('categories.0.months.0.total', 30);
+        $this->assertDatabaseHas('sole_inventory_plans', ['basis' => 'receipts', 'opening_balances' => '[]']);
+    }
+
+    public function test_later_batch_adds_stock_without_resetting_consumption_or_daily_rate(): void
+    {
+        $this->receive();
+        $this->shipment($this->category, '36/37', 30, 'shipped', '2026-09-05 10:00:00');
+        $this->receive(['received_on' => '2026-09-10', 'quantities' => $this->quantities(50)]);
+        $this->shipment($this->category, '36/37', 10, 'shipped', '2026-09-16 10:00:00');
+        $this->report()->assertJsonPath('categories.0.counting_from', '2026-09-01')
+            ->assertJsonPath('categories.0.rows.0.received_quantity', 150)
+            ->assertJsonPath('categories.0.rows.0.consumed', 40)
+            ->assertJsonPath('categories.0.rows.0.remaining', 110)
+            ->assertJsonPath('categories.0.rows.0.daily_rate', 2)
+            ->assertJsonPath('categories.0.months.0.total', 40);
+    }
+
+    public function test_historical_batch_and_corrected_arrival_date_recalculate_the_full_period(): void
+    {
+        $laterId = $this->receive(['received_on' => '2026-09-10']);
+        $this->shipment($this->category, '36/37', 12, 'shipped', '2026-08-25 10:00:00');
+        $this->shipment($this->category, '36/37', 18, 'shipped', '2026-09-05 10:00:00');
+        $this->receive(['received_on' => '2026-08-01', 'quantities' => $this->quantities(50)]);
+        $this->report()->assertJsonPath('categories.0.rows.0.remaining', 120)
+            ->assertJsonPath('categories.0.months.0.total', 12)->assertJsonPath('categories.0.months.1.total', 18);
+        $data = ['version' => 1, 'received_on' => '2026-07-01', 'quantities' => $this->quantities(80), 'note' => 'Уточнили кількість'];
+        $this->putJson("/api/sole-inventory/{$this->category}/batches/{$laterId}", $data)->assertOk();
+        $this->report()->assertJsonPath('categories.0.counting_from', '2026-07-01')
+            ->assertJsonPath('categories.0.rows.0.received_quantity', 130)
+            ->assertJsonPath('categories.0.rows.0.remaining', 100)
+            ->assertJsonPath('categories.0.months.0.total', 0);
+        $this->putJson("/api/sole-inventory/{$this->category}/batches/{$laterId}", $data)->assertConflict();
+        $this->putJson("/api/sole-inventory/{$this->outdoor}/batches/{$laterId}", array_replace($data, ['quantities' => $this->quantities(80, $this->outdoor)]))->assertNotFound();
+        $this->assertDatabaseCount('sole_inventory_plan_revisions', 3);
+    }
+
+    public function test_retried_batch_is_not_duplicated_and_payload_conflicts_are_rejected(): void
+    {
+        $data = $this->batch();
+        $this->postBatch($data)->assertCreated();
+        $this->postBatch($data)->assertCreated();
+        $this->postBatch(array_replace($data, ['quantities' => $this->quantities(200)]))->assertConflict();
+        $this->assertDatabaseCount('sole_inventory_batches', 1);
+        $this->assertDatabaseCount('sole_inventory_plans', 1);
+        $this->report()->assertJsonPath('categories.0.totals.received', 100);
+    }
+
+    public function test_consumption_uses_actual_quantities_and_first_dispatch_even_after_return_or_cancellation(): void
+    {
+        $this->receive();
+        [, $delivery] = $this->shipment($this->category, '36-37-24 см', 5, 'returned', '2026-09-15 10:00:00');
         $this->history($delivery, 'in_transit', '2026-09-03 10:00:00');
         $this->history($delivery, 'at_warehouse', '2026-09-05 10:00:00');
         $this->history($delivery, 'refusal', '2026-09-15 10:00:00');
-        $this->shipment($this->category, '36/37', 100, 'confirmed', '2026-09-10 10:00:00');
-        $this->shipment($this->category, '36/37', 100, 'packing', '2026-09-10 10:00:00');
-        $this->shipment($this->category, '36/37', 100, 'cancelled', '2026-09-10 10:00:00');
-        // Скасування після реального відправлення не повертає сировину.
-        [, $cancelledDelivery] = $this->shipment($this->category, '36/37', 2, 'cancelled', '2026-09-11 10:00:00');
-        $this->history($cancelledDelivery, 'in_transit', '2026-09-10 10:00:00');
+        foreach (['confirmed', 'packing', 'cancelled'] as $status) {
+            $this->shipment($this->category, '36/37', 100, $status, '2026-09-10 10:00:00');
+        }
+        [, $cancelled] = $this->shipment($this->category, '36/37', 2, 'cancelled', '2026-09-11 10:00:00');
+        $this->history($cancelled, 'in_transit', '2026-09-10 10:00:00');
+        [, $old] = $this->shipment($this->category, '36/37', 8, 'returned', '2026-09-15 10:00:00');
+        $this->history($old, 'in_transit', '2026-08-31 10:00:00');
+        $this->shipment($this->category, '36/37', 90, 'shipped', null);
         $this->report()->assertJsonPath('categories.0.rows.0.consumed', 7)
             ->assertJsonPath('categories.0.rows.0.remaining', 93)
-            ->assertJsonPath('categories.0.rows.0.shipped_in_window', 7)
+            ->assertJsonPath('categories.0.warnings.missing_date_orders', 1)
             ->assertJsonPath('categories.0.warnings.approximate_date_pairs', 0);
     }
 
-    public function test_uses_dispatch_day_not_order_creation_or_later_return_and_excludes_today_from_rate(): void
+    public function test_preserves_multiple_lines_but_deduplicates_orders_and_keeps_categories_separate(): void
     {
-        $this->savePlan();
-        [, $old] = $this->shipment($this->category, '36/37', 8, 'returned', '2026-09-15 09:00:00');
-        $this->history($old, 'in_transit', '2026-08-31 10:00:00');
-        $this->shipment($this->category, '36/37', 3, 'shipped', '2026-09-01 00:00:00');
-        $this->shipment($this->category, '36/37', 2, 'shipped', '2026-09-16 10:00:00');
-        $this->shipment($this->category, '36/37', 50, 'shipped', '2026-09-16 15:00:00');
-        $this->shipment($this->category, '36/37', 90, 'shipped', null);
-        $this->report()->assertJsonPath('categories.0.rows.0.consumed', 5)
-            ->assertJsonPath('categories.0.rows.0.shipped_in_window', 11)
-            ->assertJsonPath('categories.0.rows.0.remaining', 95)
-            ->assertJsonPath('categories.0.warnings.missing_date_orders', 1)
-            ->assertJsonPath('categories.0.trend.29.date', '2026-09-15');
-    }
-
-    public function test_preserves_multiple_lines_but_deduplicates_orders_with_same_ttn(): void
-    {
-        $this->savePlan();
+        $this->receive();
+        $this->receive([], $this->outdoor);
         [$order] = $this->shipment($this->category, '36/37', 2, 'shipped', '2026-09-10 10:00:00', '590001');
         $product = DB::table('order_items')->where('order_id', $order)->value('product_id');
         DB::table('order_items')->insert(['order_id' => $order, 'product_id' => $product, 'size' => '36/37', 'qty' => 3]);
@@ -98,126 +149,140 @@ class SoleInventoryTest extends TestCase
         $this->shipment($this->outdoor, '36/37', 4, 'shipped', '2026-09-10 10:00:00');
         $this->report()->assertJsonPath('categories.0.rows.0.consumed', 5)
             ->assertJsonPath('categories.0.warnings.duplicate_orders', 1)
-            ->assertJsonPath('categories.1.rows.0.shipped_in_window', 4);
+            ->assertJsonPath('categories.1.rows.0.consumed', 4);
     }
 
-    public function test_unrecognized_sizes_are_reported_without_guessing_and_missing_size_uses_matching_variant(): void
+    public function test_unknown_sizes_are_not_guessed_and_matching_variant_can_supply_missing_size(): void
     {
+        $this->receive([], $this->outdoor);
         [$order] = $this->shipment($this->outdoor, null, 4, 'shipped', '2026-09-10 10:00:00');
         $product = DB::table('order_items')->where('order_id', $order)->value('product_id');
         $variant = DB::table('product_variants')->insertGetId(['product_id' => $product, 'size' => '42/43-27см']);
         DB::table('order_items')->where('order_id', $order)->update(['product_variant_id' => $variant]);
         $this->shipment($this->outdoor, '42/23', 6, 'shipped', '2026-09-10 10:00:00');
-        $this->report()->assertJsonPath('categories.1.rows.3.shipped_in_window', 4)
+        $this->report()->assertJsonPath('categories.1.rows.3.consumed', 4)
             ->assertJsonPath('categories.1.warnings.unknown_size_pairs', 6)
             ->assertJsonPath('categories.1.issues.0.message', 'Невідомий розмір: 42/23');
     }
 
-    public function test_crm_audit_is_used_after_status_changes_and_terminal_only_dates_are_marked_approximate(): void
+    public function test_audit_and_terminal_evidence_are_used_but_created_or_redirected_ttn_is_not_dispatch(): void
     {
+        $this->receive();
         [$order] = $this->shipment($this->category, '36/37', 2, 'new', '2026-09-15 10:00:00', null);
         DB::table('order_status_changes')->insert(['order_id' => $order, 'order_number' => (string) $order,
             'new_status' => 'shipped', 'source' => 'manual_status', 'reason' => 'Відправлено', 'occurred_at' => '2026-09-03 09:00:00']);
         [, $returned] = $this->shipment($this->category, '36/37', 3, 'returned', '2026-09-15 10:00:00');
         $this->history($returned, 'refusal', '2026-09-14 10:00:00');
-        $this->report()->assertJsonPath('categories.0.rows.0.shipped_in_window', 5)
+        [, $redirected] = $this->shipment($this->category, '36/37', 9, 'confirmed', '2026-09-10 10:00:00');
+        $this->history($redirected, 'created', '2026-09-09 10:00:00');
+        $this->history($redirected, 'in_transit', '2026-09-10 10:00:00', '104');
+        $this->report()->assertJsonPath('categories.0.rows.0.consumed', 5)
             ->assertJsonPath('categories.0.warnings.without_ttn_orders', 1)
             ->assertJsonPath('categories.0.warnings.approximate_date_pairs', 3);
     }
 
-    public function test_nova_poshta_address_change_and_created_waybill_alone_are_not_dispatch(): void
+    public function test_forecast_uses_full_days_and_delivery_time_and_exposes_time_until_next_order(): void
     {
-        [, $delivery] = $this->shipment($this->category, '36/37', 9, 'confirmed', '2026-09-10 10:00:00');
-        $this->history($delivery, 'created', '2026-09-09 10:00:00');
-        $this->history($delivery, 'in_transit', '2026-09-10 10:00:00', '104');
-        $this->report()->assertJsonPath('categories.0.rows.0.shipped_in_window', 0);
-    }
-
-    public function test_forecast_uses_calendar_days_lead_time_and_buffer_and_keeps_negative_balance_visible(): void
-    {
-        $this->savePlan(['opening_balances' => $this->balances(100), 'lead_time_days' => 30, 'safety_days' => 10]);
+        $this->receive();
+        $this->configure(['lead_time_days' => 5, 'safety_days' => 2]);
         $this->shipment($this->category, '36/37', 60, 'shipped', '2026-09-10 10:00:00');
         $this->report()->assertJsonPath('categories.0.rows.0.remaining', 40)
-            ->assertJsonPath('categories.0.rows.0.daily_rate', 2)
-            ->assertJsonPath('categories.0.rows.0.days_remaining', 20)
-            ->assertJsonPath('categories.0.rows.0.depletion_date', '2026-10-06')
-            ->assertJsonPath('categories.0.rows.0.reorder_date', '2026-08-27')
-            ->assertJsonPath('categories.0.rows.0.reorder_point', 80)
-            ->assertJsonPath('categories.0.rows.0.status', 'order_now');
+            ->assertJsonPath('categories.0.rows.0.daily_rate', 4)
+            ->assertJsonPath('categories.0.rows.0.days_remaining', 10)
+            ->assertJsonPath('categories.0.rows.0.depletion_date', '2026-09-26')
+            ->assertJsonPath('categories.0.rows.0.reorder_date', '2026-09-19')
+            ->assertJsonPath('categories.0.rows.0.days_until_reorder', 3)
+            ->assertJsonPath('categories.0.rows.0.reorder_point', 28)
+            ->assertJsonPath('categories.0.next_order.size', '36/37')
+            ->assertJsonPath('categories.0.rows.1.status', 'not_received');
         $this->shipment($this->category, '36/37', 50, 'shipped', '2026-09-16 10:00:00');
         $this->report()->assertJsonPath('categories.0.rows.0.remaining', -10)
-            ->assertJsonPath('categories.0.rows.0.daily_rate', 2)
+            ->assertJsonPath('categories.0.rows.0.daily_rate', 4)
             ->assertJsonPath('categories.0.rows.0.status', 'depleted');
     }
 
-    public function test_zero_rate_and_missing_lead_time_do_not_produce_fictitious_dates(): void
+    public function test_recent_window_affects_forecast_only_not_stock_or_monthly_consumption(): void
     {
-        $this->savePlan(['lead_time_days' => null]);
-        $this->report()->assertJsonPath('categories.0.rows.0.days_remaining', null)
-            ->assertJsonPath('categories.0.rows.0.reorder_date', null)
-            ->assertJsonPath('categories.0.rows.0.status', 'no_history');
-        $this->shipment($this->category, '36/37', 30, 'shipped', '2026-09-10 10:00:00');
-        $this->report()->assertJsonPath('categories.0.rows.0.status', 'missing_lead')
+        $this->receive(['received_on' => '2026-07-01', 'quantities' => $this->quantities(1000)]);
+        $this->shipment($this->category, '36/37', 100, 'shipped', '2026-07-05 10:00:00');
+        $this->shipment($this->category, '36/37', 60, 'shipped', '2026-09-05 10:00:00');
+        $this->configure(['lookback_days' => 30]);
+        $this->report()->assertJsonPath('categories.0.rate_days', 30)
+            ->assertJsonPath('categories.0.rows.0.daily_rate', 2)
+            ->assertJsonPath('categories.0.rows.0.remaining', 840)
+            ->assertJsonPath('categories.0.months.0.total', 100)
+            ->assertJsonPath('categories.0.months.1.total', 0)
+            ->assertJsonPath('categories.0.months.2.total', 60);
+    }
+
+    public function test_arrival_today_has_stock_but_no_forecast_until_a_full_day_has_passed(): void
+    {
+        $this->receive(['received_on' => '2026-09-16']);
+        $this->shipment($this->category, '36/37', 3, 'shipped', '2026-09-16 10:00:00');
+        $this->shipment($this->category, '36/37', 50, 'shipped', '2026-09-16 15:00:00');
+        $this->report()->assertJsonPath('categories.0.rate_days', 0)
+            ->assertJsonPath('categories.0.rows.0.remaining', 97)
+            ->assertJsonPath('categories.0.rows.0.days_remaining', null)
             ->assertJsonPath('categories.0.rows.0.reorder_date', null);
     }
 
-    public function test_replenishments_and_signed_adjustments_are_audited_and_retry_safe(): void
+    public function test_validation_prevents_future_empty_invalid_batches_and_stale_settings(): void
     {
-        $this->savePlan();
-        $movement = $this->movement();
-        $this->postMovement($movement)->assertCreated();
-        $this->postMovement($movement)->assertCreated();
-        $this->postMovement(array_replace($movement, ['quantity' => 10]))->assertConflict();
-        $this->postMovement($this->movement(['kind' => 'adjustment', 'quantity' => -5, 'note' => 'Брак']))->assertCreated();
-        $this->assertDatabaseCount('sole_inventory_movements', 2);
-        $this->assertDatabaseCount('sole_inventory_plan_revisions', 1);
-        $this->report()->assertJsonPath('categories.0.rows.0.remaining', 115)
-            ->assertJsonPath('categories.0.rows.0.movements_quantity', 15);
-        $this->savePlan(['version' => 1, 'opening_date' => '2026-09-02'], 422);
-        $this->savePlan(['version' => 1, 'safety_days' => 20]);
-        $this->assertDatabaseCount('sole_inventory_plan_revisions', 2);
-    }
-
-    public function test_rejects_stale_versions_future_dates_invalid_sizes_and_unsafe_movements(): void
-    {
-        $this->postMovement($this->movement())->assertUnprocessable();
-        $this->savePlan();
-        $this->savePlan([], 409);
-        $this->savePlan(['version' => 1, 'opening_date' => '2026-09-17'], 422);
-        $this->savePlan(['version' => 1, 'opening_balances' => [['size' => '42/23', 'quantity' => 1]]], 422);
-        $this->postMovement($this->movement(['movement_date' => '2026-08-31']))->assertUnprocessable();
-        $this->postMovement($this->movement(['movement_date' => '2026-09-17']))->assertUnprocessable();
-        $this->postMovement($this->movement(['quantity' => -1]))->assertUnprocessable();
-        $this->postMovement($this->movement(['quantity' => 0]))->assertUnprocessable();
-        $this->postMovement($this->movement(['size' => '38/39']))->assertUnprocessable();
-        $this->postMovement($this->movement(['kind' => 'adjustment', 'quantity' => -1, 'note' => null]))->assertUnprocessable();
+        $this->postBatch($this->batch(['received_on' => '2026-09-17']))->assertUnprocessable();
+        $this->postBatch($this->batch(['quantities' => $this->quantities(0)]))->assertUnprocessable();
+        $this->postBatch($this->batch(['quantities' => $this->quantities(-1)]))->assertUnprocessable();
+        $this->postBatch($this->batch(['quantities' => [['size' => '42/23', 'quantity' => 4]]]))->assertUnprocessable();
+        $this->postBatch($this->batch(['quantities' => [['size' => '36/37', 'quantity' => 2], ['size' => '36/37', 'quantity' => 3], ['size' => '40/41', 'quantity' => 4]]]))->assertUnprocessable();
         $other = DB::table('categories')->insertGetId(['name' => 'Інша категорія']);
-        $this->putJson("/api/sole-inventory/{$other}/plan", $this->plan())->assertNotFound();
+        $this->postJson("/api/sole-inventory/{$other}/batches", $this->batch())->assertNotFound();
+        $this->receive();
+        $this->configure();
+        $this->putJson("/api/sole-inventory/{$this->category}/plan", ['version' => 1, 'lead_time_days' => 5, 'safety_days' => 0, 'lookback_days' => 0])->assertConflict();
+        $this->putJson("/api/sole-inventory/{$this->category}/plan", ['version' => 2, 'lead_time_days' => 5, 'safety_days' => 0, 'lookback_days' => 0, 'opening_balances' => [100]])->assertUnprocessable();
     }
 
-    private function balances(int $qty = 100): array
+    public function test_legacy_balances_are_preserved_and_not_relabelled_as_purchases(): void
     {
-        return [['size' => '36/37', 'quantity' => $qty], ['size' => '38/39', 'quantity' => null], ['size' => '40/41', 'quantity' => null]];
+        $plan = DB::table('sole_inventory_plans')->insertGetId(['category_id' => $this->category, 'opening_date' => '2026-09-01', 'opening_balances' => json_encode($this->quantities(100)), 'version' => 1]);
+        DB::table('sole_inventory_movements')->insert(['plan_id' => $plan, 'size' => '36/37', 'kind' => 'adjustment', 'quantity' => -5, 'movement_date' => '2026-09-10', 'request_key' => (string) Str::uuid(), 'created_at' => now()]);
+        $this->receive(['received_on' => '2026-09-12', 'quantities' => $this->quantities(20)]);
+        $this->shipment($this->category, '36/37', 10, 'shipped', '2026-09-10 10:00:00');
+        $this->configure();
+        $this->report()->assertJsonPath('categories.0.legacy_basis', true)
+            ->assertJsonPath('categories.0.rows.0.legacy_quantity', 100)
+            ->assertJsonPath('categories.0.rows.0.received_quantity', 20)
+            ->assertJsonPath('categories.0.rows.0.remaining', 105);
+        $this->postBatch($this->batch(['received_on' => '2026-08-01']))->assertUnprocessable();
     }
 
-    private function plan(array $overrides = []): array
+    private function quantities(int $qty = 100, ?int $category = null): array
     {
-        return array_replace(['version' => 0, 'opening_date' => '2026-09-01', 'opening_balances' => $this->balances(), 'lead_time_days' => 60, 'safety_days' => 14, 'lookback_days' => 30], $overrides);
+        $sizes = $category === $this->outdoor ? ['36/37', '38/39', '40/41', '42/43'] : ['36/37', '38/39', '40/41'];
+
+        return array_map(fn ($size) => ['size' => $size, 'quantity' => $size === '36/37' ? $qty : 0], $sizes);
     }
 
-    private function savePlan(array $overrides = [], int $status = 200): void
+    private function batch(array $overrides = [], ?int $category = null): array
     {
-        $this->actingAs($this->owner)->putJson("/api/sole-inventory/{$this->category}/plan", $this->plan($overrides))->assertStatus($status);
+        return array_replace(['request_key' => (string) Str::uuid(), 'received_on' => '2026-09-01', 'quantities' => $this->quantities(100, $category), 'note' => null], $overrides);
     }
 
-    private function movement(array $overrides = []): array
+    private function postBatch(array $data, ?int $category = null)
     {
-        return array_replace(['request_key' => (string) Str::uuid(), 'size' => '36/37', 'kind' => 'receipt', 'quantity' => 20, 'movement_date' => '2026-09-16', 'note' => null], $overrides);
+        $category ??= $this->category;
+
+        return $this->actingAs($this->owner)->postJson("/api/sole-inventory/{$category}/batches", $data);
     }
 
-    private function postMovement(array $data)
+    private function receive(array $overrides = [], ?int $category = null): int
     {
-        return $this->actingAs($this->owner)->postJson("/api/sole-inventory/{$this->category}/movements", $data);
+        return $this->postBatch($this->batch($overrides, $category), $category)->assertCreated()->json('id');
+    }
+
+    private function configure(array $overrides = []): void
+    {
+        $version = DB::table('sole_inventory_plans')->where('category_id', $this->category)->value('version') ?? 0;
+        $this->actingAs($this->owner)->putJson("/api/sole-inventory/{$this->category}/plan", array_replace(['version' => $version, 'lead_time_days' => null, 'safety_days' => 0, 'lookback_days' => 0], $overrides))->assertOk();
     }
 
     private function report()

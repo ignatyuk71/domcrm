@@ -68,6 +68,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/api/sole-inventory', [SoleInventoryController::class, 'data']);
         Route::put('/api/sole-inventory/{category}/plan', [SoleInventoryController::class, 'savePlan'])->whereNumber('category');
         Route::post('/api/sole-inventory/{category}/movements', [SoleInventoryController::class, 'addMovement'])->whereNumber('category');
+        Route::post('/api/sole-inventory/{category}/batches', [SoleInventoryController::class, 'saveBatch'])->whereNumber('category');
+        Route::put('/api/sole-inventory/{category}/batches/{batch}', [SoleInventoryController::class, 'saveBatch'])->whereNumber(['category', 'batch']);
     });
 
     // --- ЗАМОВЛЕННЯ (Orders) ---
