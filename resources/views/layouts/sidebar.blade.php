@@ -423,6 +423,13 @@
             <div class="nav-divider">Склад</div>
         @endif
 
+        @if($isOwner)
+            <a href="{{ route('inventory.soles') }}" class="sidebar-link {{ request()->is('sole-inventory*') ? 'active' : '' }}">
+                <span class="icon-frame"><i class="bi bi-layers-fill"></i></span>
+                <span class="item-text">Запас підошви</span>
+            </a>
+        @endif
+
         @php
             $packingCount = 0;
 

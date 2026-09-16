@@ -39,6 +39,13 @@ export async function mountSalesAnalytics(selector = '#crm-sales-analytics') {
     return app;
 }
 
+export async function mountSoleInventory(selector = '#crm-sole-inventory') {
+    const el = document.querySelector(selector);
+    if (!el) return;
+    const { default: page } = await import('./pages/inventory/SoleInventoryPage.vue');
+    return createApp(page).mount(el);
+}
+
 export function mountOrderCreate(selector = '#crm-order-create') {
     const el = document.querySelector(selector);
     if (!el) return;
@@ -204,6 +211,7 @@ function autoMount() {
     mountSettingsTelegram();
     mountDashboard();
     mountSalesAnalytics();
+    mountSoleInventory();
     mountOrderCreate();
     mountOrderEdit();
     mountOrderList();
