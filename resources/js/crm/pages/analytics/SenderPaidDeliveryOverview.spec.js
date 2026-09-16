@@ -4,6 +4,7 @@ vi.mock('vue3-apexcharts', () => ({ default: { template: '<div />' } }));
 vi.mock('@/crm/services/salesAnalyticsApi', () => ({ fetchSalesAnalytics: vi.fn() }));
 import SenderPaidDeliveryOverview from './SenderPaidDeliveryOverview.vue';
 import SalesAnalyticsPage from './SalesAnalyticsPage.vue';
+import DateRangePicker from '@/crm/components/ui/DateRangePicker.vue';
 import { fetchSalesAnalytics } from '@/crm/services/salesAnalyticsApi';
 
 const data = () => ({
@@ -46,7 +47,7 @@ describe('Доставка за наш рахунок', () => {
     wrapper.findComponent(SenderPaidDeliveryOverview).vm.$emit('page', 2);
     await flushPromises();
     expect(fetchSalesAnalytics).toHaveBeenLastCalledWith(expect.objectContaining({ sender_delivery_page: 2, source_id: '2' }));
-    await wrapper.findAll('.preset-btn')[0].trigger('click');
+    wrapper.findComponent(DateRangePicker).vm.$emit('apply', { from: '2026-09-15', to: '2026-09-15' });
     await flushPromises();
     expect(fetchSalesAnalytics.mock.lastCall[0]).not.toHaveProperty('sender_delivery_page');
     wrapper.unmount();

@@ -10,23 +10,14 @@
     <section class="filter-shell" aria-label="Фільтри фіскальних продажів">
       <form @submit.prevent="load()">
         <div class="filter-toolbar">
-          <div class="preset-row" role="group" aria-label="Швидкий вибір періоду">
-            <button v-for="preset in presets" :key="preset.key" type="button" class="preset-btn"
-              :class="{ active: activePreset === preset.key }" :aria-pressed="activePreset === preset.key"
-              @click="applyPreset(preset.key)">{{ preset.label }}</button>
-          </div>
-          <div class="date-range" role="group" aria-label="Період аналітики">
-            <label class="date-field"><span class="visually-hidden">Початок періоду</span><input v-model="filters.date_from" name="date_from" type="date" class="form-control" required @change="activePreset = 'custom'"></label>
-            <span class="date-separator" aria-hidden="true">—</span>
-            <label class="date-field"><span class="visually-hidden">Кінець періоду</span><input v-model="filters.date_to" name="date_to" type="date" class="form-control" required :min="filters.date_from" @change="activePreset = 'custom'"></label>
-          </div>
+          <DateRangePicker :from="filters.date_from" :to="filters.date_to" @apply="applyPeriod" />
           <div class="filter-actions">
             <button type="button" class="filter-toggle" :class="{ active: additionalFilterCount > 0 }" :aria-expanded="showAdditionalFilters" aria-controls="analytics-additional-filters" @click="showAdditionalFilters = !showAdditionalFilters">
               <i class="bi bi-sliders" aria-hidden="true"></i> Додаткові фільтри
               <span v-if="additionalFilterCount" class="filter-count">{{ additionalFilterCount }}</span>
               <i :class="showAdditionalFilters ? 'bi bi-chevron-up' : 'bi bi-chevron-down'" aria-hidden="true"></i>
             </button>
-            <button type="submit" class="btn-apply" :disabled="loading">Застосувати</button>
+            <button v-if="showAdditionalFilters || additionalFilterCount" type="submit" class="btn-apply" :disabled="loading">Застосувати</button>
           </div>
         </div>
         <div v-show="showAdditionalFilters" id="analytics-additional-filters" class="additional-filters">
@@ -82,18 +73,14 @@ import { fetchSalesAnalytics } from '@/crm/services/salesAnalyticsApi';
 import FiscalSalesOverview from './FiscalSalesOverview.vue';
 import ShippingReturnsOverview from './ShippingReturnsOverview.vue';
 import SenderPaidDeliveryOverview from './SenderPaidDeliveryOverview.vue';
+import DateRangePicker from '@/crm/components/ui/DateRangePicker.vue';
+import { datePresets, formatDateRange } from '@/crm/utils/dateRange';
 
-const toDateInput = (date) => date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
-const today = new Date();
+const initialPeriod = datePresets().find(preset => preset.key === 'month');
 const filters = reactive({
-  date_from: toDateInput(new Date(today.getFullYear(), today.getMonth(), 1)), date_to: toDateInput(today),
+  date_from: initialPeriod.from, date_to: initialPeriod.to,
   sale_type: '', source_id: '', manager_id: '',
 });
-const presets = [
-  { key: 'today', label: 'Сьогодні' }, { key: '7days', label: '7 днів' },
-  { key: 'month', label: 'Цей місяць' }, { key: 'previous_month', label: 'Минулий місяць' },
-];
-const activePreset = ref('month');
 const showAdditionalFilters = ref(false);
 const additionalFilterCount = computed(() => [filters.sale_type, filters.source_id, filters.manager_id].filter(Boolean).length);
 const loading = ref(false);
@@ -130,17 +117,8 @@ async function load(fresh = false, senderPage = 1) {
   }
 }
 
-function applyPreset(key) {
-  const end = new Date();
-  let start = new Date(end);
-  if (key === '7days') start.setDate(end.getDate() - 6);
-  if (key === 'month') start = new Date(end.getFullYear(), end.getMonth(), 1);
-  if (key === 'previous_month') {
-    start = new Date(end.getFullYear(), end.getMonth() - 1, 1);
-    end.setDate(0);
-  }
-  Object.assign(filters, { date_from: toDateInput(start), date_to: toDateInput(end) });
-  activePreset.value = key;
+function applyPeriod({ from, to }) {
+  Object.assign(filters, { date_from: from, date_to: to });
   load();
 }
 
@@ -152,14 +130,12 @@ function resetFilters() {
 
 function formatPeriod(from, to) {
   if (!from || !to) return '—';
-  const options = { day: 'numeric', month: 'short', year: 'numeric' };
-  return new Date(from + 'T00:00:00').toLocaleDateString('uk-UA', options) + ' — ' + new Date(to + 'T00:00:00').toLocaleDateString('uk-UA', options);
+  return formatDateRange(from, to);
 }
 
 onMounted(() => {
   const query = new URLSearchParams(window.location.search);
   Object.keys(filters).forEach((key) => { if (query.has(key)) filters[key] = query.get(key); });
-  if (query.has('date_from') || query.has('date_to')) activePreset.value = 'custom';
   // Збережене посилання з умовами відкриваємо без прихованих активних фільтрів.
   showAdditionalFilters.value = additionalFilterCount.value > 0;
   load();
@@ -169,11 +145,11 @@ onMounted(() => {
 <style scoped>
 .analytics-page{color:#0f172a;max-width:1800px;margin:0 auto}.analytics-header{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:14px}.analytics-header h1{font-size:1.5rem;line-height:1.2;letter-spacing:-.025em;font-weight:750;margin:0}
 .btn-refresh,.btn-apply,.btn-reset,.filter-toggle{border:0;display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:8px;font-weight:650;font-size:.78rem;padding:8px 11px;min-height:36px;white-space:nowrap}.btn-refresh{color:#64748b;background:#fff;border:1px solid #e7ecf3;width:36px;padding:0;font-size:1rem;flex-shrink:0}.btn-refresh:hover,.btn-reset:hover{background:#f1f5f9}.btn-reset{background:transparent;color:#64748b}.btn-apply{background:#4f46e5;color:#fff}.btn-apply:hover{background:#4338ca}button:disabled{opacity:.65}button:focus-visible{outline:2px solid #6366f1;outline-offset:3px}.spinning{animation:spin .85s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
-.filter-shell{background:#fff;border:1px solid #e7ecf3;border-radius:12px;padding:10px 12px;margin-bottom:16px}.filter-toolbar{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}.preset-row{display:flex;flex-wrap:wrap;gap:4px;flex:1}.preset-btn{border:0;background:transparent;color:#64748b;padding:8px 10px;min-height:36px;border-radius:7px;font-size:.76rem;font-weight:650;white-space:nowrap}.preset-btn:hover,.preset-btn.active{background:#eef2ff;color:#4338ca}.date-range{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:5px;width:310px;min-width:0;padding:0 5px;border:1px solid #dfe5ee;border-radius:8px}.date-field{min-width:0}.date-range .form-control{width:100%;min-width:0;min-height:34px;padding:5px;border:0;border-radius:5px;color:#334155;font-size:.78rem}.date-range:focus-within{border-color:#818cf8}.date-range .form-control:focus{box-shadow:none;background:#f5f7ff}.date-separator{font-size:.8rem;color:#94a3b8}.filter-actions{display:flex;gap:7px;justify-content:flex-end}.filter-toggle{background:#f8fafc;color:#64748b}.filter-toggle:hover,.filter-toggle.active{background:#eef2ff;color:#4338ca}.filter-toggle>.bi-chevron-up,.filter-toggle>.bi-chevron-down{font-size:.65rem}.filter-count{display:inline-grid;place-items:center;min-width:18px;height:18px;border-radius:5px;background:#4f46e5;color:#fff;font-size:.65rem;padding:0 4px}
+.filter-shell{background:#fff;border:1px solid #e7ecf3;border-radius:12px;padding:10px 12px;margin-bottom:16px}.filter-toolbar{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center}.filter-actions{display:flex;gap:7px;justify-content:flex-end;margin-left:auto}.filter-toggle{background:#f8fafc;color:#64748b}.filter-toggle:hover,.filter-toggle.active{background:#eef2ff;color:#4338ca}.filter-toggle>.bi-chevron-up,.filter-toggle>.bi-chevron-down{font-size:.65rem}.filter-count{display:inline-grid;place-items:center;min-width:18px;height:18px;border-radius:5px;background:#4f46e5;color:#fff;font-size:.65rem;padding:0 4px}
 .additional-filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;gap:12px;align-items:end;margin-top:12px;padding-top:12px;border-top:1px solid #edf0f4}.filter-field{min-width:0}.filter-field>span{display:block;color:#64748b;font-size:.7rem;font-weight:650;margin:0 0 5px 2px}.filter-field .form-select{min-height:36px;border-color:#dfe5ee;border-radius:8px;color:#334155;font-size:.8rem}
 .alert-error{display:flex;align-items:center;gap:13px;background:#fff1f2;color:#be123c;border:1px solid #fecdd3;border-radius:14px;padding:14px 16px;margin-bottom:18px}.alert-error div{display:flex;flex-direction:column;flex:1}.alert-error span{font-size:.82rem}.alert-error button{border:0;background:#be123c;color:#fff;border-radius:8px;padding:7px 10px}.period-caption{display:flex;justify-content:space-between;gap:15px;color:#64748b;font-size:.78rem;margin:0 2px 12px}.period-caption span{display:flex;align-items:center;gap:7px}.loading-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:15px}.skeleton{height:170px;border-radius:16px;background:#eef2f7}
-@media(max-width:1199.98px){.preset-row{flex-basis:100%}.date-range{flex:1}.additional-filters{grid-template-columns:repeat(3,minmax(0,1fr))}.additional-filters .btn-reset{grid-column:1/-1;justify-self:end}}
-@media(max-width:767.98px){.analytics-header h1{font-size:1.3rem}.date-range{flex-basis:100%}.filter-actions{width:100%;justify-content:space-between}.additional-filters{grid-template-columns:1fr}.period-caption{flex-direction:column;gap:4px}.loading-grid{grid-template-columns:1fr}}
-@media(max-width:479.98px){.preset-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.filter-actions{flex-wrap:wrap}}
+@media(max-width:1199.98px){.additional-filters{grid-template-columns:repeat(3,minmax(0,1fr))}.additional-filters .btn-reset{grid-column:1/-1;justify-self:end}}
+@media(max-width:767.98px){.analytics-header h1{font-size:1.3rem}.filter-toolbar>.period-picker{width:100%}.filter-actions{width:100%;justify-content:space-between;margin-left:0}.additional-filters{grid-template-columns:1fr}.period-caption{flex-direction:column;gap:4px}.loading-grid{grid-template-columns:1fr}}
+@media(max-width:479.98px){.filter-actions{flex-wrap:wrap}}
 @media(prefers-reduced-motion:reduce){.spinning{animation:none}}
 </style>
