@@ -7,12 +7,12 @@ use Illuminate\Support\Facades\DB;
 
 class ProductionCostService
 {
-    public function __construct(private SoleCostCalculator $soles, private CardboardCostCalculator $cardboard, private FoamCostCalculator $foam, private FurCostCalculator $fur, private LaminateCostCalculator $laminate) {}
+    public function __construct(private SoleCostCalculator $soles, private CardboardCostCalculator $cardboard, private FoamCostCalculator $foam, private FurCostCalculator $fur, private LaminateCostCalculator $laminate, private TapeCostCalculator $tape) {}
 
-    private function calculator(string $component): SoleCostCalculator|CardboardCostCalculator|FoamCostCalculator|FurCostCalculator|LaminateCostCalculator
+    private function calculator(string $component): SoleCostCalculator|CardboardCostCalculator|FoamCostCalculator|FurCostCalculator|LaminateCostCalculator|TapeCostCalculator
     {
         return match ($component) {
-            'soles' => $this->soles, 'cardboard' => $this->cardboard, 'foam' => $this->foam, 'fur' => $this->fur, 'laminate' => $this->laminate,
+            'soles' => $this->soles, 'cardboard' => $this->cardboard, 'foam' => $this->foam, 'fur' => $this->fur, 'laminate' => $this->laminate, 'tape' => $this->tape,
             default => abort(404),
         };
     }
@@ -32,7 +32,7 @@ class ProductionCostService
     {
         $calculator = $this->calculator($component);
         $inputs = $calculator->normalize($data);
-        $quantity = in_array($component, ['foam', 'fur', 'laminate'], true) ? 1 : (int) $data['quantity'];
+        $quantity = in_array($component, ['foam', 'fur', 'laminate', 'tape'], true) ? 1 : (int) $data['quantity'];
         $calculation = $calculator->calculate($quantity, $inputs);
         $values = [
             'name' => trim($data['name']), 'purchased_on' => $data['purchased_on'] ?? null, 'quantity' => $quantity,

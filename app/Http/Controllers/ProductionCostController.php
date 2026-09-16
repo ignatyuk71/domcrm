@@ -7,6 +7,7 @@ use App\Http\Requests\FoamCostRequest;
 use App\Http\Requests\FurCostRequest;
 use App\Http\Requests\LaminateCostRequest;
 use App\Http\Requests\SoleCostBatchRequest;
+use App\Http\Requests\TapeCostRequest;
 use App\Services\Costs\ProductionCostService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -78,5 +79,17 @@ class ProductionCostController extends Controller
     public function saveLaminate(LaminateCostRequest $request, ProductionCostService $service, ?int $batch = null): JsonResponse
     {
         return response()->json($service->save($request->validated(), $request->user()->id, $batch, 'laminate'), $batch ? 200 : 201);
+    }
+
+    public function tapeData(Request $request, ProductionCostService $service): JsonResponse
+    {
+        $request->validate(['page' => ['sometimes', 'integer', 'min:1', 'max:100000']]);
+
+        return response()->json($service->listing('tape'));
+    }
+
+    public function saveTape(TapeCostRequest $request, ProductionCostService $service, ?int $batch = null): JsonResponse
+    {
+        return response()->json($service->save($request->validated(), $request->user()->id, $batch, 'tape'), $batch ? 200 : 201);
     }
 }

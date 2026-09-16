@@ -15,6 +15,9 @@ export const updateFurBatch = (id, data) => http.put(`/api/production-costs/fur-
 export const fetchLaminateCosts = (page = 1) => http.get('/api/production-costs/laminate-calculations', { params: { page } });
 export const createLaminateCost = data => http.post('/api/production-costs/laminate-calculations', data);
 export const updateLaminateCost = (id, data) => http.put(`/api/production-costs/laminate-calculations/${id}`, data);
+export const fetchTapeBatches = (page = 1) => http.get('/api/production-costs/tape-batches', { params: { page } });
+export const createTapeBatch = data => http.post('/api/production-costs/tape-batches', data);
+export const updateTapeBatch = (id, data) => http.put(`/api/production-costs/tape-batches/${id}`, data);
 export function costError(error) {
   const errors = error.response?.data?.errors;
   return errors ? Object.values(errors).flat().join(' ') : error.response?.data?.message || 'Не вдалося виконати запит. Перевірте з’єднання та спробуйте ще раз.';

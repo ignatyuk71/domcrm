@@ -1,10 +1,10 @@
 <template>
-  <section class="cost-page" :aria-busy="loading || saving || cardboardSaving || foamSaving || furSaving || laminateSaving">
+  <section class="cost-page" :aria-busy="loading || saving || cardboardSaving || foamSaving || furSaving || laminateSaving || tapeSaving">
     <header class="cost-heading">
       <div><h1>Собівартість виробництва</h1><p>Рахуємо складові однієї пари капців. Кожен матеріал — окремий розрахунок.</p></div>
     </header>
     <nav class="cost-components" aria-label="Складові собівартості">
-      <button v-for="item in components" :key="item.key" type="button" :aria-pressed="activeComponent === item.key" :class="{ active: activeComponent === item.key }" :disabled="saving || cardboardSaving || foamSaving || furSaving || laminateSaving" @click="activeComponent = item.key">
+      <button v-for="item in components" :key="item.key" type="button" :aria-pressed="activeComponent === item.key" :class="{ active: activeComponent === item.key }" :disabled="saving || cardboardSaving || foamSaving || furSaving || laminateSaving || tapeSaving" @click="activeComponent = item.key">
         <i :class="`bi bi-${item.icon}`" aria-hidden="true"></i>{{ item.label }}
       </button>
     </nav>
@@ -58,7 +58,7 @@
         <footer v-if="lastPage > 1"><button class="btn cost-button" :disabled="page <= 1 || loading || saving" @click="load(page - 1)">Назад</button><span>{{ page }} / {{ lastPage }}</span><button class="btn cost-button" :disabled="page >= lastPage || loading || saving" @click="load(page + 1)">Далі</button></footer>
       </section>
     </template>
-    <section v-else-if="!['cardboard', 'foam', 'fur', 'laminate'].includes(activeComponent)" class="cost-card cost-placeholder">
+    <section v-else-if="!['cardboard', 'foam', 'fur', 'laminate', 'tape'].includes(activeComponent)" class="cost-card cost-placeholder">
       <span class="cost-placeholder-icon"><i :class="`bi bi-${component.icon}`" aria-hidden="true"></i></span>
       <h2>{{ component.label }}</h2><p>{{ component.description }}</p><span class="cost-state pending">Ще не пораховано</span><p class="cost-placeholder-note">Додамо розрахунок, коли узгодимо витрату та ціни цього матеріалу. Відсутні дані не вважаємо нульовою собівартістю.</p>
     </section>
@@ -66,6 +66,7 @@
     <SheetMaterialCostPanel v-if="foamOpened" v-show="activeComponent === 'foam'" material="foam" @saving="foamSaving = $event" />
     <FurCostPanel v-if="furOpened" v-show="activeComponent === 'fur'" @saving="furSaving = $event" />
     <LaminateCostPanel v-if="laminateOpened" v-show="activeComponent === 'laminate'" @saving="laminateSaving = $event" />
+    <TapeCostPanel v-if="tapeOpened" v-show="activeComponent === 'tape'" @saving="tapeSaving = $event" />
   </section>
 </template>
 
@@ -74,6 +75,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import SheetMaterialCostPanel from './SheetMaterialCostPanel.vue';
 import FurCostPanel from './FurCostPanel.vue';
 import LaminateCostPanel from './LaminateCostPanel.vue';
+import TapeCostPanel from './TapeCostPanel.vue';
 import { fetchCostBatches, createCostBatch, updateCostBatch, costError } from '@/crm/services/productionCostsApi';
 import { calculateSoleCost, costFields, decimalInput, emptyCostForm } from '@/crm/utils/soleCosts';
 
@@ -83,7 +85,7 @@ const components = [
   { key: 'cardboard', label: 'Картон', icon: 'file-earmark' },
   { key: 'foam', label: 'Поролон-вставка', icon: 'square' },
   { key: 'fur', label: 'Хутро', icon: 'scissors' },
-  { key: 'tape', label: 'Окантовка', icon: 'bounding-box', description: 'Оксамитова стрічка для окантування заготовки. Вартість визначимо за довжиною на пару.' },
+  { key: 'tape', label: 'Окантовка', icon: 'bounding-box' },
   { key: 'thread', label: 'Нитки', icon: 'bezier', description: 'Нитки для зшивання деталей, окантування та пришивання до підошви. Потрібна фактична або погоджена норма витрати на пару.' },
   { key: 'labor', label: 'Робота', icon: 'tools', description: 'Розкрій, склеювання, зшивання, окантування та пришивання до підошви. Внесемо погоджені розцінки на одну пару.' },
 ];
@@ -108,11 +110,13 @@ const cardboardOpened = ref(false), cardboardSaving = ref(false);
 const foamOpened = ref(false), foamSaving = ref(false);
 const furOpened = ref(false), furSaving = ref(false);
 const laminateOpened = ref(false), laminateSaving = ref(false);
+const tapeOpened = ref(false), tapeSaving = ref(false);
 watch(activeComponent, value => {
   if (value === 'cardboard') cardboardOpened.value = true;
   if (value === 'foam') foamOpened.value = true;
   if (value === 'fur') furOpened.value = true;
   if (value === 'laminate') laminateOpened.value = true;
+  if (value === 'tape') tapeOpened.value = true;
 });
 const component = computed(() => components.find(item => item.key === activeComponent.value));
 const batches = ref([]), page = ref(1), lastPage = ref(1), total = ref(0), ready = ref(false), loading = ref(false), saving = ref(false);
