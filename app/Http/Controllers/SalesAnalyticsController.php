@@ -5,12 +5,15 @@ namespace App\Http\Controllers;
 use App\Http\Requests\SalesAnalyticsRequest;
 use App\Services\Analytics\SalesAnalyticsService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class SalesAnalyticsController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
+        $request->session()->put('analytics.last_tab', 'sales');
+
         return view('analytics.sales');
     }
 

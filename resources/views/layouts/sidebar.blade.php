@@ -401,9 +401,12 @@
         </a>
 
         @if($isOwner)
-            <a href="{{ route('analytics.sales') }}" class="sidebar-link {{ request()->is('analytics*') ? 'active' : '' }}">
+            <a href="{{ route(session('analytics.last_tab') === 'soles' ? 'inventory.soles' : 'analytics.sales') }}"
+               class="sidebar-link {{ request()->routeIs('analytics.*', 'inventory.soles') ? 'active' : '' }}"
+               data-analytics-menu
+               @if(request()->routeIs('analytics.*', 'inventory.soles')) aria-current="page" @endif>
                 <span class="icon-frame"><i class="bi bi-graph-up-arrow"></i></span>
-                <span class="item-text">Аналітика продажів</span>
+                <span class="item-text">Аналітика</span>
             </a>
         @endif
 
@@ -421,13 +424,6 @@
 
         @if($canSeePacking || $canSeeOperations)
             <div class="nav-divider">Склад</div>
-        @endif
-
-        @if($isOwner)
-            <a href="{{ route('inventory.soles') }}" class="sidebar-link {{ request()->is('sole-inventory*') ? 'active' : '' }}">
-                <span class="icon-frame"><i class="bi bi-layers-fill"></i></span>
-                <span class="item-text">Запас підошви</span>
-            </a>
         @endif
 
         @php
