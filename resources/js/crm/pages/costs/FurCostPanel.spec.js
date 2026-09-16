@@ -7,7 +7,7 @@ import { calculateFurCost, activeFurFields, furGeometry } from '@/crm/utils/furC
 import { costFields } from '@/crm/utils/soleCosts';
 
 vi.mock('@/crm/services/productionCostsApi', async importOriginal => ({ ...await importOriginal(), fetchFurBatches: vi.fn(), createFurBatch: vi.fn(), updateFurBatch: vi.fn(), fetchCostBatches: vi.fn() }));
-const inputs = { fabric_length: '10', length_unit: 'yard', fabric_width_cm: '200', top_width_cm: '20', bottom_width_cm: '10', height_cm: '10', goods_cny: '100', china_shipping_cny: '10', commission_percent: '10', international_shipping_usd: '10', ukraine_shipping_uah: null, other_costs_uah: '0', cny_rate: '6', usd_rate: '40' };
+const inputs = { fabric_length: '10', length_unit: 'yard', fabric_width_cm: '200', cut_length_cm: '100', top_width_cm: '20', bottom_width_cm: '10', height_cm: '10', goods_cny: '100', china_shipping_cny: '10', commission_percent: '10', international_shipping_usd: '10', ukraine_shipping_uah: null, other_costs_uah: '0', cny_rate: '6', usd_rate: '40' };
 const record = (changes = {}) => {
   const values = { ...inputs, ...changes }, precision = { ...costFields, ...furGeometry, goods_uah: 2 };
   return { id: 4, version: 1, name: 'Тестове хутро', quantity: 1, purchased_on: null, note: null, ...changes,
@@ -26,6 +26,28 @@ beforeEach(() => {
 afterEach(() => { wrapper?.unmount(); vi.restoreAllMocks(); });
 
 describe('Форма хутра', () => {
+  it('показує ряди, обрізки, ціну деталі й пари та зберігає змінену довжину розкрою', async () => {
+    fetchFurBatches.mockResolvedValue(listing([record({ purchase_source: 'ukraine', goods_uah: '1200', length_unit: 'metre', fabric_length: '1', fabric_width_cm: '180', bottom_width_cm: '13', height_cm: '8' })]));
+    await open();
+    expect(wrapper.get('[name="cut_length_cm"]').element.value).toBe('100.00');
+    expect(wrapper.get('[data-testid="fur-layout"]').text()).toContain('5 у ряду × 22 ряди = 110 деталей');
+    expect(wrapper.get('[data-testid="fur-pieces"]').text()).toBe('110 деталей');
+    expect(wrapper.get('[data-testid="fur-pairs"]').text()).toBe('55 пар');
+    expect(wrapper.get('[data-testid="fur-piece-cost"]').text()).toContain('10,91');
+    expect(wrapper.get('[data-testid="fur-unit-cost"]').text()).toContain('21,82');
+    expect(wrapper.findAll('.cutting-row polygon')).toHaveLength(5);
+    expect(wrapper.text()).not.toContain('Орієнтовно за площею');
+    await wrapper.get('[name="height_cm"]').setValue('9');
+    expect(wrapper.get('[data-testid="fur-unit-cost"]').text()).toContain('24,00');
+    await wrapper.get('[name="cut_length_cm"]').setValue('50');
+    expect(wrapper.get('[data-testid="fur-pieces"]').text()).toBe('80 деталей');
+    expect(wrapper.get('[data-testid="fur-unit-cost"]').text()).toContain('30,00');
+    expect(updateFurBatch).not.toHaveBeenCalled();
+    await wrapper.get('form').trigger('submit'); await flushPromises();
+    expect(updateFurBatch).toHaveBeenCalledWith(4, expect.objectContaining({ cut_length_cm: '50', height_cm: '9' }));
+    await button('Нова партія').trigger('click');
+    expect(wrapper.get('[name="cut_length_cm"]').element.value).toBe('50.00');
+  });
   it('перемикання на Україну прибирає курси й комісію та надсилає тільки українські поля', async () => {
     await open();
     await wrapper.get('[name="purchase_source"][value="ukraine"]').setValue();
@@ -38,7 +60,7 @@ describe('Форма хутра', () => {
     await wrapper.get('[name="goods_uah"]').setValue('3000,00');
     await wrapper.get('[name="ukraine_shipping_uah"]').setValue('100');
     await wrapper.get('[name="other_costs_uah"]').setValue('20');
-    expect(wrapper.get('[data-testid="fur-unit-cost"]').text()).toContain('4,68');
+    expect(wrapper.get('[data-testid="fur-unit-cost"]').text()).toContain('5,20');
     await wrapper.get('form').trigger('submit'); await flushPromises();
     const payload = updateFurBatch.mock.calls[0][1];
     expect(payload).toMatchObject({ purchase_source: 'ukraine', goods_uah: '3000.00', ukraine_shipping_uah: '100', other_costs_uah: '20', version: 1 });
@@ -76,7 +98,7 @@ describe('Форма хутра', () => {
     await wrapper.get('[name="purchase_source"][value="ukraine"]').setValue();
     expect(wrapper.get('[name="length_unit"]').element.value).toBe('metre');
     for (const [field, value] of Object.entries({ fabric_length: '10', fabric_width_cm: '200', top_width_cm: '20', bottom_width_cm: '10', height_cm: '10', goods_uah: '3000' })) await wrapper.get(`[name="${field}"]`).setValue(value);
-    expect(wrapper.get('[data-testid="fur-unit-cost"]').text()).toContain('4,50');
+    expect(wrapper.get('[data-testid="fur-unit-cost"]').text()).toContain('5,00');
     await wrapper.get('form').trigger('submit'); await flushPromises();
     expect(createFurBatch).toHaveBeenCalledWith(expect.objectContaining({ purchase_source: 'ukraine', goods_uah: '3000', ukraine_shipping_uah: null }));
   });
@@ -87,18 +109,18 @@ describe('Форма хутра', () => {
     expect(wrapper.get('[name="goods_cny"]').element.value).toBe('100.00');
     expect(wrapper.get('[name="purchased_on"]').element.value).toBe('');
     expect(wrapper.get('[data-testid="fur-length"]').text()).toContain('9,144');
-    expect(wrapper.get('[data-testid="fur-unit-cost"]').text()).toContain('1,85');
+    expect(wrapper.get('[data-testid="fur-unit-cost"]').text()).toContain('2,09');
     expect(wrapper.text()).toContain('2 трапеції'); expect(wrapper.text()).toContain('Плюш і поролон');
     expect(wrapper.text()).toContain('Окрема доставка Україною не врахована');
     expect(createFurBatch).not.toHaveBeenCalled(); expect(updateFurBatch).not.toHaveBeenCalled();
   });
   it('зміна одиниці, курсу та геометрії одразу перераховує, запис — за кнопкою', async () => {
     await open(); await wrapper.get('[name="length_unit"]').setValue('metre');
-    expect(wrapper.get('[data-testid="fur-unit-cost"]').text()).toContain('1,69');
+    expect(wrapper.get('[data-testid="fur-unit-cost"]').text()).toContain('1,88');
     await wrapper.get('[name="usd_rate"]').setValue('41,00');
-    expect(wrapper.get('[data-testid="fur-unit-cost"]').text()).toContain('1,70');
+    expect(wrapper.get('[data-testid="fur-unit-cost"]').text()).toContain('1,89');
     await wrapper.get('[name="height_cm"]').setValue('20');
-    expect(wrapper.get('[data-testid="fur-unit-cost"]').text()).toContain('3,41');
+    expect(wrapper.get('[data-testid="fur-unit-cost"]').text()).toContain('3,79');
     expect(updateFurBatch).not.toHaveBeenCalled();
     await wrapper.get('form').trigger('submit'); await flushPromises();
     expect(updateFurBatch).toHaveBeenCalledWith(4, expect.objectContaining({ version: 1, length_unit: 'metre', usd_rate: '41.00', height_cm: '20', ukraine_shipping_uah: null }));
@@ -113,7 +135,7 @@ describe('Форма хутра', () => {
     await wrapper.get('form').trigger('submit'); await flushPromises();
     expect(updateFurBatch).toHaveBeenCalledWith(4, expect.objectContaining({ ukraine_shipping_uah: '100.00' }));
   });
-  it.each([['fabric_length', '0'], ['fabric_width_cm', '15'], ['usd_rate', '0']])('не зберігає некоректне поле %s', async (field, value) => {
+  it.each([['fabric_length', '0'], ['fabric_width_cm', '9'], ['usd_rate', '0'], ['cut_length_cm', '19']])('не зберігає некоректне поле %s', async (field, value) => {
     await open(); await wrapper.get(`[name="${field}"]`).setValue(value);
     expect(wrapper.get('[data-testid="fur-unit-cost"]').text()).toContain('—');
     await wrapper.get('form').trigger('submit'); await flushPromises();

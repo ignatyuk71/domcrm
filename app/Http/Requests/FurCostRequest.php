@@ -30,6 +30,7 @@ class FurCostRequest extends SoleCostBatchRequest
             'quantity' => ['prohibited'],
             'purchase_source' => ['sometimes', 'required', Rule::in(['china', 'ukraine'])],
             'goods_uah' => ['prohibited'],
+            'layout' => ['prohibited'], 'total_pieces' => ['prohibited'], 'pairs' => ['prohibited'],
             'length_unit' => ['required', Rule::in(['yard', 'metre'])],
             'ukraine_shipping_uah' => ['nullable', 'numeric', 'min:0', 'max:1000000', 'regex:/^\d+(?:\.\d{1,2})?$/D'],
         ]);
@@ -40,7 +41,7 @@ class FurCostRequest extends SoleCostBatchRequest
             $rules['goods_uah'] = ['required', 'numeric', 'min:0', 'max:1000000', 'regex:/^\d+(?:\.\d{1,2})?$/D'];
         }
         foreach (FurCostCalculator::GEOMETRY as $field => $precision) {
-            $rules[$field] = ['required', 'numeric', 'min:'.($field === 'fabric_length' ? '0.0001' : '0.01'),
+            $rules[$field] = [...($field === 'cut_length_cm' ? ['sometimes'] : []), 'required', 'numeric', 'min:'.($field === 'fabric_length' ? '0.0001' : '0.01'),
                 'max:'.($field === 'fabric_length' ? '1000000' : '1000'), 'regex:/^\d+(?:\.\d{1,'.$precision.'})?$/D'];
         }
 
@@ -54,15 +55,21 @@ class FurCostRequest extends SoleCostBatchRequest
                 return;
             }
             $data = $validator->getData();
+            $calculator = app(FurCostCalculator::class);
             $lengthCm = (float) $data['fabric_length'] * ($data['length_unit'] === 'yard' ? 91.44 : 100);
-            if (max((float) $data['top_width_cm'], (float) $data['bottom_width_cm']) > (float) $data['fabric_width_cm']) {
-                $validator->errors()->add('fabric_width_cm', 'Ширина полотна має вміщати обидві основи трапеції.');
+            $cutLength = (float) ($data['cut_length_cm'] ?? 100);
+            if (max((float) $data['top_width_cm'], (float) $data['bottom_width_cm']) > min($lengthCm, $cutLength)) {
+                $validator->errors()->add($lengthCm < $cutLength ? 'fabric_length' : 'cut_length_cm', 'Довжина робочого відрізу має вміщати більшу основу трапеції.');
             }
-            if ((float) $data['height_cm'] > $lengthCm) {
-                $validator->errors()->add('height_cm', 'Висота деталі не може перевищувати довжину придбаного полотна.');
+            if ((float) $data['height_cm'] > (float) $data['fabric_width_cm']) {
+                $validator->errors()->add('fabric_width_cm', 'Ширина полотна має вміщати хоча б один ряд за висотою трапеції.');
             }
             if ($validator->errors()->isEmpty()) {
-                $calculator = app(FurCostCalculator::class);
+                if ($calculator->layout($data)['pairs'] === 0) {
+                    $validator->errors()->add('fabric_length', 'З цього полотна не виходить двох цілих деталей на одну пару. Перевірте розміри розкрою.');
+
+                    return;
+                }
                 // Не допускаємо переповнення спільної DECIMAL(16,6) навіть на граничних сумах.
                 if ($calculator->calculate(1, $calculator->normalize($data))['unit_cost_uah'] >= 10000000000) {
                     $validator->errors()->add(($data['purchase_source'] ?? 'china') === 'ukraine' ? 'goods_uah' : 'goods_cny', 'Завелика вартість на пару. Перевірте суми, курси та розміри полотна.');
@@ -76,7 +83,7 @@ class FurCostRequest extends SoleCostBatchRequest
         return array_replace(parent::attributes(), [
             'purchase_source' => 'Де купуєте хутро', 'goods_uah' => 'Сума за всю партію хутра',
             'goods_cny' => 'Сума лише за хутро', 'fabric_length' => 'Довжина хутра', 'length_unit' => 'Одиниця довжини',
-            'fabric_width_cm' => 'Ширина полотна', 'top_width_cm' => 'Верхня основа', 'bottom_width_cm' => 'Нижня основа', 'height_cm' => 'Висота деталі',
+            'fabric_width_cm' => 'Ширина полотна', 'cut_length_cm' => 'Довжина робочого відрізу', 'top_width_cm' => 'Верхня основа', 'bottom_width_cm' => 'Нижня основа', 'height_cm' => 'Висота деталі',
         ]);
     }
 

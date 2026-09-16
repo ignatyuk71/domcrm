@@ -4,14 +4,16 @@ namespace App\Services\Costs;
 
 class FurCostCalculator
 {
-    public const GEOMETRY = ['fabric_length' => 4, 'fabric_width_cm' => 2, 'top_width_cm' => 2, 'bottom_width_cm' => 2, 'height_cm' => 2];
+    public const GEOMETRY = ['fabric_length' => 4, 'fabric_width_cm' => 2, 'cut_length_cm' => 2, 'top_width_cm' => 2, 'bottom_width_cm' => 2, 'height_cm' => 2];
 
     public const LOCAL_FIELDS = ['goods_uah', 'ukraine_shipping_uah', 'other_costs_uah'];
 
-    public function __construct(private SoleCostCalculator $purchaseCalculator) {}
+    public function __construct(private SoleCostCalculator $purchaseCalculator, private TrapezoidRowLayout $rowLayout) {}
 
     public function normalize(array $data): array
     {
+        // Для попередніх записів — узгоджений розкрій відрізами по одному погонному метру.
+        $data += ['cut_length_cm' => '100'];
         // Старі записи без джерела залишаються китайськими закупівлями.
         $source = $data['purchase_source'] ?? 'china';
         $inputs = $source === 'ukraine'
@@ -35,22 +37,33 @@ class FurCostCalculator
             $purchase = $this->purchaseCalculator->normalize(array_replace($inputs, ['ukraine_shipping_uah' => $inputs['ukraine_shipping_uah'] ?? 0]));
             $result = $this->purchaseCalculator->calculate(1, $purchase);
         }
-        // Ярд — рівно 0,9144 м. Площа двох щільно розкладених трапецій, не двох прямокутників.
+        // Ярд — рівно 0,9144 м; погонний метр дає 100 см довжини, а не квадратний метр.
         $lengthMetres = (float) $inputs['fabric_length'] * ($inputs['length_unit'] === 'yard' ? 0.9144 : 1);
         $area = $lengthMetres * (float) $inputs['fabric_width_cm'] / 100;
         $pairArea = ((float) $inputs['top_width_cm'] + (float) $inputs['bottom_width_cm']) * (float) $inputs['height_cm'] / 10000;
-        $share = $pairArea / $area;
-        $result['unit_cost_uah'] = round($result['total_uah'] * $share, 6);
-        $result['breakdown'] = array_map(function ($row) use ($share) {
-            return array_replace($row, ['label' => $row['key'] === 'goods' ? 'Хутро' : $row['label'], 'unit_uah' => round($row['total_uah'] * $share, 6)]);
+        $layout = $this->layout($inputs);
+        // Старий запис, який більше не вміщує пару, читається без помилки та без удаваної нульової ціни.
+        $result['unit_cost_uah'] = $layout['pairs'] ? round($result['total_uah'] / $layout['pairs'], 6) : null;
+        $result['piece_cost_uah'] = $layout['total_pieces'] ? round($result['total_uah'] / $layout['total_pieces'], 6) : null;
+        $result['breakdown'] = array_map(function ($row) use ($layout) {
+            return array_replace($row, ['label' => $row['key'] === 'goods' ? 'Хутро' : $row['label'], 'unit_uah' => $layout['pairs'] ? round($row['total_uah'] / $layout['pairs'], 6) : null]);
         }, $result['breakdown']);
 
         return $result + [
-            'length_metres' => $lengthMetres, 'total_area_m2' => $area, 'pair_area_m2' => $pairArea,
+            'layout' => $layout, 'length_metres' => $lengthMetres, 'total_area_m2' => $area, 'pair_area_m2' => $pairArea,
             'linear_metre_cost_uah' => round($result['total_uah'] / $lengthMetres, 6),
             'square_metre_cost_uah' => round($result['total_uah'] / $area, 6),
             'ukraine_shipping_included' => $inputs['ukraine_shipping_uah'] !== null,
         ];
+    }
+
+    public function layout(array $inputs): array
+    {
+        return $this->rowLayout->calculate(
+            (float) $inputs['fabric_length'] * ($inputs['length_unit'] === 'yard' ? 91.44 : 100),
+            (float) $inputs['fabric_width_cm'], (float) ($inputs['cut_length_cm'] ?? 100),
+            (float) $inputs['top_width_cm'], (float) $inputs['bottom_width_cm'], (float) $inputs['height_cm'],
+        );
     }
 
     private function localPurchase(array $inputs): array

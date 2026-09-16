@@ -1,0 +1,19 @@
+[
+  {"name":"Контрольний відріз", "input":[100,180,100,20,13,8], "expected":{"pieces_per_row":5,"rows_per_cut":22,"full_cuts":1,"total_pieces":110,"pairs":55,"offcut_area_m2":0.348}},
+  {"name":"Шоста деталь точно поміщається", "input":[102.5,180,102.5,20,13,8], "expected":{"pieces_per_row":6,"total_pieces":132,"pairs":66}},
+  {"name":"Сотої сантиметра бракує", "input":[102.49,180,102.49,20,13,8], "expected":{"pieces_per_row":5,"total_pieces":110,"pairs":55}},
+  {"name":"Вужчі основи", "input":[100,180,100,10,10,8], "expected":{"pieces_per_row":10,"total_pieces":220,"pairs":110}},
+  {"name":"Інша висота", "input":[100,180,100,20,13,9], "expected":{"rows_per_cut":20,"total_pieces":100,"pairs":50}},
+  {"name":"Основи переставлені", "input":[100,180,100,13,20,8], "expected":{"pieces_per_row":5,"total_pieces":110,"pairs":55}},
+  {"name":"Окремі метрові відрізи", "input":[200,180,100,20,13,8], "expected":{"full_cuts":2,"pieces_per_row":5,"total_pieces":220,"pairs":110}},
+  {"name":"Один двометровий відріз", "input":[200,180,200,20,13,8], "expected":{"full_cuts":1,"pieces_per_row":11,"total_pieces":242,"pairs":121}},
+  {"name":"Залишок дає деталі", "input":[125,180,100,20,13,8], "expected":{"full_cuts":1,"remainder_length_cm":25,"remainder_pieces_per_row":1,"remainder_pieces":22,"total_pieces":132,"pairs":66}},
+  {"name":"Залишок не дає деталей", "input":[119,180,100,20,13,8], "expected":{"remainder_length_cm":19,"remainder_pieces":0,"total_pieces":110,"pairs":55}},
+  {"name":"Один ярд", "input":[91.44,180,100,20,13,8], "expected":{"full_cuts":0,"remainder_length_cm":91.44,"remainder_pieces_per_row":5,"total_pieces":110,"pairs":55}},
+  {"name":"Два ярди", "input":[182.88,180,100,20,13,8], "expected":{"full_cuts":1,"remainder_length_cm":82.88,"remainder_pieces_per_row":4,"total_pieces":198,"pairs":99}},
+  {"name":"Непарна деталь", "input":[100,8,100,20,13,8], "expected":{"total_pieces":5,"pairs":2,"unpaired_pieces":1}},
+  {"name":"Лише одна деталь", "input":[20,8,100,20,13,8], "expected":{"total_pieces":1,"pairs":0,"consumed_pair_area_m2":null}},
+  {"name":"Ряд не вміщується по висоті", "input":[100,7.99,100,20,13,8], "expected":{"total_pieces":0,"pairs":0}},
+  {"name":"Дробові сантиметри без похибки floor", "input":[0.3,0.6,0.3,0.1,0.1,0.2], "expected":{"pieces_per_row":3,"rows_per_cut":3,"total_pieces":9,"pairs":4}},
+  {"name":"Гранична довжина без перебору рядів", "input":[100000000,1000,100,0.01,0.01,0.01], "expected":{"total_pieces":1000000000000000,"pairs":500000000000000}}
+]
