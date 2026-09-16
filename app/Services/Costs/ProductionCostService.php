@@ -7,12 +7,12 @@ use Illuminate\Support\Facades\DB;
 
 class ProductionCostService
 {
-    public function __construct(private SoleCostCalculator $soles, private CardboardCostCalculator $cardboard) {}
+    public function __construct(private SoleCostCalculator $soles, private CardboardCostCalculator $cardboard, private FoamCostCalculator $foam) {}
 
-    private function calculator(string $component): SoleCostCalculator|CardboardCostCalculator
+    private function calculator(string $component): SoleCostCalculator|CardboardCostCalculator|FoamCostCalculator
     {
         return match ($component) {
-            'soles' => $this->soles, 'cardboard' => $this->cardboard,
+            'soles' => $this->soles, 'cardboard' => $this->cardboard, 'foam' => $this->foam,
             default => abort(404),
         };
     }
@@ -32,9 +32,10 @@ class ProductionCostService
     {
         $calculator = $this->calculator($component);
         $inputs = $calculator->normalize($data);
-        $calculation = $calculator->calculate((int) $data['quantity'], $inputs);
+        $quantity = $component === 'foam' ? 1 : (int) $data['quantity'];
+        $calculation = $calculator->calculate($quantity, $inputs);
         $values = [
-            'name' => trim($data['name']), 'purchased_on' => $data['purchased_on'] ?? null, 'quantity' => (int) $data['quantity'],
+            'name' => trim($data['name']), 'purchased_on' => $data['purchased_on'] ?? null, 'quantity' => $quantity,
             'inputs' => json_encode($inputs, JSON_THROW_ON_ERROR), 'note' => $data['note'] ?? null,
             'total_uah' => number_format($calculation['total_uah'], 2, '.', ''),
             'unit_cost_uah' => number_format($calculation['unit_cost_uah'], 6, '.', ''),

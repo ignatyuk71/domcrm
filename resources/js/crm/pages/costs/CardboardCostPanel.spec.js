@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
-import CardboardCostPanel from './CardboardCostPanel.vue';
+import CardboardCostPanel from './SheetMaterialCostPanel.vue';
 import ProductionCostPage from './ProductionCostPage.vue';
 import { fetchCardboardBatches, createCardboardBatch, updateCardboardBatch, fetchCostBatches } from '@/crm/services/productionCostsApi';
 import { calculateCardboardCost, cardboardFields } from '@/crm/utils/cardboardCosts';
