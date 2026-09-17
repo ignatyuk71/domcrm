@@ -29,7 +29,8 @@ class FoamCostCalculator
         $sheetUah = intdiv($priceCents * $rateUnits + 5000, 10000) / 100;
 
         // Це розцінка одного листа, не вигадана закупівля чи складське надходження.
-        return $this->sheetCalculator->calculate(1, $inputs + ['goods_uah' => number_format($sheetUah, 2, '.', '')])
+        // Нова розкладка картону не змінює погоджений розрахунок вставки за площею.
+        return $this->sheetCalculator->calculateByArea(1, $inputs + ['goods_uah' => number_format($sheetUah, 2, '.', '')])
             + ['purchase_sheet_uah' => $sheetUah];
     }
 }

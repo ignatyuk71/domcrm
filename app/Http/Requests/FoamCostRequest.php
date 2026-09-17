@@ -4,6 +4,11 @@ namespace App\Http\Requests;
 
 class FoamCostRequest extends CardboardCostBatchRequest
 {
+    protected function requiresWholePairs(): bool
+    {
+        return false;
+    }
+
     protected function prepareForValidation(): void
     {
         parent::prepareForValidation();

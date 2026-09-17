@@ -26,20 +26,67 @@ beforeEach(() => {
 afterEach(() => { wrapper?.unmount(); vi.restoreAllMocks(); });
 
 describe('Форма картону', () => {
+  it('малює ті самі цілі деталі, які включені в ціну, та реагує на розміри', async () => {
+    await open();
+    const svg = () => wrapper.get('[data-testid="cardboard-layout"] svg');
+    expect(svg().findAll('polygon')).toHaveLength(38);
+    expect(svg().findAll('[data-rotated="true"]')).toHaveLength(6);
+    expect(svg().attributes('aria-label')).toContain('19 повних пар');
+    await wrapper.get('[name="sheet_length_cm"]').setValue('150');
+    await wrapper.get('[name="sheet_width_cm"]').setValue('100');
+    await wrapper.get('[name="blank_length_cm"]').setValue('26');
+    await wrapper.get('[name="blank_width_cm"]').setValue('11');
+    expect(svg().attributes('viewBox')).toBe('-1 -1 152 102');
+    expect(svg().findAll('polygon')).toHaveLength(48);
+    expect(svg().findAll('[data-rotated="true"]')).toHaveLength(3);
+    const boxes = svg().findAll('polygon').map(polygon => {
+      const points = polygon.attributes('points').split(' ').map(point => point.split(',').map(Number));
+      const xs = points.map(point => point[0]), ys = points.map(point => point[1]);
+      const box = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+      expect(box[0]).toBeGreaterThanOrEqual(0); expect(box[1]).toBeGreaterThanOrEqual(0);
+      expect(box[2]).toBeLessThanOrEqual(150); expect(box[3]).toBeLessThanOrEqual(100);
+      expect((box[2] - box[0]) * (box[3] - box[1])).toBeCloseTo(26 * 11);
+      return box;
+    });
+    for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
+      const [a, b] = [boxes[i], boxes[j]];
+      expect(a[2] <= b[0] || b[2] <= a[0] || a[3] <= b[1] || b[3] <= a[1]).toBe(true);
+    }
+    expect(wrapper.get('[data-testid="cardboard-pairs"]').text()).toBe('24');
+    expect(wrapper.get('[data-testid="cardboard-unit-cost"]').text()).toContain('7,50');
+    expect(updateCardboardBatch).not.toHaveBeenCalled();
+  });
+  it('не показує ціну пари, якщо на листі лише одна деталь', async () => {
+    fetchCardboardBatches.mockResolvedValueOnce(listing([record({ blank_length_cm: '70', blank_width_cm: '100' })]));
+    await open();
+    expect(wrapper.get('[data-testid="cardboard-unit-cost"]').text()).toContain('—');
+    expect(wrapper.text()).toContain('не виходить двох цілих заготовок');
+    await wrapper.get('[name="goods_uah"]').setValue('4000');
+    expect(button('Зберегти зміни').attributes('disabled')).toBeDefined();
+    await wrapper.get('form').trigger('submit'); await flushPromises();
+    expect(updateCardboardBatch).not.toHaveBeenCalled();
+  });
+  it('великі розкладки малює обмеженим фрагментом без зміни кількості', async () => {
+    fetchCardboardBatches.mockResolvedValueOnce(listing([record({ blank_length_cm: '1', blank_width_cm: '1' })]));
+    await open();
+    expect(wrapper.get('[data-testid="cardboard-pieces"]').text().replace(/\s/g, '')).toBe('9600');
+    expect(wrapper.findAll('polygon')).toHaveLength(576);
+    expect(wrapper.text()).toContain('Фрагмент розкладки');
+  });
   it('завантажує приватні дані в поля без автоматичних записів', async () => {
     await open();
     expect(wrapper.get('[name="quantity"]').element.value).toBe('20');
     expect(wrapper.get('[name="goods_uah"]').element.value).toBe('3600.00');
     expect(wrapper.get('[name="sheet_length_cm"]').element.value).toBe('120.00');
     expect(wrapper.get('[name="purchased_on"]').element.value).toBe('');
-    expect(wrapper.get('[data-testid="cardboard-unit-cost"]').text()).toContain('8,44');
+    expect(wrapper.get('[data-testid="cardboard-unit-cost"]').text()).toContain('9,47');
     expect(wrapper.text()).toContain('Доставка картону не врахована');
     expect(wrapper.text()).toContain('додаткові проміжки');
     expect(createCardboardBatch).not.toHaveBeenCalled(); expect(updateCardboardBatch).not.toHaveBeenCalled();
   });
   it('миттєво перераховує, але записує лише за кнопкою', async () => {
     await open(); await wrapper.get('[name="goods_uah"]').setValue('4000');
-    expect(wrapper.get('[data-testid="cardboard-unit-cost"]').text()).toContain('9,38');
+    expect(wrapper.get('[data-testid="cardboard-unit-cost"]').text()).toContain('10,53');
     expect(updateCardboardBatch).not.toHaveBeenCalled();
     await wrapper.get('form').trigger('submit'); await flushPromises();
     expect(updateCardboardBatch).toHaveBeenCalledWith(2, expect.objectContaining({ goods_uah: '4000', quantity: 20, version: 1, shipping_uah: null }));
@@ -48,7 +95,7 @@ describe('Форма картону', () => {
   });
   it('розрізняє невідому та нульову доставку й приймає кому', async () => {
     await open(); await wrapper.get('[name="shipping_uah"]').setValue('240,00');
-    expect(wrapper.get('[data-testid="cardboard-unit-cost"]').text()).toContain('9,00');
+    expect(wrapper.get('[data-testid="cardboard-unit-cost"]').text()).toContain('10,11');
     expect(wrapper.text()).not.toContain('Доставка картону не врахована');
     await wrapper.get('form').trigger('submit'); await flushPromises();
     expect(updateCardboardBatch).toHaveBeenCalledWith(2, expect.objectContaining({ shipping_uah: '240.00' }));

@@ -52,7 +52,7 @@ class CardboardCostsTest extends TestCase
         $this->assertDatabaseCount('sole_inventory_batches', 0);
     }
 
-    public function test_prices_use_two_rectangles_without_intermediate_rounding(): void
+    public function test_prices_use_whole_pairs_from_sheet_layout(): void
     {
         $this->owner();
         $this->postJson(self::URL, $this->payload())->assertCreated()
@@ -60,7 +60,9 @@ class CardboardCostsTest extends TestCase
             ->assertJsonPath('purchased_on', null)->assertJsonPath('calculation.total_uah', 3600)
             ->assertJsonPath('calculation.sheet_cost_uah', 180)->assertJsonPath('calculation.square_metre_cost_uah', 187.5)
             ->assertJsonPath('calculation.sheet_area_m2', 0.96)->assertJsonPath('calculation.pair_area_m2', 0.045)
-            ->assertJsonPath('calculation.unit_cost_uah', 8.4375)->assertJsonPath('calculation.shipping_included', false);
+            ->assertJsonPath('calculation.unit_cost_uah', 9.473684)->assertJsonPath('calculation.shipping_included', false)
+            ->assertJsonPath('calculation.layout.primary_pieces', 32)->assertJsonPath('calculation.layout.rotated_pieces', 6)
+            ->assertJsonPath('calculation.layout.total_pieces', 38)->assertJsonPath('calculation.layout.pairs', 19);
         $this->getJson('/api/production-costs/sole-batches')->assertOk()->assertJsonPath('total', 0);
         $this->assertDatabaseCount('production_cost_batch_revisions', 1);
         $this->assertDatabaseCount('sole_inventory_batches', 0);
@@ -70,7 +72,7 @@ class CardboardCostsTest extends TestCase
     {
         $this->owner();
         $this->postJson(self::URL, $this->payload(['shipping_uah' => '240,00', 'sheet_width_cm' => '80,00']))->assertCreated()
-            ->assertJsonPath('calculation.total_uah', 3840)->assertJsonPath('calculation.unit_cost_uah', 9)
+            ->assertJsonPath('calculation.total_uah', 3840)->assertJsonPath('calculation.unit_cost_uah', 10.105263)
             ->assertJsonPath('calculation.shipping_included', true);
         $this->postJson(self::URL, $this->payload(['shipping_uah' => '0']))->assertCreated()->assertJsonPath('inputs.shipping_uah', '0.00')
             ->assertJsonPath('calculation.shipping_included', true);
@@ -86,13 +88,14 @@ class CardboardCostsTest extends TestCase
         foreach ([['quantity', 0], ['quantity', '2.5'], ['goods_uah', -1], ['goods_uah', '1e3'], ['goods_uah', '1.001'],
             ['goods_uah', 1000001], ['sheet_width_cm', 0], ['sheet_length_cm', ''], ['sheet_length_cm', 1001],
             ['blank_length_cm', 121], ['blank_width_cm', 121], ['blank_width_cm', '1.005'], ['shipping_uah', -1],
-            ['purchased_on', '2026-02-30'], ['name', ''], ['total_uah', 1], ['unit_cost_uah', 1], ['component', 'soles']] as [$field, $value]) {
+            ['purchased_on', '2026-02-30'], ['name', ''], ['total_uah', 1], ['unit_cost_uah', 1], ['component', 'soles'], ['layout', ['pairs' => 99]], ['method', 'area']] as [$field, $value]) {
             $response = $this->postJson(self::URL, $this->payload([$field => $value]))->assertUnprocessable();
             $response->assertJsonValidationErrors($field === 'blank_width_cm' && $value === 121 ? 'blank_length_cm' : $field);
         }
         $this->assertDatabaseCount('production_cost_batches', 0);
         // Заготовка поміщається після повороту, її не потрібно помилково відхиляти.
-        $this->postJson(self::URL, $this->payload(['blank_length_cm' => 70, 'blank_width_cm' => 100]))->assertCreated();
+        $this->postJson(self::URL, $this->payload(['blank_length_cm' => 70, 'blank_width_cm' => 100]))->assertUnprocessable()->assertJsonValidationErrors('blank_length_cm');
+        $this->postJson(self::URL, $this->payload(['sheet_length_cm' => 200, 'blank_length_cm' => 70, 'blank_width_cm' => 100]))->assertCreated()->assertJsonPath('calculation.layout.pairs', 1);
     }
 
     public function test_retries_versions_and_separate_snapshots(): void
@@ -104,7 +107,7 @@ class CardboardCostsTest extends TestCase
         $this->postJson(self::URL, array_replace($payload, ['quantity' => 21]))->assertConflict();
         $edit = array_replace($payload, ['version' => 1, 'goods_uah' => '4000']);
         unset($edit['request_key']);
-        $this->putJson(self::URL.'/'.$id, $edit)->assertOk()->assertJsonPath('version', 2)->assertJsonPath('calculation.unit_cost_uah', 9.375);
+        $this->putJson(self::URL.'/'.$id, $edit)->assertOk()->assertJsonPath('version', 2)->assertJsonPath('calculation.unit_cost_uah', 10.526316);
         $this->putJson(self::URL.'/'.$id, $edit)->assertConflict();
         $this->putJson(self::URL.'/999999', $edit)->assertNotFound();
         $this->postJson(self::URL, $this->payload(['goods_uah' => '5000']))->assertCreated();
@@ -160,5 +163,41 @@ class CardboardCostsTest extends TestCase
         }
         $this->getJson(self::URL)->assertOk()->assertJsonCount(20, 'data')->assertJsonPath('data.0.name', 'Картон 21');
         $this->getJson(self::URL.'?page=2')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('total', 21);
+    }
+
+    public function test_dimensions_recalculate_layout_and_price_without_rounding_sheet_price(): void
+    {
+        $this->owner();
+        $sheet = ['sheet_length_cm' => 150, 'sheet_width_cm' => 100, 'blank_length_cm' => 26, 'blank_width_cm' => 11];
+        $this->postJson(self::URL, $this->payload($sheet))->assertCreated()
+            ->assertJsonPath('calculation.layout.primary_pieces', 45)->assertJsonPath('calculation.layout.rotated_pieces', 3)
+            ->assertJsonPath('calculation.layout.total_pieces', 48)->assertJsonPath('calculation.layout.pairs', 24)
+            ->assertJsonPath('calculation.unit_cost_uah', 7.5);
+        $this->postJson(self::URL, $this->payload(array_replace($sheet, ['blank_width_cm' => 12])))->assertCreated()
+            ->assertJsonPath('calculation.layout.total_pieces', 43)->assertJsonPath('calculation.layout.unpaired_pieces', 1)
+            ->assertJsonPath('calculation.layout.pairs', 21)->assertJsonPath('calculation.unit_cost_uah', 8.571429);
+        $this->postJson(self::URL, $this->payload(['quantity' => 7, 'goods_uah' => 100]))->assertCreated()
+            ->assertJsonPath('calculation.unit_cost_uah', 0.75188);
+    }
+
+    public function test_get_recalculates_legacy_result_without_rewriting_data_or_audit(): void
+    {
+        $this->owner();
+        $id = $this->postJson(self::URL, $this->payload())->assertCreated()->json('id');
+        // Імітуємо старий збережений результат до переходу на розкладку.
+        DB::table('production_cost_batches')->where('id', $id)->update(['unit_cost_uah' => 8.4375]);
+        $snapshot = DB::table('production_cost_batches')->where('id', $id)->first();
+        $this->getJson(self::URL)->assertOk()->assertJsonPath('data.0.calculation.unit_cost_uah', 9.473684);
+        $this->assertEquals($snapshot, DB::table('production_cost_batches')->where('id', $id)->first());
+        $inputs = json_decode($snapshot->inputs, true);
+        $inputs['blank_length_cm'] = '70.00';
+        $inputs['blank_width_cm'] = '100.00';
+        DB::table('production_cost_batches')->where('id', $id)->update(['inputs' => json_encode($inputs)]);
+        $snapshot = DB::table('production_cost_batches')->where('id', $id)->first();
+        $this->getJson(self::URL)->assertOk()->assertJsonPath('data.0.calculation.layout.pairs', 0)
+            ->assertJsonPath('data.0.calculation.unit_cost_uah', null);
+        $this->assertEquals($snapshot, DB::table('production_cost_batches')->where('id', $id)->first());
+        $this->assertDatabaseCount('production_cost_batch_revisions', 1);
+        $this->assertDatabaseCount('sole_inventory_batches', 0);
     }
 }

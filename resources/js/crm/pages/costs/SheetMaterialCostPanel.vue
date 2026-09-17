@@ -43,30 +43,32 @@
           </details>
           <div v-if="formError" class="alert alert-danger mt-3" role="alert">{{ formError }}</div>
           <div class="form-actions">
-            <button type="submit" class="btn btn-primary" :disabled="!dirty || !preview || !form.name.trim()">{{ saving ? 'Зберігаємо…' : selectedId ? 'Зберегти зміни' : ui.saveNewLabel }}</button>
+            <button type="submit" class="btn btn-primary" :disabled="!dirty || !canCalculate || !form.name.trim()">{{ saving ? 'Зберігаємо…' : selectedId ? 'Зберегти зміни' : ui.saveNewLabel }}</button>
             <button v-if="dirty && selectedId" type="button" class="btn secondary-button" @click="applyBatch(savedBatch)">Скасувати зміни</button>
           </div>
           <p class="hint mb-0">Результат змінюється одразу. Зберігаємо тільки після натискання кнопки.</p>
         </fieldset>
       </form>
 
-      <aside class="panel-result">
+      <aside class="panel-result" :class="{ 'with-cut-layout': !isFoam }">
         <div class="pair-result">
           <div class="result-label"><span>{{ ui.resultTitle }}</span><i :class="`bi bi-${isFoam ? 'square' : 'file-earmark'}`" aria-hidden="true"></i></div>
           <strong :data-testid="`${material}-unit-cost`" role="status">{{ preview ? money(preview.unit_cost_uah) : '—' }} <small>грн</small></strong>
-          <p>Орієнтовно за площею · {{ isFoam ? '2 вставки' : '2 заготовки' }} на пару</p>
+          <p>{{ isFoam ? 'Орієнтовно за площею · 2 вставки на пару' : 'За виходом повних пар із листа · обрізки враховані' }}</p>
           <span v-if="dirty" class="draft-label">Попередній розрахунок · ще не збережено</span>
         </div>
+        <CardboardCutLayout v-if="!isFoam && preview" :length="numeric('sheet_length_cm')" :width="numeric('sheet_width_cm')" :blank-length="numeric('blank_length_cm')" :blank-width="numeric('blank_width_cm')" :layout="preview.layout" />
         <div v-if="preview" class="panel-card calculation">
           <h3>Як пораховано</h3>
           <dl>
             <div v-if="isFoam"><dt>{{ number(decimalInput(form.sheet_price_usd)) }} $ × {{ number(decimalInput(form.usd_rate)) }} грн</dt><dd>{{ money(preview.purchase_sheet_uah) }} грн</dd></div>
             <div v-else><dt>Сума за партію{{ preview.shipping_included ? ' з доставкою' : '' }}</dt><dd>{{ money(preview.total_uah) }} грн</dd></div>
             <div><dt>Один лист · {{ number(preview.sheet_area_m2) }} м²{{ isFoam && preview.shipping_included ? ' · з доставкою' : '' }}</dt><dd :data-testid="`${material}-sheet-cost`">{{ money(preview.sheet_cost_uah) }} грн</dd></div>
-            <div><dt>Один квадратний метр</dt><dd>{{ money(preview.square_metre_cost_uah) }} грн</dd></div>
-            <div><dt>{{ isFoam ? 'Дві вставки' : 'Дві заготовки' }} на пару</dt><dd>{{ number(preview.pair_area_m2) }} м²</dd></div>
+            <template v-if="isFoam"><div><dt>Один квадратний метр</dt><dd>{{ money(preview.square_metre_cost_uah) }} грн</dd></div><div><dt>Дві вставки на пару</dt><dd>{{ number(preview.pair_area_m2) }} м²</dd></div></template>
+            <div v-else><dt>Повних пар із одного листа</dt><dd>{{ number(preview.layout.pairs) }}</dd></div>
           </dl>
-          <p class="formula">{{ money(preview.square_metre_cost_uah) }} грн/м² × {{ number(preview.pair_area_m2) }} м² ≈ <b>{{ money(preview.unit_cost_uah) }} грн</b></p>
+          <p v-if="isFoam" class="formula">{{ money(preview.square_metre_cost_uah) }} грн/м² × {{ number(preview.pair_area_m2) }} м² ≈ <b>{{ money(preview.unit_cost_uah) }} грн</b></p>
+          <p v-else-if="preview.layout.pairs" class="formula">{{ money(preview.sheet_cost_uah) }} грн за лист ÷ {{ number(preview.layout.pairs) }} пар = <b>{{ money(preview.unit_cost_uah) }} грн</b></p>
           <p class="hint mb-0">Рахуємо без проміжного округлення; суми показуємо до копійок.</p>
         </div>
         <p v-else class="calculation-hint">{{ ui.invalidHint }}</p>
@@ -89,6 +91,7 @@ import { fetchCardboardBatches, createCardboardBatch, updateCardboardBatch, fetc
 import { calculateCardboardCost, cardboardFields, emptyCardboardForm } from '@/crm/utils/cardboardCosts';
 import { calculateFoamCost, foamFields, emptyFoamForm } from '@/crm/utils/foamCosts';
 import { decimalInput } from '@/crm/utils/soleCosts';
+import CardboardCutLayout from './CardboardCutLayout.vue';
 
 const emit = defineEmits(['saving']);
 const props = defineProps({ material: { type: String, default: 'cardboard', validator: value => ['cardboard', 'foam'].includes(value) } });
@@ -114,10 +117,10 @@ const ui = isFoam ? {
   purchaseTitle: 'Купівля картону', purchaseHint: 'Лише сума за картон із рахунку, без поролону та інших матеріалів.',
   resultTitle: 'Картон на 1 пару капців', deliveryLabel: 'Доставка цієї партії',
   deliveryHint: 'Невідому доставку залиште порожньою. Якщо доставляли кілька матеріалів, указуйте лише частину витрат на картон.',
-  scope: 'Рахуємо весь прямокутник заготовки, включно з тим, що обрізається після пошиття. Залишки по краях листа й додаткові проміжки між заготовками поки не враховані.',
+  scope: 'Рахуємо цілий лист і весь прямокутник заготовки, включно з тим, що обрізається після пошиття. Крайові обрізки листа включені у ціну пари; додаткові проміжки та брак не задані й не враховані.',
   deliveryUnknown: 'Доставка картону не врахована — суму ще не вказано.',
   historyTitle: 'Збережені партії картону', historyHint: 'Новий рахунок — окремий розрахунок. Попередні дані зберігаються.',
-  invalidHint: 'Вкажіть кількість листів, суму та розміри у сантиметрах. Заготовка має поміщатися в лист.',
+  invalidHint: 'Вкажіть кількість листів, суму та розміри у сантиметрах. Із листа має виходити хоча б дві цілі заготовки.',
 };
 const dimensionGroups = [
   { step: 2, title: 'Розмір цілого листа', hint: 'Розміри придбаного листа, не вирізаної устілки.', fields: [{ key: 'sheet_length_cm', label: 'Довжина листа' }, { key: 'sheet_width_cm', label: 'Ширина листа' }] },
@@ -128,8 +131,10 @@ const form = ref(null), selectedId = ref(null), version = ref(null), savedBatch 
 const error = ref(''), formError = ref(''), notice = ref('');
 const dirty = computed(() => form.value !== null && JSON.stringify(form.value) !== baseline.value);
 const preview = computed(() => form.value ? calculate(form.value) : null);
-const money = value => Number(value).toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const canCalculate = computed(() => preview.value?.unit_cost_uah != null);
+const money = value => value == null ? '—' : Number(value).toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const number = value => Number(value).toLocaleString('uk-UA', { maximumFractionDigits: 8 });
+const numeric = field => Number(decimalInput(form.value[field]));
 watch(saving, value => emit('saving', value));
 
 function applyBatch(batch) {
@@ -157,7 +162,7 @@ async function load(nextPage = 1) {
 }
 async function save() {
   if (saving.value || !dirty.value) return;
-  if (!preview.value || !form.value.name.trim()) { formError.value = `Укажіть назву розрахунку. ${ui.invalidHint}`; return; }
+  if (!canCalculate.value || !form.value.name.trim()) { formError.value = `Укажіть назву розрахунку. ${ui.invalidHint}`; return; }
   saving.value = true; formError.value = ''; notice.value = '';
   const payload = { name: form.value.name.trim(), purchased_on: form.value.purchased_on || null, ...(!isFoam ? { quantity: Number(form.value.quantity) } : {}), note: form.value.note.trim() || null,
     ...Object.fromEntries(fields.map(field => [field, field === 'shipping_uah' && decimalInput(form.value[field]) === '' ? null : decimalInput(form.value[field])])),
@@ -176,3 +181,6 @@ onUnmounted(() => window.removeEventListener('beforeunload', guardUnload));
 </script>
 
 <style scoped src="./materialCostPanel.css"></style>
+<style scoped>
+.with-cut-layout{position:static}
+</style>

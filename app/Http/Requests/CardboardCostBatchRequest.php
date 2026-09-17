@@ -35,6 +35,7 @@ class CardboardCostBatchRequest extends FormRequest
             'request_key' => $this->isMethod('POST') ? ['required', 'uuid'] : ['prohibited'],
             'version' => $this->isMethod('PUT') ? ['required', 'integer', 'min:1'] : ['prohibited'],
             'total_uah' => ['prohibited'], 'unit_cost_uah' => ['prohibited'], 'component' => ['prohibited'],
+            'layout' => ['prohibited'], 'method' => ['prohibited'],
         ];
         foreach (CardboardCostCalculator::FIELDS as $field) {
             $dimension = str_ends_with($field, '_cm');
@@ -58,8 +59,18 @@ class CardboardCostBatchRequest extends FormRequest
             sort($blank);
             if ($blank[0] > $sheet[0] || $blank[1] > $sheet[1]) {
                 $validator->errors()->add('blank_length_cm', 'Заготовка має поміщатися в лист, у тому числі після повороту. Перевірте розміри у сантиметрах.');
+
+                return;
+            }
+            if ($this->requiresWholePairs() && app(CardboardCostCalculator::class)->layout($data)['pairs'] === 0) {
+                $validator->errors()->add('blank_length_cm', 'Із одного листа має виходити хоча б 2 цілі заготовки. Перевірте розміри листа й деталі.');
             }
         }];
+    }
+
+    protected function requiresWholePairs(): bool
+    {
+        return true;
     }
 
     public function attributes(): array

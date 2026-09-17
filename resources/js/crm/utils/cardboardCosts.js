@@ -1,9 +1,20 @@
 import { decimalInput } from './soleCosts';
+import { laminateRows } from './laminateRows';
 
 export const cardboardFields = ['goods_uah', 'shipping_uah', 'sheet_length_cm', 'sheet_width_cm', 'blank_length_cm', 'blank_width_cm'];
 const rounded = value => Math.round(value * 1000000) / 1000000;
 
 export function calculateCardboardCost(form) {
+  const calculation = calculateSheetAreaCost(form);
+  if (!calculation) return null;
+  const dimension = field => Number(decimalInput(form[field]));
+  const layout = laminateRows(dimension('sheet_length_cm'), dimension('sheet_width_cm'), dimension('blank_length_cm'), dimension('blank_length_cm'), dimension('blank_width_cm'));
+  return { ...calculation, method: 'sheet_rows_v1', layout,
+    unit_cost_uah: layout.pairs ? rounded(calculation.total_uah / Number(form.quantity) / layout.pairs) : null };
+}
+
+// Поролонова вставка продовжує використовувати розцінку площі без зміни її формули.
+export function calculateSheetAreaCost(form) {
   if (!/^\d+$/.test(String(form.quantity)) || Number(form.quantity) < 1 || Number(form.quantity) > 10000000) return null;
   const inputs = {};
   for (const field of cardboardFields) {
