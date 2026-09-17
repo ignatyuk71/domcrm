@@ -58,8 +58,9 @@ abstract class ImportProductionCostBatch extends Command
         $data = $validator->validated();
         // Повторний імпорт не перезаписує подальші ручні зміни власника.
         if ($existing = DB::table('production_cost_batches')->where('request_key', $data['request_key'])->first()) {
-            if ($existing->component !== $this->component) {
-                $this->error('Цей ключ належить іншій складовій. Дані не змінені.');
+            $modelId = app(\App\Services\Costs\ProductionCostModels::class)->resolve(isset($data['model_id']) ? (int) $data['model_id'] : null);
+            if ($existing->component !== $this->component || (int) $existing->model_id !== $modelId) {
+                $this->error('Цей ключ належить іншій складовій або категорії. Дані не змінені.');
 
                 return self::FAILURE;
             }

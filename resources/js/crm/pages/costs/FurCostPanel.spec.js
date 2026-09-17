@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 import FurCostPanel from './FurCostPanel.vue';
-import ProductionCostPage from './ProductionCostPage.vue';
+import ProductionCostPage from './ProductionCostWorkspace.vue';
 import { fetchFurBatches, createFurBatch, updateFurBatch, fetchCostBatches } from '@/crm/services/productionCostsApi';
 import { calculateFurCost, activeFurFields, furGeometry } from '@/crm/utils/furCosts';
 import { costFields } from '@/crm/utils/soleCosts';

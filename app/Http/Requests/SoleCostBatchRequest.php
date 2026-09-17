@@ -26,6 +26,7 @@ class SoleCostBatchRequest extends FormRequest
     public function rules(): array
     {
         $rules = [
+            'model_id' => ['sometimes', 'required', 'integer', 'min:1', 'exists:production_cost_models,id'],
             'name' => ['required', 'string', 'max:160'],
             'purchased_on' => ['nullable', 'date_format:Y-m-d'],
             'quantity' => ['required', 'integer', 'min:1', 'max:10000000'],

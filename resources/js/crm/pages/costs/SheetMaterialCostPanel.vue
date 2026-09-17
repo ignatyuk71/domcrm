@@ -92,12 +92,13 @@ import { calculateCardboardCost, cardboardFields, emptyCardboardForm } from '@/c
 import { calculateFoamCost, foamFields, emptyFoamForm } from '@/crm/utils/foamCosts';
 import { decimalInput } from '@/crm/utils/soleCosts';
 import CardboardCutLayout from './CardboardCutLayout.vue';
+import { useCostModelApi } from '@/crm/composables/useCostModelApi';
 
 const emit = defineEmits(['saving']);
 const props = defineProps({ material: { type: String, default: 'cardboard', validator: value => ['cardboard', 'foam'].includes(value) } });
 // Кожен матеріал має окремий екземпляр форми: чернетки та запити не змішуються.
 const isFoam = props.material === 'foam';
-const api = isFoam ? { fetch: fetchFoamCosts, create: createFoamCost, update: updateFoamCost } : { fetch: fetchCardboardBatches, create: createCardboardBatch, update: updateCardboardBatch };
+const api = useCostModelApi(isFoam ? { fetch: fetchFoamCosts, create: createFoamCost, update: updateFoamCost } : { fetch: fetchCardboardBatches, create: createCardboardBatch, update: updateCardboardBatch });
 const fields = isFoam ? foamFields : cardboardFields;
 const calculate = isFoam ? calculateFoamCost : calculateCardboardCost;
 const emptyForm = isFoam ? emptyFoamForm : emptyCardboardForm;
@@ -130,6 +131,7 @@ const batches = ref([]), page = ref(1), lastPage = ref(1), total = ref(0), ready
 const form = ref(null), selectedId = ref(null), version = ref(null), savedBatch = ref(null), baseline = ref(''), requestKey = ref('');
 const error = ref(''), formError = ref(''), notice = ref('');
 const dirty = computed(() => form.value !== null && JSON.stringify(form.value) !== baseline.value);
+defineExpose({ dirty });
 const preview = computed(() => form.value ? calculate(form.value) : null);
 const canCalculate = computed(() => preview.value?.unit_cost_uah != null);
 const money = value => value == null ? '—' : Number(value).toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 import LaminateCostPanel from './LaminateCostPanel.vue';
-import ProductionCostPage from './ProductionCostPage.vue';
+import ProductionCostPage from './ProductionCostWorkspace.vue';
 import { fetchLaminateCosts, createLaminateCost, updateLaminateCost, fetchCostBatches } from '@/crm/services/productionCostsApi';
 import { calculateLaminateCost, laminateFields, laminatePrecision } from '@/crm/utils/laminateCosts';
 

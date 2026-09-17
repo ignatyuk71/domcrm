@@ -29,6 +29,7 @@ class LaminateCostRequest extends FormRequest
     public function rules(): array
     {
         $rules = [
+            'model_id' => ['sometimes', 'required', 'integer', 'min:1', 'exists:production_cost_models,id'],
             'name' => ['required', 'string', 'max:160'], 'purchased_on' => ['nullable', 'date_format:Y-m-d'], 'note' => ['nullable', 'string', 'max:2000'],
             'request_key' => $this->isMethod('POST') ? ['required', 'uuid'] : ['prohibited'],
             'version' => $this->isMethod('PUT') ? ['required', 'integer', 'min:1'] : ['prohibited'],

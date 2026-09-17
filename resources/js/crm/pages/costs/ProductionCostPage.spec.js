@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
-import ProductionCostPage from './ProductionCostPage.vue';
+import ProductionCostPage from './ProductionCostWorkspace.vue';
 import { fetchCostBatches, createCostBatch, updateCostBatch } from '@/crm/services/productionCostsApi';
 import { calculateSoleCost, costFields } from '@/crm/utils/soleCosts';
 

@@ -17,10 +17,11 @@ class ProductionCostService
         };
     }
 
-    public function listing(string $component = 'soles'): array
+    public function listing(string $component = 'soles', ?int $modelId = null): array
     {
         $this->calculator($component);
-        $page = DB::table('production_cost_batches')->where('component', $component)->orderByDesc('id')->paginate(20);
+        $modelId = app(ProductionCostModels::class)->resolve($modelId);
+        $page = DB::table('production_cost_batches')->where('model_id', $modelId)->where('component', $component)->orderByDesc('id')->paginate(20);
 
         return [
             'data' => array_map(fn ($row) => $this->present($row), $page->items()),
@@ -31,20 +32,21 @@ class ProductionCostService
     public function save(array $data, ?int $userId, ?int $batchId = null, string $component = 'soles'): array
     {
         $calculator = $this->calculator($component);
+        $modelId = app(ProductionCostModels::class)->resolve(isset($data['model_id']) ? (int) $data['model_id'] : null);
         $inputs = $calculator->normalize($data);
         $quantity = in_array($component, ['foam', 'fur', 'laminate', 'tape'], true) ? 1 : (int) $data['quantity'];
         $calculation = $calculator->calculate($quantity, $inputs);
         $values = [
-            'name' => trim($data['name']), 'purchased_on' => $data['purchased_on'] ?? null, 'quantity' => $quantity,
+            'model_id' => $modelId, 'name' => trim($data['name']), 'purchased_on' => $data['purchased_on'] ?? null, 'quantity' => $quantity,
             'inputs' => json_encode($inputs, JSON_THROW_ON_ERROR), 'note' => $data['note'] ?? null,
             'total_uah' => number_format($calculation['total_uah'], 2, '.', ''),
             'unit_cost_uah' => $calculation['unit_cost_uah'] === null ? null : number_format($calculation['unit_cost_uah'], 6, '.', ''),
         ];
         try {
-            $id = DB::transaction(function () use ($data, $values, $userId, $batchId, $component) {
+            $id = DB::transaction(function () use ($data, $values, $userId, $batchId, $component, $modelId) {
                 $previous = null;
                 if ($batchId) {
-                    $previous = DB::table('production_cost_batches')->where('component', $component)->where('id', $batchId)->lockForUpdate()->first();
+                    $previous = DB::table('production_cost_batches')->where('model_id', $modelId)->where('component', $component)->where('id', $batchId)->lockForUpdate()->first();
                     abort_unless($previous, 404);
                     abort_if((int) $previous->version !== (int) $data['version'], 409, 'Цю партію вже змінили. Оновіть список і відкрийте її ще раз.');
                 } elseif ($existing = DB::table('production_cost_batches')->where('request_key', $data['request_key'])->first()) {
@@ -81,6 +83,7 @@ class ProductionCostService
     private function sameRetry(object $existing, array $values, string $component): int
     {
         abort_unless($existing->component === $component, 409, 'Цей запит належить іншій складовій. Створіть новий розрахунок.');
+        abort_unless((int) $existing->model_id === $values['model_id'], 409, 'Цей запит належить іншій категорії капців.');
         $calculator = $this->calculator($component);
         $same = true;
         foreach (['name', 'purchased_on', 'quantity', 'note'] as $field) {
@@ -99,7 +102,7 @@ class ProductionCostService
         $inputs = $calculator->normalize(json_decode($row->inputs, true));
 
         return [
-            'id' => (int) $row->id, 'name' => $row->name, 'purchased_on' => $row->purchased_on,
+            'id' => (int) $row->id, 'model_id' => (int) $row->model_id, 'name' => $row->name, 'purchased_on' => $row->purchased_on,
             'quantity' => (int) $row->quantity, 'inputs' => $inputs, 'note' => $row->note,
             'version' => (int) $row->version, 'updated_at' => $row->updated_at,
             'calculation' => $calculator->calculate((int) $row->quantity, $inputs),

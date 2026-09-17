@@ -61,6 +61,8 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { fetchTapeBatches, createTapeBatch, updateTapeBatch, costError } from '@/crm/services/productionCostsApi';
 import { calculateTapeCost, tapeFields, tapePrecision, emptyTapeForm } from '@/crm/utils/tapeCosts';
 import { decimalInput } from '@/crm/utils/soleCosts';
+import { useCostModelApi } from '@/crm/composables/useCostModelApi';
+const api = useCostModelApi({ fetch: fetchTapeBatches, create: createTapeBatch, update: updateTapeBatch });
 
 const emit = defineEmits(['saving']);
 const purchaseFields = [{ key: 'length_m', label: 'Кількість стрічки в партії', unit: 'пог. м' }, { key: 'goods_uah', label: 'Викуп стрічки з комісією', unit: 'грн' }, { key: 'shipping_uah', label: 'Доставка всієї партії', unit: 'грн' }];
@@ -69,6 +71,7 @@ const batches = ref([]), page = ref(1), lastPage = ref(1), total = ref(0), ready
 const form = ref(null), selectedId = ref(null), version = ref(null), savedBatch = ref(null), baseline = ref(''), requestKey = ref('');
 const error = ref(''), formError = ref(''), notice = ref('');
 const dirty = computed(() => form.value !== null && JSON.stringify(form.value) !== baseline.value);
+defineExpose({ dirty });
 const preview = computed(() => form.value ? calculateTapeCost(form.value) : null);
 const pattern = field => `[0-9]+([.,][0-9]{1,${tapePrecision[field]}})?`;
 const money = value => value == null ? '—' : Number(value).toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -91,7 +94,7 @@ async function load(nextPage = 1) {
   if (loading.value) return;
   loading.value = true; error.value = '';
   try {
-    const { data } = await fetchTapeBatches(nextPage);
+    const { data } = await api.fetch(nextPage);
     batches.value = data.data; page.value = data.current_page; lastPage.value = data.last_page; total.value = data.total; ready.value = true;
     if (!form.value) { if (batches.value.length) applyBatch(batches.value[0]); else newBatch(); }
   } catch (err) { error.value = costError(err); }
@@ -105,7 +108,7 @@ async function save() {
     ...Object.fromEntries(tapeFields.map(field => [field, field === 'shipping_uah' && decimalInput(form.value[field]) === '' ? null : decimalInput(form.value[field])])),
     ...(selectedId.value ? { version: version.value } : { request_key: requestKey.value }) };
   try {
-    const { data } = selectedId.value ? await updateTapeBatch(selectedId.value, payload) : await createTapeBatch(payload);
+    const { data } = selectedId.value ? await api.update(selectedId.value, payload) : await api.create(payload);
     applyBatch(data); notice.value = 'Партію стрічки збережено. Інші матеріали й склад не змінені.';
     await load(1);
     if (error.value) notice.value = 'Партію збережено, але список не оновився. Натисніть «Оновити список».';

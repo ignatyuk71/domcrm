@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 import TapeCostPanel from './TapeCostPanel.vue';
-import ProductionCostPage from './ProductionCostPage.vue';
+import ProductionCostPage from './ProductionCostWorkspace.vue';
 import { fetchTapeBatches, createTapeBatch, updateTapeBatch, fetchCostBatches } from '@/crm/services/productionCostsApi';
 import { calculateTapeCost, tapeFields, tapePrecision } from '@/crm/utils/tapeCosts';
 

@@ -66,6 +66,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/api/analytics/sales', [SalesAnalyticsController::class, 'data'])->name('analytics.sales.data');
         Route::get('/analytics/export', [SalesAnalyticsController::class, 'export'])->name('analytics.sales.export');
         Route::get('/analytics/costs', [ProductionCostController::class, 'index'])->name('analytics.costs');
+        Route::get('/api/production-costs/models', [ProductionCostController::class, 'models']);
+        Route::post('/api/production-costs/models', [ProductionCostController::class, 'openModel']);
         Route::get('/api/production-costs/sole-batches', [ProductionCostController::class, 'data']);
         Route::post('/api/production-costs/sole-batches', [ProductionCostController::class, 'save']);
         Route::put('/api/production-costs/sole-batches/{batch}', [ProductionCostController::class, 'save'])->whereNumber('batch');

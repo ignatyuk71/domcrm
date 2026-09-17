@@ -108,6 +108,8 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { fetchFurBatches, createFurBatch, updateFurBatch, costError } from '@/crm/services/productionCostsApi';
 import { calculateFurCost, activeFurFields, emptyFurForm } from '@/crm/utils/furCosts';
 import { decimalInput } from '@/crm/utils/soleCosts';
+import { useCostModelApi } from '@/crm/composables/useCostModelApi';
+const api = useCostModelApi({ fetch: fetchFurBatches, create: createFurBatch, update: updateFurBatch });
 
 const emit = defineEmits(['saving']);
 const chinaPurchaseFields = [
@@ -122,6 +124,7 @@ const error = ref(''), formError = ref(''), notice = ref('');
 const isLocal = computed(() => form.value?.purchase_source === 'ukraine');
 const purchaseFields = computed(() => isLocal.value ? [{ key: 'goods_uah', label: 'Сплачено за всю партію хутра', unit: 'грн' }] : chinaPurchaseFields);
 const dirty = computed(() => form.value !== null && JSON.stringify(form.value) !== baseline.value);
+defineExpose({ dirty });
 const preview = computed(() => form.value ? calculateFurCost(form.value) : null);
 const money = value => value === null ? '—' : Number(value).toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const number = value => Number(value).toLocaleString('uk-UA', { maximumFractionDigits: 8 });
@@ -162,7 +165,7 @@ async function load(nextPage = 1) {
   if (loading.value) return;
   loading.value = true; error.value = '';
   try {
-    const { data } = await fetchFurBatches(nextPage);
+    const { data } = await api.fetch(nextPage);
     batches.value = data.data; page.value = data.current_page; lastPage.value = data.last_page; total.value = data.total; ready.value = true;
     if (!form.value) { if (batches.value.length) applyBatch(batches.value[0]); else newBatch(); }
   } catch (err) { error.value = costError(err); }
@@ -176,7 +179,7 @@ async function save() {
     ...Object.fromEntries(activeFurFields(form.value).map(field => [field, field === 'ukraine_shipping_uah' && decimalInput(form.value[field]) === '' ? null : decimalInput(form.value[field])])),
     ...(selectedId.value ? { version: version.value } : { request_key: requestKey.value }) };
   try {
-    const { data } = selectedId.value ? await updateFurBatch(selectedId.value, payload) : await createFurBatch(payload);
+    const { data } = selectedId.value ? await api.update(selectedId.value, payload) : await api.create(payload);
     applyBatch(data); notice.value = 'Партію хутра збережено. Інші матеріали й складські залишки не змінені.';
     await load(1);
     if (error.value) notice.value = 'Партію збережено, але список не оновився. Натисніть «Оновити список».';

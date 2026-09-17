@@ -66,6 +66,8 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { fetchLaminateCosts, createLaminateCost, updateLaminateCost, costError } from '@/crm/services/productionCostsApi';
 import { calculateLaminateCost, laminateFields, laminatePrecision, laminateShipping, emptyLaminateForm } from '@/crm/utils/laminateCosts';
 import { decimalInput } from '@/crm/utils/soleCosts';
+import { useCostModelApi } from '@/crm/composables/useCostModelApi';
+const api = useCostModelApi({ fetch: fetchLaminateCosts, create: createLaminateCost, update: updateLaminateCost });
 import LaminateCutLayout from './LaminateCutLayout.vue';
 
 const emit = defineEmits(['saving']);
@@ -81,6 +83,7 @@ const calculations = ref([]), page = ref(1), lastPage = ref(1), total = ref(0), 
 const form = ref(null), selectedId = ref(null), version = ref(null), savedCalculation = ref(null), baseline = ref(''), requestKey = ref('');
 const error = ref(''), formError = ref(''), notice = ref('');
 const dirty = computed(() => form.value !== null && JSON.stringify(form.value) !== baseline.value);
+defineExpose({ dirty });
 const preview = computed(() => form.value ? calculateLaminateCost(form.value) : null);
 const canCalculate = computed(() => preview.value?.insole_layout?.pairs > 0 && preview.value?.upper_layout?.pairs > 0);
 const missingShipping = computed(() => preview.value?.breakdown.filter(row => !row.shipping_included).map(row => row.label.toLocaleLowerCase('uk-UA')) || []);
@@ -107,7 +110,7 @@ async function load(nextPage = 1) {
   if (loading.value) return;
   loading.value = true; error.value = '';
   try {
-    const { data } = await fetchLaminateCosts(nextPage);
+    const { data } = await api.fetch(nextPage);
     calculations.value = data.data; page.value = data.current_page; lastPage.value = data.last_page; total.value = data.total; ready.value = true;
     if (!form.value) { if (calculations.value.length) applyCalculation(calculations.value[0]); else newCalculation(); }
   } catch (err) { error.value = costError(err); }
@@ -121,7 +124,7 @@ async function save() {
     ...Object.fromEntries(laminateFields.map(field => [field, laminateShipping.includes(field) && decimalInput(form.value[field]) === '' ? null : decimalInput(form.value[field])])),
     ...(selectedId.value ? { version: version.value } : { request_key: requestKey.value }) };
   try {
-    const { data } = selectedId.value ? await updateLaminateCost(selectedId.value, payload) : await createLaminateCost(payload);
+    const { data } = selectedId.value ? await api.update(selectedId.value, payload) : await api.create(payload);
     applyCalculation(data); notice.value = 'Розрахунок полотна збережено. Інші матеріали й залишки не змінені.';
     await load(1);
     if (error.value) notice.value = 'Розрахунок збережено, але список не оновився. Натисніть «Оновити список».';
