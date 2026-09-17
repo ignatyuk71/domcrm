@@ -11,13 +11,14 @@ const parts = [
   ['labor', 'labor', 'Робота', 'tools', 'unit_cost_uah'],
 ];
 
-export function summarizeCostParts(components = {}) {
-  const rows = parts.map(([key, component, label, icon, field]) => {
+export function summarizeCostParts(components = {}, profile = 'sewn') {
+  const selected = profile === 'outdoor' ? parts.filter(([, component]) => ['soles', 'fur', 'labor'].includes(component)) : parts;
+  const rows = selected.map(([key, component, label, icon, field]) => {
     const entry = components[component];
     const value = entry?.calculation?.[field];
     // null, порожній рядок і невалідне число не є безкоштовним матеріалом.
     const amount = typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
-    return { key, component, label, icon, amount, name: entry?.name || '', dirty: !!entry?.dirty };
+    return { key, component, label: profile === 'outdoor' && component === 'soles' ? 'Підошва + верх' : label, icon, amount, name: entry?.name || '', dirty: !!entry?.dirty };
   });
   const known = rows.filter(row => row.amount !== null);
   // Складаємо мікрогривні, а не округлені до копійок рядки.

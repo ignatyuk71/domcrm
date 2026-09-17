@@ -10,11 +10,13 @@ class SoleCostCalculator
         'other_costs_uah' => 2, 'cny_rate' => 4, 'usd_rate' => 4,
     ];
 
+    public const OPTIONAL_FIELDS = ['upper_shipping_usd' => 2];
+
     public function normalize(array $data): array
     {
         $inputs = [];
-        foreach (self::FIELDS as $field => $precision) {
-            $inputs[$field] = number_format((float) $data[$field], $precision, '.', '');
+        foreach (self::FIELDS + self::OPTIONAL_FIELDS as $field => $precision) {
+            $inputs[$field] = number_format((float) ($data[$field] ?? 0), $precision, '.', '');
         }
 
         return $inputs;
@@ -23,8 +25,8 @@ class SoleCostCalculator
     public function calculate(int $quantity, array $inputs): array
     {
         $units = [];
-        foreach (self::FIELDS as $field => $precision) {
-            $units[$field] = $this->minor($inputs[$field], $precision);
+        foreach (self::FIELDS + self::OPTIONAL_FIELDS as $field => $precision) {
+            $units[$field] = $this->minor($inputs[$field] ?? '0', $precision);
         }
         // Рахуємо в цілих копійках; комісія на товар і китайську доставку округлюється до феня.
         $commission = $this->divide(($units['goods_cny'] + $units['china_shipping_cny']) * $units['commission_percent'], 10000);
@@ -36,6 +38,9 @@ class SoleCostCalculator
             ['key' => 'ukraine_shipping', 'label' => 'Доставка по Україні', 'minor' => $units['ukraine_shipping_uah']],
             ['key' => 'other_costs', 'label' => 'Інші витрати', 'minor' => $units['other_costs_uah']],
         ];
+        if ($units['upper_shipping_usd'] > 0) {
+            $rows[] = ['key' => 'upper_shipping', 'label' => 'Окрема доставка верху в Україну', 'minor' => $this->divide($units['upper_shipping_usd'] * $units['usd_rate'], 10000)];
+        }
         $total = array_sum(array_column($rows, 'minor'));
 
         return [

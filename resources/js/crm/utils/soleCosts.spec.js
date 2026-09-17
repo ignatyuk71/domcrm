@@ -3,6 +3,14 @@ import { calculateSoleCost, emptyCostForm } from './soleCosts';
 
 const exampleInputs = { quantity: '100', goods_cny: '200', china_shipping_cny: '10', commission_percent: '10', international_shipping_usd: '100', ukraine_shipping_uah: '500', other_costs_uah: '0', cny_rate: '6', usd_rate: '40' };
 describe('Собівартість підошви', () => {
+  it('додає окрему доставку верху один раз і не змінює спільну доставку', () => {
+    expect(calculateSoleCost({ ...exampleInputs, upper_shipping_usd: '0' })).toEqual(calculateSoleCost(exampleInputs));
+    const result = calculateSoleCost({ ...exampleInputs, upper_shipping_usd: '20' });
+    expect(result.total_uah).toBe(6686);
+    expect(result.unit_cost_uah).toBe(66.86);
+    expect(result.breakdown.at(-1).key).toBe('upper_shipping');
+    for (const value of ['', '-1', '0.001', '1000001']) expect(calculateSoleCost({ ...exampleInputs, upper_shipping_usd: value })).toBeNull();
+  });
   it('відтворює погоджені суми без хутра та подвійного митного оформлення', () => {
     const result = calculateSoleCost(exampleInputs);
     expect(result.total_uah).toBe(5886);

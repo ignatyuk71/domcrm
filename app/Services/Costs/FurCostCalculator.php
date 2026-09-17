@@ -20,6 +20,8 @@ class FurCostCalculator
             ? array_combine(self::LOCAL_FIELDS, array_map(fn ($field) => number_format((float) ($data[$field] ?? 0), 2, '.', ''), self::LOCAL_FIELDS))
             : $this->purchaseCalculator->normalize(array_replace($data, ['ukraine_shipping_uah' => $data['ukraine_shipping_uah'] ?? 0]));
         $inputs['purchase_source'] = $source;
+        // Доставка готового верху належить комплекту, а не закупівлі хутра.
+        unset($inputs['upper_shipping_usd']);
         $inputs['ukraine_shipping_uah'] = ($data['ukraine_shipping_uah'] ?? null) === null ? null : $inputs['ukraine_shipping_uah'];
         foreach (self::GEOMETRY as $field => $precision) {
             $inputs[$field] = number_format((float) $data[$field], $precision, '.', '');

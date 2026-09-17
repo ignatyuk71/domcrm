@@ -28,6 +28,7 @@ class FurCostRequest extends SoleCostBatchRequest
     {
         $rules = array_replace(parent::rules(), [
             'quantity' => ['prohibited'],
+            'upper_shipping_usd' => ['prohibited'],
             'purchase_source' => ['sometimes', 'required', Rule::in(['china', 'ukraine'])],
             'goods_uah' => ['prohibited'],
             'layout' => ['prohibited'], 'total_pieces' => ['prohibited'], 'pairs' => ['prohibited'],

@@ -3,6 +3,7 @@ export const costFields = {
   international_shipping_usd: 2, ukraine_shipping_uah: 2, other_costs_uah: 2,
   cny_rate: 4, usd_rate: 4,
 };
+export const optionalCostFields = { upper_shipping_usd: 2 };
 export const decimalInput = value => String(value ?? '').trim().replace(',', '.');
 const divide = (numerator, denominator) => Math.floor((numerator + Math.floor(denominator / 2)) / denominator);
 const roundUnit = value => Math.round(value * 1000000) / 1000000;
@@ -14,8 +15,8 @@ const minor = (value, precision) => {
 export function calculateSoleCost(form) {
   if (!/^\d+$/.test(String(form.quantity)) || Number(form.quantity) < 1 || Number(form.quantity) > 10000000) return null;
   const quantity = Number(form.quantity), units = {};
-  for (const [field, precision] of Object.entries(costFields)) {
-    const value = decimalInput(form[field]);
+  for (const [field, precision] of Object.entries({ ...costFields, ...optionalCostFields })) {
+    const value = decimalInput(form[field] ?? (field in optionalCostFields ? '0' : ''));
     const max = field.endsWith('_rate') ? 1000 : field === 'commission_percent' ? 100 : 1000000;
     if (!new RegExp(`^\\d+(?:\\.\\d{1,${precision}})?$`).test(value) || Number(value) > max || (field.endsWith('_rate') && Number(value) < 0.0001)) return null;
     units[field] = minor(value, precision);
@@ -30,6 +31,7 @@ export function calculateSoleCost(form) {
     ['ukraine_shipping', 'Доставка по Україні', units.ukraine_shipping_uah],
     ['other_costs', 'Інші витрати', units.other_costs_uah],
   ];
+  if (units.upper_shipping_usd > 0) rows.push(['upper_shipping', 'Окрема доставка верху в Україну', divide(units.upper_shipping_usd * units.usd_rate, 10000)]);
   const total = rows.reduce((sum, row) => sum + row[2], 0);
   return {
     total_uah: total / 100, unit_cost_uah: roundUnit(total / 100 / quantity),
@@ -42,5 +44,5 @@ export function calculateSoleCost(form) {
 export const emptyCostForm = () => ({
   name: 'Нова партія підошви', purchased_on: '', quantity: '', note: '',
   goods_cny: '', china_shipping_cny: '0', commission_percent: '10', international_shipping_usd: '0',
-  ukraine_shipping_uah: '0', other_costs_uah: '0', cny_rate: '', usd_rate: '',
+  upper_shipping_usd: '0', ukraine_shipping_uah: '0', other_costs_uah: '0', cny_rate: '', usd_rate: '',
 });

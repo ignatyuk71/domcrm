@@ -21,10 +21,12 @@ class ProductionCostService
     {
         $this->calculator($component);
         $modelId = app(ProductionCostModels::class)->resolve($modelId);
+        $profile = app(ProductionCostModels::class)->profile($modelId);
+        abort_unless(in_array($component, app(ProductionCostModels::class)->components($profile), true), 404);
         $page = DB::table('production_cost_batches')->where('model_id', $modelId)->where('component', $component)->orderByDesc('id')->paginate(20);
 
         return [
-            'data' => array_map(fn ($row) => $this->present($row), $page->items()),
+            'data' => array_map(fn ($row) => $this->present($row, $profile), $page->items()),
             'current_page' => $page->currentPage(), 'last_page' => $page->lastPage(), 'total' => $page->total(),
         ];
     }
@@ -32,19 +34,23 @@ class ProductionCostService
     public function summary(?int $modelId = null): array
     {
         $modelId = app(ProductionCostModels::class)->resolve($modelId);
+        $profile = app(ProductionCostModels::class)->profile($modelId);
         // По одній останній створеній партії матеріалу: не додаємо всі закупівлі чи два види хутра.
         $latest = DB::table('production_cost_batches')->where('model_id', $modelId)
-            ->whereIn('component', ['soles', 'cardboard', 'foam', 'fur', 'laminate', 'tape'])
+            ->whereIn('component', app(ProductionCostModels::class)->components($profile))
             ->selectRaw('MAX(id)')->groupBy('component');
         $rows = DB::table('production_cost_batches')->where('model_id', $modelId)->whereIn('id', $latest)->get();
 
-        return ['model_id' => $modelId, 'components' => $rows->mapWithKeys(fn ($row) => [$row->component => $this->present($row)])->all()];
+        return ['model_id' => $modelId, 'cost_profile' => $profile, 'components' => $rows->mapWithKeys(fn ($row) => [$row->component => $this->present($row, $profile)])->all()];
     }
 
     public function save(array $data, ?int $userId, ?int $batchId = null, string $component = 'soles'): array
     {
         $calculator = $this->calculator($component);
         $modelId = app(ProductionCostModels::class)->resolve(isset($data['model_id']) ? (int) $data['model_id'] : null);
+        $profile = app(ProductionCostModels::class)->profile($modelId);
+        abort_unless(in_array($component, app(ProductionCostModels::class)->components($profile), true), 422, 'Ця складова не входить у виріб цієї категорії.');
+        abort_if($component === 'soles' && $profile !== 'outdoor' && (float) ($data['upper_shipping_usd'] ?? 0) !== 0.0, 422, 'Окрема доставка верху доступна лише для вуличних капців.');
         $inputs = $calculator->normalize($data);
         $quantity = in_array($component, ['foam', 'fur', 'laminate', 'tape'], true) ? 1 : (int) $data['quantity'];
         $calculation = $calculator->calculate($quantity, $inputs);
@@ -89,7 +95,7 @@ class ProductionCostService
             $id = $this->sameRetry($existing, $values, $component);
         }
 
-        return $this->present(DB::table('production_cost_batches')->where('id', $id)->first());
+        return $this->present(DB::table('production_cost_batches')->where('id', $id)->first(), $profile);
     }
 
     private function sameRetry(object $existing, array $values, string $component): int
@@ -108,16 +114,20 @@ class ProductionCostService
         return (int) $existing->id;
     }
 
-    private function present(object $row): array
+    private function present(object $row, string $profile = 'sewn'): array
     {
         $calculator = $this->calculator($row->component);
         $inputs = $calculator->normalize(json_decode($row->inputs, true));
+        $calculation = $calculator->calculate((int) $row->quantity, $inputs);
+        if ($profile === 'outdoor' && $row->component === 'soles') {
+            $calculation['breakdown'][0]['label'] = 'Підошва + верх';
+        }
 
         return [
             'id' => (int) $row->id, 'model_id' => (int) $row->model_id, 'name' => $row->name, 'purchased_on' => $row->purchased_on,
             'quantity' => (int) $row->quantity, 'inputs' => $inputs, 'note' => $row->note,
             'version' => (int) $row->version, 'updated_at' => $row->updated_at,
-            'calculation' => $calculator->calculate((int) $row->quantity, $inputs),
+            'calculation' => $calculation,
         ];
     }
 }

@@ -22,6 +22,15 @@ beforeEach(() => {
 });
 afterEach(() => { wrapper?.unmount(); vi.restoreAllMocks(); });
 describe('Грід категорій виробництва', () => {
+  it('передає вуличний профіль у вкладки й підсумок без зайвих складових', async () => {
+    const data = catalog(); data.models[0].cost_profile = 'outdoor';
+    fetchCostModels.mockResolvedValue({ data });
+    await open(true); await wrapper.get('[data-testid="model-11"]').trigger('click'); await flushPromises();
+    expect(wrapper.findAll('.cost-components button').map(node => node.text())).toEqual(['Підошва + верх', 'Хутро', 'Робота']);
+    await wrapper.get('.pair-summary [aria-controls]').trigger('click');
+    expect(wrapper.findAll('.pair-summary-row')).toHaveLength(3);
+    expect(wrapper.get('.pair-summary').text()).not.toContain('ниток');
+  });
   it('спочатку показує грід, не відкриває форми і нічого не створює', async () => {
     await open(); expect(wrapper.findAll('.category-card')).toHaveLength(2);
     expect(wrapper.text()).toContain('Матеріалів із даними: 6');

@@ -7,11 +7,11 @@
         <h1>{{ activeModel ? activeModel.name : 'Собівартість капців' }}</h1>
         <p>{{ activeModel ? 'Окремі розрахунки матеріалів для цієї категорії.' : 'Оберіть категорію — рахуйте матеріали, розкрій і витрати на одну пару.' }}</p>
       </div>
-      <CostSummaryCard v-if="activeModel" :key="activeModel.id" :model-id="activeModel.id" :snapshots="summaryParts" :busy="workspace?.isSaving" @select-part="workspace?.openComponent($event)" />
+      <CostSummaryCard v-if="activeModel" :key="activeModel.id" :model-id="activeModel.id" :profile="activeModel.cost_profile" :snapshots="summaryParts" :busy="workspace?.isSaving" @select-part="workspace?.openComponent($event)" />
       <button v-if="!activeModel" type="button" class="btn catalog-refresh" :disabled="loading || opening !== null" @click="load"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Оновити</button>
     </header>
 
-    <ProductionCostWorkspace v-if="activeModel" :key="activeModel.id" ref="workspace" :model-id="activeModel.id" />
+    <ProductionCostWorkspace v-if="activeModel" :key="activeModel.id" ref="workspace" :model-id="activeModel.id" :profile="activeModel.cost_profile" />
     <template v-else>
       <div v-if="error" class="alert alert-danger" role="alert">{{ error }}</div>
       <p v-if="loading && !ready" class="catalog-empty" role="status">Завантажуємо категорії…</p>

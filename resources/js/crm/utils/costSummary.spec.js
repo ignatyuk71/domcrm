@@ -3,6 +3,12 @@ import { summarizeCostParts } from './costSummary';
 
 const entry = amount => ({ name: 'Синтетична партія', calculation: { unit_cost_uah: amount, total_uah: 99999 } });
 describe('Підсумок однієї пари', () => {
+  it('для вуличних капців враховує лише комплект і хутро, роботу залишає невідомою', () => {
+    const result = summarizeCostParts({ soles: entry(30), fur: entry(15), cardboard: entry(999), tape: entry(888), laminate: { calculation: { insole_pair_cost_uah: 777 } } }, 'outdoor');
+    expect(result.total).toBe(45); expect(result.known).toBe(2);
+    expect(result.rows.map(row => row.label)).toEqual(['Підошва + верх', 'Хутро', 'Робота']);
+    expect(result.missing.map(row => row.key)).toEqual(['labor']);
+  });
   it('додає по одній ціні матеріалів та дві різні деталі полотна без подвійного поролону', () => {
     const result = summarizeCostParts({ soles: entry(30), cardboard: entry(4), foam: entry(2), fur: entry(15), tape: entry(6), laminate: { calculation: { unit_cost_uah: null, total_uah: 300, insole_pair_cost_uah: 9, upper_pair_cost_uah: 3 } } });
     expect(result.total).toBe(69); expect(result.known).toBe(7);

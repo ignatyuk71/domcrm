@@ -7,7 +7,7 @@
     </nav>
 
     <template v-if="activeComponent === 'soles'">
-      <div class="cost-section-heading"><div><h2>Китайська підошва</h2><p>Розрахунок партії · суми змінюєте ви, ціну за пару рахуємо автоматично.</p></div><button class="btn btn-primary" :disabled="!ready || loading || saving" @click="newBatch"><i class="bi bi-plus-lg" aria-hidden="true"></i> Нова партія</button></div>
+      <div class="cost-section-heading"><div><h2>{{ outdoor ? 'Підошва + верх' : 'Китайська підошва' }}</h2><p>{{ outdoor ? 'Один комплект на пару: підошва та верх. Хутро рахуємо окремо.' : 'Розрахунок партії · суми змінюєте ви, ціну за пару рахуємо автоматично.' }}</p></div><button class="btn btn-primary" :disabled="!ready || loading || saving" @click="newBatch"><i class="bi bi-plus-lg" aria-hidden="true"></i> Нова партія</button></div>
       <div v-if="error" class="alert alert-danger" role="alert">{{ error }} <button class="cost-link" :disabled="loading" @click="load(page)">Оновити список</button></div>
       <div v-if="notice" class="alert alert-success" role="status">{{ notice }}</div>
       <p v-if="loading && !form" class="cost-empty" role="status">Завантажуємо розрахунок…</p>
@@ -15,11 +15,11 @@
       <div v-if="form" class="cost-workspace">
         <form class="cost-card cost-form" @submit.prevent="save">
           <fieldset :disabled="saving">
-            <legend>{{ selectedId ? 'Дані партії' : 'Нова партія підошви' }}<span class="cost-state" :class="{ pending: dirty }">{{ dirty ? 'Не збережено' : 'Збережено' }}</span></legend>
+            <legend>{{ selectedId ? 'Дані партії' : outdoor ? 'Нова партія підошви та верху' : 'Нова партія підошви' }}<span class="cost-state" :class="{ pending: dirty }">{{ dirty ? 'Не збережено' : 'Збережено' }}</span></legend>
             <div class="cost-fields cost-fields-meta">
               <label class="cost-name">Назва партії<input v-model="form.name" name="name" class="form-control" maxlength="160" required /></label>
               <label>Кількість пар<input v-model="form.quantity" name="quantity" type="number" min="1" max="10000000" step="1" class="form-control" required /></label>
-              <label>Дата рахунку <small>· необов’язково</small><input v-model="form.purchased_on" name="purchased_on" type="date" class="form-control" /></label>
+              <label>{{ outdoor ? 'Дата партії' : 'Дата рахунку' }} <small>· необов’язково</small><input v-model="form.purchased_on" name="purchased_on" type="date" class="form-control" /></label>
             </div>
             <section v-for="group in groups" :key="group.title" class="cost-form-section">
               <h3>{{ group.title }}</h3>
@@ -38,13 +38,13 @@
         </form>
 
         <aside class="cost-result">
-          <div class="cost-unit"><span>Собівартість підошви · 1 пара</span><strong data-testid="unit-cost">{{ preview ? money(preview.unit_cost_uah) : '—' }} <small>грн</small></strong><p>{{ preview ? `${money(preview.total_uah)} грн ÷ ${count(form.quantity)} пар` : 'Вкажіть кількість, суми та обидва курси валют.' }}</p><span v-if="dirty" class="cost-preview-label">Попередній розрахунок · ще не збережено</span></div>
+          <div class="cost-unit"><span>{{ outdoor ? 'Підошва + верх · 1 пара' : 'Собівартість підошви · 1 пара' }}</span><strong data-testid="unit-cost">{{ preview ? money(preview.unit_cost_uah) : '—' }} <small>грн</small></strong><p>{{ preview ? `${money(preview.total_uah)} грн ÷ ${count(form.quantity)} пар` : 'Вкажіть кількість, суми та обидва курси валют.' }}</p><span v-if="dirty" class="cost-preview-label">Попередній розрахунок · ще не збережено</span></div>
           <div v-if="preview" class="cost-card cost-breakdown">
             <h3>Що входить у вартість</h3>
             <div class="cost-breakdown-scroll"><table><caption class="visually-hidden">Витрати на партію та на одну пару підошви у гривнях</caption><thead><tr><th scope="col">Витрата</th><th scope="col">На партію</th><th scope="col">На пару</th></tr></thead><tbody><tr v-for="row in preview.breakdown" :key="row.key"><th scope="row">{{ row.label }}</th><td>{{ money(row.total_uah) }}</td><td>{{ money(row.unit_uah) }}</td></tr></tbody><tfoot><tr><th scope="row">Разом, грн</th><td>{{ money(preview.total_uah) }}</td><td>{{ money(preview.unit_cost_uah) }}</td></tr></tfoot></table></div>
             <p>Ціна за пару — загальні витрати, поділені на кількість пар. Округлення рядків показане до копійок.</p>
           </div>
-          <p class="cost-scope"><i class="bi bi-info-circle" aria-hidden="true"></i> Це лише підошва, не готові капці. Хутро й решту складових порахуємо окремо. Збереження тут не додає пар до складського залишку.</p>
+          <p class="cost-scope"><i class="bi bi-info-circle" aria-hidden="true"></i> {{ outdoor ? 'Це комплект підошви та верху без хутра. Хутро пришивається до верху, після чого верх кріпиться до підошви. Кількість — пари повних комплектів, не сума окремих деталей.' : 'Це лише підошва, не готові капці. Хутро й решту складових порахуємо окремо.' }} Збереження тут не додає пар до складського залишку.</p>
         </aside>
       </div>
 
@@ -83,15 +83,16 @@ import FurCostPanel from './FurCostPanel.vue';
 import LaminateCostPanel from './LaminateCostPanel.vue';
 import TapeCostPanel from './TapeCostPanel.vue';
 import { fetchCostBatches, createCostBatch, updateCostBatch, costError } from '@/crm/services/productionCostsApi';
-import { calculateSoleCost, costFields, decimalInput, emptyCostForm } from '@/crm/utils/soleCosts';
+import { calculateSoleCost, costFields, optionalCostFields, decimalInput, emptyCostForm } from '@/crm/utils/soleCosts';
 import { costModelKey, scopedCostApi } from '@/crm/composables/useCostModelApi';
 import { useCostSummaryPart } from '@/crm/composables/useCostSummaryPart';
 
-const props = defineProps({ modelId: { type: Number, default: undefined } });
+const props = defineProps({ modelId: { type: Number, default: undefined }, profile: { type: String, default: 'sewn' } });
+const outdoor = computed(() => props.profile === 'outdoor');
 provide(costModelKey, props.modelId);
 const api = scopedCostApi(props.modelId, { fetch: fetchCostBatches, create: createCostBatch, update: updateCostBatch });
 
-const components = [
+const allComponents = [
   { key: 'soles', label: 'Підошва', icon: 'box-seam' },
   { key: 'laminate', label: 'Плюш + поролон', icon: 'layers' },
   { key: 'cardboard', label: 'Картон', icon: 'file-earmark' },
@@ -101,7 +102,8 @@ const components = [
   { key: 'thread', label: 'Нитки', icon: 'bezier', description: 'Нитки для зшивання деталей, окантування та пришивання до підошви. Потрібна фактична або погоджена норма витрати на пару.' },
   { key: 'labor', label: 'Робота', icon: 'tools' },
 ];
-const groups = [
+const components = computed(() => allComponents.filter(item => !outdoor.value || ['soles', 'fur', 'labor'].includes(item.key)).map(item => item.key === 'soles' && outdoor.value ? { ...item, label: 'Підошва + верх' } : item));
+const baseGroups = [
   { title: 'Закупівля в Китаї', hint: 'Указуйте лише підошву. Комісія рахується від суми товару та доставки по Китаю.', fields: [
     { key: 'goods_cny', label: 'Підошва — сума за всю партію', unit: '¥' },
     { key: 'china_shipping_cny', label: 'Доставка по Китаю', unit: '¥' },
@@ -117,6 +119,15 @@ const groups = [
     { key: 'usd_rate', label: 'Курс долара', unit: 'грн / $', rate: true, placeholder: 'Наприклад, 45' },
   ] },
 ];
+const groups = computed(() => baseGroups.map(group => {
+  if (!outdoor.value) return group;
+  if (group.title === 'Закупівля в Китаї') return { ...group, hint: 'Сума викупу підошви та верху разом. Комісія рахується один раз від товару й доставки по Китаю.', fields: group.fields.map(field => field.key === 'goods_cny' ? { ...field, label: 'Підошва + верх — сума за всю партію' } : field) };
+  if (group.title === 'Доставка та інші витрати') return { ...group, hint: 'Якщо доставка спільна — внесіть її в перше поле, а окрему доставку верху залиште 0. Якщо рахунки окремі — перше поле для підошви, друге для верху. Не дублюйте вже включені суми.', fields: [
+    { ...group.fields[0], label: 'Спільна доставка / доставка підошви в Україну' },
+    { key: 'upper_shipping_usd', label: 'Окрема доставка верху в Україну', unit: '$' }, ...group.fields.slice(1),
+  ] };
+  return group;
+}));
 const activeComponent = ref('soles');
 const cardboardOpened = ref(false), cardboardSaving = ref(false);
 const foamOpened = ref(false), foamSaving = ref(false);
@@ -130,7 +141,7 @@ watch(activeComponent, value => {
   if (value === 'laminate') laminateOpened.value = true;
   if (value === 'tape') tapeOpened.value = true;
 });
-const component = computed(() => components.find(item => item.key === activeComponent.value));
+const component = computed(() => components.value.find(item => item.key === activeComponent.value));
 const batches = ref([]), page = ref(1), lastPage = ref(1), total = ref(0), ready = ref(false), loading = ref(false), saving = ref(false);
 const form = ref(null), selectedId = ref(null), version = ref(null), savedBatch = ref(null), baseline = ref(''), requestKey = ref('');
 const error = ref(''), formError = ref(''), notice = ref('');
@@ -140,12 +151,16 @@ const hasUnsavedChanges = computed(() => dirty.value || [cardboardPanel, foamPan
 const isSaving = computed(() => saving.value || cardboardSaving.value || foamSaving.value || furSaving.value || laminateSaving.value || tapeSaving.value);
 const navigation = ref(null);
 function openComponent(key) {
-  if (isSaving.value || !components.some(item => item.key === key)) return;
+  if (isSaving.value || !components.value.some(item => item.key === key)) return;
   activeComponent.value = key;
   nextTick(() => navigation.value?.querySelector('[aria-pressed="true"]')?.focus());
 }
 defineExpose({ hasUnsavedChanges, isSaving, openComponent });
-const preview = computed(() => form.value ? calculateSoleCost(form.value) : null);
+const preview = computed(() => {
+  const result = form.value ? calculateSoleCost(form.value) : null;
+  if (result && outdoor.value) result.breakdown[0].label = 'Підошва + верх';
+  return result;
+});
 useCostSummaryPart('soles', { form, selectedId, preview, dirty }, props.modelId);
 const money = value => Number(decimalInput(value)).toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const count = value => Number(value).toLocaleString('uk-UA');
@@ -153,7 +168,7 @@ const date = value => value.split('-').reverse().join('.');
 
 function applyBatch(batch) {
   selectedId.value = batch.id; version.value = batch.version; savedBatch.value = batch;
-  form.value = { name: batch.name, purchased_on: batch.purchased_on || '', quantity: String(batch.quantity), note: batch.note || '', ...batch.inputs };
+  form.value = { name: batch.name, purchased_on: batch.purchased_on || '', quantity: String(batch.quantity), note: batch.note || '', upper_shipping_usd: '0', ...batch.inputs };
   baseline.value = JSON.stringify(form.value); requestKey.value = ''; formError.value = '';
 }
 function canDiscard() {
@@ -166,6 +181,7 @@ function chooseBatch(batch) {
 function newBatch() {
   if (!canDiscard()) return;
   form.value = emptyCostForm(); selectedId.value = null; version.value = null; baseline.value = '';
+  if (outdoor.value) form.value.name = 'Нова партія підошви та верху';
   requestKey.value = crypto.randomUUID(); formError.value = ''; notice.value = '';
 }
 async function load(nextPage = 1) {
@@ -186,7 +202,7 @@ async function save() {
   if (!preview.value || !form.value.name.trim()) { formError.value = 'Укажіть назву, кількість пар, коректні суми та курси валют.'; return; }
   saving.value = true; formError.value = ''; notice.value = '';
   const payload = { name: form.value.name.trim(), purchased_on: form.value.purchased_on || null, quantity: Number(form.value.quantity), note: form.value.note.trim() || null,
-    ...Object.fromEntries(Object.keys(costFields).map(field => [field, decimalInput(form.value[field])])),
+    ...Object.fromEntries(Object.keys({ ...costFields, ...(outdoor.value ? optionalCostFields : {}) }).map(field => [field, decimalInput(form.value[field])])),
     ...(selectedId.value ? { version: version.value } : { request_key: requestKey.value }) };
   try {
     const { data } = selectedId.value ? await api.update(selectedId.value, payload) : await api.create(payload);

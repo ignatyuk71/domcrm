@@ -26,6 +26,8 @@ class ProductionCostModelsMigrationTest extends TestCase
     public function test_existing_private_values_and_revisions_are_unchanged_when_assigned_to_halluci(): void
     {
         $migration = require database_path('migrations/2026_09_17_120000_add_models_to_production_costs.php');
+        $profiles = require database_path('migrations/2026_09_17_150000_add_cost_profiles.php');
+        $profiles->down();
         $migration->down();
         $category = Category::create(['name' => 'Домашні капці Halluci (хутряні)']);
         $values = ['component' => 'cardboard', 'name' => 'Синтетична стара партія', 'purchased_on' => null, 'quantity' => 20,
@@ -36,6 +38,7 @@ class ProductionCostModelsMigrationTest extends TestCase
         $before = (array) DB::table('production_cost_batches')->first();
         $audit = DB::table('production_cost_batch_revisions')->get()->toJson();
         $migration->up();
+        $profiles->up();
         $after = (array) DB::table('production_cost_batches')->first();
         $modelId = $after['model_id'];
         unset($after['model_id']);
@@ -43,5 +46,18 @@ class ProductionCostModelsMigrationTest extends TestCase
         $this->assertSame($audit, DB::table('production_cost_batch_revisions')->get()->toJson());
         $this->assertDatabaseHas('production_cost_models', ['id' => $modelId, 'category_id' => $category->id]);
         $this->assertCount(1, app(ProductionCostService::class)->listing('cardboard', $modelId)['data']);
+    }
+
+    public function test_profiles_backfill_only_the_outdoor_category_without_changing_costs(): void
+    {
+        $migration = require database_path('migrations/2026_09_17_150000_add_cost_profiles.php');
+        $migration->down();
+        $category = Category::create(['name' => 'Капці для вулиці (хутряні)']);
+        $id = DB::table('production_cost_models')->insertGetId(['category_id' => $category->id, 'name' => $category->name, 'created_at' => now(), 'updated_at' => now()]);
+        $before = DB::table('production_cost_batches')->orderBy('id')->get()->toJson();
+        $migration->up();
+        $this->assertDatabaseHas('production_cost_models', ['id' => $id, 'cost_profile' => 'outdoor']);
+        $this->assertSame(0, DB::table('production_cost_models')->where('id', '!=', $id)->where('cost_profile', '!=', 'sewn')->count());
+        $this->assertSame($before, DB::table('production_cost_batches')->orderBy('id')->get()->toJson());
     }
 }

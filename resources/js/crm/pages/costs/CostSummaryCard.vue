@@ -3,7 +3,7 @@
     <div class="pair-summary-top"><span class="pair-summary-icon"><i class="bi bi-calculator" aria-hidden="true"></i></span><span>Собівартість 1 пари</span><span class="pair-summary-badge">{{ result.dirty ? 'Чернетка' : 'Неповна' }}</span></div>
     <div class="pair-summary-main" aria-live="polite" aria-atomic="true"><strong data-testid="pair-total">{{ loading || error ? '—' : money(result.total) }}</strong><span>грн / пара</span></div>
     <div class="pair-summary-bottom"><span>{{ loading ? 'Підтягуємо матеріали…' : error ? 'Не вдалося оновити суму' : result.known ? `Враховано ${result.known} із ${result.rows.length} складових` : 'Додайте перший розрахунок' }}</span><button v-if="error" type="button" @click="load">Повторити <i class="bi bi-arrow-clockwise" aria-hidden="true"></i></button><button v-else ref="toggle" type="button" :disabled="loading" :aria-expanded="expanded" :aria-controls="panelId" @click="expanded = !expanded">Деталі <i :class="`bi bi-chevron-${expanded ? 'up' : 'down'}`" aria-hidden="true"></i></button></div>
-    <p class="pair-summary-warning">{{ result.dirty ? 'Попередня сума · є незбережені зміни' : 'Матеріали · без ниток і роботи' }}</p>
+    <p class="pair-summary-warning">{{ result.dirty ? 'Попередня сума · є незбережені зміни' : profile === 'outdoor' ? 'Матеріали · без роботи' : 'Матеріали · без ниток і роботи' }}</p>
 
     <section v-if="expanded && !loading && !error" :id="panelId" class="pair-summary-details" aria-label="Складові собівартості">
       <header><div><h2>Що входить у суму</h2><p>На одну пару капців</p></div><button type="button" class="pair-close" aria-label="Закрити деталі" @click="close(true)"><i class="bi bi-x-lg" aria-hidden="true"></i></button></header>
@@ -22,11 +22,11 @@ import { computed, onMounted, onUnmounted, ref, useId } from 'vue';
 import { fetchCostSummary } from '@/crm/services/productionCostsApi';
 import { summarizeCostParts } from '@/crm/utils/costSummary';
 
-const props = defineProps({ modelId: { type: Number, required: true }, snapshots: { type: Object, default: () => ({}) }, busy: Boolean });
+const props = defineProps({ modelId: { type: Number, required: true }, profile: { type: String, default: 'sewn' }, snapshots: { type: Object, default: () => ({}) }, busy: Boolean });
 const emit = defineEmits(['select-part']);
 const saved = ref({}), loading = ref(true), error = ref(false), expanded = ref(false), root = ref(null), toggle = ref(null);
 const panelId = `cost-summary-${useId()}`;
-const result = computed(() => summarizeCostParts({ ...saved.value, ...props.snapshots }));
+const result = computed(() => summarizeCostParts({ ...saved.value, ...props.snapshots }, props.profile));
 const money = value => value === null ? '—' : value.toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 let disposed = false;
 async function load() {

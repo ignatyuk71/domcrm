@@ -8,6 +8,16 @@ use Illuminate\Support\Facades\DB;
 
 class ProductionCostModels
 {
+    public function profile(int $modelId): string
+    {
+        return DB::table('production_cost_models')->where('id', $modelId)->first()?->cost_profile ?? 'sewn';
+    }
+
+    public function components(string $profile): array
+    {
+        return $profile === 'outdoor' ? ['soles', 'fur'] : ['soles', 'cardboard', 'foam', 'fur', 'laminate', 'tape'];
+    }
+
     public function resolve(?int $modelId = null): int
     {
         $id = $modelId ?? DB::table('production_cost_models')->where('legacy_key', 'halluci-fur')->value('id');
@@ -28,7 +38,7 @@ class ProductionCostModels
         foreach ($models as $model) {
             $category = $categories->firstWhere('id', $model->category_id);
             $cards[] = ['id' => (int) $model->id, 'category_id' => $model->category_id, 'name' => $category?->name ?? $model->name,
-                'photo_url' => $photos->get($model->category_id)?->main_photo_url, 'is_default' => $model->legacy_key === 'halluci-fur',
+                'photo_url' => $photos->get($model->category_id)?->main_photo_url, 'is_default' => $model->legacy_key === 'halluci-fur', 'cost_profile' => $model->cost_profile ?? 'sewn',
                 'records_count' => (int) ($totals->get($model->id)?->records_count ?? 0), 'materials_count' => (int) ($totals->get($model->id)?->materials_count ?? 0)];
         }
         $available = [];
@@ -60,10 +70,11 @@ class ProductionCostModels
                 return $legacy->id;
             }
 
-            return DB::table('production_cost_models')->insertGetId(['category_id' => $categoryId, 'name' => $category->name, 'created_at' => now(), 'updated_at' => now()]);
+            return DB::table('production_cost_models')->insertGetId(['category_id' => $categoryId, 'name' => $category->name,
+                'cost_profile' => $category->name === 'Капці для вулиці (хутряні)' ? 'outdoor' : 'sewn', 'created_at' => now(), 'updated_at' => now()]);
         });
         $model = DB::table('production_cost_models')->where('id', $id)->first();
 
-        return ['id' => (int) $id, 'category_id' => $categoryId, 'name' => Category::find($categoryId)?->name ?? $model->name];
+        return ['id' => (int) $id, 'category_id' => $categoryId, 'name' => Category::find($categoryId)?->name ?? $model->name, 'cost_profile' => $model->cost_profile ?? 'sewn'];
     }
 }

@@ -164,4 +164,40 @@ class ProductionCostModelsTest extends TestCase
         $this->getJson('/api/production-costs/summary')->assertOk()->assertJsonCount(0, 'components');
         $this->assertDatabaseCount('production_cost_batches', 0);
     }
+
+    public function test_outdoor_profile_has_only_base_and_fur_and_survives_category_rename(): void
+    {
+        $this->owner();
+        $category = $this->category('Капці для вулиці (хутряні)');
+        $id = $this->postJson(self::URL, ['category_id' => $category->id])->assertOk()->assertJsonPath('cost_profile', 'outdoor')->json('id');
+        $payload = $this->samples()['sole-batches'] + ['name' => 'Тестовий комплект', 'model_id' => $id, 'upper_shipping_usd' => 20, 'request_key' => (string) Str::uuid()];
+        $row = $this->postJson('/api/production-costs/sole-batches', $payload)->assertCreated()
+            ->assertJsonPath('inputs.upper_shipping_usd', '20.00')->assertJsonPath('calculation.total_uah', 1400)
+            ->assertJsonPath('calculation.breakdown.0.label', 'Підошва + верх')->json();
+        $this->postJson('/api/production-costs/sole-batches', $payload)->assertCreated()->assertJsonPath('id', $row['id']);
+        $this->getJson('/api/production-costs/summary?model_id='.$id)->assertOk()->assertJsonPath('cost_profile', 'outdoor')->assertJsonCount(1, 'components');
+        foreach (['cardboard-batches', 'foam-calculations', 'laminate-calculations', 'tape-batches'] as $path) {
+            $this->getJson('/api/production-costs/'.$path.'?model_id='.$id)->assertNotFound();
+            $this->postJson('/api/production-costs/'.$path, $this->samples()[$path] + ['name' => 'Зайвий матеріал', 'model_id' => $id, 'request_key' => (string) Str::uuid()])->assertUnprocessable();
+        }
+        foreach ([-1, '', null, '1.001', '1000001'] as $invalid) {
+            $this->postJson('/api/production-costs/sole-batches', array_replace($payload, ['request_key' => (string) Str::uuid(), 'upper_shipping_usd' => $invalid]))->assertUnprocessable();
+        }
+        $category->update(['name' => 'Перейменована категорія']);
+        $this->postJson(self::URL, ['category_id' => $category->id])->assertOk()->assertJsonPath('cost_profile', 'outdoor');
+        $this->assertDatabaseCount('production_cost_batches', 1);
+        $this->assertDatabaseCount('sole_inventory_batches', 0);
+    }
+
+    public function test_profile_summary_ignores_old_inapplicable_materials_without_deleting_them(): void
+    {
+        $this->owner();
+        $id = app(ProductionCostModels::class)->openCategory($this->category()->id)['id'];
+        $this->postJson('/api/production-costs/cardboard-batches', $this->samples()['cardboard-batches'] + ['name' => 'Попередній розрахунок', 'model_id' => $id, 'request_key' => (string) Str::uuid()])->assertCreated();
+        DB::table('production_cost_models')->where('id', $id)->update(['cost_profile' => 'outdoor']);
+        $this->getJson('/api/production-costs/summary?model_id='.$id)->assertOk()->assertJsonCount(0, 'components');
+        $this->assertDatabaseCount('production_cost_batches', 1);
+        $this->assertDatabaseCount('production_cost_batch_revisions', 1);
+        $this->postJson('/api/production-costs/sole-batches', $this->samples()['sole-batches'] + ['name' => 'Чужа доставка', 'upper_shipping_usd' => 10, 'request_key' => (string) Str::uuid()])->assertUnprocessable();
+    }
 }

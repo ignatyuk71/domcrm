@@ -25,6 +25,17 @@ beforeEach(() => {
 afterEach(() => { wrapper?.unmount(); vi.restoreAllMocks(); });
 
 describe('Калькулятор виробництва', () => {
+  it('вуличний профіль показує три вкладки та зберігає доставку верху окремо', async () => {
+    wrapper = mount(ProductionCostPage, { props: { profile: 'outdoor' } }); await flushPromises();
+    expect(wrapper.findAll('.cost-components button').map(node => node.text())).toEqual(['Підошва + верх', 'Хутро', 'Робота']);
+    expect(wrapper.get('[name="upper_shipping_usd"]').element.value).toBe('0');
+    await wrapper.get('[name="upper_shipping_usd"]').setValue('20');
+    expect(wrapper.get('[data-testid="unit-cost"]').text()).toContain('66,86');
+    await wrapper.get('form').trigger('submit'); await flushPromises();
+    expect(updateCostBatch).toHaveBeenCalledWith(1, expect.objectContaining({ upper_shipping_usd: '20' }));
+    wrapper.vm.openComponent('cardboard'); await flushPromises();
+    expect(wrapper.get('.cost-components [aria-pressed="true"]').text()).toBe('Підошва + верх');
+  });
   it('показує підтверджені дані прямо в полях, без записів під час відкриття', async () => {
     await open();
     expect(wrapper.get('[name="quantity"]').element.value).toBe('100');
