@@ -37,7 +37,7 @@
     ]
   },
   "resources/js/crm/index.js": {
-    "file": "assets/index-BD26WQqe.js",
+    "file": "assets/index-wq4KRZRa.js",
     "name": "index",
     "src": "resources/js/crm/index.js",
     "isEntry": true,
@@ -55,7 +55,7 @@
     ]
   },
   "resources/js/crm/pages/analytics/SalesAnalyticsPage.vue": {
-    "file": "assets/SalesAnalyticsPage-CBUAzQxr.js",
+    "file": "assets/SalesAnalyticsPage-Qa3j4AuH.js",
     "name": "SalesAnalyticsPage",
     "src": "resources/js/crm/pages/analytics/SalesAnalyticsPage.vue",
     "isDynamicEntry": true,
@@ -68,7 +68,7 @@
     ]
   },
   "resources/js/crm/pages/costs/ProductionCostPage.vue": {
-    "file": "assets/ProductionCostPage-BMkOOXI0.js",
+    "file": "assets/ProductionCostPage-C9Yjy1T5.js",
     "name": "ProductionCostPage",
     "src": "resources/js/crm/pages/costs/ProductionCostPage.vue",
     "isDynamicEntry": true,
@@ -77,11 +77,11 @@
       "_index-B9ygI19o.js"
     ],
     "css": [
-      "assets/ProductionCostPage-DNKdFZVT.css"
+      "assets/ProductionCostPage-at0rOmlU.css"
     ]
   },
   "resources/js/crm/pages/inventory/SoleInventoryPage.vue": {
-    "file": "assets/SoleInventoryPage-BB7L5DVF.js",
+    "file": "assets/SoleInventoryPage-CfLNaqLi.js",
     "name": "SoleInventoryPage",
     "src": "resources/js/crm/pages/inventory/SoleInventoryPage.vue",
     "isDynamicEntry": true,
@@ -94,7 +94,7 @@
     ]
   },
   "resources/js/crm/pages/settings/SettingsTelegramPage.vue": {
-    "file": "assets/SettingsTelegramPage-BCzlOiRF.js",
+    "file": "assets/SettingsTelegramPage-CyPzvxOr.js",
     "name": "SettingsTelegramPage",
     "src": "resources/js/crm/pages/settings/SettingsTelegramPage.vue",
     "isDynamicEntry": true,

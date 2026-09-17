@@ -30,6 +30,7 @@ describe('Форма картону', () => {
     await open();
     const svg = () => wrapper.get('[data-testid="cardboard-layout"] svg');
     expect(svg().findAll('polygon')).toHaveLength(38);
+    expect(svg().findAll('[data-testid="cardboard-insole"]')).toHaveLength(38);
     expect(svg().findAll('[data-rotated="true"]')).toHaveLength(6);
     expect(svg().attributes('aria-label')).toContain('19 повних пар');
     await wrapper.get('[name="sheet_length_cm"]').setValue('150');
@@ -38,6 +39,10 @@ describe('Форма картону', () => {
     await wrapper.get('[name="blank_width_cm"]').setValue('11');
     expect(svg().attributes('viewBox')).toBe('-1 -1 152 102');
     expect(svg().findAll('polygon')).toHaveLength(48);
+    expect(svg().findAll('[data-testid="cardboard-insole"]')).toHaveLength(48);
+    expect(svg().get('[data-testid="cardboard-insole"]').attributes('transform')).toBe('matrix(1 0 0 1 0 0.5)');
+    expect(wrapper.text()).toContain('Умовна устілка 26 × 10 см');
+    expect(wrapper.text()).not.toContain('Контур зменшено');
     expect(svg().findAll('[data-rotated="true"]')).toHaveLength(3);
     const boxes = svg().findAll('polygon').map(polygon => {
       const points = polygon.attributes('points').split(' ').map(point => point.split(',').map(Number));
@@ -71,6 +76,8 @@ describe('Форма картону', () => {
     await open();
     expect(wrapper.get('[data-testid="cardboard-pieces"]').text().replace(/\s/g, '')).toBe('9600');
     expect(wrapper.findAll('polygon')).toHaveLength(576);
+    expect(wrapper.findAll('[data-testid="cardboard-insole"]')).toHaveLength(576);
+    expect(wrapper.text()).toContain('Контур зменшено');
     expect(wrapper.text()).toContain('Фрагмент розкладки');
   });
   it('завантажує приватні дані в поля без автоматичних записів', async () => {
