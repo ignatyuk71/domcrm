@@ -34,8 +34,10 @@ return new class extends Migration
             throw new RuntimeException('Спочатку збережіть окремі розрахунки моделей: відкат об’єднав би їхні дані.');
         }
         Schema::table('production_cost_batches', function (Blueprint $table) {
+            // MySQL використовує складений індекс для FK: спочатку прибираємо зв’язок.
+            $table->dropForeign(['model_id']);
             $table->dropIndex('production_cost_model_component_id');
-            $table->dropConstrainedForeignId('model_id');
+            $table->dropColumn('model_id');
         });
         Schema::dropIfExists('production_cost_models');
     }

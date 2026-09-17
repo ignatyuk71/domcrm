@@ -57,11 +57,14 @@ class ProductionCostModelsTest extends TestCase
         $this->owner();
         $category = $this->category();
         Product::create(['title' => 'Тестовий товар', 'category_id' => $category->id, 'main_photo_path' => 'products/example.jpg']);
-        $this->category('Тестові інші товари');
-        $this->getJson(self::URL)->assertOk()->assertJsonCount(1, 'models')->assertJsonCount(2, 'categories')
-            ->assertJsonPath('models.0.records_count', 0)->assertJsonPath('models.0.materials_count', 0)
-            ->assertJsonPath('categories.0.photo_url', '/storage/products/example.jpg')->assertJsonPath('categories.0.footwear', true)
-            ->assertJsonPath('categories.1.footwear', false);
+        $other = $this->category('Тестові інші товари');
+        $response = $this->getJson(self::URL)->assertOk()->assertJsonCount(1, 'models')->assertJsonCount(2, 'categories')
+            ->assertJsonPath('models.0.records_count', 0)->assertJsonPath('models.0.materials_count', 0);
+        // Сортування українських літер різниться між SQLite та MySQL — звіряємо за ID.
+        $categories = collect($response->json('categories'))->keyBy('id');
+        $this->assertSame('/storage/products/example.jpg', $categories[$category->id]['photo_url']);
+        $this->assertTrue($categories[$category->id]['footwear']);
+        $this->assertFalse($categories[$other->id]['footwear']);
         $this->assertDatabaseCount('production_cost_models', 1);
         $this->assertDatabaseCount('production_cost_batches', 0);
         $this->assertDatabaseCount('production_cost_batch_revisions', 0);
