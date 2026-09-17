@@ -32,6 +32,7 @@
       </form>
       <aside class="panel-result">
         <div class="pair-result"><div class="result-label">Окантовка · одна пара<i class="bi bi-bounding-box" aria-hidden="true"></i></div><strong data-testid="tape-unit-cost" role="status">{{ money(preview?.unit_cost_uah) }} <small>грн</small></strong><p>{{ preview ? `${number(preview.pair_length_m)} м стрічки на пару, включно із запасом` : 'Укажіть довжину, суми й витрату стрічки.' }}</p><span v-if="dirty" class="draft-label">Попередній розрахунок · ще не збережено</span></div>
+        <TapeInsoleIllustration />
         <div v-if="preview" class="panel-card calculation">
           <h3>Як рахуємо</h3>
           <dl>
@@ -63,6 +64,7 @@ import { calculateTapeCost, tapeFields, tapePrecision, emptyTapeForm } from '@/c
 import { decimalInput } from '@/crm/utils/soleCosts';
 import { useCostModelApi } from '@/crm/composables/useCostModelApi';
 import { useCostSummaryPart } from '@/crm/composables/useCostSummaryPart';
+import TapeInsoleIllustration from './TapeInsoleIllustration.vue';
 const api = useCostModelApi({ fetch: fetchTapeBatches, create: createTapeBatch, update: updateTapeBatch });
 
 const emit = defineEmits(['saving']);

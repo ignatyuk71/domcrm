@@ -35,13 +35,17 @@ describe('Калькулятор окантовки', () => {
     expect(wrapper.get('[data-testid="tape-slipper-length"]').text()).toBe('80 см');
     expect(wrapper.get('[data-testid="tape-pair-length"]').text()).toBe('1,6 м');
     expect(wrapper.get('[data-testid="tape-yield"]').text()).toBe('62');
+    expect(wrapper.find('[data-testid="tape-insole-illustration"]').exists()).toBe(true);
     expect(wrapper.text()).not.toContain('Доставка не врахована');
     expect(wrapper.find('[name="quantity"]').exists()).toBe(false);
     expect(createTapeBatch).not.toHaveBeenCalled(); expect(updateTapeBatch).not.toHaveBeenCalled();
     expect(button('Зберегти зміни').attributes('disabled')).toBeDefined();
   });
   it('одразу перераховує поля й зберігає лише після кнопки', async () => {
-    await open(); await wrapper.get('[name="allowance_cm"]').setValue('10,00');
+    await open();
+    const contour = wrapper.get('[data-testid="tape-insole-edging"]').attributes('d');
+    await wrapper.get('[name="allowance_cm"]').setValue('10,00');
+    expect(wrapper.get('[data-testid="tape-insole-edging"]').attributes('d')).toBe(contour);
     expect(wrapper.get('[data-testid="tape-unit-cost"]').text()).toContain('20,40');
     expect(wrapper.get('[data-testid="tape-pair-length"]').text()).toBe('1,7 м');
     expect(updateTapeBatch).not.toHaveBeenCalled();
@@ -104,6 +108,7 @@ describe('Калькулятор окантовки', () => {
     expect(wrapper.get('[name="goods_uah"]').element.value).toBe('');
     expect(wrapper.get('[data-testid="tape-unit-cost"]').text()).toContain('—');
     expect(createTapeBatch).not.toHaveBeenCalled();
+    expect(wrapper.find('[data-testid="tape-insole-illustration"]').exists()).toBe(true);
   });
   it('ліниво відкриває окантовку без заглушки й зберігає чернетку між вкладками', async () => {
     wrapper = mount(ProductionCostPage); await flushPromises();
