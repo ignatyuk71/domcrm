@@ -1,27 +1,26 @@
 import { describe, expect, it } from 'vitest';
 import { mount } from '@vue/test-utils';
 import TapeInsoleIllustration from './TapeInsoleIllustration.vue';
-import { insolePath } from '@/crm/utils/cardboardInsole';
+import insoleImage from '../../../../images/costs/halluci-insole-black-edging.webp';
 
 describe('Схема окантовки устілки', () => {
-  it('окантовка повторює весь замкнений контур устілки, а не прямокутник', () => {
+  it('показує затверджене зображення з чорною окантовкою замість старого SVG', () => {
     const wrapper = mount(TapeInsoleIllustration);
-    const body = wrapper.get('[data-testid="tape-insole-body"]'), edge = wrapper.get('[data-testid="tape-insole-edging"]');
-    expect(body.attributes('d')).toBe(insolePath); expect(edge.attributes('d')).toBe(insolePath);
-    expect(insolePath.endsWith('Z')).toBe(true); expect(edge.attributes('fill')).toBe('none');
-    expect(wrapper.text()).toContain('Оксамитова стрічка'); expect(wrapper.text()).toContain('не вимірюємо за зображенням');
-    expect(wrapper.find('img').exists()).toBe(false);
+    const image = wrapper.get('[data-testid="tape-insole-image"]');
+    expect(image.attributes('src')).toBe(insoleImage);
+    expect(image.attributes('alt')).toContain('чорною оксамитовою окантовкою');
+    expect(wrapper.find('svg').exists()).toBe(false);
+    expect(wrapper.text()).toContain('не вимірюємо за зображенням');
     wrapper.unmount();
   });
-  it('має доступний опис і унікальні посилання на градієнт та підписи', () => {
-    const wrapper = mount({ components: { TapeInsoleIllustration }, template: '<div><TapeInsoleIllustration /><TapeInsoleIllustration /></div>' });
-    const ids = wrapper.findAll('[id]').map(node => node.attributes('id'));
-    expect(new Set(ids).size).toBe(ids.length);
-    for (const svg of wrapper.findAll('svg')) {
-      expect(svg.attributes('role')).toBe('img');
-      for (const id of svg.attributes('aria-labelledby').split(' ')) expect(ids).toContain(id);
-      expect(svg.get('[data-testid="tape-insole-body"]').attributes('fill')).toBe(`url(#${svg.get('linearGradient').attributes('id')})`);
-    }
+  it('резервує пропорції зображення та залишає доступний опис', () => {
+    const wrapper = mount(TapeInsoleIllustration);
+    const image = wrapper.get('img');
+    expect(image.attributes('width')).toBe('752');
+    expect(image.attributes('height')).toBe('752');
+    expect(image.attributes('decoding')).toBe('async');
+    expect(image.attributes('alt')).toContain('вужчою п’яткою');
+    expect(wrapper.get('figcaption').text()).toContain('1 капець');
     wrapper.unmount();
   });
 });

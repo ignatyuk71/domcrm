@@ -43,9 +43,9 @@ describe('Калькулятор окантовки', () => {
   });
   it('одразу перераховує поля й зберігає лише після кнопки', async () => {
     await open();
-    const contour = wrapper.get('[data-testid="tape-insole-edging"]').attributes('d');
+    const illustration = wrapper.get('[data-testid="tape-insole-image"]').attributes('src');
     await wrapper.get('[name="allowance_cm"]').setValue('10,00');
-    expect(wrapper.get('[data-testid="tape-insole-edging"]').attributes('d')).toBe(contour);
+    expect(wrapper.get('[data-testid="tape-insole-image"]').attributes('src')).toBe(illustration);
     expect(wrapper.get('[data-testid="tape-unit-cost"]').text()).toContain('20,40');
     expect(wrapper.get('[data-testid="tape-pair-length"]').text()).toBe('1,7 м');
     expect(updateTapeBatch).not.toHaveBeenCalled();
