@@ -97,6 +97,21 @@ describe('Калькулятор виробництва', () => {
     await button('Підошва').trigger('click');
     expect(wrapper.get('[name="usd_rate"]').element.value).toBe('46');
   });
+  it('залишає роботу інформаційною: спільний виробіток без зарплат і розрахунку', async () => {
+    await open();
+    await button('Робота').trigger('click');
+    const info = wrapper.get('[data-testid="labor-info"]');
+    expect(info.text()).toContain('Оплата праці — поденна');
+    expect(info.get('.labor-output').text()).toContain('35');
+    expect(info.text()).toContain('готових пар на день');
+    expect(info.text()).toContain('для двох швачок разом, по всіх моделях');
+    expect(info.text()).toContain('Вартість роботи поки не включена');
+    expect(info.text()).not.toMatch(/грн|₴|Ще не пораховано|розцінки/);
+    expect(info.find('input, form, button').exists()).toBe(false);
+    expect(createCostBatch).not.toHaveBeenCalled();
+    expect(updateCostBatch).not.toHaveBeenCalled();
+    expect(fetchCostBatches).toHaveBeenCalledTimes(1);
+  });
   it('дозволяє повторити невдале завантаження без створення партії', async () => {
     fetchCostBatches.mockRejectedValueOnce(new Error('network'));
     await open(); expect(wrapper.find('form').exists()).toBe(false);
