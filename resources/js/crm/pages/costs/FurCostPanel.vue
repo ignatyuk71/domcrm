@@ -109,6 +109,7 @@ import { fetchFurBatches, createFurBatch, updateFurBatch, costError } from '@/cr
 import { calculateFurCost, activeFurFields, emptyFurForm } from '@/crm/utils/furCosts';
 import { decimalInput } from '@/crm/utils/soleCosts';
 import { useCostModelApi } from '@/crm/composables/useCostModelApi';
+import { useCostSummaryPart } from '@/crm/composables/useCostSummaryPart';
 const api = useCostModelApi({ fetch: fetchFurBatches, create: createFurBatch, update: updateFurBatch });
 
 const emit = defineEmits(['saving']);
@@ -126,6 +127,7 @@ const purchaseFields = computed(() => isLocal.value ? [{ key: 'goods_uah', label
 const dirty = computed(() => form.value !== null && JSON.stringify(form.value) !== baseline.value);
 defineExpose({ dirty });
 const preview = computed(() => form.value ? calculateFurCost(form.value) : null);
+useCostSummaryPart('fur', { form, selectedId, preview, dirty });
 const money = value => value === null ? '—' : Number(value).toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const number = value => Number(value).toLocaleString('uk-UA', { maximumFractionDigits: 8 });
 const displayCut = computed(() => {

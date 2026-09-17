@@ -1,6 +1,6 @@
 <template>
   <section class="cost-page" :aria-busy="loading || saving || cardboardSaving || foamSaving || furSaving || laminateSaving || tapeSaving">
-    <nav class="cost-components" aria-label="Складові собівартості">
+    <nav ref="navigation" class="cost-components" aria-label="Складові собівартості">
       <button v-for="item in components" :key="item.key" type="button" :aria-pressed="activeComponent === item.key" :class="{ active: activeComponent === item.key }" :disabled="saving || cardboardSaving || foamSaving || furSaving || laminateSaving || tapeSaving" @click="activeComponent = item.key">
         <i :class="`bi bi-${item.icon}`" aria-hidden="true"></i>{{ item.label }}
       </button>
@@ -68,7 +68,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, provide, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, provide, ref, watch } from 'vue';
 import SheetMaterialCostPanel from './SheetMaterialCostPanel.vue';
 import FurCostPanel from './FurCostPanel.vue';
 import LaminateCostPanel from './LaminateCostPanel.vue';
@@ -76,6 +76,7 @@ import TapeCostPanel from './TapeCostPanel.vue';
 import { fetchCostBatches, createCostBatch, updateCostBatch, costError } from '@/crm/services/productionCostsApi';
 import { calculateSoleCost, costFields, decimalInput, emptyCostForm } from '@/crm/utils/soleCosts';
 import { costModelKey, scopedCostApi } from '@/crm/composables/useCostModelApi';
+import { useCostSummaryPart } from '@/crm/composables/useCostSummaryPart';
 
 const props = defineProps({ modelId: { type: Number, default: undefined } });
 provide(costModelKey, props.modelId);
@@ -128,8 +129,15 @@ const dirty = computed(() => form.value !== null && JSON.stringify(form.value) !
 const cardboardPanel = ref(null), foamPanel = ref(null), furPanel = ref(null), laminatePanel = ref(null), tapePanel = ref(null);
 const hasUnsavedChanges = computed(() => dirty.value || [cardboardPanel, foamPanel, furPanel, laminatePanel, tapePanel].some(panel => panel.value?.dirty));
 const isSaving = computed(() => saving.value || cardboardSaving.value || foamSaving.value || furSaving.value || laminateSaving.value || tapeSaving.value);
-defineExpose({ hasUnsavedChanges, isSaving });
+const navigation = ref(null);
+function openComponent(key) {
+  if (isSaving.value || !components.some(item => item.key === key)) return;
+  activeComponent.value = key;
+  nextTick(() => navigation.value?.querySelector('[aria-pressed="true"]')?.focus());
+}
+defineExpose({ hasUnsavedChanges, isSaving, openComponent });
 const preview = computed(() => form.value ? calculateSoleCost(form.value) : null);
+useCostSummaryPart('soles', { form, selectedId, preview, dirty }, props.modelId);
 const money = value => Number(decimalInput(value)).toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const count = value => Number(value).toLocaleString('uk-UA');
 const date = value => value.split('-').reverse().join('.');

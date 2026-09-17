@@ -62,6 +62,7 @@ import { fetchTapeBatches, createTapeBatch, updateTapeBatch, costError } from '@
 import { calculateTapeCost, tapeFields, tapePrecision, emptyTapeForm } from '@/crm/utils/tapeCosts';
 import { decimalInput } from '@/crm/utils/soleCosts';
 import { useCostModelApi } from '@/crm/composables/useCostModelApi';
+import { useCostSummaryPart } from '@/crm/composables/useCostSummaryPart';
 const api = useCostModelApi({ fetch: fetchTapeBatches, create: createTapeBatch, update: updateTapeBatch });
 
 const emit = defineEmits(['saving']);
@@ -73,6 +74,7 @@ const error = ref(''), formError = ref(''), notice = ref('');
 const dirty = computed(() => form.value !== null && JSON.stringify(form.value) !== baseline.value);
 defineExpose({ dirty });
 const preview = computed(() => form.value ? calculateTapeCost(form.value) : null);
+useCostSummaryPart('tape', { form, selectedId, preview, dirty });
 const pattern = field => `[0-9]+([.,][0-9]{1,${tapePrecision[field]}})?`;
 const money = value => value == null ? '—' : Number(value).toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const number = value => Number(decimalInput(value)).toLocaleString('uk-UA', { maximumFractionDigits: 4 });

@@ -7,6 +7,7 @@ use App\Models\Product;
 use App\Models\User;
 use App\Services\Costs\ProductionCostModels;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -43,10 +44,12 @@ class ProductionCostModelsTest extends TestCase
     {
         $category = $this->category();
         $this->getJson(self::URL)->assertUnauthorized();
+        $this->getJson('/api/production-costs/summary')->assertUnauthorized();
         $this->postJson(self::URL, ['category_id' => $category->id])->assertUnauthorized();
         foreach ([User::ROLE_OPERATOR, User::ROLE_PACKER] as $role) {
             $this->actingAs(User::factory()->create(['role' => $role]));
             $this->getJson(self::URL)->assertForbidden();
+            $this->getJson('/api/production-costs/summary')->assertForbidden();
             $this->postJson(self::URL, ['category_id' => $category->id])->assertForbidden();
         }
         $this->assertDatabaseCount('production_cost_models', 1);
@@ -122,5 +125,43 @@ class ProductionCostModelsTest extends TestCase
         $category->delete();
         $this->getJson(self::URL)->assertOk()->assertJsonPath('models.1.id', $model)->assertJsonPath('models.1.category_id', null);
         $this->getJson('/api/production-costs/sole-batches?model_id='.$model)->assertOk();
+    }
+
+    public function test_summary_uses_one_latest_batch_per_component_and_never_writes_or_mixes_models(): void
+    {
+        $this->owner();
+        $legacy = app(ProductionCostModels::class)->resolve();
+        $other = app(ProductionCostModels::class)->openCategory($this->category()->id)['id'];
+        $components = ['sole-batches' => 'soles', 'cardboard-batches' => 'cardboard', 'foam-calculations' => 'foam', 'fur-batches' => 'fur', 'laminate-calculations' => 'laminate', 'tape-batches' => 'tape'];
+        $expected = [];
+        foreach ($this->samples() as $path => $sample) {
+            foreach (['Попередня', 'Остання'] as $name) {
+                $row = $this->postJson('/api/production-costs/'.$path, $sample + ['name' => $name, 'request_key' => (string) Str::uuid()])->assertCreated()->json();
+            }
+            $expected[$components[$path]] = $row;
+        }
+        $this->postJson('/api/production-costs/tape-batches', $this->samples()['tape-batches'] + ['name' => 'Інша категорія', 'request_key' => (string) Str::uuid(), 'model_id' => $other])->assertCreated();
+        $before = DB::table('production_cost_batches')->orderBy('id')->get()->toJson();
+        $revisions = DB::table('production_cost_batch_revisions')->count();
+        $response = $this->getJson('/api/production-costs/summary?model_id='.$legacy)->assertOk()->assertJsonPath('model_id', $legacy)->assertJsonCount(6, 'components');
+        foreach ($expected as $component => $row) {
+            $response->assertJsonPath('components.'.$component.'.id', $row['id'])->assertJsonPath('components.'.$component.'.calculation', $row['calculation']);
+        }
+        $response->assertJsonPath('components.laminate.calculation.unit_cost_uah', null);
+        $this->assertGreaterThan(0, $response->json('components.laminate.calculation.insole_pair_cost_uah'));
+        $this->assertGreaterThan(0, $response->json('components.laminate.calculation.upper_pair_cost_uah'));
+        $this->getJson('/api/production-costs/summary')->assertOk()->assertJsonCount(6, 'components');
+        $this->getJson('/api/production-costs/summary?model_id='.$other)->assertOk()->assertJsonCount(1, 'components')->assertJsonPath('components.tape.name', 'Інша категорія');
+        $this->getJson('/api/production-costs/summary?model_id=99999')->assertUnprocessable();
+        $this->getJson('/api/production-costs/summary?model_id=')->assertUnprocessable();
+        $this->assertSame($before, DB::table('production_cost_batches')->orderBy('id')->get()->toJson());
+        $this->assertDatabaseCount('production_cost_batch_revisions', $revisions);
+    }
+
+    public function test_empty_summary_does_not_fabricate_prices(): void
+    {
+        $this->owner();
+        $this->getJson('/api/production-costs/summary')->assertOk()->assertJsonCount(0, 'components');
+        $this->assertDatabaseCount('production_cost_batches', 0);
     }
 }

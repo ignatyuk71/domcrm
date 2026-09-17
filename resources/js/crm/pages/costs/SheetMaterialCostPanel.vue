@@ -93,6 +93,7 @@ import { calculateFoamCost, foamFields, emptyFoamForm } from '@/crm/utils/foamCo
 import { decimalInput } from '@/crm/utils/soleCosts';
 import CardboardCutLayout from './CardboardCutLayout.vue';
 import { useCostModelApi } from '@/crm/composables/useCostModelApi';
+import { useCostSummaryPart } from '@/crm/composables/useCostSummaryPart';
 
 const emit = defineEmits(['saving']);
 const props = defineProps({ material: { type: String, default: 'cardboard', validator: value => ['cardboard', 'foam'].includes(value) } });
@@ -133,6 +134,7 @@ const error = ref(''), formError = ref(''), notice = ref('');
 const dirty = computed(() => form.value !== null && JSON.stringify(form.value) !== baseline.value);
 defineExpose({ dirty });
 const preview = computed(() => form.value ? calculate(form.value) : null);
+useCostSummaryPart(props.material, { form, selectedId, preview, dirty });
 const canCalculate = computed(() => preview.value?.unit_cost_uah != null);
 const money = value => value == null ? '—' : Number(value).toLocaleString('uk-UA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const number = value => Number(value).toLocaleString('uk-UA', { maximumFractionDigits: 8 });

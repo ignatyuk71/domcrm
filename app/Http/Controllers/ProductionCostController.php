@@ -47,6 +47,11 @@ class ProductionCostController extends Controller
         return response()->json($service->listing('soles', $this->modelId($request)));
     }
 
+    public function summary(Request $request, ProductionCostService $service): JsonResponse
+    {
+        return response()->json($service->summary($this->modelId($request)));
+    }
+
     public function save(SoleCostBatchRequest $request, ProductionCostService $service, ?int $batch = null): JsonResponse
     {
         return response()->json($service->save($request->validated(), $request->user()->id, $batch), $batch ? 200 : 201);

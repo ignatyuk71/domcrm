@@ -67,6 +67,7 @@ import { fetchLaminateCosts, createLaminateCost, updateLaminateCost, costError }
 import { calculateLaminateCost, laminateFields, laminatePrecision, laminateShipping, emptyLaminateForm } from '@/crm/utils/laminateCosts';
 import { decimalInput } from '@/crm/utils/soleCosts';
 import { useCostModelApi } from '@/crm/composables/useCostModelApi';
+import { useCostSummaryPart } from '@/crm/composables/useCostSummaryPart';
 const api = useCostModelApi({ fetch: fetchLaminateCosts, create: createLaminateCost, update: updateLaminateCost });
 import LaminateCutLayout from './LaminateCutLayout.vue';
 
@@ -85,6 +86,7 @@ const error = ref(''), formError = ref(''), notice = ref('');
 const dirty = computed(() => form.value !== null && JSON.stringify(form.value) !== baseline.value);
 defineExpose({ dirty });
 const preview = computed(() => form.value ? calculateLaminateCost(form.value) : null);
+useCostSummaryPart('laminate', { form, selectedId, preview, dirty });
 const canCalculate = computed(() => preview.value?.insole_layout?.pairs > 0 && preview.value?.upper_layout?.pairs > 0);
 const missingShipping = computed(() => preview.value?.breakdown.filter(row => !row.shipping_included).map(row => row.label.toLocaleLowerCase('uk-UA')) || []);
 const pattern = key => `[0-9]+([.,][0-9]{1,${laminatePrecision[key]}})?`;

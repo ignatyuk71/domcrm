@@ -2,6 +2,7 @@ import http from '@/crm/api/http';
 
 const params = (page, modelId) => ({ page, ...(modelId == null ? {} : { model_id: modelId }) });
 export const fetchCostModels = () => http.get('/api/production-costs/models');
+export const fetchCostSummary = modelId => http.get('/api/production-costs/summary', { params: { model_id: modelId } });
 export const openCostModel = categoryId => http.post('/api/production-costs/models', { category_id: categoryId });
 export const fetchCostBatches = (page = 1, modelId) => http.get('/api/production-costs/sole-batches', { params: params(page, modelId) });
 export const createCostBatch = data => http.post('/api/production-costs/sole-batches', data);

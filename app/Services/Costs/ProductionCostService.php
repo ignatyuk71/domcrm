@@ -29,6 +29,18 @@ class ProductionCostService
         ];
     }
 
+    public function summary(?int $modelId = null): array
+    {
+        $modelId = app(ProductionCostModels::class)->resolve($modelId);
+        // По одній останній створеній партії матеріалу: не додаємо всі закупівлі чи два види хутра.
+        $latest = DB::table('production_cost_batches')->where('model_id', $modelId)
+            ->whereIn('component', ['soles', 'cardboard', 'foam', 'fur', 'laminate', 'tape'])
+            ->selectRaw('MAX(id)')->groupBy('component');
+        $rows = DB::table('production_cost_batches')->where('model_id', $modelId)->whereIn('id', $latest)->get();
+
+        return ['model_id' => $modelId, 'components' => $rows->mapWithKeys(fn ($row) => [$row->component => $this->present($row)])->all()];
+    }
+
     public function save(array $data, ?int $userId, ?int $batchId = null, string $component = 'soles'): array
     {
         $calculator = $this->calculator($component);

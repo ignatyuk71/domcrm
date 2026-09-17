@@ -67,6 +67,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/analytics/export', [SalesAnalyticsController::class, 'export'])->name('analytics.sales.export');
         Route::get('/analytics/costs', [ProductionCostController::class, 'index'])->name('analytics.costs');
         Route::get('/api/production-costs/models', [ProductionCostController::class, 'models']);
+        Route::get('/api/production-costs/summary', [ProductionCostController::class, 'summary']);
         Route::post('/api/production-costs/models', [ProductionCostController::class, 'openModel']);
         Route::get('/api/production-costs/sole-batches', [ProductionCostController::class, 'data']);
         Route::post('/api/production-costs/sole-batches', [ProductionCostController::class, 'save']);
