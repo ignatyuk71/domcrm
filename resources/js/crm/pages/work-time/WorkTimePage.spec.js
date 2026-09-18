@@ -29,6 +29,13 @@ beforeEach(() => {
 afterEach(() => { wrapper?.unmount(); document.body.innerHTML = ''; vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe('Табель робочого часу', () => {
+    it('не додає відрядних працівників у сітку годин', async () => {
+        api.fetchWorkTime.mockResolvedValue({ data: { month: period, employees: [employee, { ...employee, id: 2, name: 'Відрядний тест', payment_type: 'piecework' }], entries: [], can_manage_pay: true } });
+        await open(); expect(wrapper.find('[data-testid="employee-1"]').exists()).toBe(true);
+        expect(wrapper.find('[data-testid="employee-2"]').exists()).toBe(false);
+        expect(wrapper.find('[data-cell="2|2026-09-01"]').exists()).toBe(false);
+        expect(button('Відрядні роботи')).toBeDefined();
+    });
     it('відкриває поточний місяць без запису чи завантаження зарплат', async () => {
         await open(); expect(api.fetchWorkTime).toHaveBeenCalledWith(period);
         expect(wrapper.get('[data-testid="all-hours"]').text()).toContain('8');
@@ -44,6 +51,7 @@ describe('Табель робочого часу', () => {
         expect(wrapper.find('[name="hourly_rate"]').exists()).toBe(false);
         expect(api.fetchWorkPayroll).not.toHaveBeenCalled();
         expect(button('Додати працівника')).toBeUndefined();
+        expect(button('Відрядні роботи')).toBeUndefined();
     });
     it('автозбереження приймає кому і використовує версію клітинки', async () => {
         await open(); await cell().setValue('7,5'); await vi.advanceTimersByTimeAsync(650); await flushPromises();

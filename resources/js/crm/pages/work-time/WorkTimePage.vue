@@ -1,10 +1,11 @@
 <template>
   <section class="work-time" :aria-busy="loading">
     <header class="wt-heading">
-      <div><span class="wt-eyebrow">КОМАНДА · ОБЛІК ЧАСУ</span><h1>Табель робочого часу</h1><p>Години команди — в одному місці</p></div>
+      <div><span class="wt-eyebrow">КОМАНДА · РОБОЧИЙ ОБЛІК</span><h1>Табель і виконані роботи</h1><p>Погодинна та відрядна робота — окремо, без плутанини</p></div>
       <button v-if="owner" class="btn btn-primary" type="button" :disabled="loading || pending" @click="openEmployeeForm()"><i class="bi bi-plus-lg" aria-hidden="true"></i> Додати працівника</button>
     </header>
-    <div v-if="ready" class="wt-stats">
+    <div v-if="owner" class="wt-tabs" role="group" aria-label="Тип обліку"><button type="button" :aria-pressed="view === 'hours'" @click="switchView('hours')">Табель годин</button><button type="button" :aria-pressed="view === 'piecework'" @click="switchView('piecework')">Відрядні роботи</button></div>
+    <div v-if="ready && view === 'hours'" class="wt-stats">
       <div><span>Відпрацьовано за місяць</span><strong data-testid="all-hours">{{ number(allHours) }} <small>год</small></strong></div>
       <div><span>Працівників у табелі</span><strong>{{ employees.length }}</strong></div>
       <div><span>Заповнено по</span><strong>{{ lastDay ? `${lastDay} ${monthGen[month - 1]}` : 'Ще немає' }}</strong></div>
@@ -13,8 +14,10 @@
     <div class="wt-sheet">
       <div class="wt-toolbar">
         <div class="wt-period"><i class="bi bi-calendar3" aria-hidden="true"></i><select class="form-select" :value="month" aria-label="Місяць" :disabled="loading || pending" @change="selectPeriod($event, 'month')"><option v-for="(label, i) in workMonths" :key="label" :value="i + 1">{{ label }}</option></select><select class="form-select wt-year" :value="year" aria-label="Рік" :disabled="loading || pending" @change="selectPeriod($event, 'year')"><option v-for="value in years" :key="value">{{ value }}</option></select></div>
-        <div class="wt-toolbar-right"><span class="wt-save-state" :class="{ error: failures.length, pending: pending || unsaved }" role="status">{{ loading ? 'Завантажуємо…' : failures.length ? 'Є незбережені зміни' : pending ? 'Зберігаємо…' : unsaved ? 'Очікуємо збереження…' : ready ? 'Усі зміни збережено' : '' }}</span><button type="button" class="btn wt-refresh" :disabled="loading || pending" aria-label="Оновити табель" @click="reload"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i></button></div>
+        <div class="wt-toolbar-right"><span v-if="view === 'hours'" class="wt-save-state" :class="{ error: failures.length, pending: pending || unsaved }" role="status">{{ loading ? 'Завантажуємо…' : failures.length ? 'Є незбережені зміни' : pending ? 'Зберігаємо…' : unsaved ? 'Очікуємо збереження…' : ready ? 'Усі зміни збережено' : '' }}</span><button type="button" class="btn wt-refresh" :disabled="loading || pending" aria-label="Оновити табель" @click="reload"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i></button></div>
       </div>
+      <PieceworkPanel v-if="owner && view === 'piecework'" :month="period" :refresh-key="allEmployees" @edit-employee="openEmployeeForm" />
+      <template v-else>
       <div v-if="failures.length" class="wt-errors" role="alert"><div v-for="[k, state] in failures" :key="k"><span>{{ failureLabel(k) }}: {{ state.error }}</span><button v-if="!state.conflict" class="btn btn-sm btn-outline-danger" @click="flush(k)">Повторити</button><button v-else class="btn btn-sm btn-outline-danger" @click="reload">Оновити табель</button></div></div>
       <div v-if="ready && employees.length" class="wt-scroll">
         <table aria-label="Години роботи працівників за днями">
@@ -31,8 +34,9 @@
       <div v-else-if="ready && !loading" class="wt-empty"><i class="bi bi-people" aria-hidden="true"></i><h2>Додайте команду до табеля</h2><p>{{ owner ? 'Створіть працівника, потім вводьте години навпроти потрібного дня.' : 'Власник CRM має додати працівників. Після цього тут можна вести години.' }}</p></div>
       <div v-else-if="loading && !ready" class="wt-empty" role="status">Завантажуємо табель…</div>
       <footer class="wt-sheet-footer"><span><i class="wt-weekend-swatch"></i> Вихідні <span class="ms-3">Порожня клітинка = 0 год у підсумку</span></span><span>Tab → наступна клітинка · Enter ↓</span></footer>
+      </template>
     </div>
-    <p class="wt-bottom-note"><i class="bi bi-cursor" aria-hidden="true"></i> Натисніть на ім’я — відкриється картка працівника. {{ owner ? 'Зарплатні дані доступні лише вам у вкладці «Нарахування».' : '' }}</p>
+    <p v-if="view === 'hours'" class="wt-bottom-note"><i class="bi bi-cursor" aria-hidden="true"></i> Натисніть на ім’я — відкриється картка працівника. {{ owner ? 'Зарплатні дані доступні лише вам у вкладці «Нарахування».' : '' }}</p>
 
     <dialog ref="personDialog" class="wt-dialog" aria-labelledby="wt-person-title" @cancel.prevent="closePerson">
       <template v-if="selected">
@@ -61,7 +65,17 @@
     </dialog>
 
     <dialog v-if="owner" ref="employeeDialog" class="wt-dialog wt-employee-dialog" aria-labelledby="wt-edit-title" @cancel.prevent="closeEmployeeForm">
-      <form @submit.prevent="submitEmployee"><header class="wt-dialog-header"><h2 id="wt-edit-title">{{ employeeForm.id ? 'Працівник' : 'Новий працівник' }}</h2><button class="wt-close" type="button" aria-label="Закрити" :disabled="employeeSaving" @click="closeEmployeeForm"><i class="bi bi-x-lg" aria-hidden="true"></i></button></header><div v-if="employeeError" class="alert alert-danger" role="alert">{{ employeeError }}</div><label class="wt-field">Ім’я та прізвище<input v-model="employeeForm.name" class="form-control" name="employee_name" required maxlength="100" :disabled="employeeSaving" autocomplete="off" /></label><label class="wt-field">Посада<input v-model="employeeForm.position" class="form-control" name="employee_position" maxlength="100" :disabled="employeeSaving" /></label><label v-if="employeeForm.id" class="form-check my-3"><input v-model="employeeForm.archived" class="form-check-input" type="checkbox" :disabled="employeeSaving" /><span class="form-check-label">В архіві — зберегти історію, не додавати нові дні</span></label><p class="wt-private">Працівник табеля — не обліковий запис для входу в CRM.</p><button class="btn btn-primary w-100" type="submit" :disabled="employeeSaving">{{ employeeSaving ? 'Зберігаємо…' : employeeForm.id ? 'Зберегти' : 'Додати працівника' }}</button></form>
+      <form @submit.prevent="submitEmployee">
+        <header class="wt-dialog-header"><h2 id="wt-edit-title">{{ employeeForm.id ? 'Працівник' : 'Новий працівник' }}</h2><button class="wt-close" type="button" aria-label="Закрити" :disabled="employeeSaving" @click="closeEmployeeForm"><i class="bi bi-x-lg" aria-hidden="true"></i></button></header>
+        <div v-if="employeeError" class="alert alert-danger" role="alert">{{ employeeError }}</div>
+        <label class="wt-field">Ім’я та прізвище<input v-model="employeeForm.name" class="form-control" name="employee_name" required maxlength="100" :disabled="employeeSaving" autocomplete="off" /></label>
+        <label class="wt-field">Тип оплати<select v-model="employeeForm.payment_type" class="form-select mt-2" name="payment_type" :disabled="employeeSaving || !!employeeForm.id"><option value="hourly">Погодинна — вводимо години</option><option value="piecework">За виконану роботу — кількість і сума</option></select></label>
+        <p v-if="employeeForm.id" class="wt-private">Тип оплати незмінний, щоб не змішувати історію обліку.</p>
+        <label class="wt-field">Посада<input v-model="employeeForm.position" class="form-control" name="employee_position" maxlength="100" :disabled="employeeSaving" /></label>
+        <label v-if="employeeForm.id" class="form-check my-3"><input v-model="employeeForm.archived" class="form-check-input" type="checkbox" :disabled="employeeSaving" /><span class="form-check-label">В архіві — зберегти історію, не додавати нові дні</span></label>
+        <p class="wt-private">Працівник — не обліковий запис для входу в CRM.</p>
+        <button class="btn btn-primary w-100" type="submit" :disabled="employeeSaving">{{ employeeSaving ? 'Зберігаємо…' : employeeForm.id ? 'Зберегти' : 'Додати працівника' }}</button>
+      </form>
     </dialog>
   </section>
 </template>
@@ -71,11 +85,14 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'v
 import { useWorkTime } from '../../composables/useWorkTime';
 import { workMonths, periodKey, workError } from '../../utils/workTime';
 import { createWorkEmployee, updateWorkEmployee, fetchWorkPayroll, saveWorkPayroll } from '../../services/workTimeApi';
+import PieceworkPanel from './PieceworkPanel.vue';
 
 const props = defineProps({ canManagePay: { type: Boolean, default: false } });
-const { period, days, employees, loading, ready, loadError, canManage, entries, drafts, states, pending, unsaved, failures,
+const { period, days, employees, allEmployees, loading, ready, loadError, canManage, entries, drafts, states, pending, unsaved, failures,
   key, employeeHours, employeeDays, allHours, dayHours, lastDay, load, flush, schedule, flushAll, changePeriod, reload } = useWorkTime();
 const owner = computed(() => props.canManagePay && canManage.value);
+const view = ref('hours');
+async function switchView(target) { if (!loading.value && await flushAll()) view.value = target; }
 const year = computed(() => Number(period.value.slice(0, 4))), month = computed(() => Number(period.value.slice(5)));
 const years = Array.from({ length: 101 }, (_, i) => 2000 + i);
 const monthGen = ['січня', 'лютого', 'березня', 'квітня', 'травня', 'червня', 'липня', 'серпня', 'вересня', 'жовтня', 'листопада', 'грудня'];
@@ -165,7 +182,7 @@ async function submitPay() {
 }
 async function openEmployeeForm(employee = null) {
   if (!owner.value || !await flushAll()) return;
-  Object.assign(employeeForm, { id: employee?.id ?? null, name: employee?.name || '', position: employee?.position || '', archived: !!employee?.archived_on, version: employee?.version || 0, request_key: crypto.randomUUID() });
+  Object.assign(employeeForm, { id: employee?.id ?? null, name: employee?.name || '', position: employee?.position || '', payment_type: employee?.payment_type || (view.value === 'piecework' ? 'piecework' : 'hourly'), archived: !!employee?.archived_on, version: employee?.version || 0, request_key: crypto.randomUUID() });
   employeeError.value = ''; await showDialog(employeeDialog);
 }
 async function editEmployee() { const employee = selected.value; if (await closePerson()) await openEmployeeForm(employee); }
@@ -175,10 +192,10 @@ async function submitEmployee() {
   if (employeeForm.id && employeeForm.archived && !window.confirm('Архівувати працівника? Попередні години й нарахування збережуться.')) return;
   employeeSaving.value = true; employeeError.value = '';
   try {
-    const values = { name: employeeForm.name.trim(), position: employeeForm.position.trim() || null };
+    const values = { name: employeeForm.name.trim(), position: employeeForm.position.trim() || null, payment_type: employeeForm.payment_type };
     if (employeeForm.id) await updateWorkEmployee(employeeForm.id, { ...values, archived: employeeForm.archived, version: employeeForm.version });
     else await createWorkEmployee({ ...values, request_key: employeeForm.request_key });
-    employeeDialog.value.close(); await load();
+    employeeDialog.value.close(); view.value = employeeForm.payment_type === 'piecework' ? 'piecework' : 'hours'; await load();
   } catch (error) { employeeError.value = workError(error); }
   finally { employeeSaving.value = false; }
 }

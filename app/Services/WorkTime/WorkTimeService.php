@@ -32,7 +32,7 @@ class WorkTimeService
     public function employee(object $row): array
     {
         return ['id' => (int) $row->id, 'name' => $row->name, 'position' => $row->position,
-            'archived_on' => $row->archived_on, 'version' => (int) $row->version];
+            'payment_type' => $row->payment_type, 'archived_on' => $row->archived_on, 'version' => (int) $row->version];
     }
 
     public function entry(object $row): array
@@ -79,9 +79,10 @@ class WorkTimeService
         return DB::transaction(function () use ($data, $actor) {
             // Унікальний ключ запобігає дублюванню після втрати відповіді сервера.
             DB::table('work_employees')->insertOrIgnore(['request_key' => $data['request_key'], 'name' => $data['name'],
-                'position' => $data['position'] ?? null, 'created_at' => now(), 'updated_at' => now()]);
+                'position' => $data['position'] ?? null, 'payment_type' => $data['payment_type'] ?? 'hourly', 'created_at' => now(), 'updated_at' => now()]);
             $row = DB::table('work_employees')->where('request_key', $data['request_key'])->lockForUpdate()->first();
             abort_unless($row && $row->name === $data['name'] && $row->position === ($data['position'] ?? null), 409, 'Цей запит уже використано з іншими даними.');
+            abort_unless($row->payment_type === ($data['payment_type'] ?? 'hourly'), 409, 'Цей запит уже використано з іншим типом оплати.');
             if (! DB::table('work_time_revisions')->where('subject_type', 'employee')->where('subject_id', $row->id)->exists()) {
                 $this->audit('employee', $row->id, $actor, null, $row);
             }
@@ -94,6 +95,7 @@ class WorkTimeService
     {
         return DB::transaction(function () use ($id, $data, $actor) {
             $before = $this->lockedEmployee($id);
+            abort_if(isset($data['payment_type']) && $data['payment_type'] !== $before->payment_type, 422, 'Тип оплати зберігається незмінним, щоб не змішувати історію обліку.');
             $values = ['name' => $data['name'], 'position' => $data['position'] ?? null,
                 'archived_on' => $data['archived'] ? ($before->archived_on ?? now()->toDateString()) : null];
             $same = collect($values)->every(fn ($value, $key) => $value === $before->$key);
@@ -111,6 +113,7 @@ class WorkTimeService
     {
         return DB::transaction(function () use ($id, $data, $actor) {
             $employee = $this->lockedEmployee($id);
+            abort_unless($employee->payment_type === 'hourly', 422, 'Для цього працівника вносьте виконані роботи, а не години.');
             abort_if($employee->archived_on && $data['date'] > $employee->archived_on, 422, 'Після архівації нові робочі дні недоступні.');
             $query = DB::table('work_time_entries')->where('employee_id', $id)->where('work_date', $data['date']);
             $before = (clone $query)->first();
@@ -137,6 +140,7 @@ class WorkTimeService
     public function payroll(int $id, string $month): array
     {
         abort_unless(DB::table('work_employees')->where('id', $id)->exists(), 404);
+        abort_unless(DB::table('work_employees')->where('id', $id)->value('payment_type') === 'hourly', 422, 'Нарахування цього працівника ведуться у відрядних роботах.');
         [$start, $end] = $this->monthBounds($month);
         $row = DB::table('work_payroll_months')->where('employee_id', $id)->where('month', $start)->first();
         $hours = (int) DB::table('work_time_entries')->where('employee_id', $id)->whereBetween('work_date', [$start, $end])->sum('hour_units');
@@ -156,7 +160,7 @@ class WorkTimeService
     public function savePayroll(int $id, string $month, array $data, int $actor): array
     {
         return DB::transaction(function () use ($id, $month, $data, $actor) {
-            $this->lockedEmployee($id);
+            abort_unless($this->lockedEmployee($id)->payment_type === 'hourly', 422, 'Використовуйте відрядні роботи.');
             [$start] = $this->monthBounds($month);
             $query = DB::table('work_payroll_months')->where('employee_id', $id)->where('month', $start);
             $before = (clone $query)->first();

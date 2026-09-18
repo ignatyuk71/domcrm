@@ -20,6 +20,7 @@ use App\Http\Controllers\SalesAnalyticsController;
 use App\Http\Controllers\SoleInventoryController;
 use App\Http\Controllers\ProductionCostController;
 use App\Http\Controllers\WorkTimeController;
+use App\Http\Controllers\PieceworkController;
 use App\Http\Controllers\PackingController;
 use App\Http\Controllers\SavedFileController;
 use App\Http\Controllers\NovaPoshtaSettingsController;
@@ -68,6 +69,9 @@ Route::middleware('auth')->group(function () {
     });
     Route::middleware('role:owner')->group(function () {
         Route::post('/api/work-time/employees', [WorkTimeController::class, 'createEmployee']);
+        Route::get('/api/work-time/piecework', [PieceworkController::class, 'index']);
+        Route::post('/api/work-time/piecework', [PieceworkController::class, 'save']);
+        Route::put('/api/work-time/piecework/{entry}', [PieceworkController::class, 'save'])->whereNumber('entry');
         Route::put('/api/work-time/employees/{employee}', [WorkTimeController::class, 'updateEmployee'])->whereNumber('employee');
         Route::get('/api/work-time/employees/{employee}/payroll', [WorkTimeController::class, 'payroll'])->whereNumber('employee');
         Route::put('/api/work-time/employees/{employee}/payroll', [WorkTimeController::class, 'savePayroll'])->whereNumber('employee');
