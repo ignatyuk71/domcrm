@@ -25,7 +25,8 @@ class PieceworkDayService
         })->orderBy('id')->get()->map(fn ($row) => app(WorkTimeService::class)->employee($row))->all();
         // Попередні роботи показуємо сумою за день, не змінюючи їхні записи чи виплати.
         $legacy = DB::table('work_piecework_entries')->whereBetween('work_date', [$start, $end])
-            ->selectRaw('employee_id, work_date, SUM(total_cents) as amount_cents, SUM(version) as version')
+            ->selectRaw('employee_id, work_date, SUM(total_cents) as amount_cents,
+                (SELECT SUM(source.version) FROM work_piecework_entries AS source WHERE source.employee_id = work_piecework_entries.employee_id) as version')
             ->groupBy('employee_id', 'work_date')->get();
         $entries = [];
         foreach ($legacy as $row) {
@@ -54,6 +55,11 @@ class PieceworkDayService
             }
             $legacy = DB::table('work_piecework_entries')->where('employee_id', $employeeId)->where('work_date', $data['date'])
                 ->selectRaw('SUM(total_cents) as amount_cents, COALESCE(SUM(version), 0) as version')->first();
+            // Версія всіх старих робіт працівника не зменшується при перенесенні роботи між датами.
+            // Для порожнього дня без старих робіт клієнт передає початкову версію 0.
+            if ($legacy->version) {
+                $legacy->version = (int) DB::table('work_piecework_entries')->where('employee_id', $employeeId)->sum('version');
+            }
             $version = (int) ($before->version ?? $legacy->version);
             abort_unless($version === (int) $data['version'], 409, 'Суму за цей день уже змінили. Оновіть таблицю.');
             $values = ['amount_cents' => $amount, 'version' => $version + 1, 'updated_by' => $actor, 'updated_at' => now()];

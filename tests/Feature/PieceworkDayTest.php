@@ -106,4 +106,18 @@ class PieceworkDayTest extends TestCase
         $this->getJson('/api/work-time/piecework-days?month=2026-09')->assertOk()->assertJsonPath('entries.0.amount', null);
         $this->assertDatabaseCount('work_piecework_entries', 2);
     }
+
+    public function test_moving_old_work_between_dates_does_not_reuse_a_stale_day_version(): void
+    {
+        $id = $this->employee();
+        $payload = ['request_key' => (string) Str::uuid(), 'employee_id' => $id, 'date' => '2026-09-09', 'description' => 'Попередня робота',
+            'quantity' => 1, 'unit' => 'piece', 'pricing_mode' => 'fixed', 'agreed_total' => '100', 'paid' => '0'];
+        $first = $this->postJson('/api/work-time/piecework', $payload)->assertCreated()->json('id');
+        $this->postJson('/api/work-time/piecework', array_replace($payload, ['request_key' => (string) Str::uuid()]))->assertCreated();
+        $this->getJson('/api/work-time/piecework-days?month=2026-09')->assertOk()->assertJsonPath('entries.0.version', 2);
+        $this->putJson("/api/work-time/piecework/$first", array_replace($payload, ['date' => '2026-09-10', 'version' => 1]))->assertOk();
+        $this->postJson('/api/work-time/piecework', array_replace($payload, ['request_key' => (string) Str::uuid(), 'agreed_total' => '300']))->assertCreated();
+        $this->save($id, ['amount' => '250', 'version' => 2])->assertConflict();
+        $this->getJson('/api/work-time/piecework-days?month=2026-09')->assertOk()->assertJsonPath('entries.0.version', 4);
+    }
 }
