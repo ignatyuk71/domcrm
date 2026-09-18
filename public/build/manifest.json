@@ -41,7 +41,7 @@
     ]
   },
   "resources/js/crm/index.js": {
-    "file": "assets/index-e08-EYwH.js",
+    "file": "assets/index-Bb00i6yS.js",
     "name": "index",
     "src": "resources/js/crm/index.js",
     "isEntry": true,
@@ -60,7 +60,7 @@
     ]
   },
   "resources/js/crm/pages/analytics/SalesAnalyticsPage.vue": {
-    "file": "assets/SalesAnalyticsPage-eDW8YaDV.js",
+    "file": "assets/SalesAnalyticsPage-CULolnpS.js",
     "name": "SalesAnalyticsPage",
     "src": "resources/js/crm/pages/analytics/SalesAnalyticsPage.vue",
     "isDynamicEntry": true,
@@ -73,7 +73,7 @@
     ]
   },
   "resources/js/crm/pages/costs/ProductionCostPage.vue": {
-    "file": "assets/ProductionCostPage-C2OnfSVB.js",
+    "file": "assets/ProductionCostPage-CbIOcO1Z.js",
     "name": "ProductionCostPage",
     "src": "resources/js/crm/pages/costs/ProductionCostPage.vue",
     "isDynamicEntry": true,
@@ -89,7 +89,7 @@
     ]
   },
   "resources/js/crm/pages/inventory/SoleInventoryPage.vue": {
-    "file": "assets/SoleInventoryPage-DjaVwjI6.js",
+    "file": "assets/SoleInventoryPage-BI3KAW0R.js",
     "name": "SoleInventoryPage",
     "src": "resources/js/crm/pages/inventory/SoleInventoryPage.vue",
     "isDynamicEntry": true,
@@ -102,7 +102,7 @@
     ]
   },
   "resources/js/crm/pages/settings/SettingsTelegramPage.vue": {
-    "file": "assets/SettingsTelegramPage-BoKARBSb.js",
+    "file": "assets/SettingsTelegramPage-CeufNDH4.js",
     "name": "SettingsTelegramPage",
     "src": "resources/js/crm/pages/settings/SettingsTelegramPage.vue",
     "isDynamicEntry": true,
@@ -115,7 +115,7 @@
     ]
   },
   "resources/js/crm/pages/work-time/WorkTimePage.vue": {
-    "file": "assets/WorkTimePage-rYPXy6Ho.js",
+    "file": "assets/WorkTimePage-C-AGAVqN.js",
     "name": "WorkTimePage",
     "src": "resources/js/crm/pages/work-time/WorkTimePage.vue",
     "isDynamicEntry": true,
@@ -124,7 +124,7 @@
       "_index-B9ygI19o.js"
     ],
     "css": [
-      "assets/WorkTimePage-DdWrZuwb.css"
+      "assets/WorkTimePage-D3jS8OaB.css"
     ]
   }
 }

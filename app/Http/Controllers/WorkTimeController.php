@@ -45,6 +45,14 @@ class WorkTimeController extends Controller
         return $this->response($service->updateEmployee($employee, $data, $request->user()->id));
     }
 
+    public function deleteEmployee(Request $request, WorkTimeService $service, int $employee): JsonResponse
+    {
+        $data = $request->validate(['version' => ['required', 'integer', 'min:1'], 'confirmed' => ['required', 'accepted']]);
+        $service->deleteEmployee($employee, (int) $data['version'], $request->user()->id);
+
+        return $this->response(['deleted' => true]);
+    }
+
     private function normalize(Request $request, array $fields): void
     {
         foreach ($fields as $field) {

@@ -103,6 +103,16 @@ export function useWorkTime({ fetchData = fetchWorkTime, saveData = saveWorkDay,
         return success;
     }
 
+    // Викликати лише після завершення черги та успішного видалення на сервері.
+    function forgetEmployee(id) {
+        allEmployees.value = allEmployees.value.filter(employee => employee.id !== id);
+        for (const collection of [entries, drafts, states]) {
+            for (const k of Object.keys(collection).filter(k => k.startsWith(`${id}|`))) {
+                clearTimeout(timers.get(k)); timers.delete(k); delete collection[k];
+            }
+        }
+    }
+
     async function changePeriod(target) {
         if (loading.value || !await flushAll()) return false;
         return load(target);
@@ -116,5 +126,5 @@ export function useWorkTime({ fetchData = fetchWorkTime, saveData = saveWorkDay,
     onMounted(() => { if (autoLoad) load(); window.addEventListener('beforeunload', unload); });
     onBeforeUnmount(() => { alive = false; timers.forEach(clearTimeout); window.removeEventListener('beforeunload', unload); });
     return { period, days, employees, allEmployees, loading, ready, loadError, canManage, entries, drafts, states, pending, unsaved, failures,
-        key, employeeHours, employeeDays, allHours, dayHours, lastDay, load, flush, schedule, flushAll, changePeriod, reload };
+        key, employeeHours, employeeDays, allHours, dayHours, lastDay, load, flush, schedule, flushAll, changePeriod, reload, forgetEmployee };
 }

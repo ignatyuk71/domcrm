@@ -109,6 +109,30 @@ class WorkTimeService
         }, 3);
     }
 
+    public function deleteEmployee(int $id, int $version, int $actor): void
+    {
+        DB::transaction(function () use ($id, $version, $actor) {
+            // Той самий замок використовують усі записи годин і нарахувань.
+            $employee = DB::table('work_employees')->where('id', $id)->lockForUpdate()->first();
+            if (! $employee) {
+                return; // Повтор після втрати відповіді не створює помилки.
+            }
+            abort_unless((int) $employee->version === $version, 409, 'Працівника вже змінили. Оновіть табель перед видаленням.');
+            $tables = ['entry' => 'work_time_entries', 'payroll' => 'work_payroll_months',
+                'piecework' => 'work_piecework_entries', 'piecework_day' => 'work_piecework_days'];
+            foreach ($tables as $type => $table) {
+                // Прибираємо також попередні значення, що містять особисті й зарплатні дані.
+                DB::table('work_time_revisions')->where('subject_type', $type)
+                    ->whereIn('subject_id', DB::table($table)->select('id')->where('employee_id', $id))->delete();
+                DB::table($table)->where('employee_id', $id)->delete();
+            }
+            DB::table('work_time_revisions')->where('subject_type', 'employee')->where('subject_id', $id)->delete();
+            DB::table('work_employees')->where('id', $id)->delete();
+            // Лише технічний факт видалення: без імені, годин чи сум.
+            $this->audit('employee_deleted', $id, $actor, null, (object) ['deleted' => true]);
+        }, 3);
+    }
+
     public function saveEntry(int $id, array $data, int $actor): array
     {
         return DB::transaction(function () use ($id, $data, $actor) {

@@ -76,6 +76,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/api/work-time/piecework', [PieceworkController::class, 'save']);
         Route::put('/api/work-time/piecework/{entry}', [PieceworkController::class, 'save'])->whereNumber('entry');
         Route::put('/api/work-time/employees/{employee}', [WorkTimeController::class, 'updateEmployee'])->whereNumber('employee');
+        Route::delete('/api/work-time/employees/{employee}', [WorkTimeController::class, 'deleteEmployee'])->whereNumber('employee');
         Route::get('/api/work-time/employees/{employee}/payroll', [WorkTimeController::class, 'payroll'])->whereNumber('employee');
         Route::put('/api/work-time/employees/{employee}/payroll', [WorkTimeController::class, 'savePayroll'])->whereNumber('employee');
     });

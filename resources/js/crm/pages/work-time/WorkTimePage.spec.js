@@ -5,7 +5,7 @@ import * as api from '../../services/workTimeApi';
 import * as pieceApi from '../../services/pieceworkApi';
 import { parseWorkHours, workDays } from '../../utils/workTime';
 
-vi.mock('../../services/workTimeApi', () => ({ fetchWorkTime: vi.fn(), saveWorkDay: vi.fn(), createWorkEmployee: vi.fn(), updateWorkEmployee: vi.fn(), fetchWorkPayroll: vi.fn(), saveWorkPayroll: vi.fn() }));
+vi.mock('../../services/workTimeApi', () => ({ fetchWorkTime: vi.fn(), saveWorkDay: vi.fn(), createWorkEmployee: vi.fn(), updateWorkEmployee: vi.fn(), deleteWorkEmployee: vi.fn(), fetchWorkPayroll: vi.fn(), saveWorkPayroll: vi.fn() }));
 vi.mock('../../services/pieceworkApi', () => ({ fetchPieceworkDays: vi.fn(), savePieceworkDay: vi.fn() }));
 const period = '2026-09';
 const employee = { id: 1, name: 'Тестова працівниця', position: 'Швачка', archived_on: null, version: 1 };
@@ -28,12 +28,68 @@ beforeEach(() => {
     api.saveWorkPayroll.mockImplementation(async (id, data) => ({ data: payroll({ ...data, version: data.version + 1 }) }));
     api.createWorkEmployee.mockResolvedValue({ data: { ...employee, id: 2 } });
     api.updateWorkEmployee.mockResolvedValue({ data: employee });
+    api.deleteWorkEmployee.mockResolvedValue({ data: { deleted: true } });
     pieceApi.fetchPieceworkDays.mockImplementation(async month => ({ data: { month, employees: [pieceEmployee], entries: [] } }));
     pieceApi.savePieceworkDay.mockImplementation(async (id, data) => ({ data: { employee_id: id, date: data.date, amount: data.amount, version: data.version + 1 } }));
 });
 afterEach(() => { wrapper?.unmount(); document.body.innerHTML = ''; vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe('Табель робочого часу', () => {
+    it('кошик відкриває підтвердження з безпечним фокусом, скасування нічого не видаляє', async () => {
+        await open();
+        await wrapper.get('[data-testid="delete-employee-1"]').trigger('click'); await flushPromises();
+        const dialog = wrapper.get('.wt-delete-dialog');
+        expect(dialog.attributes('open')).toBeDefined();
+        expect(dialog.text()).toContain(employee.name); expect(dialog.text()).toContain('за всі місяці');
+        expect(document.activeElement.textContent).toBe('Скасувати');
+        expect(api.deleteWorkEmployee).not.toHaveBeenCalled();
+        await dialog.trigger('cancel'); await flushPromises();
+        expect(dialog.attributes('open')).toBeUndefined();
+        expect(api.deleteWorkEmployee).not.toHaveBeenCalled();
+        expect(cell().element.value).toBe('8');
+    });
+    it.each([1, 2])('після підтвердження видаляє тільки працівника %s без повторного запиту', async id => {
+        const request = deferred(); api.deleteWorkEmployee.mockReturnValueOnce(request.promise);
+        await open();
+        await wrapper.get(`[data-testid="delete-employee-${id}"]`).trigger('click'); await flushPromises();
+        const confirm = wrapper.get('[data-testid="confirm-delete-employee"]');
+        await confirm.trigger('click'); await confirm.trigger('click'); await flushPromises();
+        expect(api.deleteWorkEmployee).toHaveBeenCalledExactlyOnceWith(id, 1);
+        expect(confirm.attributes('disabled')).toBeDefined();
+        request.resolve({ data: { deleted: true } }); await flushPromises();
+        expect(wrapper.find(`[data-testid="delete-employee-${id}"]`).exists()).toBe(false);
+        expect(wrapper.find(`[data-testid="delete-employee-${id === 1 ? 2 : 1}"]`).exists()).toBe(true);
+        expect(wrapper.text()).toContain('Працівника та всі його записи видалено');
+        if (id === 1) expect(wrapper.get('[data-testid="all-hours"]').text()).toContain('0');
+        await vi.advanceTimersByTimeAsync(1000); expect(api.saveWorkDay).not.toHaveBeenCalled();
+    });
+    it('залишає дані і модальне вікно при помилці видалення', async () => {
+        api.deleteWorkEmployee.mockRejectedValueOnce({ response: { status: 409, data: { message: 'Працівника вже змінили' } } });
+        await open(); await wrapper.get('[data-testid="delete-employee-1"]').trigger('click'); await flushPromises();
+        await wrapper.get('[data-testid="confirm-delete-employee"]').trigger('click'); await flushPromises();
+        expect(wrapper.get('.wt-delete-dialog').attributes('open')).toBeDefined();
+        expect(wrapper.get('.wt-delete-dialog').text()).toContain('Працівника вже змінили');
+        expect(cell().element.value).toBe('8');
+    });
+    it('оператор не бачить кошики', async () => {
+        await open({ canManagePay: false });
+        expect(wrapper.find('.wt-delete').exists()).toBe(false);
+        expect(api.deleteWorkEmployee).not.toHaveBeenCalled();
+    });
+    it('завершує автозбереження перед видаленням і не видаляє при помилковій клітинці', async () => {
+        await open(); await cell().setValue('25');
+        await wrapper.get('[data-testid="delete-employee-1"]').trigger('click'); await flushPromises();
+        await wrapper.get('[data-testid="confirm-delete-employee"]').trigger('click'); await flushPromises();
+        expect(api.deleteWorkEmployee).not.toHaveBeenCalled();
+        expect(wrapper.get('.wt-delete-dialog').text()).toContain('Спочатку виправте незбережені клітинки');
+        await wrapper.get('.wt-delete-dialog').trigger('cancel');
+        await cell().setValue('7');
+        await wrapper.get('[data-testid="delete-employee-1"]').trigger('click'); await flushPromises();
+        await wrapper.get('[data-testid="confirm-delete-employee"]').trigger('click'); await flushPromises();
+        expect(api.saveWorkDay).toHaveBeenCalledWith(1, expect.objectContaining({ hours: '7.00' }));
+        expect(api.deleteWorkEmployee).toHaveBeenCalledExactlyOnceWith(1, 1);
+        expect(api.saveWorkDay.mock.invocationCallOrder[0]).toBeLessThan(api.deleteWorkEmployee.mock.invocationCallOrder[0]);
+    });
     it('має однакову сітку колонок для годин і сум у місяцях різної довжини', async () => {
         await open();
         for (const [month, count] of [['9', 30], ['10', 31], ['2', 28]]) {
