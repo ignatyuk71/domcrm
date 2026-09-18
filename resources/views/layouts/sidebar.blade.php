@@ -534,6 +534,10 @@
             </a>
 
             @if($isOwner)
+                <a href="{{ route('settings.workPayroll.index') }}" class="sidebar-link-sub {{ request()->is('settings/work-payroll*') ? 'active' : '' }}">
+                    <span class="icon-frame"><i class="bi bi-person-vcard"></i></span>
+                    <span class="item-text-sub">Працівники та зарплата</span>
+                </a>
                 <a href="{{ route('settings.team.index') }}" class="sidebar-link-sub {{ request()->is('settings/team*') ? 'active' : '' }}">
                     <span class="icon-frame"><i class="bi bi-people"></i></span>
                     <span class="item-text-sub">Команда</span>

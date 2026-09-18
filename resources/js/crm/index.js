@@ -221,7 +221,15 @@ async function mountSettingsTelegram() {
     createApp(page).mount(el);
 }
 
+async function mountWorkPayrollSettings() {
+    const el = document.querySelector('#crm-settings-work-payroll');
+    if (!el) return;
+    const { default: page } = await import('./pages/settings/SettingsWorkPayrollPage.vue');
+    createApp(page).mount(el);
+}
+
 function autoMount() {
+    mountWorkPayrollSettings();
     mountSettingsTelegram();
     mountDashboard();
     mountSalesAnalytics();

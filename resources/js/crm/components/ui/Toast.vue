@@ -6,12 +6,13 @@ const props = defineProps({
   type: { type: String, default: 'error' },
   actionLabel: { type: String, default: '' },
   secondaryLabel: { type: String, default: '' },
+  teleportTo: { type: [String, Object], default: 'body' },
 });
 const emit = defineEmits(['close', 'action', 'secondary']);
 </script>
 
 <template>
-  <Teleport to="body">
+  <Teleport :to="teleportTo">
     <transition name="toast-slide">
       <div v-if="show && messages.length" class="app-toast" :class="`app-toast--${type}`" :role="type === 'error' || type === 'warning' ? 'alert' : 'status'" aria-atomic="true">
         <div class="app-toast-head">

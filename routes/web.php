@@ -310,6 +310,10 @@ Route::middleware('auth')->group(function () {
 
     // --- НАЛАШТУВАННЯ: ДОВІДНИКИ ---
     Route::middleware('role:owner')->prefix('settings')->name('settings.')->group(function () {
+        Route::get('/work-payroll', [\App\Http\Controllers\WorkPayrollSettingsController::class, 'index'])->name('workPayroll.index');
+        Route::get('/work-payroll/employees', [\App\Http\Controllers\WorkPayrollSettingsController::class, 'employees']);
+        Route::get('/work-payroll/report', [\App\Http\Controllers\WorkPayrollSettingsController::class, 'report']);
+        Route::put('/work-payroll/employees/{employee}', [\App\Http\Controllers\WorkPayrollSettingsController::class, 'save'])->whereNumber('employee');
         Route::get('/telegram', [TelegramSettingsController::class, 'index'])->name('telegram.index');
         Route::post('/telegram/connect', [TelegramSettingsController::class, 'connect'])->middleware('throttle:10,1,telegram-connect')->name('telegram.connect');
         Route::put('/telegram', [TelegramSettingsController::class, 'update'])->name('telegram.update');

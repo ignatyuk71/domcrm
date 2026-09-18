@@ -165,20 +165,8 @@ class WorkTimeService
     {
         abort_unless(DB::table('work_employees')->where('id', $id)->exists(), 404);
         abort_unless(DB::table('work_employees')->where('id', $id)->value('payment_type') === 'hourly', 422, 'Нарахування цього працівника ведуться у відрядних роботах.');
-        [$start, $end] = $this->monthBounds($month);
-        $row = DB::table('work_payroll_months')->where('employee_id', $id)->where('month', $start)->first();
-        $hours = (int) DB::table('work_time_entries')->where('employee_id', $id)->whereBetween('work_date', [$start, $end])->sum('hour_units');
-        $rate = isset($row->hourly_rate_cents) ? (int) $row->hourly_rate_cents : null;
-        $bonus = (int) ($row->bonus_cents ?? 0);
-        $paid = (int) ($row->paid_cents ?? 0);
-        // Округлення один раз до копійки, без накопичення похибок float.
-        $base = $rate === null ? null : intdiv($hours * $rate + 50, 100);
 
-        return ['employee_id' => $id, 'month' => $month, 'version' => (int) ($row->version ?? 0),
-            'hours' => self::decimal($hours), 'hourly_rate' => self::decimal($rate),
-            'bonus' => self::decimal($bonus), 'paid' => self::decimal($paid), 'note' => $row->note ?? null,
-            'base_pay' => self::decimal($base), 'accrued' => self::decimal($base === null ? null : $base + $bonus),
-            'balance' => self::decimal($base === null ? null : $base + $bonus - $paid)];
+        return app(PayrollReportService::class)->forEmployee($id, $month);
     }
 
     public function savePayroll(int $id, string $month, array $data, int $actor): array
