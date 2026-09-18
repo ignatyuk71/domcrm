@@ -2,11 +2,13 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { fetchWorkTime, saveWorkDay } from '../services/workTimeApi';
 import { parseWorkHours, periodKey, workDays, workError } from '../utils/workTime';
 
-export function useWorkTime() {
+// Однакова надійна черга збереження для годин і грошових клітинок.
+export function useWorkTime({ fetchData = fetchWorkTime, saveData = saveWorkDay, parseValue = parseWorkHours,
+    valueField = 'hours', employeeType = 'hourly', autoLoad = true } = {}) {
     const now = new Date();
     const period = ref(periodKey(now.getFullYear(), now.getMonth() + 1));
     const allEmployees = ref([]), loading = ref(false), ready = ref(false), loadError = ref('');
-    const employees = computed(() => allEmployees.value.filter(employee => (employee.payment_type || 'hourly') === 'hourly'));
+    const employees = computed(() => allEmployees.value.filter(employee => (employee.payment_type || 'hourly') === employeeType));
     const canManage = ref(false), entries = reactive({}), drafts = reactive({}), states = reactive({});
     const timers = new Map(), running = new Map();
     let alive = true;
@@ -16,30 +18,30 @@ export function useWorkTime() {
         if (states[k]?.uncertain) return true;
         const draft = drafts[k], saved = entries[k];
         if (!draft) return false;
-        try { return parseWorkHours(draft.hours) !== (saved?.hours ?? null) || (draft.note.trim() || null) !== (saved?.note ?? null); }
+        try { return parseValue(draft[valueField]) !== (saved?.[valueField] ?? null) || (draft.note.trim() || null) !== (saved?.note ?? null); }
         catch { return true; }
     };
     const pending = computed(() => Object.values(states).some(s => s.pending));
     const unsaved = computed(() => Object.keys(drafts).some(dirtyKey));
     const failures = computed(() => Object.entries(states).filter(([, state]) => state.error));
-    const employeeHours = id => days.value.reduce((sum, day) => sum + Math.round(Number(entries[key(id, day.date)]?.hours || 0) * 100), 0) / 100;
-    const employeeDays = id => days.value.filter(day => Number(entries[key(id, day.date)]?.hours) > 0).length;
+    const employeeHours = id => days.value.reduce((sum, day) => sum + Math.round(Number(entries[key(id, day.date)]?.[valueField] || 0) * 100), 0) / 100;
+    const employeeDays = id => days.value.filter(day => Number(entries[key(id, day.date)]?.[valueField]) > 0).length;
     const allHours = computed(() => employees.value.reduce((sum, employee) => sum + Math.round(employeeHours(employee.id) * 100), 0) / 100);
-    const dayHours = date => employees.value.reduce((sum, employee) => sum + Math.round(Number(entries[key(employee.id, date)]?.hours || 0) * 100), 0) / 100;
-    const lastDay = computed(() => days.value.filter(day => employees.value.some(e => entries[key(e.id, day.date)]?.hours != null)).at(-1)?.day);
+    const dayHours = date => employees.value.reduce((sum, employee) => sum + Math.round(Number(entries[key(employee.id, date)]?.[valueField] || 0) * 100), 0) / 100;
+    const lastDay = computed(() => days.value.filter(day => employees.value.some(e => entries[key(e.id, day.date)]?.[valueField] != null)).at(-1)?.day);
 
     async function load(target = period.value) {
         loading.value = true; loadError.value = '';
         timers.forEach(clearTimeout); timers.clear();
         try {
-            const { data } = await fetchWorkTime(target);
+            const { data } = await fetchData(target);
             if (!alive) return false;
             for (const collection of [entries, drafts, states]) Object.keys(collection).forEach(k => delete collection[k]);
             period.value = target; allEmployees.value = data.employees; canManage.value = data.can_manage_pay === true;
             data.entries.forEach(entry => entries[key(entry.employee_id, entry.date)] = entry);
             employees.value.forEach(employee => days.value.forEach(day => {
                 const k = key(employee.id, day.date), entry = entries[k];
-                drafts[k] = { employeeId: employee.id, date: day.date, hours: entry?.hours == null ? '' : String(Number(entry.hours)), note: entry?.note || '' };
+                drafts[k] = { employeeId: employee.id, date: day.date, [valueField]: entry?.[valueField] == null ? '' : String(Number(entry[valueField])), note: entry?.note || '' };
             }));
             ready.value = true;
             return true;
@@ -55,21 +57,21 @@ export function useWorkTime() {
         const work = async () => {
             while (alive && dirtyKey(k)) {
                 const draft = drafts[k];
-                let hours;
-                try { hours = parseWorkHours(draft.hours); }
+                let value;
+                try { value = parseValue(draft[valueField]); }
                 catch (error) { states[k] = { error: error.message, pending: false }; return false; }
                 if (states[k]?.conflict) return false;
                 const snapshot = { ...draft };
                 states[k] = { pending: true, error: '' };
                 try {
-                    const { data } = await saveWorkDay(draft.employeeId, {
-                        date: draft.date, hours, note: draft.note.trim() || null, version: entries[k]?.version || 0,
+                    const { data } = await saveData(draft.employeeId, {
+                        date: draft.date, [valueField]: value, note: draft.note.trim() || null, version: entries[k]?.version || 0,
                     });
                     if (!alive) return false;
                     entries[k] = data;
                     // Не затираємо текст, який користувач устиг ввести під час запиту.
-                    if (draft.hours === snapshot.hours && draft.note === snapshot.note) {
-                        draft.hours = data.hours == null ? '' : String(Number(data.hours)); draft.note = data.note || '';
+                    if (draft[valueField] === snapshot[valueField] && draft.note === snapshot.note) {
+                        draft[valueField] = data[valueField] == null ? '' : String(Number(data[valueField])); draft.note = data.note || '';
                     }
                     states[k] = { pending: false, error: '' };
                 } catch (error) {
@@ -111,7 +113,7 @@ export function useWorkTime() {
         return load();
     }
     const unload = event => { if (unsaved.value || pending.value) { event.preventDefault(); event.returnValue = ''; } };
-    onMounted(() => { load(); window.addEventListener('beforeunload', unload); });
+    onMounted(() => { if (autoLoad) load(); window.addEventListener('beforeunload', unload); });
     onBeforeUnmount(() => { alive = false; timers.forEach(clearTimeout); window.removeEventListener('beforeunload', unload); });
     return { period, days, employees, allEmployees, loading, ready, loadError, canManage, entries, drafts, states, pending, unsaved, failures,
         key, employeeHours, employeeDays, allHours, dayHours, lastDay, load, flush, schedule, flushAll, changePeriod, reload };

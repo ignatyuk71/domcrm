@@ -13,6 +13,12 @@ export const parseWorkHours = value => {
     if (!/^\d{1,2}(\.\d{1,2})?$/.test(text) || Number(text) > 24) throw new Error('Введіть від 0 до 24 годин, наприклад 8 або 7,5.');
     return Number(text).toFixed(2);
 };
+export const parseWorkAmount = value => {
+    const text = String(value ?? '').trim().replace(',', '.');
+    if (!text) return null;
+    if (!/^\d{1,10}(\.\d{1,2})?$/.test(text) || Number(text) > 1000000000) throw new Error('Введіть суму від 0 до 1 000 000 000 грн, до двох знаків після коми.');
+    return Number(text).toFixed(2);
+};
 export const workError = error => {
     if (error?.response?.status === 409) return error.response.data?.message || 'Дані вже змінили. Оновіть табель.';
     if ([401, 419].includes(error?.response?.status)) return 'Сесія закінчилася. Збережіть введені значення та увійдіть знову.';

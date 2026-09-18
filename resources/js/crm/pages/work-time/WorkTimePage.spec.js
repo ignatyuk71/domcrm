@@ -2,11 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 import WorkTimePage from './WorkTimePage.vue';
 import * as api from '../../services/workTimeApi';
+import * as pieceApi from '../../services/pieceworkApi';
 import { parseWorkHours, workDays } from '../../utils/workTime';
 
 vi.mock('../../services/workTimeApi', () => ({ fetchWorkTime: vi.fn(), saveWorkDay: vi.fn(), createWorkEmployee: vi.fn(), updateWorkEmployee: vi.fn(), fetchWorkPayroll: vi.fn(), saveWorkPayroll: vi.fn() }));
+vi.mock('../../services/pieceworkApi', () => ({ fetchPieceworkDays: vi.fn(), savePieceworkDay: vi.fn() }));
 const period = '2026-09';
 const employee = { id: 1, name: 'Тестова працівниця', position: 'Швачка', archived_on: null, version: 1 };
+const pieceEmployee = { id: 2, name: 'Відрядний тест', payment_type: 'piecework', archived_on: null, version: 1 };
 const record = (replace = {}) => ({ employee_id: 1, date: '2026-09-01', hours: '8.00', note: null, version: 1, updated_by: 'Тест', updated_at: '2026-09-01 10:00:00', ...replace });
 const payroll = (replace = {}) => ({ employee_id: 1, month: period, hours: '8.00', hourly_rate: '50.00', bonus: '100.00', paid: '0.00', note: null, version: 1, ...replace });
 let wrapper;
@@ -25,16 +28,62 @@ beforeEach(() => {
     api.saveWorkPayroll.mockImplementation(async (id, data) => ({ data: payroll({ ...data, version: data.version + 1 }) }));
     api.createWorkEmployee.mockResolvedValue({ data: { ...employee, id: 2 } });
     api.updateWorkEmployee.mockResolvedValue({ data: employee });
+    pieceApi.fetchPieceworkDays.mockImplementation(async month => ({ data: { month, employees: [pieceEmployee], entries: [] } }));
+    pieceApi.savePieceworkDay.mockImplementation(async (id, data) => ({ data: { employee_id: id, date: data.date, amount: data.amount, version: data.version + 1 } }));
 });
 afterEach(() => { wrapper?.unmount(); document.body.innerHTML = ''; vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe('Табель робочого часу', () => {
+    it('зберігає 600 і 300 у різні дні та показує 900 без полів кількості', async () => {
+        await open();
+        const first = wrapper.get('[data-money-cell="2|2026-09-09"]'), second = wrapper.get('[data-money-cell="2|2026-09-20"]');
+        await first.setValue('600'); await first.trigger('blur'); await flushPromises();
+        await second.setValue('300'); await vi.advanceTimersByTimeAsync(650); await flushPromises();
+        expect(pieceApi.savePieceworkDay).toHaveBeenCalledWith(2, { date: '2026-09-09', amount: '600.00', note: null, version: 0 });
+        expect(wrapper.get('[data-testid="piece-total-2"]').text()).toBe('900');
+        expect(wrapper.get('[data-testid="piece-all-total"]').text()).toBe('900');
+        expect(wrapper.find('[name="piece_quantity"]').exists()).toBe(false);
+        expect(api.saveWorkDay).not.toHaveBeenCalled();
+    });
+    it('залишає швидке нове значення суми та послідовно зберігає обидві зміни', async () => {
+        const first = deferred(); pieceApi.savePieceworkDay.mockImplementationOnce(() => first.promise);
+        await open(); const input = wrapper.get('[data-money-cell="2|2026-09-09"]');
+        await input.setValue('600'); await input.trigger('blur'); await flushPromises();
+        await input.setValue('650,25'); first.resolve({ data: { employee_id: 2, date: '2026-09-09', amount: '600.00', version: 1 } }); await flushPromises();
+        expect(pieceApi.savePieceworkDay).toHaveBeenLastCalledWith(2, expect.objectContaining({ amount: '650.25', version: 1 }));
+        expect(input.element.value).toBe('650.25');
+    });
+    it('помилка грошової клітинки не дає загубити дані при зміні місяця', async () => {
+        pieceApi.savePieceworkDay.mockRejectedValue({ response: { status: 409, data: { message: 'Суму вже змінили' } } });
+        await open(); const input = wrapper.get('[data-money-cell="2|2026-09-09"]');
+        await input.setValue('600'); await input.trigger('blur'); await flushPromises();
+        await wrapper.get('[aria-label="Місяць"]').setValue('10'); await flushPromises();
+        expect(wrapper.get('[aria-label="Місяць"]').element.value).toBe('9');
+        expect(input.element.value).toBe('600'); expect(wrapper.text()).toContain('Суму вже змінили');
+    });
+    it('оновлює обидві таблиці при виборі року та місяця', async () => {
+        await open(); await wrapper.get('[aria-label="Місяць"]').setValue('10'); await flushPromises();
+        expect(api.fetchWorkTime).toHaveBeenLastCalledWith('2026-10'); expect(pieceApi.fetchPieceworkDays).toHaveBeenLastCalledWith('2026-10');
+        expect(wrapper.find('[data-money-cell="2|2026-10-31"]').exists()).toBe(true);
+        expect(wrapper.find('[data-money-cell="2|2026-09-01"]').exists()).toBe(false);
+    });
+    it('від’ємні суми не надсилає, очищення і явний нуль розрізняє', async () => {
+        await open(); const input = wrapper.get('[data-money-cell="2|2026-09-09"]');
+        await input.setValue('-1'); await input.trigger('blur'); await flushPromises();
+        expect(pieceApi.savePieceworkDay).not.toHaveBeenCalled();
+        await input.setValue('0'); await input.trigger('blur'); await flushPromises();
+        expect(pieceApi.savePieceworkDay).toHaveBeenLastCalledWith(2, expect.objectContaining({ amount: '0.00' }));
+        await input.setValue(''); await input.trigger('blur'); await flushPromises();
+        expect(pieceApi.savePieceworkDay).toHaveBeenLastCalledWith(2, expect.objectContaining({ amount: null, version: 1 }));
+    });
     it('не додає відрядних працівників у сітку годин', async () => {
         api.fetchWorkTime.mockResolvedValue({ data: { month: period, employees: [employee, { ...employee, id: 2, name: 'Відрядний тест', payment_type: 'piecework' }], entries: [], can_manage_pay: true } });
         await open(); expect(wrapper.find('[data-testid="employee-1"]').exists()).toBe(true);
         expect(wrapper.find('[data-testid="employee-2"]').exists()).toBe(false);
         expect(wrapper.find('[data-cell="2|2026-09-01"]').exists()).toBe(false);
-        expect(button('Відрядні роботи')).toBeDefined();
+        expect(wrapper.find('[data-money-cell="2|2026-09-01"]').exists()).toBe(true);
+        expect(wrapper.findAll('table')).toHaveLength(2);
+        expect(wrapper.find('[aria-label="Тип обліку"]').exists()).toBe(false);
     });
     it('відкриває поточний місяць без запису чи завантаження зарплат', async () => {
         await open(); expect(api.fetchWorkTime).toHaveBeenCalledWith(period);
@@ -52,6 +101,8 @@ describe('Табель робочого часу', () => {
         expect(api.fetchWorkPayroll).not.toHaveBeenCalled();
         expect(button('Додати працівника')).toBeUndefined();
         expect(button('Відрядні роботи')).toBeUndefined();
+        expect(pieceApi.fetchPieceworkDays).not.toHaveBeenCalled();
+        expect(wrapper.find('[aria-label="Суми за виконану роботу за днями"]').exists()).toBe(false);
     });
     it('автозбереження приймає кому і використовує версію клітинки', async () => {
         await open(); await cell().setValue('7,5'); await vi.advanceTimersByTimeAsync(650); await flushPromises();

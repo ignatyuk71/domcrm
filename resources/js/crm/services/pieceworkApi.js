@@ -5,3 +5,5 @@ const options = { timeout: 15000 };
 export const fetchPiecework = (month, page = 1) => http.get(url, { ...options, params: { month, page } });
 export const createPiecework = data => http.post(url, data, options);
 export const updatePiecework = (id, data) => http.put(`${url}/${id}`, data, options);
+export const fetchPieceworkDays = month => http.get('/api/work-time/piecework-days', { ...options, params: { month } });
+export const savePieceworkDay = (id, data) => http.put(`/api/work-time/employees/${id}/piecework-day`, data, options);

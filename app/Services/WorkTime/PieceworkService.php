@@ -47,6 +47,9 @@ class PieceworkService
             $before = $id ? DB::table('work_piecework_entries')->where('id', $id)->lockForUpdate()->first() : null;
             abort_if($id && ! $before, 404);
             abort_if($before && (int) $before->employee_id !== (int) $data['employee_id'], 422, 'Не можна перенести збережену роботу іншому працівнику.');
+            abort_if(DB::table('work_piecework_days')->where('employee_id', $data['employee_id'])
+                ->whereIn('work_date', array_unique([$data['date'], $before->work_date ?? $data['date']]))->exists(),
+                409, 'Цей день уже ведеться у новій таблиці сум. Оновіть сторінку та редагуйте суму в клітинці.');
             $rate = $data['pricing_mode'] === 'unit' ? WorkTimeService::units($data['unit_rate']) : null;
             $total = $rate === null ? WorkTimeService::units($data['agreed_total']) : $rate * (int) $data['quantity'];
             abort_if($total > 100000000, 422, 'Сума однієї роботи не може перевищувати 1 000 000 грн.');
