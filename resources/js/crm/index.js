@@ -53,6 +53,13 @@ export async function mountProductionCosts(selector = '#crm-production-costs') {
     return createApp(page).mount(el);
 }
 
+export async function mountWorkTime(selector = '#crm-work-time') {
+    const el = document.querySelector(selector);
+    if (!el) return;
+    const { default: page } = await import('./pages/work-time/WorkTimePage.vue');
+    return createApp(page, { canManagePay: el.dataset.canManagePay === '1' }).mount(el);
+}
+
 export function mountOrderCreate(selector = '#crm-order-create') {
     const el = document.querySelector(selector);
     if (!el) return;
@@ -220,6 +227,7 @@ function autoMount() {
     mountSalesAnalytics();
     mountSoleInventory();
     mountProductionCosts();
+    mountWorkTime();
     mountOrderCreate();
     mountOrderEdit();
     mountOrderList();

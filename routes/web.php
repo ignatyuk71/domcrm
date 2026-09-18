@@ -19,6 +19,7 @@ use App\Http\Controllers\FinanceController;
 use App\Http\Controllers\SalesAnalyticsController;
 use App\Http\Controllers\SoleInventoryController;
 use App\Http\Controllers\ProductionCostController;
+use App\Http\Controllers\WorkTimeController;
 use App\Http\Controllers\PackingController;
 use App\Http\Controllers\SavedFileController;
 use App\Http\Controllers\NovaPoshtaSettingsController;
@@ -59,6 +60,18 @@ Route::middleware(['auth', 'verified', 'role:owner,operator,packer'])->group(fun
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth')->group(function () {
+
+    Route::middleware('role:owner,operator')->group(function () {
+        Route::get('/work-time', [WorkTimeController::class, 'index'])->name('work-time.index');
+        Route::get('/api/work-time', [WorkTimeController::class, 'data']);
+        Route::put('/api/work-time/employees/{employee}/entry', [WorkTimeController::class, 'saveEntry'])->whereNumber('employee');
+    });
+    Route::middleware('role:owner')->group(function () {
+        Route::post('/api/work-time/employees', [WorkTimeController::class, 'createEmployee']);
+        Route::put('/api/work-time/employees/{employee}', [WorkTimeController::class, 'updateEmployee'])->whereNumber('employee');
+        Route::get('/api/work-time/employees/{employee}/payroll', [WorkTimeController::class, 'payroll'])->whereNumber('employee');
+        Route::put('/api/work-time/employees/{employee}/payroll', [WorkTimeController::class, 'savePayroll'])->whereNumber('employee');
+    });
 
     // --- АНАЛІТИКА ПРОДАЖІВ (фінансові дані — лише власник) ---
     Route::middleware('role:owner')->group(function () {

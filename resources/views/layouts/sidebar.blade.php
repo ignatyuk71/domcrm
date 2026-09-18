@@ -411,6 +411,12 @@
         @endif
 
         @if($canSeeOperations)
+            <a href="{{ route('work-time.index') }}" class="sidebar-link {{ request()->routeIs('work-time.*') ? 'active' : '' }}"
+               @if(request()->routeIs('work-time.*')) aria-current="page" @endif>
+                <span class="icon-frame"><i class="bi bi-calendar-week"></i></span>
+                <span class="item-text">Табель</span>
+            </a>
+
             <a href="{{ url('/orders') }}" class="sidebar-link {{ request()->is('orders*') ? 'active' : '' }}">
                 <span class="icon-frame"><i class="bi bi-basket2-fill"></i></span>
                 <span class="item-text">Замовлення</span>
