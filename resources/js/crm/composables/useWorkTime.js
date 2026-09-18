@@ -7,7 +7,7 @@ export function useWorkTime({ fetchData = fetchWorkTime, saveData = saveWorkDay,
     valueField = 'hours', employeeType = 'hourly', autoLoad = true } = {}) {
     const now = new Date();
     const period = ref(periodKey(now.getFullYear(), now.getMonth() + 1));
-    const allEmployees = ref([]), loading = ref(false), ready = ref(false), loadError = ref('');
+    const allEmployees = ref([]), loading = ref(false), ready = ref(false), loadError = ref(''), savedRevision = ref(0);
     const employees = computed(() => allEmployees.value.filter(employee => (employee.payment_type || 'hourly') === employeeType));
     const canManage = ref(false), entries = reactive({}), drafts = reactive({}), states = reactive({});
     const timers = new Map(), running = new Map();
@@ -74,6 +74,7 @@ export function useWorkTime({ fetchData = fetchWorkTime, saveData = saveWorkDay,
                         draft[valueField] = data[valueField] == null ? '' : String(Number(data[valueField])); draft.note = data.note || '';
                     }
                     states[k] = { pending: false, error: '' };
+                    savedRevision.value++;
                 } catch (error) {
                     if (alive) states[k] = { pending: false, error: workError(error), conflict: error?.response?.status === 409,
                         uncertain: !error?.response || error.response.status >= 500 };
@@ -125,6 +126,6 @@ export function useWorkTime({ fetchData = fetchWorkTime, saveData = saveWorkDay,
     const unload = event => { if (unsaved.value || pending.value) { event.preventDefault(); event.returnValue = ''; } };
     onMounted(() => { if (autoLoad) load(); window.addEventListener('beforeunload', unload); });
     onBeforeUnmount(() => { alive = false; timers.forEach(clearTimeout); window.removeEventListener('beforeunload', unload); });
-    return { period, days, employees, allEmployees, loading, ready, loadError, canManage, entries, drafts, states, pending, unsaved, failures,
+    return { period, days, employees, allEmployees, loading, ready, loadError, canManage, entries, drafts, states, pending, unsaved, failures, savedRevision,
         key, employeeHours, employeeDays, allHours, dayHours, lastDay, load, flush, schedule, flushAll, changePeriod, reload, forgetEmployee };
 }

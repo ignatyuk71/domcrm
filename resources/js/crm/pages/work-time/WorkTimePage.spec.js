@@ -14,7 +14,9 @@ const record = (replace = {}) => ({ employee_id: 1, date: '2026-09-01', hours: '
 const payroll = (replace = {}) => ({ employee_id: 1, month: period, hours: '8.00', hourly_rate: '50.00', bonus: '100.00', paid: '0.00', note: null, version: 1, ...replace });
 let wrapper;
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
-const button = label => wrapper.findAll('button').find(node => node.text().includes(label));
+const toastText = () => document.querySelector('.app-toast')?.textContent || '';
+const toastButton = label => [...document.querySelectorAll('.app-toast button')].find(node => node.textContent.includes(label) || node.getAttribute('aria-label') === label);
+async function clickToast(label) { toastButton(label).click(); await flushPromises(); }
 const cell = () => wrapper.get('[data-cell="1|2026-09-01"]');
 async function open(props = { canManagePay: true }) { wrapper = mount(WorkTimePage, { props, attachTo: document.body }); await flushPromises(); }
 beforeEach(() => {
@@ -35,61 +37,71 @@ beforeEach(() => {
 afterEach(() => { wrapper?.unmount(); document.body.innerHTML = ''; vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe('Табель робочого часу', () => {
-    it('кошик відкриває підтвердження з безпечним фокусом, скасування нічого не видаляє', async () => {
-        await open();
-        await wrapper.get('[data-testid="delete-employee-1"]').trigger('click'); await flushPromises();
-        const dialog = wrapper.get('.wt-delete-dialog');
-        expect(dialog.attributes('open')).toBeDefined();
-        expect(dialog.text()).toContain(employee.name); expect(dialog.text()).toContain('за всі місяці');
-        expect(document.activeElement.textContent).toBe('Скасувати');
-        expect(api.deleteWorkEmployee).not.toHaveBeenCalled();
-        await dialog.trigger('cancel'); await flushPromises();
-        expect(dialog.attributes('open')).toBeUndefined();
-        expect(api.deleteWorkEmployee).not.toHaveBeenCalled();
-        expect(cell().element.value).toBe('8');
-    });
-    it.each([1, 2])('після підтвердження видаляє тільки працівника %s без повторного запиту', async id => {
-        const request = deferred(); api.deleteWorkEmployee.mockReturnValueOnce(request.promise);
-        await open();
-        await wrapper.get(`[data-testid="delete-employee-${id}"]`).trigger('click'); await flushPromises();
-        const confirm = wrapper.get('[data-testid="confirm-delete-employee"]');
-        await confirm.trigger('click'); await confirm.trigger('click'); await flushPromises();
-        expect(api.deleteWorkEmployee).toHaveBeenCalledExactlyOnceWith(id, 1);
-        expect(confirm.attributes('disabled')).toBeDefined();
-        request.resolve({ data: { deleted: true } }); await flushPromises();
-        expect(wrapper.find(`[data-testid="delete-employee-${id}"]`).exists()).toBe(false);
-        expect(wrapper.find(`[data-testid="delete-employee-${id === 1 ? 2 : 1}"]`).exists()).toBe(true);
-        expect(wrapper.text()).toContain('Працівника та всі його записи видалено');
-        if (id === 1) expect(wrapper.get('[data-testid="all-hours"]').text()).toContain('0');
-        await vi.advanceTimersByTimeAsync(1000); expect(api.saveWorkDay).not.toHaveBeenCalled();
-    });
-    it('залишає дані і модальне вікно при помилці видалення', async () => {
-        api.deleteWorkEmployee.mockRejectedValueOnce({ response: { status: 409, data: { message: 'Працівника вже змінили' } } });
-        await open(); await wrapper.get('[data-testid="delete-employee-1"]').trigger('click'); await flushPromises();
-        await wrapper.get('[data-testid="confirm-delete-employee"]').trigger('click'); await flushPromises();
-        expect(wrapper.get('.wt-delete-dialog').attributes('open')).toBeDefined();
-        expect(wrapper.get('.wt-delete-dialog').text()).toContain('Працівника вже змінили');
-        expect(cell().element.value).toBe('8');
-    });
-    it('оператор не бачить кошики', async () => {
-        await open({ canManagePay: false });
+    it.each([true, false])('не має керування працівниками або модальних форм, власник: %s', async canManagePay => {
+        await open({ canManagePay });
+        expect(wrapper.find('dialog').exists()).toBe(false);
         expect(wrapper.find('.wt-delete').exists()).toBe(false);
+        expect(wrapper.find('.wt-heading button').exists()).toBe(false);
+        expect(wrapper.find('.wt-person button').exists()).toBe(false);
+        await wrapper.get('[data-testid="employee-1"]').trigger('click');
+        expect(api.fetchWorkPayroll).not.toHaveBeenCalled();
+        expect(api.createWorkEmployee).not.toHaveBeenCalled();
+        expect(api.updateWorkEmployee).not.toHaveBeenCalled();
         expect(api.deleteWorkEmployee).not.toHaveBeenCalled();
+        expect(pieceApi.fetchPieceworkDays).toHaveBeenCalledTimes(canManagePay ? 1 : 0);
     });
-    it('завершує автозбереження перед видаленням і не видаляє при помилковій клітинці', async () => {
-        await open(); await cell().setValue('25');
-        await wrapper.get('[data-testid="delete-employee-1"]').trigger('click'); await flushPromises();
-        await wrapper.get('[data-testid="confirm-delete-employee"]').trigger('click'); await flushPromises();
-        expect(api.deleteWorkEmployee).not.toHaveBeenCalled();
-        expect(wrapper.get('.wt-delete-dialog').text()).toContain('Спочатку виправте незбережені клітинки');
-        await wrapper.get('.wt-delete-dialog').trigger('cancel');
-        await cell().setValue('7');
-        await wrapper.get('[data-testid="delete-employee-1"]').trigger('click'); await flushPromises();
-        await wrapper.get('[data-testid="confirm-delete-employee"]').trigger('click'); await flushPromises();
-        expect(api.saveWorkDay).toHaveBeenCalledWith(1, expect.objectContaining({ hours: '7.00' }));
-        expect(api.deleteWorkEmployee).toHaveBeenCalledExactlyOnceWith(1, 1);
-        expect(api.saveWorkDay.mock.invocationCallOrder[0]).toBeLessThan(api.deleteWorkEmployee.mock.invocationCallOrder[0]);
+    it('не повідомляє про збереження при відкритті, успіх зникає після реального запису', async () => {
+        await open(); expect(document.querySelector('.app-toast')).toBeNull();
+        await cell().setValue('7'); await cell().trigger('blur'); await flushPromises();
+        expect(toastText()).toContain('Усі зміни збережено');
+        expect(document.querySelector('.app-toast').getAttribute('role')).toBe('status');
+        expect(wrapper.find('.wt-save-state').exists()).toBe(false);
+        await vi.advanceTimersByTimeAsync(4000); await flushPromises();
+        expect(document.querySelector('.app-toast')).toBeNull();
     });
+    it('помилка містить працівника і дату, не зникає та відкривається повторно', async () => {
+        await open(); await cell().setValue('25'); await cell().trigger('blur'); await flushPromises();
+        expect(toastText()).toContain(employee.name); expect(toastText()).toContain('2026-09-01');
+        expect(document.querySelector('.app-toast').getAttribute('role')).toBe('alert');
+        expect(cell().attributes('aria-invalid')).toBe('true');
+        expect(wrapper.find('.wt-errors').exists()).toBe(false);
+        await vi.advanceTimersByTimeAsync(10000); expect(toastText()).toContain('Введіть від 0 до 24');
+        await clickToast('Закрити');
+        await wrapper.get('[aria-label="Показати помилки табеля"]').trigger('click'); await flushPromises();
+        expect(toastText()).toContain('Введіть від 0 до 24');
+    });
+    it('успіх іншої клітинки не перекриває невиправлену помилку', async () => {
+        await open(); await cell().setValue('25'); await cell().trigger('blur'); await flushPromises();
+        const amount = wrapper.get('[data-money-cell="2|2026-09-09"]');
+        await amount.setValue('600'); await amount.trigger('blur'); await flushPromises();
+        expect(toastText()).toContain('Введіть від 0 до 24');
+        expect(toastText()).not.toContain('Усі зміни збережено');
+        expect(document.querySelectorAll('.app-toast')).toHaveLength(1);
+    });
+    it('помилка завантаження показується у toast і має повтор', async () => {
+        api.fetchWorkTime.mockRejectedValueOnce({ response: { status: 500, data: { message: 'Табель недоступний' } } });
+        await open(); expect(toastText()).toContain('Табель недоступний');
+        expect(wrapper.find('.alert-danger').exists()).toBe(false);
+        await clickToast('Оновити табель');
+        expect(api.fetchWorkTime).toHaveBeenCalledTimes(2);
+        expect(cell().element.value).toBe('8');
+        expect(toastText()).toContain('Табель оновлено');
+    });
+    it('закриття попередження не відкидає чернетки та не викликає браузерну модалку', async () => {
+        await open(); await cell().setValue('25'); await cell().trigger('blur'); await flushPromises();
+        await wrapper.get('[aria-label="Оновити табель"]').trigger('click'); await flushPromises();
+        expect(toastText()).toContain('Незбережені зміни буде втрачено');
+        await clickToast('Залишити зміни');
+        expect(cell().element.value).toBe('25');
+        expect(api.fetchWorkTime).toHaveBeenCalledTimes(1);
+        expect(window.confirm).not.toHaveBeenCalled();
+    });
+
+
+
+
+
+
     it('має однакову сітку колонок для годин і сум у місяцях різної довжини', async () => {
         await open();
         for (const [month, count] of [['9', 30], ['10', 31], ['2', 28]]) {
@@ -114,14 +126,7 @@ describe('Табель робочого часу', () => {
         expect(input.element.value).toBe('123456.78');
         expect(input.attributes('title')).toBe('123456.78 грн');
     });
-    it('лишає додавання працівників тільки в основному заголовку', async () => {
-        await open();
-        const header = wrapper.get('.wt-money-sheet .wt-table-heading');
-        expect(header.text()).toBe('За виконану роботу ГРИВНІ');
-        expect(header.find('button').exists()).toBe(false);
-        expect(header.find('p').exists()).toBe(false);
-        expect(wrapper.get('.wt-heading').text()).toContain('Додати працівника');
-    });
+
     it('зберігає 600 і 300 у різні дні та показує 900 без полів кількості', async () => {
         await open();
         const first = wrapper.get('[data-money-cell="2|2026-09-09"]'), second = wrapper.get('[data-money-cell="2|2026-09-20"]');
@@ -147,7 +152,7 @@ describe('Табель робочого часу', () => {
         await input.setValue('600'); await input.trigger('blur'); await flushPromises();
         await wrapper.get('[aria-label="Місяць"]').setValue('10'); await flushPromises();
         expect(wrapper.get('[aria-label="Місяць"]').element.value).toBe('9');
-        expect(input.element.value).toBe('600'); expect(wrapper.text()).toContain('Суму вже змінили');
+        expect(input.element.value).toBe('600'); expect(toastText()).toContain('Суму вже змінили');
     });
     it('оновлює обидві таблиці при виборі року та місяця', async () => {
         await open(); await wrapper.get('[aria-label="Місяць"]').setValue('10'); await flushPromises();
@@ -167,7 +172,7 @@ describe('Табель робочого часу', () => {
     it('не додає відрядних працівників у сітку годин', async () => {
         api.fetchWorkTime.mockResolvedValue({ data: { month: period, employees: [employee, { ...employee, id: 2, name: 'Відрядний тест', payment_type: 'piecework' }], entries: [], can_manage_pay: true } });
         await open(); expect(wrapper.find('[data-testid="employee-1"]').exists()).toBe(true);
-        expect(wrapper.find('[data-testid="employee-2"]').exists()).toBe(false);
+        expect(wrapper.find('[data-testid="employee-2"]').exists()).toBe(true);
         expect(wrapper.find('[data-cell="2|2026-09-01"]').exists()).toBe(false);
         expect(wrapper.find('[data-money-cell="2|2026-09-01"]').exists()).toBe(true);
         expect(wrapper.findAll('table')).toHaveLength(2);
@@ -180,23 +185,12 @@ describe('Табель робочого часу', () => {
         expect(api.saveWorkDay).not.toHaveBeenCalled(); expect(api.fetchWorkPayroll).not.toHaveBeenCalled();
         expect(wrapper.find('table').text()).not.toContain('грн');
     });
-    it('оператор має картку годин без зарплатної вкладки й запитів', async () => {
-        api.fetchWorkTime.mockResolvedValue({ data: { month: period, employees: [employee], entries: [], can_manage_pay: false } });
-        await open({ canManagePay: false }); await wrapper.get('[data-testid="employee-1"]').trigger('click'); await flushPromises();
-        expect(wrapper.find('dialog').attributes('open')).toBeDefined();
-        expect(wrapper.find('[data-testid="pay-tab"]').exists()).toBe(false);
-        expect(wrapper.find('[name="hourly_rate"]').exists()).toBe(false);
-        expect(api.fetchWorkPayroll).not.toHaveBeenCalled();
-        expect(button('Додати працівника')).toBeUndefined();
-        expect(button('Відрядні роботи')).toBeUndefined();
-        expect(pieceApi.fetchPieceworkDays).not.toHaveBeenCalled();
-        expect(wrapper.find('[aria-label="Суми за виконану роботу за днями"]').exists()).toBe(false);
-    });
+
     it('автозбереження приймає кому і використовує версію клітинки', async () => {
         await open(); await cell().setValue('7,5'); await vi.advanceTimersByTimeAsync(650); await flushPromises();
         expect(api.saveWorkDay).toHaveBeenCalledWith(1, { date: '2026-09-01', hours: '7.50', note: null, version: 1 });
         expect(wrapper.get('[data-testid="all-hours"]').text()).toContain('7,5');
-        expect(wrapper.text()).toContain('Усі зміни збережено');
+        expect(toastText()).toContain('Усі зміни збережено');
     });
     it('не втрачає новий текст під час незавершеного запиту', async () => {
         const first = deferred(); api.saveWorkDay.mockImplementationOnce(() => first.promise);
@@ -209,14 +203,14 @@ describe('Табель робочого часу', () => {
     it('показує мережеву помилку і повторює ті самі дані без втрати тексту', async () => {
         api.saveWorkDay.mockRejectedValueOnce(new Error('offline'));
         await open(); await cell().setValue('7'); await cell().trigger('blur'); await flushPromises();
-        expect(wrapper.text()).toContain('Є незбережені зміни'); expect(cell().element.value).toBe('7');
-        await button('Повторити').trigger('click'); await flushPromises();
-        expect(api.saveWorkDay).toHaveBeenCalledTimes(2); expect(wrapper.text()).toContain('Усі зміни збережено');
+        expect(toastText()).toContain('Не вдалося'); expect(cell().element.value).toBe('7');
+        await clickToast('Повторити');
+        expect(api.saveWorkDay).toHaveBeenCalledTimes(2); expect(toastText()).toContain('Усі зміни збережено');
     });
     it('конфлікт не перезаписує чужу клітинку автоматично', async () => {
         api.saveWorkDay.mockRejectedValue({ response: { status: 409, data: { message: 'Цей день уже змінили' } } });
         await open(); await cell().setValue('7'); await cell().trigger('blur'); await flushPromises();
-        expect(wrapper.text()).toContain('Цей день уже змінили');
+        expect(toastText()).toContain('Цей день уже змінили');
         await cell().trigger('blur'); await flushPromises(); expect(api.saveWorkDay).toHaveBeenCalledTimes(1);
         await wrapper.get('select[aria-label="Місяць"]').setValue('10'); await flushPromises();
         expect(api.fetchWorkTime).toHaveBeenCalledTimes(1); expect(wrapper.get('select[aria-label="Місяць"]').element.value).toBe('9');
@@ -231,12 +225,14 @@ describe('Табель робочого часу', () => {
     it('підтверджене відкидання чернетки скасовує таймер автозбереження', async () => {
         await open(); await cell().setValue('7');
         await wrapper.get('button[aria-label="Оновити табель"]').trigger('click'); await flushPromises();
+        expect(toastText()).toContain('Незбережені зміни буде втрачено');
+        await clickToast('Відкинути зміни й оновити');
         await vi.advanceTimersByTimeAsync(700); await flushPromises();
         expect(api.saveWorkDay).not.toHaveBeenCalled(); expect(cell().element.value).toBe('8');
     });
     it('не надсилає неправильні години, зберігає очищення як null', async () => {
         await open(); await cell().setValue('25'); await cell().trigger('blur'); await flushPromises();
-        expect(api.saveWorkDay).not.toHaveBeenCalled(); expect(wrapper.text()).toContain('Введіть від 0 до 24');
+        expect(api.saveWorkDay).not.toHaveBeenCalled(); expect(toastText()).toContain('Введіть від 0 до 24');
         await cell().setValue(''); await cell().trigger('blur'); await flushPromises();
         expect(api.saveWorkDay).toHaveBeenCalledWith(1, expect.objectContaining({ hours: null }));
     });
@@ -245,41 +241,11 @@ describe('Табель робочого часу', () => {
         expect(api.saveWorkDay).toHaveBeenCalled(); expect(api.fetchWorkTime).toHaveBeenLastCalledWith('2026-10');
         expect(wrapper.get('[data-testid="all-hours"]').text()).toContain('0');
     });
-    it('модальне вікно редагує ті самі години, що і таблиця', async () => {
-        await open(); await wrapper.get('[data-testid="employee-1"]').trigger('click'); await flushPromises();
-        await wrapper.get('dialog select').setValue('2026-09-01');
-        await wrapper.get('[name="day_hours"]').setValue('6'); await button('Зберегти день').trigger('click'); await flushPromises();
-        expect(cell().element.value).toBe('6'); expect(wrapper.find('dialog').attributes('open')).toBeDefined();
-        await button('Готово').trigger('click'); await flushPromises(); expect(wrapper.find('dialog').attributes('open')).toBeUndefined();
-    });
-    it('зарплата завантажується лише при відкритті нарахувань і зберігається явно', async () => {
-        await open(); await wrapper.get('[data-testid="employee-1"]').trigger('click'); await flushPromises();
-        await wrapper.get('[data-testid="pay-tab"]').trigger('click'); await flushPromises();
-        expect(api.fetchWorkPayroll).toHaveBeenCalledWith(1, period);
-        await wrapper.get('[name="bonus"]').setValue('200'); expect(wrapper.get('[data-testid="balance"]').text()).toContain('600');
-        expect(api.saveWorkPayroll).not.toHaveBeenCalled(); await button('Зберегти нарахування').trigger('submit'); await flushPromises();
-        expect(api.saveWorkPayroll).toHaveBeenCalledWith(1, expect.objectContaining({ hourly_rate: '50.00', bonus: '200.00', paid: '0.00', month: period, version: 1 }));
-    });
-    it('відсутня ставка не показує нульову зарплату', async () => {
-        api.fetchWorkPayroll.mockResolvedValue({ data: payroll({ hourly_rate: null, version: 0 }) });
-        await open(); await wrapper.get('[data-testid="employee-1"]').trigger('click'); await flushPromises(); await wrapper.get('[data-testid="pay-tab"]').trigger('click'); await flushPromises();
-        expect(wrapper.get('[data-testid="balance"]').text()).toBe('—');
-    });
-    it('нарахування використовують актуальні години сервера, а не старий табель', async () => {
-        api.fetchWorkPayroll.mockResolvedValue({ data: payroll({ hours: '10.00' }) });
-        await open(); await wrapper.get('[data-testid="employee-1"]').trigger('click'); await flushPromises();
-        await wrapper.get('[data-testid="pay-tab"]').trigger('click'); await flushPromises();
-        expect(wrapper.get('[data-testid="balance"]').text()).toContain('600');
-        expect(wrapper.get('.wt-month-total').text()).toContain('10 год');
-    });
-    it('працівника додає лише явно та повторює ключ після помилки', async () => {
-        api.createWorkEmployee.mockRejectedValueOnce(new Error('offline'));
-        await open(); await button('Додати працівника').trigger('click'); await flushPromises();
-        await wrapper.get('[name="employee_name"]').setValue('Тест');
-        const form = wrapper.get('.wt-employee-dialog form'); await form.trigger('submit'); await flushPromises();
-        const token = api.createWorkEmployee.mock.calls[0][0].request_key;
-        await form.trigger('submit'); await flushPromises(); expect(api.createWorkEmployee.mock.calls[1][0].request_key).toBe(token);
-    });
+
+
+
+
+
 });
 
 describe('Календар і години', () => {
