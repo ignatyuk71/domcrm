@@ -34,6 +34,30 @@ beforeEach(() => {
 afterEach(() => { wrapper?.unmount(); document.body.innerHTML = ''; vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe('Табель робочого часу', () => {
+    it('має однакову сітку колонок для годин і сум у місяцях різної довжини', async () => {
+        await open();
+        for (const [month, count] of [['9', 30], ['10', 31], ['2', 28]]) {
+            if (month !== '9') { await wrapper.get('[aria-label="Місяць"]').setValue(month); await flushPromises(); }
+            const tables = wrapper.findAll('table.wt-calendar');
+            expect(tables).toHaveLength(2);
+            for (const table of tables) {
+                expect(table.element.style.getPropertyValue('--wt-day-count')).toBe(String(count));
+                expect(table.findAll('colgroup .wt-day-col')).toHaveLength(count);
+                expect(table.get('colgroup col:first-child').classes()).toContain('wt-person-col');
+                expect(table.get('colgroup col:last-child').classes()).toContain('wt-total-col');
+            }
+            expect(tables[0].get('colgroup').html()).toBe(tables[1].get('colgroup').html());
+        }
+    });
+    it('не обрізає саме значення довгої суми при компактному відображенні', async () => {
+        await open(); const input = wrapper.get('[data-money-cell="2|2026-09-09"]');
+        await input.setValue('123456,78');
+        expect(input.attributes('title')).toBe('123456,78 грн');
+        await input.trigger('focus'); await input.trigger('blur'); await flushPromises();
+        expect(pieceApi.savePieceworkDay).toHaveBeenCalledWith(2, expect.objectContaining({ amount: '123456.78' }));
+        expect(input.element.value).toBe('123456.78');
+        expect(input.attributes('title')).toBe('123456.78 грн');
+    });
     it('лишає додавання працівників тільки в основному заголовку', async () => {
         await open();
         const header = wrapper.get('.wt-money-sheet .wt-table-heading');
