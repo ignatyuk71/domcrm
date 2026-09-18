@@ -49,7 +49,12 @@ class WorkEmployeeDeletionTest extends TestCase
                 $this->putJson("/api/work-time/employees/$employee/payroll", ['month' => $month, 'hourly_rate' => '50', 'bonus' => '100', 'paid' => '200', 'version' => 0])->assertOk();
             }
         }
-        $otherRevisions = DB::table('work_time_revisions')->where('id', '>', 6)->get()->toJson();
+        // MySQL не скидає AUTO_INCREMENT після відкату попереднього тесту.
+        $otherRevisions = DB::table('work_time_revisions')->orderBy('id')->get()
+            ->filter(fn ($row) => $row->subject_type === 'employee'
+                ? (int) $row->subject_id === $other
+                : (int) (json_decode($row->after, true)['employee_id'] ?? 0) === $other)
+            ->values()->toJson();
         $payload = ['version' => 1, 'confirmed' => true];
         $this->deleteJson("/api/work-time/employees/$id", $payload)->assertOk()->assertJsonPath('deleted', true);
         $this->deleteJson("/api/work-time/employees/$id", $payload)->assertOk();
@@ -57,7 +62,7 @@ class WorkEmployeeDeletionTest extends TestCase
             $this->assertDatabaseMissing($table, [$column => $id]);
             $this->assertDatabaseHas($table, [$column => $other]);
         }
-        $this->assertSame($otherRevisions, DB::table('work_time_revisions')->where('id', '>', 6)->where('subject_type', '!=', 'employee_deleted')->get()->toJson());
+        $this->assertSame($otherRevisions, DB::table('work_time_revisions')->where('subject_type', '!=', 'employee_deleted')->orderBy('id')->get()->toJson());
         $this->assertDatabaseCount('work_time_revisions', 6);
         $audit = DB::table('work_time_revisions')->where('subject_type', 'employee_deleted')->sole();
         $this->assertNull($audit->before);
