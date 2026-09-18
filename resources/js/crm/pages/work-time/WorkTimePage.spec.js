@@ -34,6 +34,14 @@ beforeEach(() => {
 afterEach(() => { wrapper?.unmount(); document.body.innerHTML = ''; vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe('Табель робочого часу', () => {
+    it('лишає додавання працівників тільки в основному заголовку', async () => {
+        await open();
+        const header = wrapper.get('.wt-money-sheet .wt-table-heading');
+        expect(header.text()).toBe('За виконану роботу ГРИВНІ');
+        expect(header.find('button').exists()).toBe(false);
+        expect(header.find('p').exists()).toBe(false);
+        expect(wrapper.get('.wt-heading').text()).toContain('Додати працівника');
+    });
     it('зберігає 600 і 300 у різні дні та показує 900 без полів кількості', async () => {
         await open();
         const first = wrapper.get('[data-money-cell="2|2026-09-09"]'), second = wrapper.get('[data-money-cell="2|2026-09-20"]');

@@ -36,7 +36,7 @@
     <p class="wt-bottom-note"><i class="bi bi-cursor" aria-hidden="true"></i> Натисніть на ім’я — відкриється картка працівника. {{ owner ? 'Зарплатні дані доступні лише вам у вкладці «Нарахування».' : '' }}</p>
 
     <section v-if="owner" class="wt-sheet wt-money-sheet" aria-labelledby="wt-piece-title" :aria-busy="piece.loading">
-      <header class="wt-table-heading"><div><h2 id="wt-piece-title">За виконану роботу <span>ГРИВНІ</span></h2><p>{{ workMonths[month - 1] }} {{ year }} · Просто впишіть суму навпроти дня, коли принесли роботу.</p></div><button class="btn btn-sm btn-outline-primary" :disabled="loading || piece.loading || piece.pending" @click="openEmployeeForm(null, 'piecework')">+ Додати працівника</button></header>
+      <header class="wt-table-heading"><div><h2 id="wt-piece-title">За виконану роботу <span>ГРИВНІ</span></h2></div></header>
       <div v-if="piece.loadError" class="wt-errors" role="alert">{{ piece.loadError }} <button class="btn btn-sm btn-outline-danger" @click="reload">Повторити</button></div>
       <div v-if="piece.failures.length" class="wt-errors" role="alert"><div v-for="[k, state] in piece.failures" :key="k"><span>{{ pieceFailureLabel(k) }}: {{ state.error }}</span><button v-if="!state.conflict" class="btn btn-sm btn-outline-danger" @click="piece.flush(k)">Повторити</button><button v-else class="btn btn-sm btn-outline-danger" @click="reload">Оновити таблиці</button></div></div>
       <div v-if="piece.ready && piece.period === period && piece.employees.length" class="wt-scroll wt-money-scroll">
