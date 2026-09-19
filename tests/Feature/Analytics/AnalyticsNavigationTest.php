@@ -28,8 +28,11 @@ class AnalyticsNavigationTest extends TestCase
             $this->assertCount(1, $activeTabs);
             $this->assertSame(url($path), $activeTabs->item(0)->getAttribute('href'));
 
-            $menu = $xpath->query('//nav[@class="sidebar-nav"]/a[@data-analytics-menu]');
+            $this->assertCount(0, $xpath->query('//nav[@class="sidebar-nav"]//a[@data-analytics-menu]'));
+            $this->assertCount(1, $xpath->query('//a[@data-analytics-menu]'));
+            $menu = $xpath->query('//div[@id="settings-footer"]//a[@data-analytics-menu]');
             $this->assertCount(1, $menu);
+            $this->assertStringContainsString('sidebar-link-sub', $menu->item(0)->getAttribute('class'));
             $this->assertSame('Аналітика', trim($menu->item(0)->textContent));
             $this->assertSame('page', $menu->item(0)->getAttribute('aria-current'));
             $this->assertStringContainsString('active', $menu->item(0)->getAttribute('class'));

@@ -400,16 +400,6 @@
             <span class="item-text">Дашборд</span>
         </a>
 
-        @if($isOwner)
-            <a href="{{ route(match (session('analytics.last_tab')) { 'soles' => 'inventory.soles', 'costs' => 'analytics.costs', default => 'analytics.sales' }) }}"
-               class="sidebar-link {{ request()->routeIs('analytics.*', 'inventory.soles') ? 'active' : '' }}"
-               data-analytics-menu
-               @if(request()->routeIs('analytics.*', 'inventory.soles')) aria-current="page" @endif>
-                <span class="icon-frame"><i class="bi bi-graph-up-arrow"></i></span>
-                <span class="item-text">Аналітика</span>
-            </a>
-        @endif
-
         @if($canSeeOperations)
             <a href="{{ route('work-time.index') }}" class="sidebar-link {{ request()->routeIs('work-time.*') ? 'active' : '' }}"
                @if(request()->routeIs('work-time.*')) aria-current="page" @endif>
@@ -534,6 +524,13 @@
             </a>
 
             @if($isOwner)
+                <a href="{{ route(match (session('analytics.last_tab')) { 'soles' => 'inventory.soles', 'costs' => 'analytics.costs', default => 'analytics.sales' }) }}"
+                   class="sidebar-link-sub {{ request()->routeIs('analytics.*', 'inventory.soles') ? 'active' : '' }}"
+                   data-analytics-menu
+                   @if(request()->routeIs('analytics.*', 'inventory.soles')) aria-current="page" @endif>
+                    <span class="icon-frame"><i class="bi bi-graph-up-arrow"></i></span>
+                    <span class="item-text-sub">Аналітика</span>
+                </a>
                 <a href="{{ route('settings.workPayroll.index') }}" class="sidebar-link-sub {{ request()->is('settings/work-payroll*') ? 'active' : '' }}">
                     <span class="icon-frame"><i class="bi bi-person-vcard"></i></span>
                     <span class="item-text-sub">Працівники та зарплата</span>
