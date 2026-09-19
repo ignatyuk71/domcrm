@@ -9,32 +9,12 @@
       <div class="wp-period"><select class="form-select" aria-label="Місяць" :value="month" :disabled="loading" @change="changePeriod($event, 'month')"><option v-for="(name, i) in workMonths" :key="name" :value="i + 1">{{ name }}</option></select><select class="form-select wp-year" aria-label="Рік" :value="year" :disabled="loading" @change="changePeriod($event, 'year')"><option v-for="y in years" :key="y">{{ y }}</option></select><button class="btn btn-outline-secondary" aria-label="Оновити дані" :disabled="loading" @click="load(true)"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i></button></div>
     </div>
 
-    <template v-if="tab === 'report'">
-      <div v-if="report" class="wp-stats">
-        <div><span>{{ report.incomplete_count ? 'Відомі нарахування' : 'Нараховано' }}</span><strong>{{ money(report.totals.accrued) }}</strong><small>З преміями та відшкодуванням</small></div>
-        <div><span>Виплачено</span><strong>{{ money(report.totals.paid) }}</strong><small>Вказані вами виплати за місяць</small></div>
-        <div><span>{{ report.incomplete_count ? 'Відомий залишок' : 'Залишок до виплати' }}</span><strong>{{ money(report.totals.balance) }}</strong><small>{{ report.incomplete_count ? `Без ставки: ${report.incomplete_count}. Підсумок неповний.` : 'Мінус означає переплату' }}</small></div>
-      </div>
-      <div class="wp-card">
-        <div class="wp-card-heading"><div><h2>{{ periodLabel }}</h2><p>Години й виконана робота — з табеля. Ставки та доплати — окремо за кожен місяць.</p></div><a href="/work-time" class="wp-link">Відкрити табель ↗</a></div>
-        <div v-if="report?.rows.length" class="wp-table-scroll"><table class="wp-table" aria-label="Нарахування працівників за місяць">
-          <thead><tr><th>Працівник</th><th>Дні / години</th><th>Ставка</th><th>Зарплата</th><th>Премія</th><th>Відшкодування</th><th>Нараховано</th><th>Виплачено</th><th>Залишок</th><th><span class="visually-hidden">Редагування</span></th></tr></thead>
-          <tbody><tr v-for="row in report.rows" :key="row.employee_id" :data-testid="`payroll-row-${row.employee_id}`">
-            <th scope="row"><button class="wp-name" @click="openPayroll(row)">{{ row.employee.name }}</button><small>{{ typeLabel(row.employee.payment_type) }}{{ row.employee.archived_on ? ' · Архів' : '' }}</small></th>
-            <td>{{ row.employee.payment_type === 'hourly' ? `${row.days} дн.` : '—' }}<small v-if="row.employee.payment_type === 'hourly'">{{ number(row.hours) }} год</small></td>
-            <td><span :class="{ 'wp-missing': row.accrued === null }">{{ rateLabel(row) }}</span></td>
-            <td>{{ money(row.salary) }}<small v-if="Number(row.adjustment)" :title="row.adjustment_reason">Коригування {{ money(row.adjustment) }}</small></td>
-            <td>{{ money(row.bonus) }}</td><td>{{ money(row.expenses) }}</td><td class="wp-emphasis">{{ money(row.accrued) }}</td><td>{{ money(row.paid) }}</td><td :class="{ 'wp-positive': Number(row.balance) > 0 }">{{ money(row.balance) }}</td>
-            <td><button class="wp-icon" :aria-label="`Редагувати нарахування ${row.employee.name}`" @click="openPayroll(row)"><i class="bi bi-pencil" aria-hidden="true"></i></button></td>
-          </tr></tbody>
-          <tfoot><tr><th>Разом{{ report.incomplete_count ? ' · неповний підсумок' : '' }}</th><td colspan="2"></td><td>{{ money(report.totals.salary) }}</td><td>{{ money(report.totals.bonus) }}</td><td>{{ money(report.totals.expenses) }}</td><td>{{ money(report.totals.accrued) }}</td><td>{{ money(report.totals.paid) }}</td><td>{{ money(report.totals.balance) }}</td><td></td></tr></tfoot>
-        </table></div>
-        <div v-else class="wp-empty">{{ loading ? 'Завантажуємо нарахування…' : report ? 'За цей місяць ще немає працівників у звіті.' : 'Звіт не завантажено. Спробуйте оновити дані.' }}</div>
-        <footer class="wp-note">Відшкодування — повернення витрат працівника додатково до зарплати. «Виплачено» — ручний облік, не переказ коштів.</footer>
-      </div>
-    </template>
+    <div v-show="tab === 'report'">
+      <PayrollLedger v-if="report" ref="ledger" :report="report" :label="periodLabel" :disabled="loading || busy || !!kind" @notify="ledgerNotice" @reload="confirmReload" @details="openPayroll" />
+      <div v-else class="wp-card wp-empty">{{ loading ? 'Завантажуємо відомість…' : 'Звіт не завантажено. Спробуйте оновити дані.' }}</div>
+    </div>
 
-    <div v-else class="wp-card">
+    <div v-if="tab === 'employees'" class="wp-card">
       <div class="wp-card-heading"><div><h2>Працівники</h2><p>Це працівники виробництва, не облікові записи для входу в CRM.</p></div><label class="form-check"><input v-model="showArchived" class="form-check-input" type="checkbox" /> Показати архів</label></div>
       <div v-if="visibleEmployees.length" class="wp-table-scroll"><table class="wp-table wp-team" aria-label="Працівники виробництва">
         <thead><tr><th>Ім’я та прізвище</th><th>Посада</th><th>Тип обліку</th><th>Статус</th><th>Дії</th></tr></thead>
@@ -85,6 +65,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import Toast from '../../components/ui/Toast.vue';
+import PayrollLedger from './PayrollLedger.vue';
 import { useToast } from '../../composables/useToast';
 import { workMonths, periodKey, workError } from '../../utils/workTime';
 import { createWorkEmployee, updateWorkEmployee, deleteWorkEmployee } from '../../services/workTimeApi';
@@ -96,6 +77,7 @@ const year = computed(() => Number(period.value.slice(0, 4))), month = computed(
 const years = Array.from({ length: 101 }, (_, i) => 2000 + i);
 const periodLabel = computed(() => `${workMonths[month.value - 1]} ${year.value}`);
 const visibleEmployees = computed(() => employees.value.filter(e => showArchived.value || !e.archived_on));
+const ledger = ref();
 const { toast, showToast, closeToast, runAction, runSecondary } = useToast();
 const modal = ref(), kind = ref(''), form = reactive({}), original = ref(''), errors = ref({}), currentRow = ref(null), deleteTarget = ref(null), deleteCancel = ref();
 const dirty = computed(() => ['employee', 'payroll'].includes(kind.value) && JSON.stringify(form) !== original.value);
@@ -103,10 +85,10 @@ let focusBefore = null, alive = true;
 const number = value => new Intl.NumberFormat('uk-UA', { maximumFractionDigits: 2 }).format(Number(value));
 const money = value => value === null || value === undefined || !Number.isFinite(Number(value)) ? '—' : `${number(value)} грн`;
 const typeLabel = type => type === 'piecework' ? 'За виконану роботу' : 'За годинами';
-function rateLabel(row) {
-  if (row.rate_mode === 'piecework') return 'Суми з табеля';
-  const rate = row.rate_mode === 'daily' ? row.daily_rate : row.hourly_rate;
-  return rate === null ? 'Не вказано' : `${money(rate)} / ${row.rate_mode === 'daily' ? '8 год' : 'год'}`;
+function ledgerNotice(event) {
+  // Відкладений успіх таблиці не перекриває повідомлення відкритої форми.
+  if (event.type === 'success' && (kind.value || loading.value)) return;
+  showToast(event);
 }
 function showError(error, retry = null) {
   errors.value = error?.response?.data?.errors || {};
@@ -114,10 +96,12 @@ function showError(error, retry = null) {
   showToast({ type: 'error', title: 'Не вдалося виконати дію', messages: messages.length ? messages : [workError(error)],
     actionLabel: retry ? 'Повторити' : '', onAction: retry });
 }
-async function load(notify = false, target = period.value) {
+async function load(notify = false, target = period.value, discard = false) {
   if (loading.value) return false;
   loading.value = true;
   try {
+    const clean = await ledger.value?.flush();
+    if (clean === false && !discard) return false;
     const [team, payroll] = await Promise.all([fetchWorkEmployees(), fetchPayrollReport(target)]);
     if (!alive) return false;
     employees.value = team.data.employees; report.value = payroll.data; period.value = target;
@@ -126,13 +110,17 @@ async function load(notify = false, target = period.value) {
   } catch (error) { if (alive) showError(error, () => load(notify, target)); return false; }
   finally { if (alive) loading.value = false; }
 }
+function confirmReload() {
+  showToast({ type: 'warning', title: 'Оновити відомість?', messages: ['Незбережені зміни в клітинках цього місяця буде відкинуто після успішного завантаження. Скопіюйте потрібні значення перед оновленням.'],
+    actionLabel: 'Відкинути й оновити', onAction: () => load(true, period.value, true), secondaryLabel: 'Залишити зміни' });
+}
 async function changePeriod(event, field) {
   const value = Number(event.target.value);
   await load(false, periodKey(field === 'year' ? value : year.value, field === 'month' ? value : month.value));
   event.target.value = String(field === 'year' ? year.value : month.value);
 }
 async function openDialog(type, values = {}) {
-  if (busy.value) return;
+  if (busy.value || loading.value || await ledger.value?.flush() === false) return;
   focusBefore = document.activeElement; closeToast(); errors.value = {};
   Object.keys(form).forEach(k => delete form[k]); Object.assign(form, values); original.value = JSON.stringify(form);
   kind.value = type; await nextTick(); modal.value.showModal();
@@ -208,7 +196,7 @@ const preview = computed(() => {
     return { salary: salary / 100, accrued: accrued / 100, balance: (accrued - cents(form.paid)) / 100 };
   } catch { return { salary: null, accrued: null, balance: null }; }
 });
-const protect = event => { if (dirty.value || busy.value) { event.preventDefault(); event.returnValue = ''; } };
+const protect = event => { if (dirty.value || busy.value || ledger.value?.hasUnsaved) { event.preventDefault(); event.returnValue = ''; } };
 onMounted(() => { load(); window.addEventListener('beforeunload', protect); });
 onBeforeUnmount(() => { alive = false; window.removeEventListener('beforeunload', protect); });
 </script>
