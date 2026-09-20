@@ -23,6 +23,7 @@
         display: flex;
         flex-direction: column;
         height: 100vh;
+        height: 100dvh;
         transition: width var(--transition-speed) cubic-bezier(0.4, 0, 0.2, 1);
         z-index: 1045;
         border-right: 1px solid var(--border-color);
@@ -83,12 +84,14 @@
     /* --- НАВІГАЦІЯ --- */
     .sidebar-nav {
         flex: 1;
+        min-height: 0;
         padding: 24px 12px;
         display: flex;
         flex-direction: column;
         gap: 4px;
         overflow-y: auto; 
         overflow-x: hidden;
+        overscroll-behavior-y: contain;
         /* Стилізація скролу */
         scrollbar-width: thin;
         scrollbar-color: #334155 var(--sidebar-bg);
@@ -159,6 +162,7 @@
     }
 
     .nav-divider {
+        flex-shrink: 0;
         margin: 20px 0 10px 16px;
         text-transform: uppercase;
         font-size: 0.65rem;
@@ -188,6 +192,38 @@
             width: 80px; 
             position: fixed;
             top: 0; left: 0;
+        }
+
+        /* Меню вміщується по висоті без великих порожніх проміжків між групами. */
+        .pro-sidebar .sidebar-nav {
+            padding-block: 12px;
+            gap: 2px;
+        }
+
+        .pro-sidebar .sidebar-nav > .sidebar-link {
+            height: clamp(36px, 5.2vh, 50px);
+        }
+
+        .pro-sidebar .nav-divider {
+            margin: 6px 0 2px 16px;
+            line-height: 16px;
+        }
+
+        /* У вузькій панелі системний скрол Windows не стискає іконки. */
+        .pro-sidebar .sidebar-nav {
+            scrollbar-width: none;
+        }
+
+        .pro-sidebar .sidebar-nav::-webkit-scrollbar {
+            display: none;
+        }
+
+        .pro-sidebar:hover:not(:has(.sidebar-footer:hover)) .sidebar-nav {
+            scrollbar-width: thin;
+        }
+
+        .pro-sidebar:hover:not(:has(.sidebar-footer:hover)) .sidebar-nav::-webkit-scrollbar {
+            display: block;
         }
 
         /* Розширення */
@@ -313,6 +349,21 @@
         .submenu-divider { height: 1px; background: rgba(255,255,255,0.1); margin: 6px 0; }
         
         body { padding-left: 80px; transition: padding-left 0.3s; }
+    }
+
+    @media (min-width: 992px) and (max-height: 800px) {
+        .pro-sidebar .sidebar-header {
+            height: 64px;
+            min-height: 64px;
+        }
+
+        .pro-sidebar .sidebar-footer {
+            padding-block: 8px;
+        }
+
+        .pro-sidebar .sidebar-nav {
+            padding-block: 8px;
+        }
     }
 
     /* =================================================================

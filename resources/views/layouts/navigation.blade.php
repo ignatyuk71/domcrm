@@ -159,7 +159,7 @@
         
         <!-- ЛІВА ЧАСТИНА -->
         <div class="d-flex align-items-center me-auto">
-            <button class="btn btn-light border-0 me-3 d-md-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileSidebar">
+            <button class="btn btn-light border-0 me-3 d-lg-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileSidebar" aria-label="Відкрити меню">
                 <i class="bi bi-list fs-4"></i>
             </button>
 
