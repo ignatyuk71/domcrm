@@ -41,7 +41,13 @@
           <tbody><tr v-for="employee in piece.employees" :key="employee.id">
             <th class="wt-person" scope="row"><div class="wt-person-label" :data-testid="`employee-${employee.id}`"><span class="wt-avatar">{{ employee.name.slice(0, 1) }}</span><span><b>{{ employee.name }}</b><small>{{ employee.archived_on ? 'В архіві' : employee.position || 'Працівник' }}</small></span></div></th>
             <td v-for="day in days" :key="day.date" :class="{ weekend: day.weekend, 'wt-cell-error': piece.states[key(employee.id, day.date)]?.error, 'wt-cell-saving': piece.states[key(employee.id, day.date)]?.pending }">
-              <input v-model="piece.drafts[key(employee.id, day.date)].amount" type="text" inputmode="decimal" maxlength="13" :data-money-cell="key(employee.id, day.date)" :title="piece.drafts[key(employee.id, day.date)].amount ? `${piece.drafts[key(employee.id, day.date)].amount} грн` : ''" :aria-label="`${employee.name}, ${day.day} ${monthGen[month - 1]}, сума у гривнях`" :aria-invalid="!!piece.states[key(employee.id, day.date)]?.error" :disabled="loading || piece.loading || !!(employee.archived_on && day.date > employee.archived_on)" @focus="piece.states[key(employee.id, day.date)]?.error && showProblems()" @input="piece.schedule(key(employee.id, day.date))" @blur="piece.flush(key(employee.id, day.date))" @keydown.enter.prevent="nextPieceEmployee(employee.id, day.date)" />
+              <input v-model="piece.drafts[key(employee.id, day.date)].amount" type="text" inputmode="decimal" maxlength="13" :data-money-cell="key(employee.id, day.date)" :title="piece.drafts[key(employee.id, day.date)].amount ? `${piece.drafts[key(employee.id, day.date)].amount} грн` : ''" :aria-label="`${employee.name}, ${day.day} ${monthGen[month - 1]}, сума у гривнях`" :aria-invalid="!!piece.states[key(employee.id, day.date)]?.error" :disabled="loading || piece.loading || !!dayEditor || !!(employee.archived_on && day.date > employee.archived_on)" @focus="piece.states[key(employee.id, day.date)]?.error && showProblems()" @input="piece.schedule(key(employee.id, day.date))" @blur="piece.flush(key(employee.id, day.date))" @keydown.enter.prevent="nextPieceEmployee(employee.id, day.date)" />
+              <button type="button" class="wt-day-note" :class="{ 'has-note': !!piece.drafts[key(employee.id, day.date)].note }"
+                :data-note-cell="key(employee.id, day.date)" :title="piece.drafts[key(employee.id, day.date)].note || 'Додати пояснення'"
+                :aria-label="`${employee.name}, ${day.day} ${monthGen[month - 1]}: сума та пояснення`" aria-haspopup="dialog"
+                :aria-expanded="dayEditor?.key === key(employee.id, day.date)"
+                :disabled="loading || piece.loading || !!openingDay || (!!dayEditor && dayEditor.key !== key(employee.id, day.date)) || !!(employee.archived_on && day.date > employee.archived_on)"
+                @click="openDayEditor(employee, day.date, $event.currentTarget)"><i class="bi bi-chat-left-text" aria-hidden="true"></i></button>
             </td><td class="wt-total"><b :title="money(piece.employeeHours(employee.id))" :data-testid="`piece-total-${employee.id}`">{{ number(piece.employeeHours(employee.id)) }}</b><small>грн за місяць</small></td>
           </tr></tbody>
           <tfoot><tr><th class="wt-person" scope="row">Разом за день, грн</th><td v-for="day in days" :key="day.date"><span class="wt-day-sum" :title="money(piece.dayHours(day.date))">{{ number(piece.dayHours(day.date)) }}</span></td><td class="wt-total" data-testid="piece-all-total" :title="money(piece.allHours)">{{ number(piece.allHours) }}</td></tr></tfoot>
@@ -52,12 +58,16 @@
       <footer class="wt-sheet-footer"><span>Автозбереження · Порожня клітинка = 0 грн у підсумку</span><span>Сума до оплати за роботу, не факт виплати · Лише власник</span></footer>
     </section>
 
+    <PieceworkDayPopover v-if="dayEditor" :employee="dayEditor.employee" :date="dayEditor.date" :anchor="dayEditor.anchor"
+      :initial-amount="dayEditor.amount" :initial-note="dayEditor.note" :saving="savingDay"
+      :error="piece.states[dayEditor.key]?.error || ''" @save="saveDayEditor" @close="closeDayEditor" @notice="dayNotice" />
     <Toast v-bind="toast" @close="closeToast" @action="runAction" @secondary="runSecondary" />
   </section>
 </template>
 
 <script setup>
-import { computed, reactive, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, reactive, ref, shallowRef, watch } from 'vue';
+import PieceworkDayPopover from './PieceworkDayPopover.vue';
 import { useWorkTime } from '../../composables/useWorkTime';
 import { useToast } from '../../composables/useToast';
 import Toast from '../../components/ui/Toast.vue';
@@ -73,6 +83,53 @@ const owner = computed(() => props.canManagePay && canManage.value);
 const piece = reactive(useWorkTime({ fetchData: fetchPieceworkDays, saveData: savePieceworkDay, parseValue: parseWorkAmount,
   valueField: 'amount', employeeType: 'piecework', autoLoad: false }));
 const { toast, showToast, closeToast, runAction, runSecondary } = useToast();
+const dayEditor = shallowRef(null), savingDay = ref(false), openingDay = ref(''), dayError = shallowRef(null);
+let alive = true;
+onBeforeUnmount(() => { alive = false; });
+async function openDayEditor(employee, date, anchor) {
+  if (dayEditor.value || openingDay.value || loading.value || piece.loading) return;
+  const k = key(employee.id, date);
+  if (employee.archived_on && date > employee.archived_on) return;
+  openingDay.value = k;
+  // Дочікуємося попереднього автозбереження суми перед редагуванням обох полів.
+  await piece.flush(k);
+  if (!alive) return;
+  const draft = piece.drafts[k];
+  dayEditor.value = { key: k, employee, date, anchor, amount: draft.amount, note: draft.note };
+  openingDay.value = '';
+}
+function dayNotice(notice) {
+  if (notice.type === 'error') dayError.value = notice;
+  // Не приховуємо помилку іншої клітинки локальним попередженням.
+  const localErrors = dayError.value && dayError.value !== notice ? dayError.value.messages : [];
+  showToast({ ...notice, messages: [...notice.messages, ...localErrors, ...problems.value.map(p => p.message)],
+    type: problems.value.length || dayError.value ? 'error' : notice.type });
+}
+async function closeDayEditor() {
+  if (savingDay.value) return;
+  const anchor = dayEditor.value?.anchor;
+  dayEditor.value = null;
+  dayError.value = null;
+  if (problems.value.length) showProblems(); else closeToast();
+  await nextTick(); anchor?.focus();
+}
+async function saveDayEditor(values) {
+  if (!dayEditor.value || savingDay.value) return;
+  dayError.value = null;
+  const k = dayEditor.value.key;
+  Object.assign(piece.drafts[k], values);
+  savingDay.value = true;
+  const ok = await piece.flush(k);
+  savingDay.value = false;
+  if (!alive) return;
+  if (ok) {
+    const anchor = dayEditor.value?.anchor;
+    dayEditor.value = null;
+    if (problems.value.length) showProblems();
+    else showToast({ type: 'success', title: 'Нарахування збережено', messages: ['Суму та пояснення оновлено.'] });
+    await nextTick(); anchor?.focus();
+  } else showProblems();
+}
 watch(owner, allowed => { if (allowed) piece.load(period.value); });
 const year = computed(() => Number(period.value.slice(0, 4))), month = computed(() => Number(period.value.slice(5)));
 const years = Array.from({ length: 101 }, (_, i) => 2000 + i);
@@ -91,6 +148,7 @@ function failureLabel(team, k) {
   return `${team.find(e => e.id === Number(id))?.name || 'Працівник'}, ${date}`;
 }
 function showProblems() {
+  if (dayError.value) { dayNotice(dayError.value); return; }
   if (!problems.value.length) return;
   const mustReload = problems.value.some(p => p.reload);
   showToast({ type: 'error', title: 'Не вдалося зберегти або завантажити дані',
@@ -101,7 +159,7 @@ watch(() => problems.value.map(p => `${p.id}:${p.message}`).join('|'), value => 
 let reportedRevision = 0;
 watch(() => [hours.savedRevision + piece.savedRevision, pending.value || piece.pending, unsaved.value || piece.unsaved, problems.value.length],
   ([revision, saving, dirty, errors]) => {
-    if (errors) return;
+    if (errors || dayError.value) return;
     // Одне повідомлення на чергу вводу. Читання даних не є збереженням.
     if (saving || dirty) showToast({ type: 'info', title: saving ? 'Зберігаємо…' : 'Очікуємо збереження…', messages: ['Зміни зберігаються автоматично.'] });
     else if (revision > reportedRevision) {
@@ -119,6 +177,7 @@ async function load(target = period.value) {
   return ok;
 }
 async function reload(confirmed = false) {
+  if (dayEditor.value || openingDay.value) { dayNotice({ type: 'warning', title: 'Спочатку закрийте нарахування', messages: ['Збережіть зміни або натисніть «Скасувати» у віконці.'] }); return; }
   if (loading.value || pending.value || piece.loading || piece.pending) return;
   if (!confirmed && (unsaved.value || failures.value.length || piece.unsaved || piece.failures.length)) {
     showToast({ type: 'warning', title: 'Оновити обидві таблиці?',
@@ -132,6 +191,10 @@ async function reload(confirmed = false) {
   else showProblems();
 }
 async function selectPeriod(event, field) {
+  if (dayEditor.value || openingDay.value) {
+    event.target.value = String(field === 'year' ? year.value : month.value);
+    dayNotice({ type: 'warning', title: 'Спочатку закрийте нарахування', messages: ['Збережіть зміни або натисніть «Скасувати» у віконці.'] }); return;
+  }
   const value = Number(event.target.value), target = periodKey(field === 'year' ? value : year.value, field === 'month' ? value : month.value);
   if (!loading.value && !piece.loading && await flushBoth()) await load(target);
   else showProblems();
@@ -166,6 +229,10 @@ function nextPieceEmployee(id, date) {
 .wt-scroll .wt-calendar .wt-total{min-width:0;padding:0 3px;overflow-wrap:anywhere}
 .wt-calendar .wt-total b,.wt-day-sum{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .wt-calendar tbody td:not(.wt-total){position:relative}
+.wt-day-note{position:absolute;right:1px;bottom:1px;z-index:1;display:grid;place-items:center;width:18px;height:18px;padding:0;border:0;border-radius:4px;background:transparent;color:#8795a5;font-size:10px;opacity:0}
+.wt-day-note.has-note,.wt-calendar td:hover .wt-day-note,.wt-calendar td:focus-within .wt-day-note{opacity:1}
+.wt-day-note.has-note{color:#24816f;background:#e5f4ee}.wt-day-note:hover{background:#d5eee3;color:#1d705d}
+@media(hover:none){.wt-day-note{opacity:1;width:22px;height:22px}}
 .wt-calendar tbody th,.wt-calendar tbody td{height:60px}
 .wt-calendar .wt-person-label{gap:7px}
 .wt-calendar .wt-person-label b{font-size:12px}

@@ -10,6 +10,7 @@ class PieceworkDayService
     {
         return ['employee_id' => (int) $row->employee_id, 'date' => $row->work_date,
             'amount' => WorkTimeService::decimal($row->amount_cents === null ? null : (int) $row->amount_cents),
+            'note' => $row->note ?? null,
             'version' => (int) $row->version];
     }
 
@@ -50,7 +51,10 @@ class PieceworkDayService
             $query = DB::table('work_piecework_days')->where('employee_id', $employeeId)->where('work_date', $data['date']);
             $before = (clone $query)->first();
             $amount = WorkTimeService::units($data['amount']);
-            if ($before && ($before->amount_cents === null ? null : (int) $before->amount_cents) === $amount) {
+            // Сума й пояснення мають одну версію: повтор запиту не створює дубль ревізії.
+            $note = array_key_exists('note', $data) ? trim($data['note'] ?? '') : ($before->note ?? null);
+            $note = $note === '' ? null : $note;
+            if ($before && ($before->amount_cents === null ? null : (int) $before->amount_cents) === $amount && $before->note === $note) {
                 return $this->entry($before);
             }
             $legacy = DB::table('work_piecework_entries')->where('employee_id', $employeeId)->where('work_date', $data['date'])
@@ -61,8 +65,8 @@ class PieceworkDayService
                 $legacy->version = (int) DB::table('work_piecework_entries')->where('employee_id', $employeeId)->sum('version');
             }
             $version = (int) ($before->version ?? $legacy->version);
-            abort_unless($version === (int) $data['version'], 409, 'Суму за цей день уже змінили. Оновіть таблицю.');
-            $values = ['amount_cents' => $amount, 'version' => $version + 1, 'updated_by' => $actor, 'updated_at' => now()];
+            abort_unless($version === (int) $data['version'], 409, 'Суму або пояснення за цей день уже змінили. Оновіть таблицю.');
+            $values = ['amount_cents' => $amount, 'note' => $note, 'version' => $version + 1, 'updated_by' => $actor, 'updated_at' => now()];
             if ($before) {
                 $query->update($values);
             } else {

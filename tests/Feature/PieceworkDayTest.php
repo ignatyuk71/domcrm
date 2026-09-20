@@ -51,6 +51,46 @@ class PieceworkDayTest extends TestCase
         $this->assertDatabaseCount('work_time_revisions', 4);
     }
 
+    public function test_notes_are_saved_with_amounts_listed_and_audited_without_duplicate_retries(): void
+    {
+        $id = $this->employee();
+        $payload = ['amount' => '300', 'note' => '  Допомога у вихідний  '];
+        $this->save($id, $payload)->assertOk()->assertJsonPath('note', 'Допомога у вихідний')->assertJsonPath('version', 1);
+        $this->save($id, $payload)->assertOk()->assertJsonPath('version', 1);
+        $this->getJson('/api/work-time/piecework-days?month=2026-09')->assertOk()
+            ->assertJsonPath('entries.0.note', 'Допомога у вихідний')->assertJsonPath('entries.0.amount', '300.00');
+        $this->assertDatabaseCount('work_piecework_days', 1);
+        $this->assertSame(1, DB::table('work_time_revisions')->where('subject_type', 'piecework_day')->count());
+        $audit = json_decode(DB::table('work_time_revisions')->where('subject_type', 'piecework_day')->value('after'), true);
+        $this->assertSame('Допомога у вихідний', $audit['note']);
+        $this->assertDatabaseCount('work_payroll_months', 0);
+    }
+
+    public function test_note_only_edits_conflict_on_stale_versions_and_omitted_note_is_preserved(): void
+    {
+        $id = $this->employee();
+        $this->save($id, ['note' => 'Перший опис'])->assertOk();
+        $this->save($id, ['note' => 'Новий опис', 'version' => 1])->assertOk()->assertJsonPath('version', 2);
+        $this->save($id, ['note' => 'Перший опис', 'version' => 1])->assertConflict();
+        $this->save($id, ['note' => null, 'version' => 1])->assertConflict();
+        $this->save($id, ['amount' => '700', 'version' => 2])->assertOk()->assertJsonPath('note', 'Новий опис');
+        $this->save($id, ['amount' => '700', 'note' => null, 'version' => 3])->assertOk()->assertJsonPath('note', null);
+        $this->save($id, ['amount' => null, 'note' => '0', 'version' => 4])->assertOk()->assertJsonPath('note', '0');
+    }
+
+    public function test_invalid_note_does_not_partially_save_amount_and_notes_stay_private(): void
+    {
+        $id = $this->employee();
+        $this->save($id, ['note' => str_repeat('я', 500)])->assertOk();
+        foreach ([str_repeat('я', 501), ['bad'], 12] as $note) {
+            $this->save($id, ['amount' => '999', 'note' => $note, 'version' => 1])->assertUnprocessable()->assertJsonValidationErrors('note');
+        }
+        $this->assertDatabaseHas('work_piecework_days', ['employee_id' => $id, 'amount_cents' => 60000, 'version' => 1]);
+        $this->actingAs(User::factory()->create(['role' => 'operator']));
+        $this->save($id, ['note' => 'Приватне пояснення', 'version' => 1])->assertForbidden();
+        $this->getJson('/api/work-time?month=2026-09')->assertOk()->assertDontSee(str_repeat('я', 500));
+    }
+
     public function test_access_is_owner_only_and_general_timesheet_never_leaks_amounts(): void
     {
         $id = $this->employee();

@@ -22,6 +22,7 @@ class PieceworkDayController extends Controller
         }
         $data = $request->validate(['date' => ['required', 'date_format:Y-m-d', 'after_or_equal:2000-01-01', 'before_or_equal:2100-12-31'],
             'amount' => ['present', 'nullable', 'numeric', 'between:0,1000000000', 'regex:/^\d{1,10}(\.\d{1,2})?$/'],
+            'note' => ['sometimes', 'nullable', 'string', 'max:500'],
             'version' => ['required', 'integer', 'min:0'], 'paid' => ['prohibited']]);
 
         return response()->json($service->save($employee, $data, $request->user()->id))->header('Cache-Control', 'private, no-store');
