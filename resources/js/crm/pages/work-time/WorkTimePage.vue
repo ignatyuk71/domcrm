@@ -1,13 +1,13 @@
 <template>
   <section class="work-time" :aria-busy="loading">
     <header class="wt-heading">
-      <div><span class="wt-eyebrow">КОМАНДА · РОБОЧИЙ ОБЛІК</span><h1>Табель і виконані роботи</h1><p>Погодинна та відрядна робота — окремо, без плутанини</p></div>
+      <div class="wt-title"><span class="wt-eyebrow">КОМАНДА · РОБОЧИЙ ОБЛІК</span><h1>Табель і виконані роботи</h1><p>Погодинна та відрядна робота — окремо, без плутанини</p></div>
+      <div v-if="ready" class="wt-stats">
+        <div><span>Відпрацьовано за місяць</span><strong data-testid="all-hours">{{ number(allHours) }} <small>год</small></strong></div>
+        <div><span>Працівників у табелі</span><strong>{{ employees.length }}</strong></div>
+        <div><span>Заповнено по</span><strong>{{ lastDay ? `${lastDay} ${monthGen[month - 1]}` : 'Ще немає' }}</strong></div>
+      </div>
     </header>
-    <div v-if="ready" class="wt-stats">
-      <div><span>Відпрацьовано за місяць</span><strong data-testid="all-hours">{{ number(allHours) }} <small>год</small></strong></div>
-      <div><span>Працівників у табелі</span><strong>{{ employees.length }}</strong></div>
-      <div><span>Заповнено по</span><strong>{{ lastDay ? `${lastDay} ${monthGen[month - 1]}` : 'Ще немає' }}</strong></div>
-    </div>
     <div class="wt-sheet">
       <div class="wt-toolbar">
         <div class="wt-period"><i class="bi bi-calendar3" aria-hidden="true"></i><select class="form-select" :value="month" aria-label="Місяць" :disabled="loading || pending || piece.loading || piece.pending" @change="selectPeriod($event, 'month')"><option v-for="(label, i) in workMonths" :key="label" :value="i + 1">{{ label }}</option></select><select class="form-select wt-year" :value="year" aria-label="Рік" :disabled="loading || pending || piece.loading || piece.pending" @change="selectPeriod($event, 'year')"><option v-for="value in years" :key="value">{{ value }}</option></select></div>
@@ -252,4 +252,15 @@ function nextEmployee(id, date) {
 /* На телефоні не стискаємо 31 день до нечитабельних цифр. */
 @container (max-width:900px){.wt-scroll{--wt-person-width:140px;--wt-total-width:80px;--wt-day-min:34px}.wt-scroll .wt-calendar input{font-size:12px}}
 @media(pointer:coarse){.wt-scroll .wt-calendar input:focus{font-size:16px}}
+/* Підсумки поруч із заголовком; коли місця бракує, весь блок переходить нижче. */
+.wt-heading{column-gap:32px;row-gap:22px}
+.wt-title{flex:1 1 420px;min-width:0}
+.wt-heading .wt-stats{flex:0 1 auto;gap:24px;margin:0}
+.wt-heading .wt-stats>div{min-width:0}
+.wt-heading .wt-stats strong{white-space:nowrap}
+@media(max-width:700px){
+  .wt-heading .wt-stats{width:100%;gap:18px 24px}
+  .wt-heading .wt-stats>div{flex:1 1 120px}
+  .wt-heading .wt-stats>div:last-child{display:block}
+}
 </style>

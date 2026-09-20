@@ -1,22 +1,22 @@
 {
+  "../../../Users/ihnatiuk_myhailo/DOM-CRM/domcrm/node_modules/bootstrap-icons/font/fonts/bootstrap-icons.woff": {
+    "file": "assets/bootstrap-icons-BeopsB42.woff",
+    "src": "../../../Users/ihnatiuk_myhailo/DOM-CRM/domcrm/node_modules/bootstrap-icons/font/fonts/bootstrap-icons.woff"
+  },
+  "../../../Users/ihnatiuk_myhailo/DOM-CRM/domcrm/node_modules/bootstrap-icons/font/fonts/bootstrap-icons.woff2": {
+    "file": "assets/bootstrap-icons-mSm7cUeB.woff2",
+    "src": "../../../Users/ihnatiuk_myhailo/DOM-CRM/domcrm/node_modules/bootstrap-icons/font/fonts/bootstrap-icons.woff2"
+  },
   "_index-B9ygI19o.js": {
     "file": "assets/index-B9ygI19o.js",
     "name": "index"
   },
-  "_useToast-Cjzw_XbS.js": {
-    "file": "assets/useToast-Cjzw_XbS.js",
+  "_useToast-BcGwWg3n.js": {
+    "file": "assets/useToast-BcGwWg3n.js",
     "name": "useToast",
     "imports": [
       "resources/js/crm/index.js"
     ]
-  },
-  "node_modules/bootstrap-icons/font/fonts/bootstrap-icons.woff": {
-    "file": "assets/bootstrap-icons-BeopsB42.woff",
-    "src": "node_modules/bootstrap-icons/font/fonts/bootstrap-icons.woff"
-  },
-  "node_modules/bootstrap-icons/font/fonts/bootstrap-icons.woff2": {
-    "file": "assets/bootstrap-icons-mSm7cUeB.woff2",
-    "src": "node_modules/bootstrap-icons/font/fonts/bootstrap-icons.woff2"
   },
   "resources/css/app.css": {
     "file": "assets/app-tn0RQdqM.css",
@@ -48,7 +48,7 @@
     ]
   },
   "resources/js/crm/index.js": {
-    "file": "assets/index-Vv8RfXkK.js",
+    "file": "assets/index-CICnM0T4.js",
     "name": "index",
     "src": "resources/js/crm/index.js",
     "isEntry": true,
@@ -68,7 +68,7 @@
     ]
   },
   "resources/js/crm/pages/analytics/SalesAnalyticsPage.vue": {
-    "file": "assets/SalesAnalyticsPage-DJ1610SH.js",
+    "file": "assets/SalesAnalyticsPage-kZyylW0g.js",
     "name": "SalesAnalyticsPage",
     "src": "resources/js/crm/pages/analytics/SalesAnalyticsPage.vue",
     "isDynamicEntry": true,
@@ -81,7 +81,7 @@
     ]
   },
   "resources/js/crm/pages/costs/ProductionCostPage.vue": {
-    "file": "assets/ProductionCostPage-DcAWhj2a.js",
+    "file": "assets/ProductionCostPage-c8w8356A.js",
     "name": "ProductionCostPage",
     "src": "resources/js/crm/pages/costs/ProductionCostPage.vue",
     "isDynamicEntry": true,
@@ -97,7 +97,7 @@
     ]
   },
   "resources/js/crm/pages/inventory/SoleInventoryPage.vue": {
-    "file": "assets/SoleInventoryPage-CDMmS2zL.js",
+    "file": "assets/SoleInventoryPage-DFlTjPcq.js",
     "name": "SoleInventoryPage",
     "src": "resources/js/crm/pages/inventory/SoleInventoryPage.vue",
     "isDynamicEntry": true,
@@ -110,7 +110,7 @@
     ]
   },
   "resources/js/crm/pages/settings/SettingsTelegramPage.vue": {
-    "file": "assets/SettingsTelegramPage-DozzOH40.js",
+    "file": "assets/SettingsTelegramPage-B0GdDyF7.js",
     "name": "SettingsTelegramPage",
     "src": "resources/js/crm/pages/settings/SettingsTelegramPage.vue",
     "isDynamicEntry": true,
@@ -123,13 +123,13 @@
     ]
   },
   "resources/js/crm/pages/settings/SettingsWorkPayrollPage.vue": {
-    "file": "assets/SettingsWorkPayrollPage-iKyIVwFz.js",
+    "file": "assets/SettingsWorkPayrollPage-BFatWp4c.js",
     "name": "SettingsWorkPayrollPage",
     "src": "resources/js/crm/pages/settings/SettingsWorkPayrollPage.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/crm/index.js",
-      "_useToast-Cjzw_XbS.js",
+      "_useToast-BcGwWg3n.js",
       "_index-B9ygI19o.js"
     ],
     "css": [
@@ -137,17 +137,17 @@
     ]
   },
   "resources/js/crm/pages/work-time/WorkTimePage.vue": {
-    "file": "assets/WorkTimePage-DcEUA7C1.js",
+    "file": "assets/WorkTimePage-Zz64Ynmf.js",
     "name": "WorkTimePage",
     "src": "resources/js/crm/pages/work-time/WorkTimePage.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/crm/index.js",
-      "_useToast-Cjzw_XbS.js",
+      "_useToast-BcGwWg3n.js",
       "_index-B9ygI19o.js"
     ],
     "css": [
-      "assets/WorkTimePage-IrLv_er0.css"
+      "assets/WorkTimePage-B0OVgS-t.css"
     ]
   }
 }
