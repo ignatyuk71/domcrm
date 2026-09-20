@@ -184,6 +184,35 @@
         background: var(--sidebar-bg); /* Суцільний фон */
     }
 
+    .sidebar-footer button {
+        border: 0;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+    }
+
+    .sidebar-footer .settings-group-toggle {
+        width: 100%;
+        gap: 4px;
+        background: transparent;
+    }
+
+    .settings-group-panel[hidden] { display: none !important; }
+    .settings-group { position: relative; }
+    .settings-group-arrow { font-size: 0.75rem; }
+
+    .sidebar-footer .sidebar-link-sub.active,
+    .sidebar-footer .settings-group-toggle[aria-expanded="true"] {
+        color: #a5b4fc;
+        background: rgba(99, 102, 241, 0.14);
+    }
+
+    .sidebar-footer button:focus-visible,
+    .sidebar-footer a:focus-visible {
+        outline: 2px solid #a5b4fc;
+        outline-offset: -2px;
+    }
+
     /* =================================================================
        ПК (DESKTOP)
        ================================================================= */
@@ -304,14 +333,17 @@
             
             display: flex; flex-direction: column; gap: 4px;
             opacity: 0; visibility: hidden;
-            transform: translateX(-15px);
-            transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+            max-height: calc(100dvh - 40px);
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            scrollbar-width: thin;
+            scrollbar-color: #475569 #1e293b;
+            transition: opacity 0.2s, visibility 0.2s;
             z-index: 1500; 
         }
 
-        .sidebar-footer:hover .sidebar-submenu {
+        .sidebar-footer.settings-open .sidebar-submenu {
             opacity: 1; visibility: visible;
-            transform: translateX(0);
         }
 
         .sidebar-footer .sidebar-link-sub {
@@ -334,19 +366,35 @@
         }
         .sidebar-footer .sidebar-link-sub:hover .icon-frame { color: var(--accent-color); }
 
-        /* Трикутник */
-        .sidebar-footer .sidebar-submenu::before {
-            content: ''; position: absolute; left: -6px; bottom: 30px; width: 12px; height: 12px;
+        /* Підменю не обрізається прокручуваним списком налаштувань. */
+        .settings-group-panel {
+            position: fixed;
+            width: 280px;
+            max-height: calc(100dvh - 16px);
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            scrollbar-width: thin;
+            scrollbar-color: #475569 #1e293b;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
             background: #1e293b;
-            border-left: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color);
-            transform: rotate(45deg);
-        }
-        /* Міст */
-        .sidebar-footer .sidebar-submenu::after {
-            content: ''; position: absolute; top: 0; bottom: 0; left: -30px; width: 30px;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            box-shadow: 0 16px 36px rgba(0, 0, 0, 0.35);
+            z-index: 1501;
         }
 
-        .submenu-divider { height: 1px; background: rgba(255,255,255,0.1); margin: 6px 0; }
+        /* Безпечний перехід курсора від назви групи до її посилань. */
+        .settings-group:has([aria-expanded="true"])::after {
+            content: '';
+            position: absolute;
+            left: 100%; top: 0; bottom: 0;
+            width: 10px;
+        }
+
+        .sidebar-footer .settings-group-toggle:hover { transform: none; }
         
         body { padding-left: 80px; transition: padding-left 0.3s; }
     }
@@ -385,7 +433,7 @@
             cursor: pointer; border: 1px solid transparent;
         }
         
-        .sidebar-footer.mobile-active > .sidebar-link {
+        .sidebar-footer.settings-open > .sidebar-link {
             background: rgba(99, 102, 241, 0.1);
             border-color: rgba(99, 102, 241, 0.2);
             color: #fff;
@@ -394,7 +442,7 @@
         .sidebar-footer > .sidebar-link .item-text { display: block !important; color: inherit; }
         
         .mobile-arrow { display: block; font-size: 0.8rem; transition: transform 0.3s ease; }
-        .sidebar-footer.mobile-active .mobile-arrow { transform: rotate(180deg); color: var(--accent-color); }
+        .sidebar-footer.settings-open .mobile-arrow { transform: rotate(180deg); color: var(--accent-color); }
 
         /* Акордеон */
         .sidebar-footer .sidebar-submenu {
@@ -402,7 +450,7 @@
             margin-top: 8px; padding-left: 12px; gap: 4px;
         }
 
-        .sidebar-footer.mobile-active .sidebar-submenu { display: flex; animation: slideDown 0.3s ease; }
+        .sidebar-footer.settings-open .sidebar-submenu { display: flex; animation: slideDown 0.3s ease; }
         @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
 
         .sidebar-footer .sidebar-link-sub {
@@ -412,15 +460,20 @@
         .sidebar-footer .sidebar-link-sub:hover { background: rgba(255,255,255,0.05); color: #fff; }
         
         .sidebar-footer .sidebar-link-sub .icon-frame { font-size: 1.1rem; margin-right: 14px; min-width: 24px; color: #64748b; }
-        .sidebar-footer .sidebar-submenu::before, .sidebar-footer .sidebar-submenu::after, .submenu-divider { display: none; }
+        .settings-group-panel {
+            margin: 4px 0 8px 12px;
+            border-left: 1px solid #334155;
+            padding-left: 4px;
+        }
+        .settings-group-toggle[aria-expanded="true"] .settings-group-arrow { transform: rotate(90deg); }
     }
 </style>
 
 <aside class="pro-sidebar offcanvas-lg offcanvas-start" tabindex="-1" id="mobileSidebar" aria-labelledby="sidebarLabel">
     
     <div class="mobile-header d-lg-none">
-        <span class="fw-bold text-white fs-5" style="letter-spacing: -0.5px;">Меню</span>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" data-bs-target="#mobileSidebar" aria-label="Close"></button>
+        <span id="sidebarLabel" class="fw-bold text-white fs-5" style="letter-spacing: -0.5px;">Меню</span>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" data-bs-target="#mobileSidebar" aria-label="Закрити меню"></button>
     </div>
 
     <div class="sidebar-header">
@@ -562,102 +615,238 @@
 
     <div class="sidebar-footer mt-auto" id="settings-footer">
         
-        <div class="sidebar-link" id="settings-toggle">
+        <button type="button" class="sidebar-link" id="settings-toggle" aria-label="Налаштування" aria-expanded="false" aria-controls="settings-menu">
             <span class="icon-frame"><i class="bi bi-gear-wide-connected"></i></span>
             <span class="item-text">Налаштування</span>
-            <i class="bi bi-chevron-down ms-auto mobile-arrow"></i>
-        </div>
+            <i class="bi bi-chevron-down ms-auto mobile-arrow" aria-hidden="true"></i>
+        </button>
         
-        <div class="sidebar-submenu">
+        <div class="sidebar-submenu" id="settings-menu">
             <a href="{{ route('profile.edit') }}" class="sidebar-link-sub {{ request()->is('profile*') ? 'active' : '' }}">
                 <span class="icon-frame"><i class="bi bi-person-circle"></i></span>
                 <span class="item-text-sub">Профіль</span>
             </a>
 
             @if($isOwner)
-                <a href="{{ route(match (session('analytics.last_tab')) { 'soles' => 'inventory.soles', 'costs' => 'analytics.costs', default => 'analytics.sales' }) }}"
-                   class="sidebar-link-sub {{ request()->routeIs('analytics.*', 'inventory.soles') ? 'active' : '' }}"
-                   data-analytics-menu
-                   @if(request()->routeIs('analytics.*', 'inventory.soles')) aria-current="page" @endif>
-                    <span class="icon-frame"><i class="bi bi-graph-up-arrow"></i></span>
-                    <span class="item-text-sub">Аналітика</span>
-                </a>
-                <a href="{{ route('settings.workPayroll.index') }}" class="sidebar-link-sub {{ request()->is('settings/work-payroll*') ? 'active' : '' }}">
-                    <span class="icon-frame"><i class="bi bi-person-vcard"></i></span>
-                    <span class="item-text-sub">Працівники та зарплата</span>
-                </a>
                 <a href="{{ route('settings.team.index') }}" class="sidebar-link-sub {{ request()->is('settings/team*') ? 'active' : '' }}">
                     <span class="icon-frame"><i class="bi bi-people"></i></span>
                     <span class="item-text-sub">Команда</span>
                 </a>
-                <a href="{{ route('finance.index') }}" class="sidebar-link-sub {{ request()->is('finance*') ? 'active' : '' }}">
-                    <span class="icon-frame"><i class="bi bi-wallet2"></i></span>
-                    <span class="item-text-sub">Фінанси</span>
-                </a>
 
-                <div class="submenu-divider"></div>
+                <div class="settings-group">
+                    <button type="button" class="sidebar-link-sub settings-group-toggle {{ request()->routeIs('analytics.*', 'inventory.soles', 'settings.workPayroll.*', 'finance.*') ? 'active' : '' }}"
+                            id="settings-accounting-toggle" aria-expanded="false" aria-controls="settings-accounting">
+                        <span class="icon-frame"><i class="bi bi-calculator" aria-hidden="true"></i></span>
+                        <span>Бухгалтерія</span>
+                        <i class="bi bi-chevron-right ms-auto settings-group-arrow" aria-hidden="true"></i>
+                    </button>
+                    <div class="settings-group-panel" id="settings-accounting" aria-labelledby="settings-accounting-toggle" hidden>
+                        <a href="{{ route(match (session('analytics.last_tab')) { 'soles' => 'inventory.soles', 'costs' => 'analytics.costs', default => 'analytics.sales' }) }}"
+                           class="sidebar-link-sub {{ request()->routeIs('analytics.*', 'inventory.soles') ? 'active' : '' }}"
+                           data-analytics-menu
+                           @if(request()->routeIs('analytics.*', 'inventory.soles')) aria-current="page" @endif>
+                            <span class="icon-frame"><i class="bi bi-graph-up-arrow"></i></span>
+                            <span class="item-text-sub">Аналітика</span>
+                        </a>
 
-                <a href="{{ route('settings.novaPoshta.index') }}" class="sidebar-link-sub {{ request()->is('settings/nova-poshta') ? 'active' : '' }}">
-                    <span class="icon-frame"><i class="bi bi-box-seam"></i></span>
-                    <span class="item-text-sub">Нова Пошта</span>
-                </a>
-                <a href="{{ route('settings.integrations.index') }}" class="sidebar-link-sub {{ request()->is('settings/integrations*') ? 'active' : '' }}">
-                    <span class="icon-frame"><i class="bi bi-hdd-network"></i></span>
-                    <span class="item-text-sub">Інтеграції</span>
-                </a>
-                <a href="{{ route('settings.meta.index') }}" class="sidebar-link-sub {{ request()->is('settings/meta*') ? 'active' : '' }}">
-                    <span class="icon-frame"><i class="bi bi-facebook"></i></span>
-                    <span class="item-text-sub">Facebook / IG</span>
-                </a>
-                <a href="{{ route('settings.telegram.index') }}" class="sidebar-link-sub {{ request()->is('settings/telegram*') ? 'active' : '' }}">
-                    <span class="icon-frame"><i class="bi bi-telegram"></i></span>
-                    <span class="item-text-sub">Telegram</span>
-                </a>
-                <a href="{{ route('settings.categories.index') }}" class="sidebar-link-sub {{ request()->is('settings/categories') ? 'active' : '' }}">
-                    <span class="icon-frame"><i class="bi bi-tags"></i></span>
-                    <span class="item-text-sub">Категорії</span>
-                </a>
-                <a href="{{ route('settings.colors.index') }}" class="sidebar-link-sub {{ request()->is('settings/colors') ? 'active' : '' }}">
-                    <span class="icon-frame"><i class="bi bi-palette2"></i></span>
-                    <span class="item-text-sub">Кольори</span>
-                </a>
-                <a href="{{ route('settings.tags.index') }}" class="sidebar-link-sub {{ request()->is('settings/tags') ? 'active' : '' }}">
-                    <span class="icon-frame"><i class="bi bi-bookmark-star"></i></span>
-                    <span class="item-text-sub">Теги</span>
-                </a>
-                <a href="{{ route('settings.statuses.index') }}" class="sidebar-link-sub {{ request()->is('settings/statuses') ? 'active' : '' }}">
-                    <span class="icon-frame"><i class="bi bi-list-check"></i></span>
-                    <span class="item-text-sub">Статуси</span>
-                </a>
-                <a href="{{ route('settings.chatStatuses.index') }}" class="sidebar-link-sub {{ request()->is('settings/chat-statuses') ? 'active' : '' }}">
-                    <span class="icon-frame"><i class="bi bi-chat-square-dots"></i></span>
-                    <span class="item-text-sub">Статуси чату</span>
-                </a>
-                <a href="{{ route('settings.ai.index') }}" class="sidebar-link-sub {{ request()->is('settings/ai') ? 'active' : '' }}">
-                    <span class="icon-frame"><i class="bi bi-robot"></i></span>
-                    <span class="item-text-sub">AI-агент</span>
-                </a>
-                <a href="{{ route('settings.aiGallery.index') }}" class="sidebar-link-sub {{ request()->is('settings/ai-gallery') ? 'active' : '' }}">
-                    <span class="icon-frame"><i class="bi bi-images"></i></span>
-                    <span class="item-text-sub">Галерея ШІ</span>
-                </a>
+                        <a href="{{ route('settings.workPayroll.index') }}" class="sidebar-link-sub {{ request()->is('settings/work-payroll*') ? 'active' : '' }}">
+                            <span class="icon-frame"><i class="bi bi-person-vcard"></i></span>
+                            <span class="item-text-sub">Працівники та зарплата</span>
+                        </a>
+
+                        <a href="{{ route('finance.index') }}" class="sidebar-link-sub {{ request()->is('finance*') ? 'active' : '' }}">
+                            <span class="icon-frame"><i class="bi bi-wallet2"></i></span>
+                            <span class="item-text-sub">Фінанси</span>
+                        </a>
+                    </div>
+                </div>
+
+                <div class="settings-group">
+                    <button type="button" class="sidebar-link-sub settings-group-toggle {{ request()->routeIs('settings.novaPoshta.*', 'settings.integrations.*', 'settings.meta.*', 'settings.telegram.*') ? 'active' : '' }}"
+                            id="settings-api-toggle" aria-expanded="false" aria-controls="settings-api">
+                        <span class="icon-frame"><i class="bi bi-plug" aria-hidden="true"></i></span>
+                        <span>API-підключення</span>
+                        <i class="bi bi-chevron-right ms-auto settings-group-arrow" aria-hidden="true"></i>
+                    </button>
+                    <div class="settings-group-panel" id="settings-api" aria-labelledby="settings-api-toggle" hidden>
+                        <a href="{{ route('settings.novaPoshta.index') }}" class="sidebar-link-sub {{ request()->is('settings/nova-poshta') ? 'active' : '' }}">
+                            <span class="icon-frame"><i class="bi bi-box-seam"></i></span>
+                            <span class="item-text-sub">Нова Пошта</span>
+                        </a>
+
+                        <a href="{{ route('settings.integrations.index') }}" class="sidebar-link-sub {{ request()->is('settings/integrations*') ? 'active' : '' }}">
+                            <span class="icon-frame"><i class="bi bi-hdd-network"></i></span>
+                            <span class="item-text-sub">Інтеграції</span>
+                        </a>
+
+                        <a href="{{ route('settings.meta.index') }}" class="sidebar-link-sub {{ request()->is('settings/meta*') ? 'active' : '' }}">
+                            <span class="icon-frame"><i class="bi bi-facebook"></i></span>
+                            <span class="item-text-sub">Facebook / Instagram</span>
+                        </a>
+
+                        <a href="{{ route('settings.telegram.index') }}" class="sidebar-link-sub {{ request()->is('settings/telegram*') ? 'active' : '' }}">
+                            <span class="icon-frame"><i class="bi bi-telegram"></i></span>
+                            <span class="item-text-sub">Telegram</span>
+                        </a>
+                    </div>
+                </div>
+
+                <div class="settings-group">
+                    <button type="button" class="sidebar-link-sub settings-group-toggle {{ request()->routeIs('settings.ai.*', 'settings.aiGallery.*') ? 'active' : '' }}"
+                            id="settings-ai-toggle" aria-expanded="false" aria-controls="settings-ai">
+                        <span class="icon-frame"><i class="bi bi-stars" aria-hidden="true"></i></span>
+                        <span>AI-інструменти</span>
+                        <i class="bi bi-chevron-right ms-auto settings-group-arrow" aria-hidden="true"></i>
+                    </button>
+                    <div class="settings-group-panel" id="settings-ai" aria-labelledby="settings-ai-toggle" hidden>
+                        <a href="{{ route('settings.ai.index') }}" class="sidebar-link-sub {{ request()->is('settings/ai') ? 'active' : '' }}">
+                            <span class="icon-frame"><i class="bi bi-robot"></i></span>
+                            <span class="item-text-sub">AI-агент</span>
+                        </a>
+
+                        <a href="{{ route('settings.aiGallery.index') }}" class="sidebar-link-sub {{ request()->is('settings/ai-gallery') ? 'active' : '' }}">
+                            <span class="icon-frame"><i class="bi bi-images"></i></span>
+                            <span class="item-text-sub">Галерея ШІ</span>
+                        </a>
+                    </div>
+                </div>
+
+                <div class="settings-group">
+                    <button type="button" class="sidebar-link-sub settings-group-toggle {{ request()->routeIs('settings.categories.*', 'settings.colors.*', 'settings.tags.*', 'settings.statuses.*', 'settings.chatStatuses.*') ? 'active' : '' }}"
+                            id="settings-reference-toggle" aria-expanded="false" aria-controls="settings-reference">
+                        <span class="icon-frame"><i class="bi bi-collection" aria-hidden="true"></i></span>
+                        <span>Довідники</span>
+                        <i class="bi bi-chevron-right ms-auto settings-group-arrow" aria-hidden="true"></i>
+                    </button>
+                    <div class="settings-group-panel" id="settings-reference" aria-labelledby="settings-reference-toggle" hidden>
+                        <a href="{{ route('settings.categories.index') }}" class="sidebar-link-sub {{ request()->is('settings/categories') ? 'active' : '' }}">
+                            <span class="icon-frame"><i class="bi bi-tags"></i></span>
+                            <span class="item-text-sub">Категорії</span>
+                        </a>
+
+                        <a href="{{ route('settings.colors.index') }}" class="sidebar-link-sub {{ request()->is('settings/colors') ? 'active' : '' }}">
+                            <span class="icon-frame"><i class="bi bi-palette2"></i></span>
+                            <span class="item-text-sub">Кольори</span>
+                        </a>
+
+                        <a href="{{ route('settings.tags.index') }}" class="sidebar-link-sub {{ request()->is('settings/tags') ? 'active' : '' }}">
+                            <span class="icon-frame"><i class="bi bi-bookmark-star"></i></span>
+                            <span class="item-text-sub">Теги</span>
+                        </a>
+
+                        <a href="{{ route('settings.statuses.index') }}" class="sidebar-link-sub {{ request()->is('settings/statuses') ? 'active' : '' }}">
+                            <span class="icon-frame"><i class="bi bi-list-check"></i></span>
+                            <span class="item-text-sub">Статуси</span>
+                        </a>
+
+                        <a href="{{ route('settings.chatStatuses.index') }}" class="sidebar-link-sub {{ request()->is('settings/chat-statuses') ? 'active' : '' }}">
+                            <span class="icon-frame"><i class="bi bi-chat-square-dots"></i></span>
+                            <span class="item-text-sub">Статуси чату</span>
+                        </a>
+                    </div>
+                </div>
             @endif
         </div>
     </div>
 </aside>
 
 <script>
-// Mobile Toggle Logic
 document.addEventListener('DOMContentLoaded', () => {
     const settingsToggle = document.getElementById('settings-toggle');
     const settingsFooter = document.getElementById('settings-footer');
+    const settingsMenu = document.getElementById('settings-menu');
+    const desktop = window.matchMedia('(min-width: 992px)');
+    const groups = [...settingsFooter.querySelectorAll('.settings-group')];
 
-    if (settingsToggle && settingsFooter) {
-        settingsToggle.addEventListener('click', (e) => {
-            if (window.innerWidth < 992) {
-                settingsFooter.classList.toggle('mobile-active');
+    const positionPanel = (group) => {
+        if (!desktop.matches) return;
+        const panel = group.querySelector('.settings-group-panel');
+        const trigger = group.querySelector('button').getBoundingClientRect();
+        const menu = settingsMenu.getBoundingClientRect();
+        panel.style.left = `${menu.right - 2}px`;
+        panel.style.top = `${Math.max(8, Math.min(trigger.top, window.innerHeight - panel.offsetHeight - 8))}px`;
+    };
+
+    const setGroupOpen = (group, open) => {
+        const button = group.querySelector('button');
+        const panel = group.querySelector('.settings-group-panel');
+        button.setAttribute('aria-expanded', String(open));
+        panel.hidden = !open;
+        if (open) positionPanel(group);
+    };
+
+    const closeGroups = () => groups.forEach((group) => setGroupOpen(group, false));
+    const setSettingsOpen = (open) => {
+        settingsFooter.classList.toggle('settings-open', open);
+        settingsToggle.setAttribute('aria-expanded', String(open));
+        if (!open) closeGroups();
+    };
+
+    settingsToggle.addEventListener('click', () => {
+        setSettingsOpen(settingsToggle.getAttribute('aria-expanded') !== 'true');
+    });
+    settingsFooter.addEventListener('pointerenter', (event) => {
+        if (desktop.matches && event.pointerType === 'mouse') setSettingsOpen(true);
+    });
+    settingsFooter.addEventListener('pointerleave', (event) => {
+        if (desktop.matches && event.pointerType === 'mouse' && !settingsFooter.contains(document.activeElement)) {
+            setSettingsOpen(false);
+        }
+    });
+    settingsFooter.addEventListener('focusout', (event) => {
+        if (!settingsFooter.contains(event.relatedTarget)) setSettingsOpen(false);
+    });
+
+    groups.forEach((group) => {
+        const button = group.querySelector('button');
+        const openGroup = () => {
+            groups.filter((other) => other !== group).forEach((other) => setGroupOpen(other, false));
+            setGroupOpen(group, true);
+        };
+        button.addEventListener('click', () => {
+            if (button.getAttribute('aria-expanded') === 'true') setGroupOpen(group, false);
+            else openGroup();
+        });
+        group.addEventListener('pointerenter', (event) => {
+            if (desktop.matches && event.pointerType === 'mouse') openGroup();
+        });
+        group.addEventListener('pointerleave', (event) => {
+            if (desktop.matches && event.pointerType === 'mouse' && !group.contains(document.activeElement)) {
+                setGroupOpen(group, false);
             }
         });
-    }
+        group.addEventListener('focusout', (event) => {
+            if (desktop.matches && !group.contains(event.relatedTarget)) setGroupOpen(group, false);
+        });
+        button.addEventListener('keydown', (event) => {
+            if (event.key !== 'ArrowDown') return;
+            event.preventDefault();
+            openGroup();
+            group.querySelector('a').focus();
+        });
+    });
+
+    settingsFooter.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        event.preventDefault();
+        event.stopPropagation();
+        const group = event.target.closest('.settings-group');
+        if (group && group.querySelector('button').getAttribute('aria-expanded') === 'true') {
+            group.querySelector('button').focus();
+            setGroupOpen(group, false);
+        } else {
+            settingsToggle.focus();
+            setSettingsOpen(false);
+        }
+    });
+    document.addEventListener('click', (event) => {
+        if (!settingsFooter.contains(event.target)) setSettingsOpen(false);
+    });
+    // Після зміни розміру або закриття мобільного меню прибираємо відкриті панелі.
+    window.addEventListener('resize', () => setSettingsOpen(false));
+    document.getElementById('mobileSidebar').addEventListener('hidden.bs.offcanvas', () => setSettingsOpen(false));
+    settingsMenu.addEventListener('scroll', () => {
+        groups.filter((group) => !group.querySelector('.settings-group-panel').hidden).forEach(positionPanel);
+    });
 });
 </script>
