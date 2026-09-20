@@ -55,11 +55,11 @@ class WorkPayrollSettingsTest extends TestCase
         foreach (['01' => '8', '02' => '4'] as $day => $hours) {
             $this->putJson("/api/work-time/employees/$id/entry", ['date' => "2026-09-$day", 'hours' => $hours, 'version' => 0])->assertOk();
         }
-        $this->putJson("/settings/work-payroll/employees/$id", $this->payload())->assertOk()->assertJsonPath('base_pay', '525.00')
-            ->assertJsonPath('salary', '504.50')->assertJsonPath('accrued', '804.50')->assertJsonPath('balance', '504.50')->assertJsonPath('days', 2);
-        $this->getJson('/settings/work-payroll/report?month=2026-09')->assertOk()->assertJsonPath('totals.accrued', '804.50')
-            ->assertJsonPath('totals.balance', '504.50')->assertJsonPath('incomplete_count', 0);
-        $this->getJson("/api/work-time/employees/$id/payroll?month=2026-09")->assertOk()->assertJsonPath('base_pay', '525.00');
+        $this->putJson("/settings/work-payroll/employees/$id", $this->payload())->assertOk()->assertJsonPath('base_pay', '600.00')
+            ->assertJsonPath('daily_hours', 7)->assertJsonPath('salary', '579.50')->assertJsonPath('accrued', '879.50')->assertJsonPath('balance', '579.50')->assertJsonPath('days', 2);
+        $this->getJson('/settings/work-payroll/report?month=2026-09')->assertOk()->assertJsonPath('totals.accrued', '879.50')
+            ->assertJsonPath('totals.balance', '579.50')->assertJsonPath('incomplete_count', 0);
+        $this->getJson("/api/work-time/employees/$id/payroll?month=2026-09")->assertOk()->assertJsonPath('base_pay', '600.00');
         $this->putJson("/settings/work-payroll/employees/$id", $this->payload())->assertOk()->assertJsonPath('version', 1);
         $this->putJson("/settings/work-payroll/employees/$id", $this->payload(['bonus' => '101']))->assertConflict();
         $this->assertDatabaseCount('work_payroll_months', 1);
@@ -77,6 +77,37 @@ class WorkPayrollSettingsTest extends TestCase
         $this->getJson('/settings/work-payroll/report?month=2026-10')->assertOk()->assertJsonPath('rows.0.accrued', null);
         $this->putJson("/settings/work-payroll/employees/$id", $this->payload(['month' => '2026-10', 'rate' => '0']))->assertOk()->assertJsonPath('base_pay', '0.00');
         $this->getJson('/settings/work-payroll/report?month=2026-09')->assertOk()->assertJsonPath('rows.0.base_pay', '1.52');
+    }
+
+    public function test_seven_hour_day_pays_shorter_and_longer_days_without_rounding_hourly_rate(): void
+    {
+        $this->owner();
+        foreach ([['350', '7', '350.00'], ['350', '9', '450.00'], ['400', '7', '400.00'],
+            ['400', '8', '457.14'], ['400', '9', '514.29'], ['400', '3.5', '200.00'], ['400', '0', '0.00']] as [$rate, $hours, $expected]) {
+            $id = $this->employee();
+            $this->putJson("/api/work-time/employees/$id/entry", ['date' => '2026-09-01', 'hours' => $hours, 'version' => 0])->assertOk();
+            $this->putJson("/settings/work-payroll/employees/$id", $this->payload(['rate' => $rate, 'bonus' => '0', 'expenses' => '0', 'adjustment' => '0', 'paid' => '0']))
+                ->assertOk()->assertJsonPath('daily_hours', 7)->assertJsonPath('base_pay', $expected)->assertJsonPath('accrued', $expected);
+            $this->assertDatabaseHas('work_payroll_months', ['employee_id' => $id, 'daily_hours' => 7]);
+        }
+    }
+
+    public function test_historical_months_keep_eight_hours_and_existing_september_rates_use_seven(): void
+    {
+        $this->owner(); $id = $this->employee();
+        foreach (['2026-08', '2026-09'] as $month) {
+            $this->putJson("/api/work-time/employees/$id/entry", ['date' => "$month-01", 'hours' => '9', 'version' => 0])->assertOk();
+            DB::table('work_payroll_months')->insert(['employee_id' => $id, 'month' => "$month-01", 'rate_mode' => 'daily', 'daily_rate_cents' => 40000,
+                'daily_hours' => null, 'version' => 1, 'created_at' => now(), 'updated_at' => now()]);
+        }
+        $this->getJson('/settings/work-payroll/report?month=2026-08')->assertOk()->assertJsonPath('rows.0.daily_hours', 8)->assertJsonPath('rows.0.base_pay', '450.00');
+        $this->getJson('/settings/work-payroll/report?month=2026-09')->assertOk()->assertJsonPath('rows.0.daily_hours', 7)->assertJsonPath('rows.0.base_pay', '514.29');
+        $this->assertSame(2, DB::table('work_payroll_months')->whereNull('daily_hours')->count());
+        $this->putJson("/settings/work-payroll/employees/$id", $this->payload(['month' => '2026-08', 'rate' => '400', 'version' => 1]))->assertOk()
+            ->assertJsonPath('daily_hours', 8)->assertJsonPath('base_pay', '450.00');
+        $this->assertDatabaseHas('work_payroll_months', ['employee_id' => $id, 'month' => '2026-08-01', 'daily_hours' => 8, 'daily_rate_cents' => 40000]);
+        $this->getJson('/settings/work-payroll/report?month=2027-01')->assertOk()->assertJsonPath('rows.0.daily_hours', 7);
+        $this->putJson("/settings/work-payroll/employees/$id", $this->payload(['daily_hours' => 1]))->assertUnprocessable()->assertJsonValidationErrors('daily_hours');
     }
 
     public function test_piecework_uses_daily_overrides_without_double_counting_and_preserves_legacy_payments(): void

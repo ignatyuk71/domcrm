@@ -40,7 +40,7 @@ class WorkPayrollSettingsController extends Controller
             'bonus' => ['required', ...$money], 'expenses' => ['required', ...$money], 'paid' => ['required', ...$money],
             'adjustment' => ['required', 'numeric', 'between:-1000000,1000000', 'regex:/^-?\d{1,7}(\.\d{1,2})?$/'],
             'adjustment_reason' => ['nullable', 'string', 'max:500'], 'note' => ['nullable', 'string', 'max:500'],
-            'version' => ['required', 'integer', 'min:0'], 'base_pay' => ['prohibited'], 'salary' => ['prohibited'], 'accrued' => ['prohibited'], 'balance' => ['prohibited']]);
+            'version' => ['required', 'integer', 'min:0'], 'daily_hours' => ['prohibited'], 'base_pay' => ['prohibited'], 'salary' => ['prohibited'], 'accrued' => ['prohibited'], 'balance' => ['prohibited']]);
         if ((float) $data['adjustment'] !== 0.0 && trim($data['adjustment_reason'] ?? '') === '') {
             throw \Illuminate\Validation\ValidationException::withMessages(['adjustment_reason' => 'Поясніть причину коригування.']);
         }

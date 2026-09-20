@@ -39,9 +39,9 @@
         <div class="wp-source"><span>З табеля за {{ periodLabel.toLowerCase() }}</span><strong>{{ currentRow.employee.payment_type === 'hourly' ? `${currentRow.days} дн. · ${number(currentRow.hours)} год` : money(currentRow.base_pay) }}</strong></div>
         <fieldset :disabled="busy" class="wp-fields">
           <template v-if="currentRow.employee.payment_type === 'hourly'">
-            <label class="wp-field">Спосіб розрахунку<select v-model="form.rate_mode" name="rate_mode" class="form-select"><option value="hourly">Ставка за годину</option><option value="daily">Ставка за день · 8 годин</option></select></label>
-            <label class="wp-field">{{ form.rate_mode === 'daily' ? 'Ставка за 8 годин, грн' : 'Ставка за годину, грн' }}<input v-model="form.rate" name="rate" class="form-control" inputmode="decimal" placeholder="Не вказано" :aria-invalid="!!errors.rate" /></label>
-            <p class="wp-help wp-full">{{ form.rate_mode === 'daily' ? 'Зарплата = години ÷ 8 × денна ставка. Неповний день — пропорційно.' : 'Зарплата = відпрацьовані години × ставка.' }} Ставка зберігається тільки для цього місяця.</p>
+            <label class="wp-field">Спосіб розрахунку<select v-model="form.rate_mode" name="rate_mode" class="form-select"><option value="hourly">Ставка за годину</option><option value="daily">Ставка за день · {{ currentRow.daily_hours }} годин</option></select></label>
+            <label class="wp-field">{{ form.rate_mode === 'daily' ? `Ставка за ${currentRow.daily_hours} годин, грн` : 'Ставка за годину, грн' }}<input v-model="form.rate" name="rate" class="form-control" inputmode="decimal" placeholder="Не вказано" :aria-invalid="!!errors.rate" /></label>
+            <p class="wp-help wp-full">{{ form.rate_mode === 'daily' ? `Зарплата = години ÷ ${currentRow.daily_hours} × денна ставка. Менше чи більше годин — пропорційна оплата.` : 'Зарплата = відпрацьовані години × ставка.' }} У табель вводьте робочі години без неоплачуваної перерви. Ставка зберігається тільки для цього місяця.</p>
           </template>
           <label class="wp-field">Премія, грн<input v-model="form.bonus" name="bonus" class="form-control" inputmode="decimal" required :aria-invalid="!!errors.bonus" /></label>
           <label class="wp-field">Відшкодування витрат, грн<input v-model="form.expenses" name="expenses" class="form-control" inputmode="decimal" required :aria-invalid="!!errors.expenses" /></label>
@@ -189,7 +189,7 @@ function cents(value, nullable = false) {
 const preview = computed(() => {
   try {
     const rate = cents(form.rate, true), h = Math.round(Number(currentRow.value?.hours || 0) * 100);
-    const denominator = form.rate_mode === 'daily' ? 800 : 100;
+    const denominator = form.rate_mode === 'daily' ? currentRow.value.daily_hours * 100 : 100;
     const base = form.rate_mode === 'piecework' ? cents(currentRow.value?.base_pay) : rate === null ? null : Math.round(h * rate / denominator);
     if (base === null) return { salary: null, accrued: null, balance: null };
     const salary = base + cents(form.adjustment), accrued = salary + cents(form.bonus) + cents(form.expenses);

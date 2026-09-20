@@ -6,6 +6,12 @@ use Illuminate\Support\Facades\DB;
 
 class PayrollReportService
 {
+    private function dailyHours(string $month, ?object $payroll): int
+    {
+        // Перехід із вересня 2026: архівні місяці не перераховуємо за новою нормою.
+        return (int) ($payroll->daily_hours ?? ($month >= '2026-09' ? 7 : 8));
+    }
+
     public function employees(): array
     {
         return DB::table('work_employees')->orderBy('name')->orderBy('id')->get()
@@ -60,8 +66,9 @@ class PayrollReportService
             $hourlyRate = isset($p->hourly_rate_cents) ? (int) $p->hourly_rate_cents : null;
             $dailyRate = isset($p->daily_rate_cents) ? (int) $p->daily_rate_cents : null;
             $rate = $mode === 'daily' ? $dailyRate : $hourlyRate;
-            // 8 год = повна денна ставка; неповний день оплачується пропорційно, округлення один раз.
-            $denominator = $mode === 'daily' ? 800 : 100;
+            $dailyHours = $this->dailyHours($month, $p);
+            // У табелі лише оплачувані години. Неповний/довший день — пропорційно, округлення один раз.
+            $denominator = $mode === 'daily' ? $dailyHours * 100 : 100;
             $base = $isHourly ? ($rate === null ? null : intdiv($h * $rate + intdiv($denominator, 2), $denominator))
                 : array_sum($amounts[$employee->id] ?? []);
             $bonus = (int) ($p->bonus_cents ?? 0);
@@ -73,6 +80,7 @@ class PayrollReportService
 
             return ['employee' => app(WorkTimeService::class)->employee($employee), 'employee_id' => (int) $employee->id,
                 'month' => $month, 'version' => (int) ($p->version ?? 0), 'rate_mode' => $mode,
+                'daily_hours' => $dailyHours,
                 'hours' => WorkTimeService::decimal($h), 'days' => $isHourly ? (int) ($hours->get($employee->id)->days ?? 0) : null,
                 'hourly_rate' => WorkTimeService::decimal($hourlyRate), 'daily_rate' => WorkTimeService::decimal($dailyRate),
                 'base_pay' => WorkTimeService::decimal($base), 'adjustment' => WorkTimeService::decimal($adjustment),
@@ -116,12 +124,13 @@ class PayrollReportService
             $query = DB::table('work_payroll_months')->where('employee_id', $id)->where('month', $start);
             $before = (clone $query)->first();
             $values = ['rate_mode' => $data['rate_mode'],
+                'daily_hours' => $this->dailyHours($month, $before),
                 'hourly_rate_cents' => $data['rate_mode'] === 'hourly' ? WorkTimeService::units($data['rate']) : null,
                 'daily_rate_cents' => $data['rate_mode'] === 'daily' ? WorkTimeService::units($data['rate']) : null,
                 'bonus_cents' => WorkTimeService::units($data['bonus']), 'expense_cents' => WorkTimeService::units($data['expenses']),
                 'adjustment_cents' => self::signedUnits($data['adjustment']), 'adjustment_reason' => $data['adjustment_reason'] ?? null,
                 'paid_cents' => WorkTimeService::units($data['paid']), 'note' => $data['note'] ?? null];
-            $same = $before && collect($values)->every(fn ($value, $key) => str_ends_with($key, '_cents')
+            $same = $before && collect($values)->every(fn ($value, $key) => str_ends_with($key, '_cents') || $key === 'daily_hours'
                 ? ($before->$key === null ? null : (int) $before->$key) === $value : $before->$key === $value);
             if (! $same) {
                 abort_unless((int) ($before->version ?? 0) === (int) $data['version'], 409, 'Нарахування вже змінили. Закрийте картку й оновіть звіт.');

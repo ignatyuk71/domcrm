@@ -9,7 +9,7 @@ vi.mock('../../services/workPayrollApi', () => ({ fetchWorkEmployees: vi.fn(), f
 const employee = { id: 101, name: 'Тестова працівниця', position: 'Швачка', payment_type: 'hourly', archived_on: null, version: 1 };
 const pieceEmployee = { ...employee, id: 102, name: 'Тестовий виконавець', payment_type: 'piecework' };
 const archivedEmployee = { ...employee, id: 103, name: 'Тестовий архів', archived_on: '2026-08-01' };
-const row = (replace = {}) => ({ employee, employee_id: 101, month: '2026-09', version: 1, rate_mode: 'daily', hours: '12.00', days: 2,
+const row = (replace = {}) => ({ employee, employee_id: 101, month: '2026-09', version: 1, rate_mode: 'daily', daily_hours: 7, hours: '10.50', days: 2,
     hourly_rate: null, daily_rate: '350.00', base_pay: '525.00', adjustment: '0.00', adjustment_reason: null,
     salary: '525.00', bonus: '0.00', expenses: '0.00', accrued: '525.00', paid: '0.00', balance: '525.00', note: null, ...replace });
 const report = (replace = {}) => ({ month: '2026-09', rows: [row()], incomplete_count: 0,
@@ -33,6 +33,18 @@ beforeEach(() => {
 afterEach(() => { wrapper?.unmount(); document.body.innerHTML = ''; vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe('Налаштування працівників і зарплати', () => {
+    it.each([[7, '514,29'], [8, '450']])('підпис і попередній розрахунок використовують %s годин із сервера', async (dailyHours, expected) => {
+        api.fetchPayrollReport.mockResolvedValue({ data: report({ rows: [row({ daily_hours: dailyHours, hours: '9.00', daily_rate: '400.00' })] }) });
+        await open();
+        expect(wrapper.get('[aria-label="Одиниця ставки — Тестова працівниця"]').text()).toContain(`за ${dailyHours} годин`);
+        await click('Тестова працівниця');
+        expect(wrapper.get('[name="rate_mode"]').text()).toContain(`Ставка за день · ${dailyHours} годин`);
+        expect(wrapper.get('.wp-preview').text()).toContain(`${expected} грн`);
+        expect(wrapper.get('.wp-help.wp-full').text()).toContain(`години ÷ ${dailyHours}`);
+        expect(wrapper.get('.wp-help.wp-full').text()).toContain('без неоплачуваної перерви');
+        await wrapper.get('form').trigger('submit'); await flushPromises();
+        expect(api.saveMonthlyPayroll.mock.calls[0][1]).not.toHaveProperty('daily_hours');
+    });
     it('читає звіт без створення записів, показує ставки, суми й підсумки', async () => {
         await open();
         expect(api.fetchPayrollReport).toHaveBeenCalledWith('2026-09');
