@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Auth;
 
+use App\Models\User;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
@@ -12,6 +13,15 @@ use Illuminate\Validation\ValidationException;
 
 class LoginRequest extends FormRequest
 {
+    private ?string $resolvedThrottleKey = null;
+
+    protected function prepareForValidation(): void
+    {
+        // Сумісність із уже відкритими формами, які ще надсилають поле email.
+        $login = $this->input('login', $this->input('email'));
+        $this->merge(['login' => is_string($login) ? Str::lower(trim($login)) : $login]);
+    }
+
     /**
      * Determine if the user is authorized to make this request.
      */
@@ -28,7 +38,7 @@ class LoginRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'email' => ['required', 'string', 'email'],
+            'login' => ['required', 'string', 'max:255'],
             'password' => ['required', 'string'],
         ];
     }
@@ -43,7 +53,7 @@ class LoginRequest extends FormRequest
         $this->ensureIsNotRateLimited();
 
         $credentials = [
-            'email' => $this->string('email')->toString(),
+            $this->loginColumn() => $this->string('login')->toString(),
             'password' => $this->string('password')->toString(),
         ];
 
@@ -55,7 +65,7 @@ class LoginRequest extends FormRequest
             RateLimiter::hit($this->throttleKey());
 
             throw ValidationException::withMessages([
-                'email' => trans('auth.failed'),
+                'login' => 'Неправильний логін, email або пароль.',
             ]);
         }
 
@@ -78,10 +88,7 @@ class LoginRequest extends FormRequest
         $seconds = RateLimiter::availableIn($this->throttleKey());
 
         throw ValidationException::withMessages([
-            'email' => trans('auth.throttle', [
-                'seconds' => $seconds,
-                'minutes' => ceil($seconds / 60),
-            ]),
+            'login' => "Забагато спроб входу. Спробуйте через {$seconds} с.",
         ]);
     }
 
@@ -90,6 +97,31 @@ class LoginRequest extends FormRequest
      */
     public function throttleKey(): string
     {
-        return Str::transliterate(Str::lower($this->string('email')).'|'.$this->ip());
+        if ($this->resolvedThrottleKey !== null) {
+            return $this->resolvedThrottleKey;
+        }
+
+        // Обидва способи входу використовують спільний ліміт для акаунта й IP.
+        $login = $this->string('login')->toString();
+        $id = User::query()->where($this->loginColumn(), $login)->value('id');
+        $identity = $id === null ? $this->loginColumn().':'.$login : 'user:'.$id;
+
+        return $this->resolvedThrottleKey = 'login:'.hash('sha256', $identity.'|'.$this->ip());
+    }
+
+    private function loginColumn(): string
+    {
+        // Символ @ заборонено в логінах, тож email не може вказати на інший акаунт.
+        return str_contains($this->string('login')->toString(), '@') ? 'email' : 'username';
+    }
+
+    public function messages(): array
+    {
+        return [
+            'login.required' => 'Введіть логін або email.',
+            'login.string' => 'Введіть коректний логін або email.',
+            'login.max' => 'Логін або email не може містити більше 255 символів.',
+            'password.required' => 'Введіть пароль.',
+        ];
     }
 }

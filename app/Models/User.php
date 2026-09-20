@@ -3,14 +3,18 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Str;
 
 class User extends Authenticatable
 {
     public const ROLE_OWNER = 'owner';
+
     public const ROLE_OPERATOR = 'operator';
+
     public const ROLE_PACKER = 'packer';
 
     /** @use HasFactory<\Database\Factories\UserFactory> */
@@ -24,6 +28,7 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'email',
+        'username',
         'password',
         'role',
         'is_active',
@@ -60,6 +65,19 @@ class User extends Authenticatable
             self::ROLE_OPERATOR => 'Оператор',
             self::ROLE_PACKER => 'Пакувальник',
         ];
+    }
+
+    public static function normalizeUsername(?string $value): ?string
+    {
+        $value = Str::lower(trim($value ?? ''));
+
+        return $value === '' ? null : $value;
+    }
+
+    protected function username(): Attribute
+    {
+        // Єдине написання забезпечує однакову унікальність у MySQL та SQLite.
+        return Attribute::make(set: fn (?string $value) => self::normalizeUsername($value));
     }
 
     public function roleKey(): string

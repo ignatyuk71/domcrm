@@ -2,19 +2,18 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\SaveTeamUserRequest;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Validation\Rule;
-use Illuminate\Validation\Rules\Password;
 
 class TeamController extends Controller
 {
     public function index()
     {
-        if (!$this->canManageUsers()) {
+        if (! $this->canManageUsers()) {
             return view('settings.team', [
                 'users' => collect(),
                 'roleOptions' => User::roleOptions(),
@@ -25,7 +24,7 @@ class TeamController extends Controller
         $users = User::query()
             ->orderByRaw("role = 'owner' DESC")
             ->orderBy('name')
-            ->get(['id', 'name', 'email', 'role', 'is_active', 'created_at']);
+            ->get(['id', 'name', 'email', 'username', 'role', 'is_active', 'created_at']);
 
         return view('settings.team', [
             'users' => $users,
@@ -33,24 +32,20 @@ class TeamController extends Controller
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(SaveTeamUserRequest $request): RedirectResponse
     {
-        if (!$this->canManageUsers()) {
+        if (! $this->canManageUsers()) {
             return back()->withErrors([
                 'team' => 'Спочатку застосуйте міграції для модуля керування командою.',
             ]);
         }
 
-        $data = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email:rfc,dns', 'max:255', Rule::unique(User::class, 'email')],
-            'role' => ['required', Rule::in(array_keys(User::roleOptions()))],
-            'password' => ['required', 'confirmed', Password::defaults()],
-        ]);
+        $data = $request->validated();
 
         User::create([
             'name' => $data['name'],
             'email' => strtolower($data['email']),
+            'username' => $data['username'] ?? null,
             'role' => $data['role'],
             'is_active' => true,
             'password' => Hash::make($data['password']),
@@ -61,19 +56,15 @@ class TeamController extends Controller
             ->with('success', 'Користувача додано.');
     }
 
-    public function update(Request $request, User $user): RedirectResponse
+    public function update(SaveTeamUserRequest $request, User $user): RedirectResponse
     {
-        if (!$this->canManageUsers()) {
+        if (! $this->canManageUsers()) {
             return back()->withErrors([
                 'team' => 'Спочатку застосуйте міграції для модуля керування командою.',
             ]);
         }
 
-        $data = $request->validate([
-            'role' => ['required', Rule::in(array_keys(User::roleOptions()))],
-            'is_active' => ['required', 'boolean'],
-            'password' => ['nullable', 'confirmed', Password::defaults()],
-        ]);
+        $data = $request->validated();
 
         $currentUser = $request->user();
         $isSelf = $currentUser?->id === $user->id;
@@ -83,14 +74,14 @@ class TeamController extends Controller
         if ($user->role === User::ROLE_OWNER && $data['role'] !== User::ROLE_OWNER && $ownerCount <= 1) {
             return back()->withErrors([
                 'team' => 'У системі має залишитись щонайменше один власник.',
-            ]);
+            ], 'user'.$user->id)->withInput($request->except(['password', 'password_confirmation']));
         }
 
         // Забороняємо деактивацію власного акаунта
-        if ($isSelf && !$data['is_active']) {
+        if ($isSelf && ! $data['is_active']) {
             return back()->withErrors([
                 'team' => 'Неможливо деактивувати власний акаунт.',
-            ]);
+            ], 'user'.$user->id)->withInput($request->except(['password', 'password_confirmation']));
         }
 
         $payload = [
@@ -98,7 +89,12 @@ class TeamController extends Controller
             'is_active' => (bool) $data['is_active'],
         ];
 
-        if (!empty($data['password'])) {
+        // Старі форми без поля логіна не повинні стирати вже заданий логін.
+        if (array_key_exists('username', $data)) {
+            $payload['username'] = $data['username'];
+        }
+
+        if (! empty($data['password'])) {
             $payload['password'] = Hash::make($data['password']);
         }
 
@@ -111,7 +107,7 @@ class TeamController extends Controller
 
     public function destroy(Request $request, User $user): RedirectResponse
     {
-        if (!$this->canManageUsers()) {
+        if (! $this->canManageUsers()) {
             return back()->withErrors([
                 'team' => 'Спочатку застосуйте міграції для модуля керування командою.',
             ]);
@@ -145,6 +141,7 @@ class TeamController extends Controller
     {
         return Schema::hasTable('users')
             && Schema::hasColumn('users', 'role')
+            && Schema::hasColumn('users', 'username')
             && Schema::hasColumn('users', 'is_active');
     }
 }
