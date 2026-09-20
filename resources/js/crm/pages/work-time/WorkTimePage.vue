@@ -41,10 +41,11 @@
           <tbody><tr v-for="employee in piece.employees" :key="employee.id">
             <th class="wt-person" scope="row"><div class="wt-person-label" :data-testid="`employee-${employee.id}`"><span class="wt-avatar">{{ employee.name.slice(0, 1) }}</span><span><b>{{ employee.name }}</b><small>{{ employee.archived_on ? 'В архіві' : employee.position || 'Працівник' }}</small></span></div></th>
             <td v-for="day in days" :key="day.date" :class="{ weekend: day.weekend, 'wt-cell-error': piece.states[key(employee.id, day.date)]?.error, 'wt-cell-saving': piece.states[key(employee.id, day.date)]?.pending }">
-              <input v-model="piece.drafts[key(employee.id, day.date)].amount" type="text" inputmode="decimal" maxlength="13" :data-money-cell="key(employee.id, day.date)" :title="piece.drafts[key(employee.id, day.date)].amount ? `${piece.drafts[key(employee.id, day.date)].amount} грн` : ''" :aria-label="`${employee.name}, ${day.day} ${monthGen[month - 1]}, сума у гривнях`" :aria-invalid="!!piece.states[key(employee.id, day.date)]?.error" :disabled="loading || piece.loading || !!dayEditor || !!(employee.archived_on && day.date > employee.archived_on)" @focus="piece.states[key(employee.id, day.date)]?.error && showProblems()" @input="piece.schedule(key(employee.id, day.date))" @blur="piece.flush(key(employee.id, day.date))" @keydown.enter.prevent="nextPieceEmployee(employee.id, day.date)" />
-              <button type="button" class="wt-day-note" :class="{ 'has-note': !!piece.drafts[key(employee.id, day.date)].note }"
-                :data-note-cell="key(employee.id, day.date)" :title="piece.drafts[key(employee.id, day.date)].note || 'Додати пояснення'"
-                :aria-label="`${employee.name}, ${day.day} ${monthGen[month - 1]}: сума та пояснення`" aria-haspopup="dialog"
+              <span class="wt-money-value" :data-money-cell="key(employee.id, day.date)" :title="pieceHint(employee.id, day.date)">{{ piece.entries[key(employee.id, day.date)]?.amount == null ? '' : number(Number(piece.entries[key(employee.id, day.date)].amount)) }}</span>
+              <button type="button" class="wt-day-note" :class="{ 'has-note': !!piece.entries[key(employee.id, day.date)]?.note }"
+                :data-note-cell="key(employee.id, day.date)" :title="pieceHint(employee.id, day.date)"
+                :aria-label="`${employee.name}, ${day.day} ${monthGen[month - 1]}: ${pieceHint(employee.id, day.date)}. Редагувати нарахування`" aria-haspopup="dialog"
+                :aria-invalid="!!piece.states[key(employee.id, day.date)]?.error"
                 :aria-expanded="dayEditor?.key === key(employee.id, day.date)"
                 :disabled="loading || piece.loading || !!openingDay || (!!dayEditor && dayEditor.key !== key(employee.id, day.date)) || !!(employee.archived_on && day.date > employee.archived_on)"
                 @click="openDayEditor(employee, day.date, $event.currentTarget)"><i class="bi bi-chat-left-text" aria-hidden="true"></i></button>
@@ -55,7 +56,7 @@
       </div>
       <div v-else-if="piece.loading" class="wt-empty" role="status">Завантажуємо суми…</div>
       <div v-else-if="!piece.loadError" class="wt-empty"><i class="bi bi-people" aria-hidden="true"></i><h2>Працівники з оплатою за роботу</h2><p>Тут вводяться домовлені суми по днях для працівників, яких додав власник.</p></div>
-      <footer class="wt-sheet-footer"><span>Автозбереження · Порожня клітинка = 0 грн у підсумку</span><span>Сума до оплати за роботу, не факт виплати · Лише власник</span></footer>
+      <footer class="wt-sheet-footer"><span>Натисніть іконку, щоб ввести суму та пояснення · Порожня клітинка = 0 грн</span><span>Сума до оплати за роботу, не факт виплати · Лише власник</span></footer>
     </section>
 
     <PieceworkDayPopover v-if="dayEditor" :employee="dayEditor.employee" :date="dayEditor.date" :anchor="dayEditor.anchor"
@@ -91,8 +92,8 @@ async function openDayEditor(employee, date, anchor) {
   const k = key(employee.id, date);
   if (employee.archived_on && date > employee.archived_on) return;
   openingDay.value = k;
-  // Дочікуємося попереднього автозбереження суми перед редагуванням обох полів.
-  await piece.flush(k);
+  // Відкриття форми не зберігає невдалу чернетку без натискання «Зберегти».
+  if (piece.states[k]?.pending) await piece.flush(k);
   if (!alive) return;
   const draft = piece.drafts[k];
   dayEditor.value = { key: k, employee, date, anchor, amount: draft.amount, note: draft.note };
@@ -204,15 +205,15 @@ function entryHint(id, date) {
   const e = entries[key(id, date)];
   return states[key(id, date)]?.error || (e ? `${e.note ? e.note + ' · ' : ''}${e.updated_by || 'CRM'} · ${e.updated_at}` : '');
 }
+function pieceHint(id, date) {
+  const entry = piece.entries[key(id, date)];
+  if (entry?.amount == null) return entry?.note ? `Суму не вказано — ${entry.note}` : 'Додати суму та пояснення';
+  return `${money(Number(entry.amount))}${entry.note ? ` — ${entry.note}` : ''}`;
+}
 function nextEmployee(id, date) {
   flush(key(id, date));
   const next = employees.value[(employees.value.findIndex(e => e.id === id) + 1) % employees.value.length];
   const input = document.querySelector(`[data-cell="${key(next.id, date)}"]`); input?.focus(); input?.select();
-}
-function nextPieceEmployee(id, date) {
-  piece.flush(key(id, date));
-  const next = piece.employees[(piece.employees.findIndex(e => e.id === id) + 1) % piece.employees.length];
-  const input = document.querySelector(`[data-money-cell="${key(next.id, date)}"]`); input?.focus(); input?.select();
 }
 </script>
 
@@ -229,10 +230,10 @@ function nextPieceEmployee(id, date) {
 .wt-scroll .wt-calendar .wt-total{min-width:0;padding:0 3px;overflow-wrap:anywhere}
 .wt-calendar .wt-total b,.wt-day-sum{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .wt-calendar tbody td:not(.wt-total){position:relative}
-.wt-day-note{position:absolute;right:1px;bottom:1px;z-index:1;display:grid;place-items:center;width:18px;height:18px;padding:0;border:0;border-radius:4px;background:transparent;color:#8795a5;font-size:10px;opacity:0}
-.wt-day-note.has-note,.wt-calendar td:hover .wt-day-note,.wt-calendar td:focus-within .wt-day-note{opacity:1}
+.wt-money-value{display:block;height:25px;padding:3px 1px 0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:12px;color:#344158}
+.wt-day-note{display:grid;place-items:center;width:24px;height:24px;margin:0 auto;padding:0;border:0;border-radius:6px;background:#f0f4f5;color:#8795a5;font-size:13px}
 .wt-day-note.has-note{color:#24816f;background:#e5f4ee}.wt-day-note:hover{background:#d5eee3;color:#1d705d}
-@media(hover:none){.wt-day-note{opacity:1;width:22px;height:22px}}
+.wt-day-note[aria-invalid=true]{color:#b32d45;background:#fff0f2;outline:1px solid #c44758}
 .wt-calendar tbody th,.wt-calendar tbody td{height:60px}
 .wt-calendar .wt-person-label{gap:7px}
 .wt-calendar .wt-person-label b{font-size:12px}
@@ -241,14 +242,12 @@ function nextPieceEmployee(id, date) {
 /* Під час вводу показуємо довгу суму повністю, не змінюючи ширину таблиці. */
 .wt-calendar tbody td:focus-within{z-index:4}
 .wt-scroll .wt-calendar input:focus{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:66px;background:#fff;box-shadow:0 3px 14px #24304b26;outline:2px solid #8e80e9;outline-offset:-2px}
-.wt-money-scroll .wt-calendar input:focus{width:132px;font-size:14px;outline-color:#66b6a0}
 @container (max-width:1150px){
   .wt-scroll{--wt-person-width:140px;--wt-total-width:80px;--wt-day-min:24px}
   .wt-calendar .wt-avatar{display:none}
   .wt-scroll .wt-calendar input{font-size:11px}
   .wt-scroll .wt-calendar .wt-person{padding:0 8px}
   .wt-calendar .wt-person-label small{font-size:10px}
-  .wt-money-scroll .wt-calendar input:focus{font-size:14px}
 }
 /* На телефоні не стискаємо 31 день до нечитабельних цифр. */
 @container (max-width:900px){.wt-scroll{--wt-person-width:140px;--wt-total-width:80px;--wt-day-min:34px}.wt-scroll .wt-calendar input{font-size:12px}}

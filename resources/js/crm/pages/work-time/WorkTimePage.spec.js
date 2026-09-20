@@ -42,6 +42,26 @@ describe('Табель робочого часу', () => {
         await wrapper.get(`[data-note-cell="2|${date}"]`).trigger('click'); await flushPromises();
         return new DOMWrapper(document.querySelector('.piece-day-popover'));
     }
+    async function saveAmount(amount, date = '2026-09-20') {
+        const editor = await openNote(date);
+        await editor.get('input').setValue(amount); await editor.trigger('submit'); await flushPromises();
+        return editor;
+    }
+    it('відрядна таблиця має лише суми та постійні кнопки, а години залишаються полями', async () => {
+        await open();
+        expect(wrapper.find('.wt-money-sheet input').exists()).toBe(false);
+        expect(wrapper.find('.wt-money-sheet [contenteditable]').exists()).toBe(false);
+        expect(wrapper.findAll('.wt-money-sheet [data-note-cell]')).toHaveLength(30);
+        expect(wrapper.get('[data-money-cell="2|2026-09-20"]').element.tagName).toBe('SPAN');
+        expect(cell().element.tagName).toBe('INPUT');
+        const editor = await openNote(); await editor.get('input').setValue('34');
+        await editor.get('textarea').setValue('Нарізання поролону');
+        await vi.advanceTimersByTimeAsync(1000); await editor.get('input').trigger('blur');
+        expect(pieceApi.savePieceworkDay).not.toHaveBeenCalled();
+        await editor.trigger('submit'); await flushPromises();
+        expect(wrapper.get('[data-note-cell="2|2026-09-20"]').attributes('title')).toBe('34 грн — Нарізання поролону');
+        expect(wrapper.get('[data-money-cell="2|2026-09-20"]').text()).toBe('34');
+    });
     it('зберігає суму та пояснення разом через компактне віконце', async () => {
         await open(); const editor = await openNote();
         expect(editor.get('textarea').attributes('rows')).toBe('2');
@@ -53,7 +73,7 @@ describe('Табель робочого часу', () => {
         expect(pieceApi.savePieceworkDay).toHaveBeenCalledWith(2, { date: '2026-09-20', amount: '300.50', note: 'Допомога у вихідний', version: 0 });
         expect(wrapper.findComponent(PieceworkDayPopover).exists()).toBe(false);
         const icon = wrapper.get('[data-note-cell="2|2026-09-20"]');
-        expect(icon.classes()).toContain('has-note'); expect(icon.attributes('title')).toBe('Допомога у вихідний');
+        expect(icon.classes()).toContain('has-note'); expect(icon.attributes('title')).toBe('300,5 грн — Допомога у вихідний');
         expect(document.activeElement).toBe(icon.element);
         expect(wrapper.get('[data-testid="piece-total-2"]').text()).toBe('300,5');
     });
@@ -85,12 +105,22 @@ describe('Табель робочого часу', () => {
         expect(pieceApi.savePieceworkDay.mock.calls[1]).toEqual(pieceApi.savePieceworkDay.mock.calls[0]);
         expect(wrapper.findComponent(PieceworkDayPopover).exists()).toBe(false);
     });
-    it('залишає пояснення при швидкому редагуванні суми та дозволяє окремо його очистити', async () => {
+    it('повторне відкриття невдалої чернетки не записує її без кнопки збереження', async () => {
+        pieceApi.savePieceworkDay.mockRejectedValueOnce(new Error('network'));
+        await open(); const editor = await saveAmount('34');
+        await editor.get('.piece-cancel').trigger('click'); await flushPromises();
+        const reopened = await openNote(); await vi.advanceTimersByTimeAsync(1000);
+        expect(reopened.get('input').element.value).toBe('34');
+        expect(pieceApi.savePieceworkDay).toHaveBeenCalledTimes(1);
+        expect(wrapper.get('[data-money-cell="2|2026-09-20"]').text()).toBe('');
+        await reopened.trigger('submit'); await flushPromises();
+        expect(wrapper.get('[data-money-cell="2|2026-09-20"]').text()).toBe('34');
+    });
+    it('залишає пояснення при редагуванні суми у формі та дозволяє окремо його очистити', async () => {
         pieceApi.fetchPieceworkDays.mockResolvedValue({ data: { month: period, employees: [pieceEmployee], entries: [
             { employee_id: 2, date: '2026-09-20', amount: '300.00', note: 'Розкрій', version: 1 },
         ] } });
-        await open(); const input = wrapper.get('[data-money-cell="2|2026-09-20"]');
-        await input.setValue('600'); await input.trigger('blur'); await flushPromises();
+        await open(); await saveAmount('600');
         expect(pieceApi.savePieceworkDay).toHaveBeenLastCalledWith(2, expect.objectContaining({ amount: '600.00', note: 'Розкрій', version: 1 }));
         const editor = await openNote(); await editor.get('textarea').setValue('');
         await editor.trigger('submit'); await flushPromises();
@@ -149,8 +179,7 @@ describe('Табель робочого часу', () => {
     });
     it('успіх іншої клітинки не перекриває невиправлену помилку', async () => {
         await open(); await cell().setValue('25'); await cell().trigger('blur'); await flushPromises();
-        const amount = wrapper.get('[data-money-cell="2|2026-09-09"]');
-        await amount.setValue('600'); await amount.trigger('blur'); await flushPromises();
+        await saveAmount('600', '2026-09-09');
         expect(toastText()).toContain('Введіть від 0 до 24');
         expect(toastText()).not.toContain('Усі зміни збережено');
         expect(document.querySelectorAll('.app-toast')).toHaveLength(1);
@@ -195,41 +224,40 @@ describe('Табель робочого часу', () => {
         }
     });
     it('не обрізає саме значення довгої суми при компактному відображенні', async () => {
-        await open(); const input = wrapper.get('[data-money-cell="2|2026-09-09"]');
-        await input.setValue('123456,78');
-        expect(input.attributes('title')).toBe('123456,78 грн');
-        await input.trigger('focus'); await input.trigger('blur'); await flushPromises();
+        await open(); await saveAmount('123456,78', '2026-09-09');
         expect(pieceApi.savePieceworkDay).toHaveBeenCalledWith(2, expect.objectContaining({ amount: '123456.78' }));
-        expect(input.element.value).toBe('123456.78');
-        expect(input.attributes('title')).toBe('123456.78 грн');
+        const display = wrapper.get('[data-money-cell="2|2026-09-09"]');
+        expect(display.text().replace(/\s/g, '')).toBe('123456,78');
+        expect(display.attributes('title').replace(/\s/g, '')).toBe('123456,78грн');
+        const editor = await openNote('2026-09-09'); expect(editor.get('input').element.value).toBe('123456.78');
     });
 
     it('зберігає 600 і 300 у різні дні та показує 900 без полів кількості', async () => {
         await open();
-        const first = wrapper.get('[data-money-cell="2|2026-09-09"]'), second = wrapper.get('[data-money-cell="2|2026-09-20"]');
-        await first.setValue('600'); await first.trigger('blur'); await flushPromises();
-        await second.setValue('300'); await vi.advanceTimersByTimeAsync(650); await flushPromises();
+        await saveAmount('600', '2026-09-09'); await saveAmount('300');
         expect(pieceApi.savePieceworkDay).toHaveBeenCalledWith(2, { date: '2026-09-09', amount: '600.00', note: null, version: 0 });
         expect(wrapper.get('[data-testid="piece-total-2"]').text()).toBe('900');
         expect(wrapper.get('[data-testid="piece-all-total"]').text()).toBe('900');
         expect(wrapper.find('[name="piece_quantity"]').exists()).toBe(false);
         expect(api.saveWorkDay).not.toHaveBeenCalled();
     });
-    it('залишає швидке нове значення суми та послідовно зберігає обидві зміни', async () => {
+    it('блокує форму під час запиту, а після підтвердження дозволяє нову зміну', async () => {
         const first = deferred(); pieceApi.savePieceworkDay.mockImplementationOnce(() => first.promise);
-        await open(); const input = wrapper.get('[data-money-cell="2|2026-09-09"]');
-        await input.setValue('600'); await input.trigger('blur'); await flushPromises();
-        await input.setValue('650,25'); first.resolve({ data: { employee_id: 2, date: '2026-09-09', amount: '600.00', version: 1 } }); await flushPromises();
+        await open(); const editor = await saveAmount('600', '2026-09-09');
+        expect(editor.get('input').attributes('disabled')).toBeDefined();
+        expect(editor.get('.piece-save').attributes('disabled')).toBeDefined();
+        expect(wrapper.get('[data-money-cell="2|2026-09-09"]').text()).toBe('');
+        first.resolve({ data: { employee_id: 2, date: '2026-09-09', amount: '600.00', note: null, version: 1 } }); await flushPromises();
+        await saveAmount('650,25', '2026-09-09');
         expect(pieceApi.savePieceworkDay).toHaveBeenLastCalledWith(2, expect.objectContaining({ amount: '650.25', version: 1 }));
-        expect(input.element.value).toBe('650.25');
+        expect(wrapper.get('[data-money-cell="2|2026-09-09"]').text()).toBe('650,25');
     });
     it('помилка грошової клітинки не дає загубити дані при зміні місяця', async () => {
         pieceApi.savePieceworkDay.mockRejectedValue({ response: { status: 409, data: { message: 'Суму вже змінили' } } });
-        await open(); const input = wrapper.get('[data-money-cell="2|2026-09-09"]');
-        await input.setValue('600'); await input.trigger('blur'); await flushPromises();
+        await open(); const editor = await saveAmount('600', '2026-09-09');
         await wrapper.get('[aria-label="Місяць"]').setValue('10'); await flushPromises();
         expect(wrapper.get('[aria-label="Місяць"]').element.value).toBe('9');
-        expect(input.element.value).toBe('600'); expect(toastText()).toContain('Суму вже змінили');
+        expect(editor.get('input').element.value).toBe('600'); expect(toastText()).toContain('Суму вже змінили');
     });
     it('оновлює обидві таблиці при виборі року та місяця', async () => {
         await open(); await wrapper.get('[aria-label="Місяць"]').setValue('10'); await flushPromises();
@@ -238,13 +266,15 @@ describe('Табель робочого часу', () => {
         expect(wrapper.find('[data-money-cell="2|2026-09-01"]').exists()).toBe(false);
     });
     it('від’ємні суми не надсилає, очищення і явний нуль розрізняє', async () => {
-        await open(); const input = wrapper.get('[data-money-cell="2|2026-09-09"]');
-        await input.setValue('-1'); await input.trigger('blur'); await flushPromises();
+        await open(); const editor = await saveAmount('-1', '2026-09-09');
         expect(pieceApi.savePieceworkDay).not.toHaveBeenCalled();
-        await input.setValue('0'); await input.trigger('blur'); await flushPromises();
+        await editor.get('input').setValue('0'); await editor.trigger('submit'); await flushPromises();
         expect(pieceApi.savePieceworkDay).toHaveBeenLastCalledWith(2, expect.objectContaining({ amount: '0.00' }));
-        await input.setValue(''); await input.trigger('blur'); await flushPromises();
+        expect(wrapper.get('[data-money-cell="2|2026-09-09"]').text()).toBe('0');
+        expect(wrapper.get('[data-note-cell="2|2026-09-09"]').attributes('title')).toBe('0 грн');
+        await saveAmount('', '2026-09-09');
         expect(pieceApi.savePieceworkDay).toHaveBeenLastCalledWith(2, expect.objectContaining({ amount: null, version: 1 }));
+        expect(wrapper.get('[data-money-cell="2|2026-09-09"]').text()).toBe('');
     });
     it('не додає відрядних працівників у сітку годин', async () => {
         api.fetchWorkTime.mockResolvedValue({ data: { month: period, employees: [employee, { ...employee, id: 2, name: 'Відрядний тест', payment_type: 'piecework' }], entries: [], can_manage_pay: true } });
