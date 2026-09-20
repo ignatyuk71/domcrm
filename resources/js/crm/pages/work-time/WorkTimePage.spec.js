@@ -38,6 +38,15 @@ beforeEach(() => {
 afterEach(() => { wrapper?.unmount(); document.body.innerHTML = ''; vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe('Табель робочого часу', () => {
+    it('показує всі три підсумки в шапці поруч із заголовком', async () => {
+        await open();
+        const heading = wrapper.get('.wt-heading');
+        expect(heading.get('.wt-title h1').text()).toBe('Табель і виконані роботи');
+        expect(heading.findAll('.wt-stats > div')).toHaveLength(3);
+        expect(heading.get('[data-testid="all-hours"]').text()).toContain('8');
+        expect(heading.get('.wt-stats').text()).toContain('Заповнено по');
+        expect(wrapper.findAll('.wt-stats')).toHaveLength(1);
+    });
     async function openNote(date = '2026-09-20') {
         await wrapper.get(`[data-note-cell="2|${date}"]`).trigger('click'); await flushPromises();
         return new DOMWrapper(document.querySelector('.piece-day-popover'));
