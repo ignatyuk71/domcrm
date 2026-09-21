@@ -228,7 +228,15 @@ async function mountWorkPayrollSettings() {
     createApp(page).mount(el);
 }
 
+async function mountExpenses() {
+    const el = document.querySelector('#crm-expenses');
+    if (!el) return;
+    const { default: page } = await import('./pages/expenses/ExpensesPage.vue');
+    createApp(page).mount(el);
+}
+
 function autoMount() {
+    mountExpenses();
     mountWorkPayrollSettings();
     mountSettingsTelegram();
     mountDashboard();

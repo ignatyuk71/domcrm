@@ -634,7 +634,7 @@
                 </a>
 
                 <div class="settings-group">
-                    <button type="button" class="sidebar-link-sub settings-group-toggle {{ request()->routeIs('analytics.*', 'inventory.soles', 'settings.workPayroll.*', 'finance.*') ? 'active' : '' }}"
+                    <button type="button" class="sidebar-link-sub settings-group-toggle {{ request()->routeIs('analytics.*', 'inventory.soles', 'settings.workPayroll.*', 'finance.*', 'expenses.*') ? 'active' : '' }}"
                             id="settings-accounting-toggle" aria-expanded="false" aria-controls="settings-accounting">
                         <span class="icon-frame"><i class="bi bi-calculator" aria-hidden="true"></i></span>
                         <span>Бухгалтерія</span>
@@ -657,6 +657,12 @@
                         <a href="{{ route('finance.index') }}" class="sidebar-link-sub {{ request()->is('finance*') ? 'active' : '' }}">
                             <span class="icon-frame"><i class="bi bi-wallet2"></i></span>
                             <span class="item-text-sub">Фінанси</span>
+                        </a>
+
+                        <a href="{{ route('expenses.index') }}" class="sidebar-link-sub {{ request()->routeIs('expenses.*') ? 'active' : '' }}"
+                           @if(request()->routeIs('expenses.*')) aria-current="page" @endif>
+                            <span class="icon-frame"><i class="bi bi-receipt"></i></span>
+                            <span class="item-text-sub">Витрати</span>
                         </a>
                     </div>
                 </div>
