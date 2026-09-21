@@ -1310,6 +1310,23 @@
             document.getElementById('send-btn').classList.toggle('d-none', !has);
         }
         replyTa.addEventListener('input', autoGrow);
+        replyTa.addEventListener('paste', (e) => {
+            const clipboard = e.clipboardData;
+            if (!clipboard) return;
+
+            let images = Array.from(clipboard.items || [])
+                .filter(item => item.kind === 'file' && item.type.startsWith('image/'))
+                .map(item => item.getAsFile())
+                .filter(Boolean);
+            if (!images.length) {
+                images = Array.from(clipboard.files || []).filter(file => file.type.startsWith('image/'));
+            }
+            // Звичайний текст вставляє браузер; зображення додаємо до чернетки вкладень.
+            if (!images.length) return;
+            e.preventDefault();
+            if (!activeId || sendingNow) return;
+            stageFiles(images);
+        });
         replyTa.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -1413,7 +1430,13 @@
 
         function stageFile(input) {
             if (!input.files.length) return;
-            for (const f of input.files) {
+            stageFiles(input.files);
+            document.getElementById('reply-error').classList.add('d-none');
+            input.value = '';
+        }
+
+        function stageFiles(files) {
+            for (const f of files) {
                 const item = { kind: 'file', file: f, url: null };
                 staged.push(item);
                 if (f.type.startsWith('image/')) {
@@ -1422,8 +1445,6 @@
                     reader.readAsDataURL(f);
                 }
             }
-            document.getElementById('reply-error').classList.add('d-none');
-            input.value = '';
             renderStaged();
         }
 
