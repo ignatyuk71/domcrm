@@ -33,30 +33,34 @@ beforeEach(() => {
 afterEach(() => { wrapper?.unmount(); document.body.innerHTML = ''; vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe('Налаштування працівників і зарплати', () => {
-    it('об’єднує оклад, години та роботи в одному рядку і попередньому розрахунку', async () => {
-        const mixed = { ...employee, payment_type: 'mixed' };
-        api.fetchPayrollReport.mockResolvedValue({ data: report({ rows: [row({ employee: mixed, hours: '14.00', daily_rate: '400.00', monthly_salary: '8000.00', time_pay: '800.00', piecework_pay: '300.00', base_pay: '9100.00', salary: '9100.00', accrued: '9100.00', balance: '9100.00' })] }) });
+    it('зберігає оклад і ручну деньовку в одному рядку з формою із трьох блоків', async () => {
+        api.fetchPayrollReport.mockResolvedValue({ data: report({ rows: [row({ employee: { ...employee, payment_type: 'piecework' }, rate_mode: 'piecework', hours: '0.00', daily_rate: null, monthly_salary: '8000.00', time_pay: '0.00', piecework_pay: '350.00', base_pay: '8350.00', salary: '8350.00', accrued: '8350.00', balance: '8350.00' })] }) });
         await open();
         expect(wrapper.findAll('[data-testid="payroll-row-101"]')).toHaveLength(1);
-        expect(wrapper.get('[data-testid="payroll-row-101"]').text()).toContain('Оклад 8');
+        expect(wrapper.text()).not.toContain('Змішана оплата');
+        expect(wrapper.get('[data-testid="payroll-row-101"]').text()).not.toContain('Оклад 8');
         expect(wrapper.get('[data-field="monthly_salary"]').element.value).toBe('8000.00');
         await click('Тестова працівниця');
-        expect(wrapper.get('.wp-preview').text().replace(/\s/g, '')).toContain('9100грн');
+        expect(dialog().classes()).toContain('wp-dialog--payroll');
+        expect(dialog().findAll('.wp-payroll-block')).toHaveLength(3);
+        expect(dialog().find('[name="rate"]').exists()).toBe(false);
+        expect(wrapper.get('.wp-preview').text().replace(/\s/g, '')).toContain('8350грн');
         await wrapper.get('[name="monthly_salary"]').setValue('8500');
-        expect(wrapper.get('.wp-preview').text().replace(/\s/g, '')).toContain('9600грн');
+        expect(wrapper.get('.wp-preview').text().replace(/\s/g, '')).toContain('8850грн');
         await wrapper.get('form').trigger('submit'); await flushPromises();
-        expect(api.saveMonthlyPayroll.mock.calls[0][1]).toMatchObject({ monthly_salary: '8500', rate_mode: 'daily', rate: '400.00' });
+        expect(api.saveMonthlyPayroll.mock.calls[0][1]).toMatchObject({ monthly_salary: '8500', rate_mode: 'piecework', rate: null });
     });
-    it('дозволяє розширити наявного працівника до обох таблиць без дубля', async () => {
+    it('залишає лише два види обліку без зміни типу наявного працівника', async () => {
         await open(); await click('Працівники');
         await wrapper.get('[aria-label="Редагувати працівника Тестова працівниця"]').trigger('click'); await flushPromises();
-        await wrapper.get('[name="payment_type"]').setValue('mixed');
+        expect(wrapper.get('[name="payment_type"]').attributes('disabled')).toBeDefined();
+        expect(wrapper.find('[name="payment_type"] option[value="mixed"]').exists()).toBe(false);
         await wrapper.get('form').trigger('submit'); await flushPromises();
-        expect(work.updateWorkEmployee).toHaveBeenCalledWith(101, expect.objectContaining({ payment_type: 'mixed', version: 1 }));
+        expect(work.updateWorkEmployee).toHaveBeenCalledWith(101, expect.objectContaining({ payment_type: 'hourly', version: 1 }));
         expect(work.createWorkEmployee).not.toHaveBeenCalled();
     });
-    it('змішана оплата без додаткових годин нараховує лише оклад і роботи', async () => {
-        api.fetchPayrollReport.mockResolvedValue({ data: report({ rows: [row({ employee: { ...employee, payment_type: 'mixed' }, hours: '0.00', daily_rate: null, monthly_salary: '8000.00', piecework_pay: '0.00' })] }) });
+    it('за відсутності виконаних робіт нараховує лише оклад без ставки', async () => {
+        api.fetchPayrollReport.mockResolvedValue({ data: report({ rows: [row({ employee: { ...employee, payment_type: 'piecework' }, rate_mode: 'piecework', hours: '0.00', daily_rate: null, monthly_salary: '8000.00', piecework_pay: '0.00' })] }) });
         await open(); await click('Тестова працівниця');
         expect(wrapper.get('.wp-preview').text().replace(/\s/g, '')).toContain('8000грн');
     });
@@ -68,7 +72,7 @@ describe('Налаштування працівників і зарплати', 
         expect(wrapper.get('[name="rate_mode"]').text()).toContain(`Ставка за день · ${dailyHours} годин`);
         expect(wrapper.get('.wp-preview').text()).toContain(`${expected} грн`);
         expect(dialog().text()).toContain(`години ÷ ${dailyHours}`);
-        expect(dialog().text()).toContain('без неоплачуваної перерви');
+        expect(dialog().text()).toContain('Без неоплачуваної перерви');
         await wrapper.get('form').trigger('submit'); await flushPromises();
         expect(api.saveMonthlyPayroll.mock.calls[0][1]).not.toHaveProperty('daily_hours');
     });
@@ -100,8 +104,8 @@ describe('Налаштування працівників і зарплати', 
         expect(wrapper.get('.wp-team').text()).not.toContain('Тестовий архів');
         await wrapper.get('.wp-card-heading input[type="checkbox"]').setValue(true);
         await wrapper.get('[aria-label="Редагувати працівника Тестовий архів"]').trigger('click'); await flushPromises();
-        expect(wrapper.get('[name="payment_type"] option[value="piecework"]').attributes('disabled')).toBeDefined();
-        expect(wrapper.get('[name="payment_type"] option[value="mixed"]').attributes('disabled')).toBeUndefined();
+        expect(wrapper.get('[name="payment_type"]').attributes('disabled')).toBeDefined();
+        expect(wrapper.find('[name="payment_type"] option[value="mixed"]').exists()).toBe(false);
         await dialog().get('input[type="checkbox"]').setValue(false);
         await wrapper.get('form').trigger('submit'); await flushPromises();
         expect(work.updateWorkEmployee).toHaveBeenCalledWith(103, expect.objectContaining({ archived: false, version: 1 }));

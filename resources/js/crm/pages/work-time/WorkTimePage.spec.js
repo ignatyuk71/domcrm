@@ -38,14 +38,15 @@ beforeEach(() => {
 afterEach(() => { wrapper?.unmount(); document.body.innerHTML = ''; vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe('Табель робочого часу', () => {
-    it('один змішаний працівник з’являється в обох таблицях з тим самим ID', async () => {
-        const mixed = { ...employee, payment_type: 'mixed' };
-        api.fetchWorkTime.mockResolvedValue({ data: { month: period, employees: [mixed], entries: [], can_manage_pay: true } });
-        pieceApi.fetchPieceworkDays.mockResolvedValue({ data: { month: period, employees: [mixed], entries: [] } });
+    it('кожен працівник відображається лише у своїй таблиці', async () => {
+        api.fetchWorkTime.mockResolvedValue({ data: { month: period, employees: [employee, pieceEmployee], entries: [], can_manage_pay: true } });
+        pieceApi.fetchPieceworkDays.mockResolvedValue({ data: { month: period, employees: [pieceEmployee], entries: [] } });
         await open();
-        expect(wrapper.findAll('[data-testid="employee-1"]')).toHaveLength(2);
+        expect(wrapper.findAll('[data-testid="employee-1"]')).toHaveLength(1);
+        expect(wrapper.findAll('[data-testid="employee-2"]')).toHaveLength(1);
         expect(wrapper.find('[data-cell="1|2026-09-01"]').exists()).toBe(true);
-        expect(wrapper.find('[data-note-cell="1|2026-09-01"]').exists()).toBe(true);
+        expect(wrapper.find('[data-note-cell="1|2026-09-01"]').exists()).toBe(false);
+        expect(wrapper.find('[data-note-cell="2|2026-09-01"]').exists()).toBe(true);
     });
     it('показує всі три підсумки в шапці поруч із заголовком', async () => {
         await open();

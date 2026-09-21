@@ -67,19 +67,17 @@ class PayrollReportService
         $rows = $employees->map(function ($employee) use ($month, $start, $payrolls, $salaries, $hours, $amounts, $paidLegacy) {
             $p = $payrolls->get($employee->id);
             $h = (int) ($hours->get($employee->id)->hours ?? 0);
-            $isMixed = $employee->payment_type === 'mixed';
-            $isHourly = in_array($employee->payment_type, ['hourly', 'mixed'], true);
-            $mode = $isHourly ? ($p->rate_mode ?? ($isMixed ? 'daily' : 'hourly')) : 'piecework';
-            if ($isMixed && $mode === 'piecework') $mode = 'daily';
+            $isHourly = $employee->payment_type === 'hourly';
+            $mode = $isHourly ? ($p->rate_mode ?? 'hourly') : 'piecework';
             $hourlyRate = isset($p->hourly_rate_cents) ? (int) $p->hourly_rate_cents : null;
             $dailyRate = isset($p->daily_rate_cents) ? (int) $p->daily_rate_cents : null;
             $rate = $mode === 'daily' ? $dailyRate : $hourlyRate;
             $dailyHours = $this->dailyHours($month, $p);
             // У табелі лише оплачувані години. Неповний/довший день — пропорційно, округлення один раз.
             $denominator = $mode === 'daily' ? $dailyHours * 100 : 100;
-            $timePay = $isHourly ? ($rate === null ? ($isMixed && $h === 0 ? 0 : null)
+            $timePay = $isHourly ? ($rate === null ? null
                 : intdiv($h * $rate + intdiv($denominator, 2), $denominator)) : 0;
-            $workPay = $isMixed || ! $isHourly ? array_sum($amounts[$employee->id] ?? []) : 0;
+            $workPay = $isHourly ? 0 : array_sum($amounts[$employee->id] ?? []);
             $salarySource = $salaries->get($employee->id);
             $monthlySalary = (int) ($salarySource->monthly_salary_cents ?? 0);
             // Після архівації не переносимо оклад у нові місяці без явного нарахування.
@@ -138,7 +136,7 @@ class PayrollReportService
         return DB::transaction(function () use ($id, $month, $data, $actor) {
             $employee = DB::table('work_employees')->where('id', $id)->lockForUpdate()->first();
             abort_unless($employee, 404);
-            abort_unless(in_array($employee->payment_type, ['hourly', 'mixed'], true) ? in_array($data['rate_mode'], ['hourly', 'daily'], true)
+            abort_unless($employee->payment_type === 'hourly' ? in_array($data['rate_mode'], ['hourly', 'daily'], true)
                 : $data['rate_mode'] === 'piecework', 422, 'Спосіб нарахування не відповідає типу працівника.');
             [$start] = app(WorkTimeService::class)->monthBounds($month);
             $query = DB::table('work_payroll_months')->where('employee_id', $id)->where('month', $start);

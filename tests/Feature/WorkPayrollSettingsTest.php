@@ -49,16 +49,16 @@ class WorkPayrollSettingsTest extends TestCase
         $this->getJson('/settings/work-payroll/report?month=2026-09')->assertForbidden();
     }
 
-    public function test_mixed_employee_has_one_total_for_salary_hours_and_work(): void
+    public function test_piecework_employee_has_one_total_for_monthly_salary_and_manual_daywork(): void
     {
-        $this->owner(); $id = $this->employee('mixed');
-        $this->putJson("/api/work-time/employees/$id/entry", ['date' => '2026-09-01', 'hours' => '14', 'version' => 0])->assertOk();
-        $this->putJson("/api/work-time/employees/$id/piecework-day", ['date' => '2026-09-02', 'amount' => '300', 'note' => 'Додаткова робота', 'version' => 0])->assertOk();
-        $payload = $this->payload(['rate' => '400', 'monthly_salary' => '8000', 'bonus' => '0', 'expenses' => '0', 'paid' => '2000', 'adjustment' => '0']);
+        $this->owner(); $id = $this->employee('piecework');
+        $this->putJson("/api/work-time/employees/$id/entry", ['date' => '2026-09-01', 'hours' => '7', 'version' => 0])->assertUnprocessable();
+        $this->putJson("/api/work-time/employees/$id/piecework-day", ['date' => '2026-09-02', 'amount' => '350', 'note' => 'Деньовка, виконано 7 годин', 'version' => 0])->assertOk();
+        $payload = $this->payload(['rate_mode' => 'piecework', 'rate' => null, 'monthly_salary' => '8000', 'bonus' => '0', 'expenses' => '0', 'paid' => '2000', 'adjustment' => '0']);
         $this->putJson("/settings/work-payroll/employees/$id", $payload)->assertOk()->assertJsonPath('monthly_salary', '8000.00')
-            ->assertJsonPath('time_pay', '800.00')->assertJsonPath('piecework_pay', '300.00')->assertJsonPath('salary', '9100.00')->assertJsonPath('balance', '7100.00');
+            ->assertJsonPath('time_pay', '0.00')->assertJsonPath('piecework_pay', '350.00')->assertJsonPath('salary', '8350.00')->assertJsonPath('balance', '6350.00');
         $this->putJson("/settings/work-payroll/employees/$id", $payload)->assertOk()->assertJsonPath('version', 1);
-        $this->getJson('/settings/work-payroll/report?month=2026-09')->assertOk()->assertJsonCount(1, 'rows')->assertJsonPath('totals.salary', '9100.00');
+        $this->getJson('/settings/work-payroll/report?month=2026-09')->assertOk()->assertJsonCount(1, 'rows')->assertJsonPath('totals.salary', '8350.00');
         $this->getJson('/api/work-time?month=2026-09')->assertOk()->assertJsonPath('employees.0.id', $id)->assertJsonMissingPath('employees.0.monthly_salary');
         $this->getJson('/api/work-time/piecework-days?month=2026-09')->assertOk()->assertJsonPath('employees.0.id', $id);
         $this->assertDatabaseCount('work_employees', 1);
@@ -70,8 +70,8 @@ class WorkPayrollSettingsTest extends TestCase
 
     public function test_salary_carries_forward_but_not_backward_and_explicit_zero_stops_it(): void
     {
-        $this->owner(); $id = $this->employee('mixed');
-        $payload = $this->payload(['rate' => null, 'monthly_salary' => '8000', 'bonus' => '0', 'expenses' => '0', 'paid' => '0', 'adjustment' => '0']);
+        $this->owner(); $id = $this->employee('piecework');
+        $payload = $this->payload(['rate_mode' => 'piecework', 'rate' => null, 'monthly_salary' => '8000', 'bonus' => '0', 'expenses' => '0', 'paid' => '0', 'adjustment' => '0']);
         $this->putJson("/settings/work-payroll/employees/$id", $payload)->assertOk()->assertJsonPath('salary', '8000.00');
         $this->getJson('/settings/work-payroll/report?month=2026-08')->assertOk()->assertJsonPath('rows.0.monthly_salary', '0.00');
         $this->getJson('/settings/work-payroll/report?month=2026-10')->assertOk()->assertJsonPath('rows.0.monthly_salary', '8000.00')->assertJsonPath('rows.0.salary_source_month', '2026-09');
@@ -81,30 +81,26 @@ class WorkPayrollSettingsTest extends TestCase
         $this->getJson('/settings/work-payroll/report?month=2026-10')->assertOk()->assertJsonPath('rows.0.monthly_salary', '8000.00');
         $this->putJson("/settings/work-payroll/employees/$id", array_replace($payload, ['month' => '2026-11', 'monthly_salary' => '0']))->assertOk();
         $this->getJson('/settings/work-payroll/report?month=2026-12')->assertOk()->assertJsonPath('rows.0.salary', '0.00');
-        $this->putJson("/api/work-time/employees/$id/entry", ['date' => '2026-10-01', 'hours' => '9', 'version' => 0])->assertOk();
-        $this->getJson('/settings/work-payroll/report?month=2026-10')->assertOk()->assertJsonPath('rows.0.time_pay', null)->assertJsonPath('rows.0.salary', null)->assertJsonPath('incomplete_count', 1);
-        $this->putJson("/settings/work-payroll/employees/$id", array_replace($payload, ['month' => '2026-10', 'rate' => '400', 'version' => 1]))->assertOk()
-            ->assertJsonPath('time_pay', '514.29')->assertJsonPath('salary', '8514.29');
     }
 
-    public function test_existing_employee_can_expand_to_mixed_without_losing_history_or_exposing_salary(): void
+    public function test_mixed_type_is_rejected_and_existing_history_and_permissions_remain(): void
     {
         $owner = $this->owner(); $id = $this->employee('piecework');
         $this->putJson("/api/work-time/employees/$id/piecework-day", ['date' => '2026-08-01', 'amount' => '300', 'version' => 0])->assertOk();
         $this->putJson("/settings/work-payroll/employees/$id", $this->payload(['month' => '2026-08', 'rate_mode' => 'piecework', 'rate' => null, 'adjustment' => '0']))->assertOk()->assertJsonPath('salary', '300.00');
         $data = ['name' => 'Тестова людина', 'payment_type' => 'mixed', 'archived' => false, 'version' => 1];
-        $this->putJson("/api/work-time/employees/$id", $data)->assertOk()->assertJsonPath('version', 2);
-        $this->putJson("/api/work-time/employees/$id", $data)->assertOk()->assertJsonPath('version', 2);
+        $this->postJson('/api/work-time/employees', ['request_key' => (string) Str::uuid(), 'name' => 'Тест', 'payment_type' => 'mixed'])->assertUnprocessable();
+        $this->putJson("/api/work-time/employees/$id", $data)->assertUnprocessable();
         $this->getJson('/settings/work-payroll/report?month=2026-08')->assertOk()->assertJsonPath('rows.0.salary', '300.00')->assertJsonPath('rows.0.piecework_pay', '300.00');
-        $this->putJson("/api/work-time/employees/$id", array_replace($data, ['payment_type' => 'hourly', 'version' => 2]))->assertUnprocessable();
+        $this->putJson("/api/work-time/employees/$id", array_replace($data, ['payment_type' => 'hourly']))->assertUnprocessable();
         $this->actingAs(User::factory()->create(['role' => 'operator']));
-        $this->putJson("/api/work-time/employees/$id/entry", ['date' => '2026-09-01', 'hours' => '7', 'version' => 0])->assertOk();
+        $this->putJson("/api/work-time/employees/$id/entry", ['date' => '2026-09-01', 'hours' => '7', 'version' => 0])->assertUnprocessable();
         $this->putJson("/api/work-time/employees/$id", $data)->assertForbidden();
         $this->getJson('/settings/work-payroll/report?month=2026-09')->assertForbidden();
         $this->putJson("/api/work-time/employees/$id/piecework-day", ['date' => '2026-09-01', 'amount' => '8000', 'version' => 0])->assertForbidden();
         $this->actingAs($owner);
-        $this->putJson("/settings/work-payroll/employees/$id", $this->payload(['monthly_salary' => '8000']))->assertOk();
-        $this->putJson("/api/work-time/employees/$id", array_replace($data, ['archived' => true, 'version' => 2]))->assertOk();
+        $this->putJson("/settings/work-payroll/employees/$id", $this->payload(['rate_mode' => 'piecework', 'rate' => null, 'monthly_salary' => '8000']))->assertOk();
+        $this->putJson("/api/work-time/employees/$id", array_replace($data, ['payment_type' => 'piecework', 'archived' => true]))->assertOk();
         $future = now()->addMonths(2)->format('Y-m');
         $this->getJson('/settings/work-payroll/report?month='.$future)->assertOk()->assertJsonCount(0, 'rows');
     }

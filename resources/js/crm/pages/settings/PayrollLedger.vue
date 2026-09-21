@@ -17,7 +17,7 @@
               <select :value="state.values.rate_mode" :aria-label="`Одиниця ставки — ${state.server.employee.name}`" :disabled="disabled" @change="edit(state, 'rate_mode', $event.target.value); save(state)"><option value="hourly">за годину</option><option value="daily">за {{ state.server.daily_hours }} годин</option></select>
             </td><td v-else class="ledger-readonly ledger-source">Сума з табеля</td>
             <td class="ledger-editable"><input :value="state.values.monthly_salary" :aria-label="`Місячний оклад — ${state.server.employee.name}`" :aria-invalid="!!state.invalid.monthly_salary" :disabled="disabled" :data-row="state.server.employee_id" data-field="monthly_salary" inputmode="decimal" title="Оклад за місяць. Переноситься на наступні місяці, доки не задасте іншу суму або 0." @input="edit(state, 'monthly_salary', $event.target.value)" @blur="save(state)" @focus="state.error && showErrors()" @keydown="navigate($event)" /></td>
-            <td class="ledger-readonly">{{ money(state.server.salary) }}<small v-if="group.type === 'mixed' || Number(state.server.monthly_salary)">Оклад {{ money(state.server.monthly_salary) }}<br />Години {{ money(state.server.time_pay) }}<br />Роботи {{ money(state.server.piecework_pay) }}</small><small v-if="Number(state.server.adjustment)" :title="state.server.adjustment_reason">Кориг. {{ money(state.server.adjustment) }}</small></td>
+            <td class="ledger-readonly">{{ money(state.server.salary) }}<small v-if="Number(state.server.adjustment)" :title="state.server.adjustment_reason">Кориг. {{ money(state.server.adjustment) }}</small></td>
             <td v-for="field in ['bonus', 'expenses']" :key="field" class="ledger-editable"><input :value="state.values[field]" :aria-label="`${labels[field]} — ${state.server.employee.name}`" :aria-invalid="!!state.invalid[field]" :disabled="disabled" :data-row="state.server.employee_id" :data-field="field" inputmode="decimal" @input="edit(state, field, $event.target.value)" @blur="save(state)" @focus="state.error && showErrors()" @keydown="navigate($event)" /></td>
             <td class="ledger-readonly ledger-total">{{ money(state.server.accrued) }}</td>
             <td class="ledger-editable"><input :value="state.values.paid" :aria-label="`Виплачено — ${state.server.employee.name}`" :aria-invalid="!!state.invalid.paid" :disabled="disabled" :data-row="state.server.employee_id" data-field="paid" inputmode="decimal" @input="edit(state, 'paid', $event.target.value)" @blur="save(state)" @focus="state.error && showErrors()" @keydown="navigate($event)" /></td>
@@ -43,7 +43,7 @@ watch(() => props.report, reset, { immediate: true });
 const labels = { bonus: 'Премія', expenses: 'Витрати' };
 const number = value => new Intl.NumberFormat('uk-UA', { maximumFractionDigits: 2 }).format(Number(value));
 const money = value => value == null ? '—' : number(value);
-const groups = computed(() => [{ type: 'hourly', label: 'За годинами' }, { type: 'mixed', label: 'Змішана оплата · години + роботи' }, { type: 'piecework', label: 'За виконану роботу / місячний оклад' }]
+const groups = computed(() => [{ type: 'hourly', label: 'За годинами' }, { type: 'piecework', label: 'За виконану роботу' }]
   .map(group => ({ ...group, rows: rows.value.filter(s => s.server.employee.payment_type === group.type) })).filter(group => group.rows.length));
 const incomplete = computed(() => rows.value.filter(s => s.server.accrued === null).length);
 // Показуємо лише підтверджені сервером суми, а не припущення щодо незбережених клітинок.
