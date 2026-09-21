@@ -47,10 +47,10 @@ class ExpensesTest extends TestCase
         $this->getJson('/api/expenses')->assertUnauthorized();
         $owner = $this->owner();
         $e = $this->create(['payment' => $this->payment()]);
-        ExpenseReceipt::create(['payment_id' => $e['payments'][0]['id'], 'path' => 'private.pdf', 'original_name' => 'receipt.pdf', 'mime_type' => 'application/pdf', 'size' => 1, 'created_by' => $owner->id]);
+        $receipt = ExpenseReceipt::create(['payment_id' => $e['payments'][0]['id'], 'path' => 'private.pdf', 'original_name' => 'receipt.pdf', 'mime_type' => 'application/pdf', 'size' => 1, 'created_by' => $owner->id]);
         foreach (['operator', 'packer'] as $role) {
             $this->actingAs(User::factory()->create(['role' => $role]));
-            foreach (['/expenses', '/api/expenses', '/api/expenses/meta', '/api/expenses/export', '/api/expenses/'.$e['id'], '/api/expenses/receipts/1'] as $url) {
+            foreach (['/expenses', '/api/expenses', '/api/expenses/meta', '/api/expenses/export', '/api/expenses/'.$e['id'], '/api/expenses/receipts/'.$receipt->id] as $url) {
                 $this->getJson($url)->assertForbidden();
             }
             $this->postJson('/api/expenses', $this->payload())->assertForbidden();
