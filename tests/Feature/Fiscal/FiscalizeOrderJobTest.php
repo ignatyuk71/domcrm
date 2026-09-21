@@ -4,6 +4,7 @@ namespace Tests\Feature\Fiscal;
 
 use App\Jobs\FiscalizeOrderJob;
 use App\Models\CheckboxSetting;
+use App\Models\Customer;
 use App\Models\FiscalReceipt;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -12,6 +13,7 @@ use App\Models\ProductVariant;
 use App\Services\CheckboxService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -121,6 +123,29 @@ class FiscalizeOrderJobTest extends TestCase
 
             return $body['payments'][0]['value'] === $goodsSum;
         });
+    }
+
+    /** Старі адреси очищаються в запиті Checkbox без перезапису клієнта в БД. */
+    public function test_fiscalization_normalizes_email_from_existing_customer(): void
+    {
+        Http::preventStrayRequests();
+
+        $customer = Customer::create(['email' => 'buyer@example.test']);
+        $legacyEmail = " buyer\u{00A0} @\texample.test\r\n";
+        // Запис напряму відтворює старі дані, оминаючи нове очищення в моделі.
+        DB::table('customers')->where('id', $customer->id)->update(['email' => $legacyEmail]);
+
+        $order = $this->makeOrder(399.00, 1);
+        $order->update(['customer_id' => $customer->id]);
+
+        (new FiscalizeOrderJob($order))->handle(app(CheckboxService::class));
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'receipts/sell')
+            && $request['delivery']['email'] === 'buyer@example.test'
+            && $request['payments'][0]['value'] === 39900);
+
+        $this->assertSame(FiscalReceipt::STATUS_SUCCESS, $order->fiscalReceipts()->first()->status);
+        $this->assertSame($legacyEmail, $customer->fresh()->email);
     }
 
     /** Happy-path: успішний чек створюється, замовлення стає оплаченим. */

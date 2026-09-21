@@ -131,6 +131,11 @@ class CustomerController extends Controller
      */
     public function update(Request $request, Customer $customer): JsonResponse
     {
+        // Очищаємо до валідації, щоб коректна адреса з пробілами не відхилялася.
+        if (is_string($request->input('email'))) {
+            $request->merge(['email' => \App\Support\EmailNormalizer::normalize($request->input('email'))]);
+        }
+
         $validated = $request->validate([
             'first_name' => ['nullable', 'string', 'max:255'],
             'last_name'  => ['nullable', 'string', 'max:255'],

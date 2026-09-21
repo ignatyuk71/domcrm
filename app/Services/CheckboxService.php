@@ -6,6 +6,7 @@ use App\Models\FiscalLog;
 use App\Models\FiscalReceipt;
 use App\Models\Order;
 use App\Models\CheckboxSetting;
+use App\Support\EmailNormalizer;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -335,7 +336,8 @@ class CheckboxService
         // Checkbox приймає телефон лише у форматі 380XXXXXXXXX (регекс \+?380\d{9}$).
         // Нормалізуємо; якщо телефон кривий — НЕ додаємо поле, щоб чек не падав з 422.
         $delivery = [
-            'email' => $order->customer?->email ?? 'no-email@example.com',
+            // Очищаємо також старі адреси, які вже збережені з пробілами.
+            'email' => EmailNormalizer::normalize($order->customer?->email) ?? 'no-email@example.com',
         ];
         $deliveryPhone = \App\Support\PhoneNormalizer::normalize($order->customer?->phone);
         if ($deliveryPhone !== null && preg_match('/^380\d{9}$/', $deliveryPhone) === 1) {

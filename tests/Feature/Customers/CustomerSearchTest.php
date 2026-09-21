@@ -74,4 +74,48 @@ class CustomerSearchTest extends TestCase
         $this->assertSame('Петренко', $customer->last_name);
         $this->assertSame('ivan@example.test', $customer->email);
     }
+
+    /** Очищення працює і при записі моделі, і до валідації контактів у формі. */
+    public function test_email_whitespace_is_removed_on_create_and_update(): void
+    {
+        $customer = Customer::create([
+            'email' => " \tIvan.Test+shop\u{00A0} @ example.test\r\n",
+        ]);
+
+        $this->assertSame('Ivan.Test+shop@example.test', $customer->fresh()->email);
+
+        $this->actingAs($this->operator())
+            ->putJson("/api/customers/{$customer->id}", [
+                'email' => " buyer\u{202F} @\texample.test\n",
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.email', 'buyer@example.test');
+
+        $this->assertSame('buyer@example.test', $customer->fresh()->email);
+    }
+
+    public function test_whitespace_only_email_is_saved_as_null(): void
+    {
+        $customer = Customer::create(['email' => 'buyer@example.test']);
+
+        $this->actingAs($this->operator())
+            ->putJson("/api/customers/{$customer->id}", ['email' => " \t\u{00A0}\n"])
+            ->assertOk()
+            ->assertJsonPath('data.email', null);
+
+        $this->assertNull($customer->fresh()->email);
+    }
+
+    /** Очищення пробілів не має пропускати інші помилки формату чи стирати дані. */
+    public function test_invalid_email_is_rejected_without_overwriting_saved_email(): void
+    {
+        $customer = Customer::create(['email' => 'buyer@example.test']);
+
+        $this->actingAs($this->operator())
+            ->putJson("/api/customers/{$customer->id}", ['email' => ' buyer example.test '])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('email');
+
+        $this->assertSame('buyer@example.test', $customer->fresh()->email);
+    }
 }
