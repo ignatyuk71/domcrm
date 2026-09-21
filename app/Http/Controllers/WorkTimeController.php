@@ -31,7 +31,7 @@ class WorkTimeController extends Controller
 
     public function createEmployee(Request $request, WorkTimeService $service): JsonResponse
     {
-        $data = $request->validate(['request_key' => ['required', 'uuid'], 'name' => ['required', 'string', 'max:100'], 'position' => ['nullable', 'string', 'max:100'], 'payment_type' => ['sometimes', 'required', 'in:hourly,piecework']]);
+        $data = $request->validate(['request_key' => ['required', 'uuid'], 'name' => ['required', 'string', 'max:100'], 'position' => ['nullable', 'string', 'max:100'], 'payment_type' => ['sometimes', 'required', 'in:hourly,piecework,mixed']]);
 
         return $this->response($service->createEmployee($data, $request->user()->id), 201);
     }
@@ -39,7 +39,7 @@ class WorkTimeController extends Controller
     public function updateEmployee(Request $request, WorkTimeService $service, int $employee): JsonResponse
     {
         $data = $request->validate(['name' => ['required', 'string', 'max:100'], 'position' => ['nullable', 'string', 'max:100'],
-            'payment_type' => ['sometimes', 'required', 'in:hourly,piecework'], 'archived' => ['required', 'boolean'], 'version' => ['required', 'integer', 'min:1']]);
+            'payment_type' => ['sometimes', 'required', 'in:hourly,piecework,mixed'], 'archived' => ['required', 'boolean'], 'version' => ['required', 'integer', 'min:1']]);
         $data['version'] = (int) $data['version'];
 
         return $this->response($service->updateEmployee($employee, $data, $request->user()->id));

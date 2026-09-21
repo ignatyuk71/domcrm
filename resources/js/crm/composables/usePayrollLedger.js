@@ -2,9 +2,9 @@ import { computed, onBeforeUnmount, ref } from 'vue';
 import { saveMonthlyPayroll } from '../services/workPayrollApi';
 import { workError } from '../utils/workTime';
 
-const fields = ['rate_mode', 'rate', 'bonus', 'expenses', 'paid'];
+const fields = ['rate_mode', 'rate', 'monthly_salary', 'bonus', 'expenses', 'paid'];
 const valuesFrom = row => ({ rate_mode: row.rate_mode, rate: (row.rate_mode === 'daily' ? row.daily_rate : row.hourly_rate) ?? '',
-    bonus: row.bonus, expenses: row.expenses, paid: row.paid });
+    monthly_salary: row.monthly_salary ?? '0.00', bonus: row.bonus, expenses: row.expenses, paid: row.paid });
 const equal = (a, b) => fields.every(key => a[key] === b[key]);
 export function payrollAmount(value, nullable = false) {
     const text = String(value ?? '').trim().replace(',', '.');
@@ -48,7 +48,7 @@ export function usePayrollLedger(notify, requestReload) {
     function payload(state) {
         const values = { rate_mode: state.values.rate_mode };
         state.invalid = {};
-        for (const field of ['rate', 'bonus', 'expenses', 'paid']) {
+        for (const field of ['rate', 'monthly_salary', 'bonus', 'expenses', 'paid']) {
             try { values[field] = field === 'rate' && values.rate_mode === 'piecework' ? null : payrollAmount(state.values[field], field === 'rate'); }
             catch (error) { state.invalid[field] = true; state.error = error.message; }
         }

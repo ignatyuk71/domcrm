@@ -8,7 +8,7 @@ export function useWorkTime({ fetchData = fetchWorkTime, saveData = saveWorkDay,
     const now = new Date();
     const period = ref(periodKey(now.getFullYear(), now.getMonth() + 1));
     const allEmployees = ref([]), loading = ref(false), ready = ref(false), loadError = ref(''), savedRevision = ref(0);
-    const employees = computed(() => allEmployees.value.filter(employee => (employee.payment_type || 'hourly') === employeeType));
+    const employees = computed(() => allEmployees.value.filter(employee => employee.payment_type === 'mixed' || (employee.payment_type || 'hourly') === employeeType));
     const canManage = ref(false), entries = reactive({}), drafts = reactive({}), states = reactive({});
     const timers = new Map(), running = new Map();
     let alive = true;

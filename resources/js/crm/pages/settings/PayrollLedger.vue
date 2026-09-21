@@ -3,20 +3,21 @@
     <header class="ledger-heading"><div><h2>{{ label }}</h2><p>Білі клітинки — для введення. Години та сірі підсумки рахуються автоматично.</p></div><a href="/work-time">Відкрити табель ↗</a></header>
     <div class="ledger-scroll">
       <table aria-label="Розрахункова відомість" class="ledger-table">
-        <colgroup><col class="col-index" /><col class="col-person" /><col class="col-time" /><col class="col-rate" /><col v-for="i in 6" :key="i" /><col class="col-action" /></colgroup>
-        <thead><tr class="ledger-groups"><th rowspan="2" scope="col">№</th><th rowspan="2" scope="col">Працівник</th><th scope="colgroup" colspan="2">Облік часу та ставка</th><th scope="colgroup" colspan="4">Нарахування</th><th scope="colgroup" colspan="2">Виплати</th><th rowspan="2" scope="col">Дії</th></tr>
-          <tr><th scope="col">Дні / години</th><th scope="col">Ставка, грн</th><th scope="col">Зарплата</th><th scope="col">Премія</th><th scope="col">Витрати</th><th scope="col">Нараховано</th><th scope="col">Виплачено</th><th scope="col">Залишок</th></tr></thead>
+        <colgroup><col class="col-index" /><col class="col-person" /><col class="col-time" /><col class="col-rate" /><col v-for="i in 7" :key="i" /><col class="col-action" /></colgroup>
+        <thead><tr class="ledger-groups"><th rowspan="2" scope="col">№</th><th rowspan="2" scope="col">Працівник</th><th scope="colgroup" colspan="2">Облік часу та ставка</th><th scope="colgroup" colspan="5">Нарахування</th><th scope="colgroup" colspan="2">Виплати</th><th rowspan="2" scope="col">Дії</th></tr>
+          <tr><th scope="col">Дні / години</th><th scope="col">Ставка, грн</th><th scope="col">Місячний оклад</th><th scope="col">Зарплата</th><th scope="col">Премія</th><th scope="col">Витрати</th><th scope="col">Нараховано</th><th scope="col">Виплачено</th><th scope="col">Залишок</th></tr></thead>
         <tbody v-for="group in groups" :key="group.type">
-          <tr class="ledger-section"><th colspan="11" scope="rowgroup">{{ group.label }} <span>{{ group.rows.length }}</span></th></tr>
+          <tr class="ledger-section"><th colspan="12" scope="rowgroup">{{ group.label }} <span>{{ group.rows.length }}</span></th></tr>
           <tr v-for="state in group.rows" :key="state.server.employee_id" :data-testid="`payroll-row-${state.server.employee_id}`" :class="{ 'ledger-error': state.error }">
             <td class="ledger-index">{{ rows.indexOf(state) + 1 }}</td>
             <th scope="row" class="ledger-person"><button :disabled="disabled" @click="editDetails(state)">{{ state.server.employee.name }}</button><small v-if="state.server.employee.archived_on">Архів</small><small v-if="state.saving"><i class="bi bi-arrow-repeat"></i> Зберігаємо…</small><button v-if="state.error" class="ledger-error-link" aria-label="Показати помилку збереження" @click="showErrors">Не збережено <i class="bi bi-exclamation-circle"></i></button></th>
-            <td class="ledger-readonly ledger-time"><template v-if="group.type === 'hourly'">{{ state.server.days }} дн.<small>{{ number(state.server.hours) }} год</small></template><span v-else>—</span></td>
-            <td v-if="group.type === 'hourly'" class="ledger-editable ledger-rate">
+            <td class="ledger-readonly ledger-time"><template v-if="group.type !== 'piecework'">{{ state.server.days }} дн.<small>{{ number(state.server.hours) }} год</small></template><span v-else>—</span></td>
+            <td v-if="group.type !== 'piecework'" class="ledger-editable ledger-rate">
               <input :value="state.values.rate" :aria-label="`Ставка — ${state.server.employee.name}`" :aria-invalid="!!state.invalid.rate" :disabled="disabled" :data-row="state.server.employee_id" data-field="rate" inputmode="decimal" placeholder="Не вказано" @input="edit(state, 'rate', $event.target.value)" @blur="save(state)" @focus="state.error && showErrors()" @keydown="navigate($event)" />
               <select :value="state.values.rate_mode" :aria-label="`Одиниця ставки — ${state.server.employee.name}`" :disabled="disabled" @change="edit(state, 'rate_mode', $event.target.value); save(state)"><option value="hourly">за годину</option><option value="daily">за {{ state.server.daily_hours }} годин</option></select>
             </td><td v-else class="ledger-readonly ledger-source">Сума з табеля</td>
-            <td class="ledger-readonly">{{ money(state.server.salary) }}<small v-if="Number(state.server.adjustment)" :title="state.server.adjustment_reason">Кориг. {{ money(state.server.adjustment) }}</small></td>
+            <td class="ledger-editable"><input :value="state.values.monthly_salary" :aria-label="`Місячний оклад — ${state.server.employee.name}`" :aria-invalid="!!state.invalid.monthly_salary" :disabled="disabled" :data-row="state.server.employee_id" data-field="monthly_salary" inputmode="decimal" title="Оклад за місяць. Переноситься на наступні місяці, доки не задасте іншу суму або 0." @input="edit(state, 'monthly_salary', $event.target.value)" @blur="save(state)" @focus="state.error && showErrors()" @keydown="navigate($event)" /></td>
+            <td class="ledger-readonly">{{ money(state.server.salary) }}<small v-if="group.type === 'mixed' || Number(state.server.monthly_salary)">Оклад {{ money(state.server.monthly_salary) }}<br />Години {{ money(state.server.time_pay) }}<br />Роботи {{ money(state.server.piecework_pay) }}</small><small v-if="Number(state.server.adjustment)" :title="state.server.adjustment_reason">Кориг. {{ money(state.server.adjustment) }}</small></td>
             <td v-for="field in ['bonus', 'expenses']" :key="field" class="ledger-editable"><input :value="state.values[field]" :aria-label="`${labels[field]} — ${state.server.employee.name}`" :aria-invalid="!!state.invalid[field]" :disabled="disabled" :data-row="state.server.employee_id" :data-field="field" inputmode="decimal" @input="edit(state, field, $event.target.value)" @blur="save(state)" @focus="state.error && showErrors()" @keydown="navigate($event)" /></td>
             <td class="ledger-readonly ledger-total">{{ money(state.server.accrued) }}</td>
             <td class="ledger-editable"><input :value="state.values.paid" :aria-label="`Виплачено — ${state.server.employee.name}`" :aria-invalid="!!state.invalid.paid" :disabled="disabled" :data-row="state.server.employee_id" data-field="paid" inputmode="decimal" @input="edit(state, 'paid', $event.target.value)" @blur="save(state)" @focus="state.error && showErrors()" @keydown="navigate($event)" /></td>
@@ -24,8 +25,8 @@
             <td><button class="ledger-pencil" :disabled="disabled" :aria-label="`Редагувати нарахування ${state.server.employee.name}`" title="Деталі, коригування та примітка" @click="editDetails(state)"><i class="bi bi-pencil"></i></button></td>
           </tr>
         </tbody>
-        <tbody v-if="!rows.length"><tr><td colspan="11" class="ledger-empty">За цей місяць ще немає працівників.</td></tr></tbody>
-        <tfoot><tr><th colspan="4">Разом <small v-if="incomplete">Підсумок неповний: без ставки {{ incomplete }}</small></th><td>{{ money(totals.salary) }}</td><td>{{ money(totals.bonus) }}</td><td>{{ money(totals.expenses) }}</td><td>{{ money(totals.accrued) }}</td><td>{{ money(totals.paid) }}</td><td class="ledger-balance">{{ money(totals.balance) }}</td><td></td></tr></tfoot>
+        <tbody v-if="!rows.length"><tr><td colspan="12" class="ledger-empty">За цей місяць ще немає працівників.</td></tr></tbody>
+        <tfoot><tr><th colspan="4">Разом <small v-if="incomplete">Підсумок неповний: без ставки {{ incomplete }}</small></th><td>{{ money(totals.monthly_salary) }}</td><td>{{ money(totals.salary) }}</td><td>{{ money(totals.bonus) }}</td><td>{{ money(totals.expenses) }}</td><td>{{ money(totals.accrued) }}</td><td>{{ money(totals.paid) }}</td><td class="ledger-balance">{{ money(totals.balance) }}</td><td></td></tr></tfoot>
       </table>
     </div>
     <footer class="ledger-footer"><div><p><i class="bi bi-info-circle"></i> Автозбереження після введення · Tab — наступне поле · Enter — наступний працівник</p><small>Усі суми в грн. Витрати додаються до зарплати. «Виплачено» — усього за місяць, не нова виплата. Підсумки оновлюються після збереження.</small></div><button v-if="errors.length" class="btn btn-outline-danger btn-sm" @click="showErrors">Помилки: {{ errors.length }}</button><button class="btn btn-primary btn-sm" :disabled="disabled || !hasUnsaved || saving" @click="flush(true)">{{ saving ? 'Зберігаємо…' : 'Зберегти зміни' }}</button></footer>
@@ -42,11 +43,11 @@ watch(() => props.report, reset, { immediate: true });
 const labels = { bonus: 'Премія', expenses: 'Витрати' };
 const number = value => new Intl.NumberFormat('uk-UA', { maximumFractionDigits: 2 }).format(Number(value));
 const money = value => value == null ? '—' : number(value);
-const groups = computed(() => [{ type: 'hourly', label: 'За годинами' }, { type: 'piecework', label: 'За виконану роботу' }]
+const groups = computed(() => [{ type: 'hourly', label: 'За годинами' }, { type: 'mixed', label: 'Змішана оплата · години + роботи' }, { type: 'piecework', label: 'За виконану роботу / місячний оклад' }]
   .map(group => ({ ...group, rows: rows.value.filter(s => s.server.employee.payment_type === group.type) })).filter(group => group.rows.length));
 const incomplete = computed(() => rows.value.filter(s => s.server.accrued === null).length);
 // Показуємо лише підтверджені сервером суми, а не припущення щодо незбережених клітинок.
-const totals = computed(() => Object.fromEntries(['salary', 'bonus', 'expenses', 'accrued', 'paid', 'balance'].map(field =>
+const totals = computed(() => Object.fromEntries(['monthly_salary', 'salary', 'bonus', 'expenses', 'accrued', 'paid', 'balance'].map(field =>
   [field, rows.value.reduce((sum, s) => sum + Math.round(Number(s.server[field] ?? 0) * 100), 0) / 100])));
 async function editDetails(state) { if (await flush()) emit('details', state.server); }
 function navigate(event) {

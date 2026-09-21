@@ -30,13 +30,14 @@ class WorkPayrollSettingsController extends Controller
     public function save(Request $request, PayrollReportService $service, int $employee)
     {
         $month = $this->month($request);
-        foreach (['rate', 'bonus', 'expenses', 'adjustment', 'paid'] as $field) {
+        foreach (['rate', 'monthly_salary', 'bonus', 'expenses', 'adjustment', 'paid'] as $field) {
             if (is_string($request->input($field))) {
                 $request->merge([$field => str_replace(',', '.', trim($request->input($field)))]);
             }
         }
         $money = ['numeric', 'between:0,1000000', 'regex:/^\d{1,7}(\.\d{1,2})?$/'];
         $data = $request->validate(['rate_mode' => ['required', 'in:hourly,daily,piecework'], 'rate' => ['present', 'nullable', ...$money],
+            'monthly_salary' => ['sometimes', 'required', ...$money],
             'bonus' => ['required', ...$money], 'expenses' => ['required', ...$money], 'paid' => ['required', ...$money],
             'adjustment' => ['required', 'numeric', 'between:-1000000,1000000', 'regex:/^-?\d{1,7}(\.\d{1,2})?$/'],
             'adjustment_reason' => ['nullable', 'string', 'max:500'], 'note' => ['nullable', 'string', 'max:500'],

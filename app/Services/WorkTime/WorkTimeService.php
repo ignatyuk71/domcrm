@@ -95,8 +95,11 @@ class WorkTimeService
     {
         return DB::transaction(function () use ($id, $data, $actor) {
             $before = $this->lockedEmployee($id);
-            abort_if(isset($data['payment_type']) && $data['payment_type'] !== $before->payment_type, 422, 'Тип оплати зберігається незмінним, щоб не змішувати історію обліку.');
+            // Можна лише додати другий вид обліку: звуження приховало б попередні записи.
+            $type = $data['payment_type'] ?? $before->payment_type;
+            abort_unless($type === $before->payment_type || $type === 'mixed', 422, 'Можна розширити облік до змішаного, але не приховати вже доступний вид робіт.');
             $values = ['name' => $data['name'], 'position' => $data['position'] ?? null,
+                'payment_type' => $type,
                 'archived_on' => $data['archived'] ? ($before->archived_on ?? now()->toDateString()) : null];
             $same = collect($values)->every(fn ($value, $key) => $value === $before->$key);
             if (! $same) {
@@ -137,7 +140,7 @@ class WorkTimeService
     {
         return DB::transaction(function () use ($id, $data, $actor) {
             $employee = $this->lockedEmployee($id);
-            abort_unless($employee->payment_type === 'hourly', 422, 'Для цього працівника вносьте виконані роботи, а не години.');
+            abort_unless(in_array($employee->payment_type, ['hourly', 'mixed'], true), 422, 'Для цього працівника вносьте виконані роботи, а не години.');
             abort_if($employee->archived_on && $data['date'] > $employee->archived_on, 422, 'Після архівації нові робочі дні недоступні.');
             $query = DB::table('work_time_entries')->where('employee_id', $id)->where('work_date', $data['date']);
             $before = (clone $query)->first();

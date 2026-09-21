@@ -17,7 +17,7 @@ class PieceworkDayService
     public function listing(string $month): array
     {
         [$start, $end] = app(WorkTimeService::class)->monthBounds($month);
-        $employees = DB::table('work_employees')->where('payment_type', 'piecework')->where(function ($q) use ($start, $end) {
+        $employees = DB::table('work_employees')->whereIn('payment_type', ['piecework', 'mixed'])->where(function ($q) use ($start, $end) {
             $q->whereNull('archived_on')->orWhere('archived_on', '>=', $start);
             foreach (['work_piecework_entries', 'work_piecework_days'] as $table) {
                 $q->orWhereExists(fn ($sub) => $sub->selectRaw('1')->from($table)
@@ -46,7 +46,7 @@ class PieceworkDayService
         return DB::transaction(function () use ($employeeId, $data, $actor) {
             $employee = DB::table('work_employees')->where('id', $employeeId)->lockForUpdate()->first();
             abort_unless($employee, 404);
-            abort_unless($employee->payment_type === 'piecework', 422, 'Для погодинного працівника заповнюйте години.');
+            abort_unless(in_array($employee->payment_type, ['piecework', 'mixed'], true), 422, 'Для погодинного працівника заповнюйте години.');
             abort_if($employee->archived_on && $data['date'] > $employee->archived_on, 422, 'Після архівації нові робочі дні недоступні.');
             $query = DB::table('work_piecework_days')->where('employee_id', $employeeId)->where('work_date', $data['date']);
             $before = (clone $query)->first();

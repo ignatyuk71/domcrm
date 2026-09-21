@@ -44,6 +44,12 @@ class PayrollReportService
         $ids = $employees->pluck('id');
         // Фіксована кількість запитів на місяць, без окремого запиту для кожного працівника.
         $payrolls = DB::table('work_payroll_months')->whereIn('employee_id', $ids)->where('month', $start)->get()->keyBy('employee_id');
+        // Останнє явно задане значення до вибраного місяця. Майбутній оклад не змінює минуле.
+        $salaryDates = DB::table('work_payroll_months')->whereIn('employee_id', $ids)->where('month', '<=', $start)
+            ->whereNotNull('monthly_salary_cents')->selectRaw('employee_id, MAX(month) as salary_month')->groupBy('employee_id');
+        $salaries = DB::table('work_payroll_months as salary')->joinSub($salaryDates, 'latest', function ($join) {
+            $join->on('salary.employee_id', '=', 'latest.employee_id')->on('salary.month', '=', 'latest.salary_month');
+        })->select('salary.employee_id', 'salary.month', 'salary.monthly_salary_cents')->get()->keyBy('employee_id');
         $hours = DB::table('work_time_entries')->whereIn('employee_id', $ids)->whereBetween('work_date', [$start, $end])
             ->selectRaw('employee_id, COALESCE(SUM(hour_units), 0) as hours, SUM(CASE WHEN hour_units > 0 THEN 1 ELSE 0 END) as days')
             ->groupBy('employee_id')->get()->keyBy('employee_id');
@@ -58,19 +64,30 @@ class PayrollReportService
             // Навіть порожня нова клітинка заміщає старий підсумок, а не додається до нього.
             $amounts[$row->employee_id][$row->work_date] = (int) ($row->amount_cents ?? 0);
         }
-        $rows = $employees->map(function ($employee) use ($month, $payrolls, $hours, $amounts, $paidLegacy) {
+        $rows = $employees->map(function ($employee) use ($month, $start, $payrolls, $salaries, $hours, $amounts, $paidLegacy) {
             $p = $payrolls->get($employee->id);
             $h = (int) ($hours->get($employee->id)->hours ?? 0);
-            $isHourly = $employee->payment_type === 'hourly';
-            $mode = $isHourly ? ($p->rate_mode ?? 'hourly') : 'piecework';
+            $isMixed = $employee->payment_type === 'mixed';
+            $isHourly = in_array($employee->payment_type, ['hourly', 'mixed'], true);
+            $mode = $isHourly ? ($p->rate_mode ?? ($isMixed ? 'daily' : 'hourly')) : 'piecework';
+            if ($isMixed && $mode === 'piecework') $mode = 'daily';
             $hourlyRate = isset($p->hourly_rate_cents) ? (int) $p->hourly_rate_cents : null;
             $dailyRate = isset($p->daily_rate_cents) ? (int) $p->daily_rate_cents : null;
             $rate = $mode === 'daily' ? $dailyRate : $hourlyRate;
             $dailyHours = $this->dailyHours($month, $p);
             // У табелі лише оплачувані години. Неповний/довший день — пропорційно, округлення один раз.
             $denominator = $mode === 'daily' ? $dailyHours * 100 : 100;
-            $base = $isHourly ? ($rate === null ? null : intdiv($h * $rate + intdiv($denominator, 2), $denominator))
-                : array_sum($amounts[$employee->id] ?? []);
+            $timePay = $isHourly ? ($rate === null ? ($isMixed && $h === 0 ? 0 : null)
+                : intdiv($h * $rate + intdiv($denominator, 2), $denominator)) : 0;
+            $workPay = $isMixed || ! $isHourly ? array_sum($amounts[$employee->id] ?? []) : 0;
+            $salarySource = $salaries->get($employee->id);
+            $monthlySalary = (int) ($salarySource->monthly_salary_cents ?? 0);
+            // Після архівації не переносимо оклад у нові місяці без явного нарахування.
+            if ($employee->archived_on && $employee->archived_on < $start && ! isset($p->monthly_salary_cents)) {
+                $monthlySalary = 0;
+                $salarySource = null;
+            }
+            $base = $timePay === null ? null : $monthlySalary + $timePay + $workPay;
             $bonus = (int) ($p->bonus_cents ?? 0);
             $expense = (int) ($p->expense_cents ?? 0);
             $adjustment = (int) ($p->adjustment_cents ?? 0);
@@ -83,6 +100,9 @@ class PayrollReportService
                 'daily_hours' => $dailyHours,
                 'hours' => WorkTimeService::decimal($h), 'days' => $isHourly ? (int) ($hours->get($employee->id)->days ?? 0) : null,
                 'hourly_rate' => WorkTimeService::decimal($hourlyRate), 'daily_rate' => WorkTimeService::decimal($dailyRate),
+                'monthly_salary' => WorkTimeService::decimal($monthlySalary),
+                'salary_source_month' => $salarySource ? substr($salarySource->month, 0, 7) : null,
+                'time_pay' => WorkTimeService::decimal($timePay), 'piecework_pay' => WorkTimeService::decimal($workPay),
                 'base_pay' => WorkTimeService::decimal($base), 'adjustment' => WorkTimeService::decimal($adjustment),
                 'adjustment_reason' => $p->adjustment_reason ?? null, 'salary' => WorkTimeService::decimal($salary),
                 'bonus' => WorkTimeService::decimal($bonus), 'expenses' => WorkTimeService::decimal($expense),
@@ -118,7 +138,7 @@ class PayrollReportService
         return DB::transaction(function () use ($id, $month, $data, $actor) {
             $employee = DB::table('work_employees')->where('id', $id)->lockForUpdate()->first();
             abort_unless($employee, 404);
-            abort_unless($employee->payment_type === 'hourly' ? in_array($data['rate_mode'], ['hourly', 'daily'], true)
+            abort_unless(in_array($employee->payment_type, ['hourly', 'mixed'], true) ? in_array($data['rate_mode'], ['hourly', 'daily'], true)
                 : $data['rate_mode'] === 'piecework', 422, 'Спосіб нарахування не відповідає типу працівника.');
             [$start] = app(WorkTimeService::class)->monthBounds($month);
             $query = DB::table('work_payroll_months')->where('employee_id', $id)->where('month', $start);
@@ -130,6 +150,10 @@ class PayrollReportService
                 'bonus_cents' => WorkTimeService::units($data['bonus']), 'expense_cents' => WorkTimeService::units($data['expenses']),
                 'adjustment_cents' => self::signedUnits($data['adjustment']), 'adjustment_reason' => $data['adjustment_reason'] ?? null,
                 'paid_cents' => WorkTimeService::units($data['paid']), 'note' => $data['note'] ?? null];
+            // Старий клієнт без нового поля не може стерти вже заданий оклад.
+            if (array_key_exists('monthly_salary', $data)) {
+                $values['monthly_salary_cents'] = WorkTimeService::units($data['monthly_salary']);
+            }
             $same = $before && collect($values)->every(fn ($value, $key) => str_ends_with($key, '_cents') || $key === 'daily_hours'
                 ? ($before->$key === null ? null : (int) $before->$key) === $value : $before->$key === $value);
             if (! $same) {

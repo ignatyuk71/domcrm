@@ -33,6 +33,33 @@ beforeEach(() => {
 afterEach(() => { wrapper?.unmount(); document.body.innerHTML = ''; vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe('Налаштування працівників і зарплати', () => {
+    it('об’єднує оклад, години та роботи в одному рядку і попередньому розрахунку', async () => {
+        const mixed = { ...employee, payment_type: 'mixed' };
+        api.fetchPayrollReport.mockResolvedValue({ data: report({ rows: [row({ employee: mixed, hours: '14.00', daily_rate: '400.00', monthly_salary: '8000.00', time_pay: '800.00', piecework_pay: '300.00', base_pay: '9100.00', salary: '9100.00', accrued: '9100.00', balance: '9100.00' })] }) });
+        await open();
+        expect(wrapper.findAll('[data-testid="payroll-row-101"]')).toHaveLength(1);
+        expect(wrapper.get('[data-testid="payroll-row-101"]').text()).toContain('Оклад 8');
+        expect(wrapper.get('[data-field="monthly_salary"]').element.value).toBe('8000.00');
+        await click('Тестова працівниця');
+        expect(wrapper.get('.wp-preview').text().replace(/\s/g, '')).toContain('9100грн');
+        await wrapper.get('[name="monthly_salary"]').setValue('8500');
+        expect(wrapper.get('.wp-preview').text().replace(/\s/g, '')).toContain('9600грн');
+        await wrapper.get('form').trigger('submit'); await flushPromises();
+        expect(api.saveMonthlyPayroll.mock.calls[0][1]).toMatchObject({ monthly_salary: '8500', rate_mode: 'daily', rate: '400.00' });
+    });
+    it('дозволяє розширити наявного працівника до обох таблиць без дубля', async () => {
+        await open(); await click('Працівники');
+        await wrapper.get('[aria-label="Редагувати працівника Тестова працівниця"]').trigger('click'); await flushPromises();
+        await wrapper.get('[name="payment_type"]').setValue('mixed');
+        await wrapper.get('form').trigger('submit'); await flushPromises();
+        expect(work.updateWorkEmployee).toHaveBeenCalledWith(101, expect.objectContaining({ payment_type: 'mixed', version: 1 }));
+        expect(work.createWorkEmployee).not.toHaveBeenCalled();
+    });
+    it('змішана оплата без додаткових годин нараховує лише оклад і роботи', async () => {
+        api.fetchPayrollReport.mockResolvedValue({ data: report({ rows: [row({ employee: { ...employee, payment_type: 'mixed' }, hours: '0.00', daily_rate: null, monthly_salary: '8000.00', piecework_pay: '0.00' })] }) });
+        await open(); await click('Тестова працівниця');
+        expect(wrapper.get('.wp-preview').text().replace(/\s/g, '')).toContain('8000грн');
+    });
     it.each([[7, '514,29'], [8, '450']])('підпис і попередній розрахунок використовують %s годин із сервера', async (dailyHours, expected) => {
         api.fetchPayrollReport.mockResolvedValue({ data: report({ rows: [row({ daily_hours: dailyHours, hours: '9.00', daily_rate: '400.00' })] }) });
         await open();
@@ -40,8 +67,8 @@ describe('Налаштування працівників і зарплати', 
         await click('Тестова працівниця');
         expect(wrapper.get('[name="rate_mode"]').text()).toContain(`Ставка за день · ${dailyHours} годин`);
         expect(wrapper.get('.wp-preview').text()).toContain(`${expected} грн`);
-        expect(wrapper.get('.wp-help.wp-full').text()).toContain(`години ÷ ${dailyHours}`);
-        expect(wrapper.get('.wp-help.wp-full').text()).toContain('без неоплачуваної перерви');
+        expect(dialog().text()).toContain(`години ÷ ${dailyHours}`);
+        expect(dialog().text()).toContain('без неоплачуваної перерви');
         await wrapper.get('form').trigger('submit'); await flushPromises();
         expect(api.saveMonthlyPayroll.mock.calls[0][1]).not.toHaveProperty('daily_hours');
     });
@@ -73,7 +100,8 @@ describe('Налаштування працівників і зарплати', 
         expect(wrapper.get('.wp-team').text()).not.toContain('Тестовий архів');
         await wrapper.get('.wp-card-heading input[type="checkbox"]').setValue(true);
         await wrapper.get('[aria-label="Редагувати працівника Тестовий архів"]').trigger('click'); await flushPromises();
-        expect(wrapper.get('[name="payment_type"]').attributes('disabled')).toBeDefined();
+        expect(wrapper.get('[name="payment_type"] option[value="piecework"]').attributes('disabled')).toBeDefined();
+        expect(wrapper.get('[name="payment_type"] option[value="mixed"]').attributes('disabled')).toBeUndefined();
         await dialog().get('input[type="checkbox"]').setValue(false);
         await wrapper.get('form').trigger('submit'); await flushPromises();
         expect(work.updateWorkEmployee).toHaveBeenCalledWith(103, expect.objectContaining({ archived: false, version: 1 }));
@@ -148,6 +176,17 @@ const reply = data => ({ data: row({ version: data.version + 1, rate_mode: data.
     balance: String(525 + Number(data.bonus) + Number(data.expenses) - Number(data.paid)) }) });
 
 describe('Відомість як Excel: автозбереження', () => {
+    it('автозберігає місячний оклад і зберігає його при редагуванні премії', async () => {
+        api.fetchPayrollReport.mockResolvedValue({ data: report({ rows: [row({ monthly_salary: '8000.00' })] }) });
+        api.saveMonthlyPayroll.mockResolvedValue({ data: row({ monthly_salary: '8500.00', version: 2 }) });
+        await open();
+        await wrapper.get('[data-field="monthly_salary"]').setValue('8500');
+        await vi.advanceTimersByTimeAsync(650); await flushPromises();
+        expect(api.saveMonthlyPayroll.mock.calls[0][1].monthly_salary).toBe('8500.00');
+        await wrapper.get('[data-field="bonus"]').setValue('200');
+        await vi.advanceTimersByTimeAsync(650); await flushPromises();
+        expect(api.saveMonthlyPayroll.mock.calls[1][1]).toMatchObject({ monthly_salary: '8500.00', bonus: '200.00', version: 2 });
+    });
     it('групує введення рядка, приймає кому та перераховує підтверджені підсумки', async () => {
         api.saveMonthlyPayroll.mockImplementation(async (id, data) => reply(data));
         await open(); await cell('bonus').setValue('100,50'); await cell('expenses').setValue('200');

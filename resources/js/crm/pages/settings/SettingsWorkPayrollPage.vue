@@ -29,19 +29,21 @@
         <fieldset :disabled="busy">
           <label class="wp-field">Ім’я та прізвище<input v-model="form.name" name="employee_name" class="form-control" required maxlength="100" :aria-invalid="!!errors.name" /></label>
           <label class="wp-field">Посада<input v-model="form.position" name="position" class="form-control" maxlength="100" :aria-invalid="!!errors.position" /></label>
-          <label class="wp-field">Тип обліку<select v-model="form.payment_type" name="payment_type" class="form-select" :disabled="!!form.id"><option value="hourly">За годинами — верхня таблиця табеля</option><option value="piecework">За виконану роботу — суми в нижній таблиці</option></select></label>
-          <p class="wp-help">{{ form.id ? 'Тип обліку незмінний, щоб не змішувати попередні дані.' : 'Ставку для погодинного працівника вкажіть у вкладці «Нарахування за місяць».' }}</p>
+          <label class="wp-field">Тип обліку<select v-model="form.payment_type" name="payment_type" class="form-select" :aria-invalid="!!errors.payment_type"><option value="hourly" :disabled="!!form.id && editingType !== 'hourly'">За годинами — верхня таблиця табеля</option><option value="piecework" :disabled="!!form.id && editingType !== 'piecework'">За виконану роботу — суми в нижній таблиці</option><option value="mixed">Години + виконана робота — обидві таблиці</option></select></label>
+          <p class="wp-help">Оклад і ставки задаються у «Нарахування за місяць». Змішаний облік показує одну людину в обох таблицях та об’єднує зарплату в одному рядку. Для наявного працівника можна додати другий вид обліку, але не прибрати попередній.</p>
           <label v-if="form.id" class="form-check mb-3"><input v-model="form.archived" type="checkbox" class="form-check-input" /> В архіві — зберігати історію, не додавати нові дні</label>
           <footer class="wp-dialog-footer"><button type="button" class="btn btn-outline-secondary" @click="closeDialog()">Скасувати</button><button class="btn btn-primary" type="submit">{{ busy ? 'Зберігаємо…' : form.id ? 'Зберегти зміни' : 'Додати працівника' }}</button></footer>
         </fieldset>
       </form>
       <form v-else-if="kind === 'payroll'" @submit.prevent="submitPayroll">
-        <div class="wp-source"><span>З табеля за {{ periodLabel.toLowerCase() }}</span><strong>{{ currentRow.employee.payment_type === 'hourly' ? `${currentRow.days} дн. · ${number(currentRow.hours)} год` : money(currentRow.base_pay) }}</strong></div>
+        <div class="wp-source"><span>З табеля за {{ periodLabel.toLowerCase() }}</span><strong>{{ currentRow.employee.payment_type !== 'piecework' ? `${currentRow.days} дн. · ${number(currentRow.hours)} год` : money(currentRow.piecework_pay ?? currentRow.base_pay) }}</strong></div>
         <fieldset :disabled="busy" class="wp-fields">
-          <template v-if="currentRow.employee.payment_type === 'hourly'">
+          <label class="wp-field wp-full">Місячний оклад, грн<input v-model="form.monthly_salary" name="monthly_salary" class="form-control" inputmode="decimal" required :aria-invalid="!!errors.monthly_salary" /><small>Фіксована сума за місяць, незалежно від додаткових годин. Переноситься на наступні місяці до зміни суми; 0 — без окладу. Уже збережені оклади інших місяців не змінюються.</small></label>
+          <p class="wp-help wp-full">Не дублюйте оклад у «За виконану роботу»: там залишаються лише додаткові роботи. Якщо оклад уже внесений у табель сумою, спочатку виправте цей запис.</p>
+          <template v-if="currentRow.employee.payment_type !== 'piecework'">
             <label class="wp-field">Спосіб розрахунку<select v-model="form.rate_mode" name="rate_mode" class="form-select"><option value="hourly">Ставка за годину</option><option value="daily">Ставка за день · {{ currentRow.daily_hours }} годин</option></select></label>
             <label class="wp-field">{{ form.rate_mode === 'daily' ? `Ставка за ${currentRow.daily_hours} годин, грн` : 'Ставка за годину, грн' }}<input v-model="form.rate" name="rate" class="form-control" inputmode="decimal" placeholder="Не вказано" :aria-invalid="!!errors.rate" /></label>
-            <p class="wp-help wp-full">{{ form.rate_mode === 'daily' ? `Зарплата = години ÷ ${currentRow.daily_hours} × денна ставка. Менше чи більше годин — пропорційна оплата.` : 'Зарплата = відпрацьовані години × ставка.' }} У табель вводьте робочі години без неоплачуваної перерви. Ставка зберігається тільки для цього місяця.</p>
+            <p class="wp-help wp-full">{{ form.rate_mode === 'daily' ? `Оплата годин = години ÷ ${currentRow.daily_hours} × денна ставка. Менше чи більше годин — пропорційна оплата.` : 'Оплата годин = відпрацьовані години × ставка.' }} У табель вводьте робочі години без неоплачуваної перерви. Ставка зберігається тільки для цього місяця.</p>
           </template>
           <label class="wp-field">Премія, грн<input v-model="form.bonus" name="bonus" class="form-control" inputmode="decimal" required :aria-invalid="!!errors.bonus" /></label>
           <label class="wp-field">Відшкодування витрат, грн<input v-model="form.expenses" name="expenses" class="form-control" inputmode="decimal" required :aria-invalid="!!errors.expenses" /></label>
@@ -49,7 +51,7 @@
           <label class="wp-field">Усього виплачено за місяць, грн<input v-model="form.paid" name="paid" class="form-control" inputmode="decimal" required :aria-invalid="!!errors.paid" /><small>Загальна сума, не нова окрема виплата</small></label>
           <label v-if="Number(String(form.adjustment).replace(',', '.')) !== 0" class="wp-field wp-full">Причина коригування<textarea v-model="form.adjustment_reason" name="adjustment_reason" class="form-control" maxlength="500" required :aria-invalid="!!errors.adjustment_reason"></textarea></label>
           <label class="wp-field wp-full">Примітка<textarea v-model="form.note" name="note" class="form-control" maxlength="500" :aria-invalid="!!errors.note"></textarea></label>
-          <div class="wp-preview wp-full"><div><span>Зарплата з коригуванням</span><b>{{ money(preview.salary) }}</b></div><div><span>Нараховано з премією та витратами</span><b>{{ money(preview.accrued) }}</b></div><div><span>Залишок до виплати</span><strong>{{ money(preview.balance) }}</strong></div><small>Попередній розрахунок. При збереженні сервер використає актуальні дані табеля. Мінус у залишку — переплата.</small></div>
+          <div class="wp-preview wp-full"><div><span>Місячний оклад</span><b>{{ money(preview.monthly) }}</b></div><div><span>За робочі години</span><b>{{ money(preview.time) }}</b></div><div><span>За виконану роботу</span><b>{{ money(preview.work) }}</b></div><div><span>Зарплата з коригуванням</span><b>{{ money(preview.salary) }}</b></div><div><span>Нараховано з премією та витратами</span><b>{{ money(preview.accrued) }}</b></div><div><span>Залишок до виплати</span><strong>{{ money(preview.balance) }}</strong></div><small>Попередній розрахунок. При збереженні сервер використає актуальні дані табеля. Мінус у залишку — переплата.</small></div>
           <footer class="wp-dialog-footer wp-full"><button class="btn btn-outline-secondary" type="button" @click="closeDialog()">Скасувати</button><button class="btn btn-primary" type="submit">{{ busy ? 'Зберігаємо…' : 'Зберегти нарахування' }}</button></footer>
         </fieldset>
       </form>
@@ -84,7 +86,8 @@ const dirty = computed(() => ['employee', 'payroll'].includes(kind.value) && JSO
 let focusBefore = null, alive = true;
 const number = value => new Intl.NumberFormat('uk-UA', { maximumFractionDigits: 2 }).format(Number(value));
 const money = value => value === null || value === undefined || !Number.isFinite(Number(value)) ? '—' : `${number(value)} грн`;
-const typeLabel = type => type === 'piecework' ? 'За виконану роботу' : 'За годинами';
+const typeLabel = type => type === 'mixed' ? 'Години + виконана робота' : type === 'piecework' ? 'За виконану роботу' : 'За годинами';
+const editingType = computed(() => employees.value.find(employee => employee.id === form.id)?.payment_type);
 function ledgerNotice(event) {
   // Відкладений успіх таблиці не перекриває повідомлення відкритої форми.
   if (event.type === 'success' && (kind.value || loading.value)) return;
@@ -142,7 +145,7 @@ function openEmployee(employee = null) {
 function openPayroll(row) {
   currentRow.value = row;
   return openDialog('payroll', { id: row.employee_id, month: period.value, version: row.version, rate_mode: row.rate_mode,
-    rate: (row.rate_mode === 'daily' ? row.daily_rate : row.hourly_rate) ?? '', bonus: row.bonus, expenses: row.expenses,
+    rate: (row.rate_mode === 'daily' ? row.daily_rate : row.hourly_rate) ?? '', monthly_salary: row.monthly_salary ?? '0.00', bonus: row.bonus, expenses: row.expenses,
     adjustment: row.adjustment, adjustment_reason: row.adjustment_reason ?? '', paid: row.paid, note: row.note ?? '' });
 }
 function openDelete(employee) { deleteTarget.value = { ...employee }; return openDialog('delete'); }
@@ -190,10 +193,14 @@ const preview = computed(() => {
   try {
     const rate = cents(form.rate, true), h = Math.round(Number(currentRow.value?.hours || 0) * 100);
     const denominator = form.rate_mode === 'daily' ? currentRow.value.daily_hours * 100 : 100;
-    const base = form.rate_mode === 'piecework' ? cents(currentRow.value?.base_pay) : rate === null ? null : Math.round(h * rate / denominator);
-    if (base === null) return { salary: null, accrued: null, balance: null };
+    const mixed = currentRow.value?.employee.payment_type === 'mixed';
+    const time = form.rate_mode === 'piecework' ? 0 : rate === null ? (mixed && h === 0 ? 0 : null) : Math.round(h * rate / denominator);
+    const work = cents(currentRow.value?.piecework_pay ?? (form.rate_mode === 'piecework' ? currentRow.value?.base_pay : '0'));
+    const monthly = cents(form.monthly_salary);
+    if (time === null) return { monthly: monthly / 100, time: null, work: work / 100, salary: null, accrued: null, balance: null };
+    const base = monthly + time + work;
     const salary = base + cents(form.adjustment), accrued = salary + cents(form.bonus) + cents(form.expenses);
-    return { salary: salary / 100, accrued: accrued / 100, balance: (accrued - cents(form.paid)) / 100 };
+    return { monthly: monthly / 100, time: time / 100, work: work / 100, salary: salary / 100, accrued: accrued / 100, balance: (accrued - cents(form.paid)) / 100 };
   } catch { return { salary: null, accrued: null, balance: null }; }
 });
 const protect = event => { if (dirty.value || busy.value || ledger.value?.hasUnsaved) { event.preventDefault(); event.returnValue = ''; } };
