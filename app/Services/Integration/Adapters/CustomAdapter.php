@@ -14,6 +14,12 @@ class CustomAdapter implements OrderAdapter
         $delivery = (array) ($raw['delivery'] ?? []);
         $payment = (array) ($raw['payment'] ?? []);
         $currency = (string) ($raw['currency'] ?? ($payment['currency'] ?? 'UAH'));
+        $provider = strtolower(trim((string) ($payment['provider'] ?? '')));
+        $method = strtolower(trim((string) ($payment['method'] ?? 'cod')));
+        if ($method === 'wayforpay') {
+            $provider = 'wayforpay';
+            $method = 'card';
+        }
 
         $items = [];
         foreach ((array) ($raw['items'] ?? []) as $item) {
@@ -54,10 +60,15 @@ class CustomAdapter implements OrderAdapter
                 'warehouse_ref' => $delivery['provider_warehouse_ref'] ?? ($delivery['warehouse_ref'] ?? null),
             ],
             'payment' => [
-                'method' => $payment['method'] ?? 'cod',
+                'method' => $provider === 'wayforpay' ? 'card' : $method,
+                'provider' => $provider ?: null,
+                'status' => $payment['status'] ?? $raw['payment_status'] ?? null,
+                'paid_amount' => $payment['paid_amount'] ?? null,
+                'transaction_id' => $payment['transaction_id'] ?? null,
+                'paid_at' => $payment['paid_at'] ?? null,
                 'total' => isset($payment['total']) ? (float) $payment['total'] : null,
                 'prepay_amount' => isset($payment['prepay_amount']) ? (float) $payment['prepay_amount'] : null,
-                'currency' => $currency,
+                'currency' => $payment['currency'] ?? $currency,
             ],
             'currency' => $currency,
             'note' => $raw['note'] ?? null,

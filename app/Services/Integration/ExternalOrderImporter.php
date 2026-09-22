@@ -18,27 +18,30 @@ use Illuminate\Support\Facades\DB;
  */
 class ExternalOrderImporter
 {
-    public function __construct(protected ProductMatcher $matcher) {}
+    public function __construct(protected ProductMatcher $matcher, protected ExternalPaymentSynchronizer $payments) {}
 
     /**
-     * Ідемпотентно: повторний імпорт того ж external_order_id повертає наявне замовлення.
+     * Ідемпотентно: повторний імпорт оновлює лише оплату наявного замовлення.
      */
     public function import(OrderSource $source, array $canonical, ?ExternalOrderRaw $raw = null): Order
     {
         $externalOrderId = isset($canonical['external_order_id']) ? trim((string) $canonical['external_order_id']) : '';
 
-        if ($externalOrderId !== '') {
-            $existing = Order::query()
-                ->where('source_id', $source->id)
-                ->where('external_id', $externalOrderId)
-                ->first();
-
-            if ($existing) {
-                return $existing;
-            }
-        }
-
         return DB::transaction(function () use ($source, $canonical, $externalOrderId) {
+            // Серіалізуємо імпорт одного джерела, включно зі створенням нового замовлення.
+            OrderSource::query()->whereKey($source->id)->lockForUpdate()->firstOrFail();
+            if ($externalOrderId !== '') {
+                $existing = Order::query()
+                    ->where('source_id', $source->id)
+                    ->where('external_id', $externalOrderId)
+                    ->lockForUpdate()->first();
+
+                if ($existing) {
+                    $this->payments->sync($existing, (array) ($canonical['payment'] ?? []));
+                    return $existing;
+                }
+            }
+
             $customer = $this->resolveCustomer((array) ($canonical['customer'] ?? []));
 
             $statusId = Status::query()
@@ -120,7 +123,9 @@ class ExternalOrderImporter
                 'method' => $payment['method'] ?? 'cod',
                 'prepay_amount' => $payment['prepay_amount'] ?? null,
                 'currency' => $payment['currency'] ?? $currency,
+                'provider' => $payment['provider'] ?? null,
             ]);
+            $this->payments->sync($order, $payment);
 
             // Доставка — текстом; рефи Нової Пошти резолвимо пізніше (окремий етап).
             $delivery = (array) ($canonical['delivery'] ?? []);

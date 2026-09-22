@@ -1,5 +1,6 @@
 <script setup>
   import { ref, computed, watch } from 'vue';
+  import { paymentSummary } from '@/crm/utils/orderPayment';
   import {
     formatCurrency,
     formatDate,
@@ -41,6 +42,8 @@
     'refresh-delivery',
     'save-comment',
   ]);
+
+  const paymentTotals = computed(() => paymentSummary(props.order));
 
   const localComment = ref(props.order.comment || '');
   const isCommentDirty = computed(() => {
@@ -108,6 +111,7 @@
           <div class="order-id-line">
             <span class="summary-label">Замовлення</span>
             <span class="summary-number font-monospace">#{{ order.order_number }}</span>
+            <span v-if="order.external_id" class="small text-muted">На сайті: #{{ order.external_id }}</span>
           </div>
   
           <div class="order-meta-line">
@@ -475,13 +479,19 @@
                     </span>
                   </div>
   
-                  <div v-if="order.prepay_amount" class="calc-row mt-1">
+                  <div v-if="paymentTotals.paid_amount" class="calc-row mt-1">
                     <span class="text-success label-small d-flex align-items-center">
-                      <i class="bi bi-check-all me-1"></i>Передплата
+                      <i class="bi bi-check-all me-1"></i>Сплачено
                     </span>
                     <span class="fw-bold text-success value-small">
-                      -{{ formatCurrency(order.prepay_amount, order.currency) }}
+                      {{ formatCurrency(paymentTotals.paid_amount, order.currency) }}
                     </span>
+                  </div>
+                  <div v-if="order.payment_paid_at" class="calc-row mt-1 small text-muted">
+                    Оплачено: {{ formatDate(order.payment_paid_at) }}
+                  </div>
+                  <div v-if="order.payment_transaction_id" class="small text-muted text-break mt-1">
+                    Транзакція: {{ order.payment_transaction_id }}
                   </div>
                 </div>
   
@@ -493,7 +503,7 @@
                     <span class="total-amount text-primary fw-800 lh-1">
                       {{
                         formatCurrency(
-                          Math.max(0, order.total - (order.prepay_amount || 0)),
+                          paymentTotals.amount_due,
                           order.currency
                         )
                       }}

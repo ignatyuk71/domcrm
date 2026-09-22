@@ -13,6 +13,15 @@ class OrderPayment extends Model
         'prepay_amount',
         'currency',
         'note',
+        'provider',
+        'paid_amount',
+        'transaction_id',
+        'paid_at',
+    ];
+
+    protected $casts = [
+        'paid_amount' => 'decimal:2',
+        'paid_at' => 'datetime',
     ];
 
     public function order(): BelongsTo

@@ -79,6 +79,7 @@
 </template>
 
 <script setup>
+import { paymentSummary } from '@/crm/utils/orderPayment';
 import { onMounted, reactive, ref, watch } from 'vue';
 import axios from 'axios';
 import OrdersTable from '@/crm/components/orders/list/OrdersTable.vue';
@@ -373,14 +374,7 @@ function mapOrder(order) {
       payment.prepayment ??
       0
     ),
-    payment_method: payment.method || order.payment_method || '',
-    payment_method_label: payment.method === 'cod'
-      ? 'Накладений платіж'
-      : payment.method === 'card'
-        ? 'Оплата на рахунок'
-        : payment.method === 'prepay'
-          ? 'Часткова передоплата'
-          : '—',
+    ...paymentSummary(order, order.items_sum_total ?? order.total_sum ?? 0),
     comment: order.comment_internal || '',
     created_at: order.created_at,
     latestFiscalReceipt: latestReceipt,

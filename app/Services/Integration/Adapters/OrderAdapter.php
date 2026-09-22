@@ -13,7 +13,7 @@ interface OrderAdapter
      *   'customer' => ['first_name','last_name','phone','email'],
      *   'items' => [ ['external_id','sku','name','size','color','qty','price'], ... ],
      *   'delivery' => ['type','city_name','warehouse_name','recipient_name','recipient_phone', ...],
-     *   'payment' => ['method','total','prepay_amount','currency'],
+     *   'payment' => ['method','provider','status','paid_amount','transaction_id','paid_at','total','prepay_amount','currency'],
      *   'currency' => string,
      *   'note' => string|null,
      * ]

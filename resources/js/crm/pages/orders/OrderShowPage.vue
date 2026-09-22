@@ -142,6 +142,7 @@
 </template>
 
 <script setup>
+import { paymentSummary } from '@/crm/utils/orderPayment';
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import axios from 'axios';
 import { getOrder, updateOrderComment } from '@/crm/api/orders';
@@ -167,11 +168,7 @@ const { copiedTtn, copyTtn } = useTtnCopy();
 const notice = reactive({ type: 'success', message: '' });
 let noticeTimer = null;
 
-const amountDue = computed(() => {
-  const total = Number(order.value?.total || 0);
-  const prepay = Number(order.value?.prepay_amount || 0);
-  return Math.max(0, total - prepay);
-});
+const amountDue = computed(() => order.value?.amount_due ?? 0);
 
 const statusChipStyle = computed(() => getStatusStyle(order.value));
 
@@ -218,15 +215,6 @@ function mapOrder(payload) {
   const itemsTotal = items.reduce((sum, item) => sum + Number(item.total || 0), 0);
   const total = Number(payload.items_sum_total ?? payload.total_sum ?? itemsTotal);
 
-  const paymentMethod = payment.method || payload.payment_method || '';
-  const paymentMethodLabel = paymentMethod === 'cod'
-    ? 'Накладений платіж'
-    : paymentMethod === 'card'
-      ? 'Оплата на рахунок'
-      : paymentMethod === 'prepay'
-        ? 'Часткова передоплата'
-        : paymentMethod || '—';
-
   const deliveryPayer = delivery.delivery_payer === 'sender'
     ? 'Відправник'
     : delivery.delivery_payer === 'recipient'
@@ -263,7 +251,8 @@ function mapOrder(payload) {
     total,
     currency: payload.currency || payment.currency || 'UAH',
     prepay_amount: Number(payload.prepay_amount ?? payment.prepay_amount ?? 0),
-    payment_method_label: paymentMethodLabel,
+    ...paymentSummary(payload, total),
+    external_id: payload.external_id,
     ttn: delivery.ttn || '',
     ttn_ref: delivery.ref || delivery.ttn_ref || '',
     loadingTtn: false,

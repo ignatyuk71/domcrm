@@ -49,8 +49,9 @@
     const option = Object.hasOwn(paymentMethodOptions, method)
       ? paymentMethodOptions[method]
       : { label: 'Спосіб не вказано', icon: 'bi-question-circle' };
-    let label = option.label;
-    let title = option.label;
+    const online = order.payment_provider === 'wayforpay' || method === 'wayforpay';
+    let label = online ? 'Карткою онлайн · WayForPay' : option.label;
+    let title = label;
     const prepay = Number(order.prepay_amount);
     if (method === 'prepay' && Number.isFinite(prepay) && prepay > 0) {
       label = `Передоплата: ${formatCurrency(prepay, order.currency)}`;
@@ -60,7 +61,7 @@
         title += ` · Залишок ${formatCurrency(Math.max(0, total - prepay), order.currency)}`;
       }
     }
-    return [order.id, { label, title, icon: option.icon }];
+    return [order.id, { label, title, icon: online ? 'bi-credit-card' : option.icon }];
   })));
 
   // Час потрібен лише для робочих етапів до відправлення.
