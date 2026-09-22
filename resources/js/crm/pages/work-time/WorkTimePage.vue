@@ -20,11 +20,11 @@
           <thead><tr><th class="wt-person" scope="col">Працівник</th><th v-for="day in days" :key="day.date" scope="col" :class="{ weekend: day.weekend, today: day.date === today }"><b>{{ day.day }}</b><span>{{ day.label }}</span></th><th class="wt-total" scope="col">Години</th></tr></thead>
           <tbody><tr v-for="employee in employees" :key="employee.id">
             <th class="wt-person" scope="row"><div class="wt-person-label" :data-testid="`employee-${employee.id}`"><span class="wt-avatar">{{ employee.name.slice(0, 1) }}</span><span><b>{{ employee.name }}</b><small>{{ employee.archived_on ? 'В архіві' : employee.position || 'Працівник' }}</small></span></div></th>
-            <td v-for="day in days" :key="day.date" :class="{ weekend: day.weekend, 'wt-cell-error': states[key(employee.id, day.date)]?.error, 'wt-cell-saving': states[key(employee.id, day.date)]?.pending }">
+            <td v-for="day in days" :key="day.date" :class="{ weekend: day.weekend, today: day.date === today, 'wt-cell-error': states[key(employee.id, day.date)]?.error, 'wt-cell-saving': states[key(employee.id, day.date)]?.pending }">
               <input v-model="drafts[key(employee.id, day.date)].hours" type="text" inputmode="decimal" maxlength="5" :data-cell="key(employee.id, day.date)" :aria-label="`${employee.name}, ${day.day} ${monthGen[month - 1]}, години`" :title="entryHint(employee.id, day.date)" :aria-invalid="!!states[key(employee.id, day.date)]?.error" :disabled="loading || !!(employee.archived_on && day.date > employee.archived_on)" @focus="states[key(employee.id, day.date)]?.error && showProblems()" @input="schedule(key(employee.id, day.date))" @blur="flush(key(employee.id, day.date))" @keydown.enter.prevent="nextEmployee(employee.id, day.date)" />
             </td><td class="wt-total"><b>{{ number(employeeHours(employee.id)) }}</b><small>{{ employeeDays(employee.id) }} дн.</small></td>
           </tr></tbody>
-          <tfoot><tr><th class="wt-person" scope="row">Разом за день</th><td v-for="day in days" :key="day.date"><span class="wt-day-sum" :title="number(dayHours(day.date))">{{ number(dayHours(day.date)) }}</span></td><td class="wt-total">{{ number(allHours) }}</td></tr></tfoot>
+          <tfoot><tr><th class="wt-person" scope="row">Разом за день</th><td v-for="day in days" :key="day.date" :class="{ today: day.date === today }"><span class="wt-day-sum" :title="number(dayHours(day.date))">{{ number(dayHours(day.date)) }}</span></td><td class="wt-total">{{ number(allHours) }}</td></tr></tfoot>
         </table>
       </div>
       <div v-else-if="ready && !loading" class="wt-empty"><i class="bi bi-people" aria-hidden="true"></i><h2>У табелі ще немає працівників</h2><p>Працівників додає власник. Тут вводяться лише години.</p></div>
@@ -40,7 +40,7 @@
           <thead><tr><th class="wt-person" scope="col">Працівник</th><th v-for="day in days" :key="day.date" scope="col" :class="{ weekend: day.weekend, today: day.date === today }"><b>{{ day.day }}</b><span>{{ day.label }}</span></th><th class="wt-total" scope="col">Разом, грн</th></tr></thead>
           <tbody><tr v-for="employee in piece.employees" :key="employee.id">
             <th class="wt-person" scope="row"><div class="wt-person-label" :data-testid="`employee-${employee.id}`"><span class="wt-avatar">{{ employee.name.slice(0, 1) }}</span><span><b>{{ employee.name }}</b><small>{{ employee.archived_on ? 'В архіві' : employee.position || 'Працівник' }}</small></span></div></th>
-            <td v-for="day in days" :key="day.date" :class="{ weekend: day.weekend, 'wt-cell-error': piece.states[key(employee.id, day.date)]?.error, 'wt-cell-saving': piece.states[key(employee.id, day.date)]?.pending }">
+            <td v-for="day in days" :key="day.date" :class="{ weekend: day.weekend, today: day.date === today, 'wt-cell-error': piece.states[key(employee.id, day.date)]?.error, 'wt-cell-saving': piece.states[key(employee.id, day.date)]?.pending }">
               <span class="wt-money-value" :data-money-cell="key(employee.id, day.date)" :title="pieceHint(employee.id, day.date)">{{ piece.entries[key(employee.id, day.date)]?.amount == null ? '' : number(Number(piece.entries[key(employee.id, day.date)].amount)) }}</span>
               <button type="button" class="wt-day-note" :class="{ 'has-note': !!piece.entries[key(employee.id, day.date)]?.note }"
                 :data-note-cell="key(employee.id, day.date)" :title="pieceHint(employee.id, day.date)"
@@ -51,7 +51,7 @@
                 @click="openDayEditor(employee, day.date, $event.currentTarget)"><i class="bi bi-chat-left-text" aria-hidden="true"></i></button>
             </td><td class="wt-total"><b :title="money(piece.employeeHours(employee.id))" :data-testid="`piece-total-${employee.id}`">{{ number(piece.employeeHours(employee.id)) }}</b><small>грн за місяць</small></td>
           </tr></tbody>
-          <tfoot><tr><th class="wt-person" scope="row">Разом за день, грн</th><td v-for="day in days" :key="day.date"><span class="wt-day-sum" :title="money(piece.dayHours(day.date))">{{ number(piece.dayHours(day.date)) }}</span></td><td class="wt-total" data-testid="piece-all-total" :title="money(piece.allHours)">{{ number(piece.allHours) }}</td></tr></tfoot>
+          <tfoot><tr><th class="wt-person" scope="row">Разом за день, грн</th><td v-for="day in days" :key="day.date" :class="{ today: day.date === today }"><span class="wt-day-sum" :title="money(piece.dayHours(day.date))">{{ number(piece.dayHours(day.date)) }}</span></td><td class="wt-total" data-testid="piece-all-total" :title="money(piece.allHours)">{{ number(piece.allHours) }}</td></tr></tfoot>
         </table>
       </div>
       <div v-else-if="piece.loading" class="wt-empty" role="status">Завантажуємо суми…</div>
@@ -223,6 +223,8 @@ function nextEmployee(id, date) {
 /* Спільна сітка не дозволяє сумам чи довгим іменам розсувати колонки дат. */
 .work-time{container-type:inline-size;--wt-grid-color:#1a1a1a;--wt-person-width:180px;--wt-total-width:90px;--wt-day-min:26px}
 .wt-scroll .wt-calendar{table-layout:fixed;width:100%;min-width:calc(var(--wt-person-width) + var(--wt-total-width) + var(--wt-day-count) * var(--wt-day-min))}
+/* Підсвічуємо сьогоднішню колонку повністю, зокрема у вихідні та в підсумках. */
+.wt-scroll .wt-calendar .today{background:#f0edff}
 /* Темні межі роблять кожну клітинку обох табелів чітко видимою. */
 .wt-scroll .wt-calendar{border-left:1px solid var(--wt-grid-color);border-right:1px solid var(--wt-grid-color)}
 .wt-calendar tfoot th,.wt-calendar tfoot td{border-bottom:1px solid var(--wt-grid-color)}
