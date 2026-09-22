@@ -2,17 +2,17 @@
   <div class="customer-section flex-column d-flex gap-3">
     
     <div v-if="hasData && !editing" class="customer-card border rounded-4 bg-white shadow-sm p-3 animate-fade-in">
-      <div class="d-flex align-items-center gap-3">
+      <div class="customer-summary d-flex align-items-start gap-3">
         <div class="avatar-circle">
           <i class="bi bi-person-check-fill fs-4 text-primary"></i>
         </div>
         
-        <div class="flex-grow-1 min-width-0">
-          <div class="d-flex align-items-center gap-2 mb-1">
-            <h6 class="mb-0 fw-bold text-dark text-truncate">{{ displayName }}</h6>
+        <div class="customer-info flex-grow-1">
+          <div class="customer-heading d-flex flex-wrap align-items-center gap-2 mb-2">
+            <h6 class="customer-name mb-0 fw-bold text-dark">{{ displayName }}</h6>
             <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2">Клієнт</span>
           </div>
-          <div class="customer-meta small d-flex flex-wrap gap-x-3">
+          <div class="customer-meta small d-flex flex-column gap-1">
             <span v-if="local.phone" class="text-secondary">
               <i class="bi bi-telephone-fill me-1 text-muted"></i>{{ formattedPhone }}
             </span>
@@ -22,14 +22,16 @@
           </div>
         </div>
 
-        <div class="d-flex gap-2">
-          <button class="btn-action edit" @click="editing = true" title="Редагувати">
-            <i class="bi bi-pencil-square"></i>
-          </button>
-          <button class="btn-action delete" @click="reset" title="Очистити">
-            <i class="bi bi-trash3"></i>
-          </button>
-        </div>
+      </div>
+
+      <div class="customer-actions d-flex gap-2 border-top mt-3 pt-3">
+        <button type="button" class="btn btn-outline-primary customer-edit" @click="editing = true">
+          <i class="bi bi-pencil-square" aria-hidden="true"></i>
+          <span>Редагувати</span>
+        </button>
+        <button type="button" class="btn-action delete" @click="reset" title="Очистити дані покупця у формі" aria-label="Очистити дані покупця у формі">
+          <i class="bi bi-trash3" aria-hidden="true"></i>
+        </button>
       </div>
     </div>
 
@@ -46,7 +48,7 @@
     <div v-else class="customer-card border rounded-4 bg-white shadow-sm animate-fade-in overflow-visible">
       <div class="card-header-custom px-3 py-2 border-bottom d-flex justify-content-between align-items-center bg-light-subtle">
         <span class="fw-bold small text-uppercase letter-spacing-1 text-muted">Дані покупця</span>
-        <button type="button" class="btn-close-custom" @click="closeForm">
+        <button type="button" class="btn-close-custom" @click="closeForm" aria-label="Згорнути дані покупця">
           <i class="bi bi-x-lg"></i>
         </button>
       </div>
@@ -83,7 +85,7 @@
                 class="dropdown-item d-flex flex-column align-items-start py-2"
                 @mousedown.prevent="selectSuggestion(customer)"
               >
-                <div class="d-flex w-100 justify-content-between align-items-center">
+                <div class="d-flex flex-wrap gap-1 w-100 justify-content-between align-items-center">
                   <span class="fw-bold text-dark">
                     {{ customer.first_name }} {{ customer.last_name }}
                   </span>
@@ -134,7 +136,7 @@
       </div>
 
       <div class="p-3 bg-light-subtle border-top text-end">
-        <button class="btn btn-primary rounded-3 px-4 fw-bold shadow-sm btn-sm" @click="editing = false">
+        <button type="button" class="btn btn-primary rounded-3 px-4 fw-bold shadow-sm w-100" @click="editing = false">
           Готово
         </button>
       </div>
@@ -173,7 +175,7 @@ const searchLoading = ref(false);
 const searchError = ref('');
 const suggestions = ref([]);
 const showSuggestions = ref(false);
-const fullName = ref('');
+const fullName = ref(`${local.first_name || ''} ${local.last_name || ''}`.trim());
 let searchTimer = null;
 
 // --- Computed ---
@@ -229,9 +231,6 @@ const nameError = computed(() => {
   if (words.length < 2) {
     return 'Вкажіть імʼя та прізвище';
   }
-  if (words.length > 2) {
-    return 'Потрібно лише імʼя та прізвище';
-  }
   return '';
 });
 function reset() {
@@ -246,7 +245,8 @@ function reset() {
 function handleNameInput() {
   const words = fullName.value.trim().split(/\s+/).filter(Boolean);
   local.first_name = words[0] || '';
-  local.last_name = words[1] || '';
+  // Зберігаємо всі частини ПІБ, зокрема подвійне прізвище чи по батькові.
+  local.last_name = words.slice(1).join(' ');
 }
 
 function handlePhoneInput() {
@@ -355,6 +355,11 @@ watch(() => model.value, (newVal) => {
 
 <style scoped>
 /* Картка покупця */
+.customer-section,
+.customer-card {
+  min-width: 0;
+  max-width: 100%;
+}
 .customer-card {
   transition: all 0.3s ease;
   border: 1px solid #edf2f7 !important;
@@ -373,18 +378,35 @@ watch(() => model.value, (newVal) => {
 }
 
 /* Мета-дані */
+.customer-info { min-width: 0; }
+.customer-name,
+.customer-meta { overflow-wrap: anywhere; }
+.customer-name { line-height: 1.4; }
 .customer-meta i { font-size: 0.85rem; }
-.gap-x-3 { column-gap: 1rem; }
 
 /* Кнопки дій */
+.customer-edit {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 10px;
+  font-weight: 600;
+}
 .btn-action {
-  width: 34px; height: 34px;
+  width: 40px; height: 40px; flex-shrink: 0;
   border-radius: 10px; border: none;
   display: flex; align-items: center; justify-content: center;
   transition: 0.2s; background: #f8f9fa; color: #64748b;
 }
-.btn-action.edit:hover { background: #e0f2fe; color: #0ea5e9; }
 .btn-action.delete:hover { background: #fee2e2; color: #ef4444; }
+.btn-action:focus-visible {
+  outline: 2px solid var(--bs-primary);
+  outline-offset: 2px;
+}
 
 /* Порожній стан */
 .empty-state-card {
@@ -411,13 +433,14 @@ watch(() => model.value, (newVal) => {
 
 .custom-input {
   border-radius: 10px; border: 1px solid #e2e8f0;
-  padding: 0.6rem 0.75rem 0.6rem 2.6rem; /* padding-left for icon */
+  padding: 0.6rem 0.75rem;
   font-size: 0.95rem; transition: all 0.2s;
 }
 .custom-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1); }
 
 /* Інпут з іконкою */
 .input-group-custom { position: relative; }
+.input-group-custom .custom-input { padding-left: 2.6rem; }
 .input-icon-left {
   position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
   color: #94a3b8; z-index: 5;
@@ -446,6 +469,8 @@ watch(() => model.value, (newVal) => {
   border-bottom: 1px solid #f8fafc; padding: 10px 14px;
   width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid #f1f5f9;
   transition: background 0.1s;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .customer-suggest-dropdown .dropdown-item:hover { background: #f8fafc; }
 .customer-suggest-dropdown .dropdown-item:last-child { border-bottom: none; }
