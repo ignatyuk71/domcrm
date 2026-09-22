@@ -47,6 +47,7 @@ class ExternalPaymentSyncTest extends TestCase
         $this->assertSame('wayforpay', $order->payment->provider);
         $this->assertSame('5.00', $order->payment->paid_amount);
         $this->assertSame('txn-1', $order->payment->transaction_id);
+        $this->assertSame('2026-09-22T08:00:00.000000Z', $order->payment->paid_at->toISOString());
         $this->assertNull($order->payment->prepay_amount);
         $this->assertDatabaseCount('fiscal_receipts', 0);
         $this->assertDatabaseCount('fiscal_queue', 0);

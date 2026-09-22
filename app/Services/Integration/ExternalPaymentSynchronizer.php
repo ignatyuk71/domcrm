@@ -50,7 +50,9 @@ class ExternalPaymentSynchronizer
         $updates = ['paid_amount' => $amount];
         foreach (['provider', 'transaction_id', 'paid_at'] as $field) {
             if (! empty($data[$field])) {
-                $updates[$field] = $field === 'paid_at' ? Carbon::parse($data[$field]) : $data[$field];
+                $updates[$field] = $field === 'paid_at'
+                    ? Carbon::parse($data[$field])->setTimezone(config('app.timezone'))
+                    : $data[$field];
             }
         }
         if (! empty($data['method'])) {
