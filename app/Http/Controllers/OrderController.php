@@ -49,7 +49,7 @@ class OrderController extends Controller
                 'tags',
                 'delivery',
                 'delivery.activeWarehouseStatus',
-                'payment:id,order_id,prepay_amount,currency,method',
+                'payment:id,order_id,prepay_amount,currency,method,provider,paid_amount,transaction_id,paid_at',
                 'items' => fn ($q) => $q
                     ->select('id', 'order_id', 'product_id', 'product_variant_id', 'product_title', 'sku', 'size', 'price', 'qty', 'total')
                     ->with(['product:id,main_photo_path,color_id', 'product.color:id,name']),
