@@ -1,10 +1,10 @@
 {
-  "_DateRangePicker-D82VYMzb.js": {
-    "file": "assets/DateRangePicker-D82VYMzb.js",
+  "_DateRangePicker-Bf20Zx2i.js": {
+    "file": "assets/DateRangePicker-Bf20Zx2i.js",
     "name": "DateRangePicker",
     "imports": [
-      "_runtime-dom.esm-bundler-Cca0NvLU.js",
-      "_Toast-D10KcBY4.js"
+      "_runtime-dom.esm-bundler-DyeGK21J.js",
+      "_Toast-D9u7N2qs.js"
     ],
     "css": [
       "assets/DateRangePicker-J8dk-P6T.css"
@@ -18,11 +18,11 @@
     "file": "assets/Toast-BQ7RB5sd.css",
     "src": "_Toast-BQ7RB5sd.css"
   },
-  "_Toast-D10KcBY4.js": {
-    "file": "assets/Toast-D10KcBY4.js",
+  "_Toast-D9u7N2qs.js": {
+    "file": "assets/Toast-D9u7N2qs.js",
     "name": "Toast",
     "imports": [
-      "_runtime-dom.esm-bundler-Cca0NvLU.js"
+      "_runtime-dom.esm-bundler-DyeGK21J.js"
     ],
     "css": [
       "assets/Toast-BQ7RB5sd.css"
@@ -32,19 +32,19 @@
     "file": "assets/index-BXicX9F6.js",
     "name": "index"
   },
-  "_runtime-dom.esm-bundler-Cca0NvLU.js": {
-    "file": "assets/runtime-dom.esm-bundler-Cca0NvLU.js",
+  "_runtime-dom.esm-bundler-DyeGK21J.js": {
+    "file": "assets/runtime-dom.esm-bundler-DyeGK21J.js",
     "name": "runtime-dom.esm-bundler"
   },
-  "_useToast-DIysHThw.js": {
-    "file": "assets/useToast-DIysHThw.js",
+  "_useToast-BPfTk0ZN.js": {
+    "file": "assets/useToast-BPfTk0ZN.js",
     "name": "useToast",
     "imports": [
-      "_runtime-dom.esm-bundler-Cca0NvLU.js"
+      "_runtime-dom.esm-bundler-DyeGK21J.js"
     ]
   },
-  "_workTimeApi-Cxbq_BTp.js": {
-    "file": "assets/workTimeApi-Cxbq_BTp.js",
+  "_workTimeApi-DOJ19VQz.js": {
+    "file": "assets/workTimeApi-DOJ19VQz.js",
     "name": "workTimeApi",
     "imports": [
       "resources/js/crm/index.js"
@@ -59,12 +59,12 @@
     "src": "node_modules/bootstrap-icons/font/fonts/bootstrap-icons.woff2"
   },
   "node_modules/vue/dist/vue.runtime.esm-bundler.js": {
-    "file": "assets/vue.runtime.esm-bundler-NkOKAlLa.js",
+    "file": "assets/vue.runtime.esm-bundler-DqWj0K3Q.js",
     "name": "vue.runtime.esm-bundler",
     "src": "node_modules/vue/dist/vue.runtime.esm-bundler.js",
     "isDynamicEntry": true,
     "imports": [
-      "_runtime-dom.esm-bundler-Cca0NvLU.js"
+      "_runtime-dom.esm-bundler-DyeGK21J.js"
     ]
   },
   "resources/css/app.css": {
@@ -81,7 +81,7 @@
     "src": "resources/images/costs/halluci-insole-black-edging.webp"
   },
   "resources/js/app.js": {
-    "file": "assets/app-C-5lojnY.js",
+    "file": "assets/app-DqJMnJfH.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true,
@@ -102,25 +102,25 @@
     ]
   },
   "resources/js/crm/components/ui/FlashToast.vue": {
-    "file": "assets/FlashToast-DaIT_g6k.js",
+    "file": "assets/FlashToast-B-D_Jqif.js",
     "name": "FlashToast",
     "src": "resources/js/crm/components/ui/FlashToast.vue",
     "isDynamicEntry": true,
     "imports": [
-      "_Toast-D10KcBY4.js",
-      "_useToast-DIysHThw.js",
-      "_runtime-dom.esm-bundler-Cca0NvLU.js"
+      "_Toast-D9u7N2qs.js",
+      "_useToast-BPfTk0ZN.js",
+      "_runtime-dom.esm-bundler-DyeGK21J.js"
     ]
   },
   "resources/js/crm/index.js": {
-    "file": "assets/index-D8gKIwxx.js",
+    "file": "assets/index-Cd2W1oik.js",
     "name": "index",
     "src": "resources/js/crm/index.js",
     "isEntry": true,
     "imports": [
       "_index-BXicX9F6.js",
-      "_runtime-dom.esm-bundler-Cca0NvLU.js",
-      "_Toast-D10KcBY4.js"
+      "_runtime-dom.esm-bundler-DyeGK21J.js",
+      "_Toast-D9u7N2qs.js"
     ],
     "dynamicImports": [
       "resources/js/crm/pages/analytics/SalesAnalyticsPage.vue",
@@ -132,19 +132,19 @@
       "resources/js/crm/pages/expenses/ExpensesPage.vue"
     ],
     "css": [
-      "assets/index-ckq7A69b.css"
+      "assets/index-C4nv1HIf.css"
     ]
   },
   "resources/js/crm/pages/analytics/SalesAnalyticsPage.vue": {
-    "file": "assets/SalesAnalyticsPage-CKwWTT6x.js",
+    "file": "assets/SalesAnalyticsPage-pokdDUkQ.js",
     "name": "SalesAnalyticsPage",
     "src": "resources/js/crm/pages/analytics/SalesAnalyticsPage.vue",
     "isDynamicEntry": true,
     "imports": [
-      "_runtime-dom.esm-bundler-Cca0NvLU.js",
+      "_runtime-dom.esm-bundler-DyeGK21J.js",
       "resources/js/crm/index.js",
-      "_Toast-D10KcBY4.js",
-      "_DateRangePicker-D82VYMzb.js",
+      "_Toast-D9u7N2qs.js",
+      "_DateRangePicker-Bf20Zx2i.js",
       "_index-BXicX9F6.js"
     ],
     "css": [
@@ -152,14 +152,14 @@
     ]
   },
   "resources/js/crm/pages/costs/ProductionCostPage.vue": {
-    "file": "assets/ProductionCostPage-BTSk88fe.js",
+    "file": "assets/ProductionCostPage-ypaU3NNk.js",
     "name": "ProductionCostPage",
     "src": "resources/js/crm/pages/costs/ProductionCostPage.vue",
     "isDynamicEntry": true,
     "imports": [
-      "_runtime-dom.esm-bundler-Cca0NvLU.js",
+      "_runtime-dom.esm-bundler-DyeGK21J.js",
       "resources/js/crm/index.js",
-      "_Toast-D10KcBY4.js",
+      "_Toast-D9u7N2qs.js",
       "_index-BXicX9F6.js"
     ],
     "css": [
@@ -170,15 +170,15 @@
     ]
   },
   "resources/js/crm/pages/expenses/ExpensesPage.vue": {
-    "file": "assets/ExpensesPage-CI8_I9N4.js",
+    "file": "assets/ExpensesPage-B2hdlo4x.js",
     "name": "ExpensesPage",
     "src": "resources/js/crm/pages/expenses/ExpensesPage.vue",
     "isDynamicEntry": true,
     "imports": [
-      "_runtime-dom.esm-bundler-Cca0NvLU.js",
-      "_DateRangePicker-D82VYMzb.js",
-      "_Toast-D10KcBY4.js",
-      "_useToast-DIysHThw.js",
+      "_runtime-dom.esm-bundler-DyeGK21J.js",
+      "_DateRangePicker-Bf20Zx2i.js",
+      "_Toast-D9u7N2qs.js",
+      "_useToast-BPfTk0ZN.js",
       "resources/js/crm/index.js",
       "_index-BXicX9F6.js"
     ],
@@ -187,14 +187,14 @@
     ]
   },
   "resources/js/crm/pages/inventory/SoleInventoryPage.vue": {
-    "file": "assets/SoleInventoryPage-BE1xygB1.js",
+    "file": "assets/SoleInventoryPage-BrGHZvKK.js",
     "name": "SoleInventoryPage",
     "src": "resources/js/crm/pages/inventory/SoleInventoryPage.vue",
     "isDynamicEntry": true,
     "imports": [
-      "_runtime-dom.esm-bundler-Cca0NvLU.js",
+      "_runtime-dom.esm-bundler-DyeGK21J.js",
       "resources/js/crm/index.js",
-      "_Toast-D10KcBY4.js",
+      "_Toast-D9u7N2qs.js",
       "_index-BXicX9F6.js"
     ],
     "css": [
@@ -202,14 +202,14 @@
     ]
   },
   "resources/js/crm/pages/settings/SettingsTelegramPage.vue": {
-    "file": "assets/SettingsTelegramPage-ConyHGlp.js",
+    "file": "assets/SettingsTelegramPage-rBorYX_k.js",
     "name": "SettingsTelegramPage",
     "src": "resources/js/crm/pages/settings/SettingsTelegramPage.vue",
     "isDynamicEntry": true,
     "imports": [
-      "_runtime-dom.esm-bundler-Cca0NvLU.js",
+      "_runtime-dom.esm-bundler-DyeGK21J.js",
       "resources/js/crm/index.js",
-      "_Toast-D10KcBY4.js",
+      "_Toast-D9u7N2qs.js",
       "_index-BXicX9F6.js"
     ],
     "css": [
@@ -217,16 +217,16 @@
     ]
   },
   "resources/js/crm/pages/settings/SettingsWorkPayrollPage.vue": {
-    "file": "assets/SettingsWorkPayrollPage-BDOQEdaI.js",
+    "file": "assets/SettingsWorkPayrollPage-Dbq-GSdi.js",
     "name": "SettingsWorkPayrollPage",
     "src": "resources/js/crm/pages/settings/SettingsWorkPayrollPage.vue",
     "isDynamicEntry": true,
     "imports": [
-      "_runtime-dom.esm-bundler-Cca0NvLU.js",
-      "_Toast-D10KcBY4.js",
+      "_runtime-dom.esm-bundler-DyeGK21J.js",
+      "_Toast-D9u7N2qs.js",
       "resources/js/crm/index.js",
-      "_workTimeApi-Cxbq_BTp.js",
-      "_useToast-DIysHThw.js",
+      "_workTimeApi-DOJ19VQz.js",
+      "_useToast-BPfTk0ZN.js",
       "_index-BXicX9F6.js"
     ],
     "css": [
@@ -234,15 +234,15 @@
     ]
   },
   "resources/js/crm/pages/work-time/WorkTimePage.vue": {
-    "file": "assets/WorkTimePage-CIAx-5No.js",
+    "file": "assets/WorkTimePage-B0_g1QBw.js",
     "name": "WorkTimePage",
     "src": "resources/js/crm/pages/work-time/WorkTimePage.vue",
     "isDynamicEntry": true,
     "imports": [
-      "_runtime-dom.esm-bundler-Cca0NvLU.js",
-      "_workTimeApi-Cxbq_BTp.js",
-      "_Toast-D10KcBY4.js",
-      "_useToast-DIysHThw.js",
+      "_runtime-dom.esm-bundler-DyeGK21J.js",
+      "_workTimeApi-DOJ19VQz.js",
+      "_Toast-D9u7N2qs.js",
+      "_useToast-BPfTk0ZN.js",
       "resources/js/crm/index.js",
       "_index-BXicX9F6.js"
     ],

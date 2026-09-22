@@ -1,31 +1,30 @@
 <template>
   <div class="customer-section flex-column d-flex gap-3">
     
-    <div v-if="hasData && !editing" class="customer-card border rounded-4 bg-white shadow-sm p-3 animate-fade-in">
-      <div class="customer-summary d-flex align-items-start gap-3">
-        <div class="avatar-circle">
-          <i class="bi bi-person-check-fill fs-4 text-primary"></i>
+    <div v-if="hasData && !editing" class="customer-card rounded-4 bg-white p-3 animate-fade-in">
+      <div class="customer-summary d-flex align-items-center gap-3">
+        <div class="avatar-circle" aria-hidden="true">
+          <i class="bi bi-person"></i>
         </div>
         
         <div class="customer-info flex-grow-1">
-          <div class="customer-heading d-flex flex-wrap align-items-center gap-2 mb-2">
-            <h6 class="customer-name mb-0 fw-bold text-dark">{{ displayName }}</h6>
-            <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2">Клієнт</span>
-          </div>
-          <div class="customer-meta small d-flex flex-column gap-1">
-            <span v-if="local.phone" class="text-secondary">
-              <i class="bi bi-telephone-fill me-1 text-muted"></i>{{ formattedPhone }}
-            </span>
-            <span v-if="local.email" class="text-secondary">
-              <i class="bi bi-envelope-at-fill me-1 text-muted"></i>{{ local.email }}
-            </span>
-          </div>
+          <h6 class="customer-name mb-0">{{ displayName }}</h6>
         </div>
-
       </div>
 
-      <div class="customer-actions d-flex gap-2 border-top mt-3 pt-3">
-        <button type="button" class="btn btn-outline-primary customer-edit" @click="editing = true">
+      <div v-if="local.phone || local.email" class="customer-meta">
+        <div v-if="local.phone" class="customer-contact customer-phone">
+          <i class="bi bi-telephone" aria-hidden="true"></i>
+          <span>{{ formattedPhone }}</span>
+        </div>
+        <div v-if="local.email" class="customer-contact">
+          <i class="bi bi-envelope" aria-hidden="true"></i>
+          <span>{{ local.email }}</span>
+        </div>
+      </div>
+
+      <div class="customer-actions d-flex gap-2">
+        <button type="button" class="btn customer-edit" @click="editing = true">
           <i class="bi bi-pencil-square" aria-hidden="true"></i>
           <span>Редагувати</span>
         </button>
@@ -35,19 +34,18 @@
       </div>
     </div>
 
-    <div v-else-if="!hasData && !editing" 
-         class="empty-state-card rounded-4 p-4 text-center cursor-pointer transition-all" 
+    <button v-else-if="!hasData && !editing"
+         type="button"
+         class="empty-state-card rounded-4 p-4 text-center"
          @click="editing = true">
-      <div class="icon-pulse mb-2">
-        <i class="bi bi-person-plus text-primary fs-2"></i>
-      </div>
-      <h6 class="fw-bold text-dark mb-1">Додати покупця</h6>
-      <p class="text-muted small mb-0">Знайдіть за номером або створіть новий профіль</p>
-    </div>
+      <span class="empty-state-icon mb-3" aria-hidden="true"><i class="bi bi-person-plus"></i></span>
+      <span class="d-block fw-semibold text-dark mb-1">Додати покупця</span>
+      <span class="d-block text-muted small">Знайдіть за номером або створіть новий профіль</span>
+    </button>
 
-    <div v-else class="customer-card border rounded-4 bg-white shadow-sm animate-fade-in overflow-visible">
-      <div class="card-header-custom px-3 py-2 border-bottom d-flex justify-content-between align-items-center bg-light-subtle">
-        <span class="fw-bold small text-uppercase letter-spacing-1 text-muted">Дані покупця</span>
+    <div v-else class="customer-card rounded-4 bg-white animate-fade-in overflow-visible">
+      <div class="card-header-custom px-3 py-2 d-flex justify-content-between align-items-center gap-2">
+        <span class="fw-semibold small">Дані покупця</span>
         <button type="button" class="btn-close-custom" @click="closeForm" aria-label="Згорнути дані покупця">
           <i class="bi bi-x-lg"></i>
         </button>
@@ -56,10 +54,11 @@
       <div class="p-3">
         <div class="row g-3">
           <div class="col-12 position-relative">
-            <label class="form-label-custom">Мобільний телефон</label>
+            <label :for="`${formId}-phone`" class="form-label-custom">Мобільний телефон</label>
             <div class="input-group-custom">
               <i class="bi bi-telephone input-icon-left"></i>
               <input
+                :id="`${formId}-phone`"
                 type="tel"
                 autocomplete="off"
                 name="crm_customer_phone"
@@ -95,12 +94,9 @@
               </button>
             </div>
 
-            <div v-if="local.id" class="duplicate-hint mt-2 text-success d-flex align-items-center gap-2 small animate-fade-in">
-              <i class="bi bi-check2-circle fs-5"></i>
-              <div>
-                <span class="fw-bold">Клієнт знайдений у базі.</span>
-                <span class="d-block text-muted smaller" style="line-height: 1.2">Редагування оновить його дані.</span>
-              </div>
+            <div v-if="local.id" class="duplicate-hint mt-2 d-flex align-items-start gap-2">
+              <i class="bi bi-info-circle" aria-hidden="true"></i>
+              <span>Редагування оновить дані наявного клієнта.</span>
             </div>
             
             <div class="text-danger small mt-2" v-if="searchError">{{ searchError }}</div>
@@ -109,8 +105,9 @@
           </div>
 
           <div class="col-12">
-            <label class="form-label-custom">Імʼя та прізвище</label>
+            <label :for="`${formId}-name`" class="form-label-custom">Імʼя та прізвище</label>
             <input
+              :id="`${formId}-name`"
               type="text"
               autocomplete="name"
               class="form-control custom-input"
@@ -128,15 +125,16 @@
           </div>
 
           <div class="col-12">
-            <label class="form-label-custom">Електронна пошта <span class="text-muted small">(необовʼязково)</span></label>
-            <input type="email" autocomplete="email" class="form-control custom-input" :class="{ 'is-invalid': errors.email }" v-model="local.email" placeholder="example@mail.com" />
+            <label :for="`${formId}-email`" class="form-label-custom">Електронна пошта <span class="text-muted fw-normal">(необовʼязково)</span></label>
+            <input :id="`${formId}-email`" type="email" autocomplete="email" class="form-control custom-input" :class="{ 'is-invalid': errors.email }" v-model="local.email" placeholder="example@mail.com" />
             <div class="invalid-feedback d-block" v-if="errors.email">{{ errors.email }}</div>
           </div>
         </div>
       </div>
 
-      <div class="p-3 bg-light-subtle border-top text-end">
-        <button type="button" class="btn btn-primary rounded-3 px-4 fw-bold shadow-sm w-100" @click="editing = false">
+      <div class="px-3 pb-3">
+        <button type="button" class="btn btn-primary customer-done w-100" @click="editing = false">
+          <i class="bi bi-check2 me-1" aria-hidden="true"></i>
           Готово
         </button>
       </div>
@@ -145,12 +143,14 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch, onMounted } from 'vue';
+import { computed, reactive, ref, watch, useId } from 'vue';
 import { searchCustomers } from '@/crm/api/customers';
 
 const props = defineProps({
   errors: { type: Object, default: () => ({}) },
 });
+
+const formId = useId();
 
 // Використовуємо defineModel для двостороннього зв'язку (Vue 3.4+)
 const model = defineModel({ type: Object, default: () => ({}) });
@@ -361,16 +361,18 @@ watch(() => model.value, (newVal) => {
   max-width: 100%;
 }
 .customer-card {
-  transition: all 0.3s ease;
-  border: 1px solid #edf2f7 !important;
+  border: 1px solid #e5e9f0;
+  box-shadow: 0 2px 6px rgb(15 23 42 / 3%);
 }
 
 /* Аватар */
 .avatar-circle {
-  width: 52px;
-  height: 52px;
-  background: #f0f7ff;
-  border-radius: 14px;
+  width: 40px;
+  height: 40px;
+  background: #eef2ff;
+  color: #6366f1;
+  font-size: 1.35rem;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -379,13 +381,48 @@ watch(() => model.value, (newVal) => {
 
 /* Мета-дані */
 .customer-info { min-width: 0; }
-.customer-name,
-.customer-meta { overflow-wrap: anywhere; }
-.customer-name { line-height: 1.4; }
-.customer-meta i { font-size: 0.85rem; }
+.customer-name {
+  color: #1e293b;
+  font-size: 0.9375rem;
+  font-weight: 650;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.customer-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  margin-top: 16px;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+.customer-contact {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  color: #64748b;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+.customer-contact span { overflow-wrap: anywhere; }
+.customer-contact i { color: #94a3b8; }
+.customer-phone { color: #334155; font-weight: 500; }
 
 /* Кнопки дій */
+.customer-actions { margin-top: 14px; }
 .customer-edit {
+  --bs-btn-color: #4f46e5;
+  --bs-btn-bg: #eef2ff;
+  --bs-btn-border-color: transparent;
+  --bs-btn-hover-color: #4338ca;
+  --bs-btn-hover-bg: #e0e7ff;
+  --bs-btn-hover-border-color: transparent;
+  --bs-btn-active-color: #3730a3;
+  --bs-btn-active-bg: #c7d2fe;
+  --bs-btn-active-border-color: transparent;
+  --bs-btn-focus-shadow-rgb: 99, 102, 241;
   flex: 1;
   min-width: 0;
   min-height: 40px;
@@ -394,49 +431,79 @@ watch(() => model.value, (newVal) => {
   justify-content: center;
   gap: 0.5rem;
   border-radius: 10px;
+  font-size: 0.8125rem;
   font-weight: 600;
 }
 .btn-action {
   width: 40px; height: 40px; flex-shrink: 0;
   border-radius: 10px; border: none;
   display: flex; align-items: center; justify-content: center;
-  transition: 0.2s; background: #f8f9fa; color: #64748b;
+  transition: background-color 0.2s, color 0.2s;
+  background: transparent; color: #94a3b8;
 }
 .btn-action.delete:hover { background: #fee2e2; color: #ef4444; }
-.btn-action:focus-visible {
-  outline: 2px solid var(--bs-primary);
+.btn-action:focus-visible,
+.btn-close-custom:focus-visible,
+.empty-state-card:focus-visible {
+  outline: 2px solid #6366f1;
   outline-offset: 2px;
 }
 
 /* Порожній стан */
 .empty-state-card {
-  border: 2px dashed #e2e8f0; background: #f8fafc; color: #64748b;
+  width: 100%;
+  border: 1px dashed #cbd5e1;
+  background: #fafbfe;
+  color: #64748b;
+  transition: border-color 0.2s, background-color 0.2s;
 }
 .empty-state-card:hover {
-  border-color: #3b82f6; background: #fff;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  border-color: #a5b4fc; background: #f5f7ff;
 }
-
-/* Анімація іконки */
-.icon-pulse { animation: pulse-soft 2s infinite; }
-@keyframes pulse-soft {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.05); }
-  100% { transform: scale(1); }
+.empty-state-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: #eef2ff;
+  color: #6366f1;
+  font-size: 1.4rem;
 }
 
 /* Форми та інпути */
+.card-header-custom {
+  color: #334155;
+  background: #f8fafc;
+  border-bottom: 1px solid #eef1f5;
+  border-radius: 15px 15px 0 0;
+}
 .form-label-custom {
-  font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
-  color: #94a3b8; margin-bottom: 0.4rem; letter-spacing: 0.025em;
+  font-size: 0.8125rem; font-weight: 500;
+  color: #475569; margin-bottom: 0.4rem;
 }
 
 .custom-input {
   border-radius: 10px; border: 1px solid #e2e8f0;
   padding: 0.6rem 0.75rem;
-  font-size: 0.95rem; transition: all 0.2s;
+  min-height: 42px;
+  font-size: 0.875rem; transition: border-color 0.2s, box-shadow 0.2s;
 }
-.custom-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1); }
+.custom-input:focus { border-color: #a5b4fc; box-shadow: 0 0 0 3px rgb(99 102 241 / 10%); }
+.customer-done {
+  --bs-btn-bg: #6366f1;
+  --bs-btn-border-color: #6366f1;
+  --bs-btn-hover-bg: #4f46e5;
+  --bs-btn-hover-border-color: #4f46e5;
+  --bs-btn-active-bg: #4338ca;
+  --bs-btn-active-border-color: #4338ca;
+  --bs-btn-focus-shadow-rgb: 99, 102, 241;
+  min-height: 40px;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
 
 /* Інпут з іконкою */
 .input-group-custom { position: relative; }
@@ -449,9 +516,11 @@ watch(() => model.value, (newVal) => {
 
 /* Закрити форму */
 .btn-close-custom {
-  background: none; border: none; color: #94a3b8; padding: 5px; transition: 0.2s;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; flex-shrink: 0; border-radius: 8px;
+  background: none; border: none; color: #94a3b8; transition: 0.2s;
 }
-.btn-close-custom:hover { color: #ef4444; }
+.btn-close-custom:hover { color: #475569; background: #e9eef5; }
 
 .animate-fade-in { animation: fadeIn 0.3s ease-out; }
 @keyframes fadeIn {
@@ -476,5 +545,9 @@ watch(() => model.value, (newVal) => {
 .customer-suggest-dropdown .dropdown-item:last-child { border-bottom: none; }
 
 /* Hint */
-.duplicate-hint { font-weight: 500; }
+.duplicate-hint { color: #64748b; font-size: 0.75rem; line-height: 1.5; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in { animation: none; }
+}
 </style>
