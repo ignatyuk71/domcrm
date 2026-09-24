@@ -16,3 +16,46 @@
 /* Дії з документами мають читабельний контраст на світлому тлі. */
 .expense-receipt-download,.expense-receipt>a,.expense-add-receipt,.expense-receipt-pill{color:#6954df}
 .expense-receipt-pill.missing{color:#8a651d}
+
+/* Редактор оплати: основні дані й деталі поруч, додаткові поля нижче. */
+.expense-dialog-editor{width:1120px}
+.expense-dialog-subtitle{margin:6px 0 0;color:#657188;font-size:12px;line-height:1.5}
+.expense-editor-form{padding-top:18px}
+.expense-editor-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.expense-editor-main{grid-column:1/-1;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.expense-editor-block{min-width:0;padding:18px;border:1px solid #e7e0f6;border-radius:11px;background:#fdfcff}
+.expense-editor-block h3,.expense-editor-block-title{margin:0 0 16px;font-size:14px;font-weight:700;line-height:1.4;color:#302744}
+.expense-editor-block-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.expense-editor-payment-fields{grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)}
+.expense-editor-main input,.expense-editor-main select{min-height:42px}
+.expense-editor-main .span-2{grid-column:1/-1}
+.expense-editor-comment{display:block}
+.expense-editor-comment.span-2{grid-column:1/-1}
+.expense-editor-comment label{height:100%;gap:0}
+.expense-editor-comment textarea{flex:1;min-height:88px;max-height:240px}
+.expense-editor-block-heading{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.expense-editor-block-heading h3{margin:0}
+.expense-editor-block-heading>span,.expense-editor-file-help{font-size:11px;color:#657188}
+.expense-editor-receipts .expense-receipt-upload{margin:0;padding:12px;min-height:72px;gap:10px;background:#fff}
+.expense-editor-receipts .expense-receipt-upload.is-disabled{opacity:.7}
+.expense-drop-label{display:flex;align-items:center;gap:9px;font-size:12px;color:#657188}
+.expense-drop-label>i{font-size:21px}
+.expense-editor-receipts .expense-button{color:#6954df}
+.expense-editor-file-help{display:block;margin-top:8px;line-height:1.5}
+.expense-editor-form .expense-file-list{max-height:150px;overflow:auto}
+.expense-editor-footer-note{display:flex;align-items:center;gap:8px;margin-right:auto;font-size:11px;color:#657188}
+.expense-editor-footer-actions{display:flex;justify-content:flex-end;gap:9px;flex-wrap:wrap}
+.expense-editor-compact,.expense-editor-compact .expense-editor-main{grid-template-columns:minmax(0,1fr)}
+@media(max-width:900px){
+  .expense-editor-grid,.expense-editor-main{grid-template-columns:minmax(0,1fr)}
+  .expense-editor-form .expense-form-footer{flex-wrap:wrap}
+  .expense-editor-footer-note{flex-basis:100%}
+  .expense-editor-footer-actions{margin-left:auto}
+}
+@media(max-width:480px){
+  .expense-editor-block{padding:14px}
+  .expense-editor-block-fields{grid-template-columns:minmax(0,1fr);gap:13px}
+  .expense-editor-payment-fields{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr)}
+  .expense-editor-grid,.expense-editor-main{gap:12px}
+  .expense-editor-footer-actions{width:100%}
+}

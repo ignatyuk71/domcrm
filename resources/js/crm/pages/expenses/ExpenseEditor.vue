@@ -48,17 +48,24 @@ function validation(messages, fields = {}) {
   showToast({ type: 'error', title: 'Перевірте дані', messages, actionLabel: 'Виправити', onAction: () => formElement.value?.querySelector('[aria-invalid="true"]')?.focus() });
 }
 function selectFiles(event) {
-  const selected = [...event.target.files];
+  addFiles([...event.target.files]);
+  event.target.value = '';
+}
+function dropFiles(event) {
+  if (!busy.value) addFiles([...event.dataTransfer.files]);
+}
+function addFiles(selected) {
+  if (busy.value) return;
   if (selected.length + files.value.length + existingReceiptCount.value > 10) {
     validation(['До однієї оплати можна додати не більше 10 квитанцій.'], { files: ['Забагато файлів.'] });
-    event.target.value = ''; return;
+    return;
   }
   const invalid = selected.filter(file => !['application/pdf', 'image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 10 * 1024 * 1024 || file.size === 0);
   if (invalid.length) {
     validation(['Оберіть фото JPG, PNG, WebP або PDF розміром до 10 МБ: ' + invalid.map(file => file.name).join(', ')], { files: ['Непідтримуваний файл.'] });
-    event.target.value = ''; return;
+    return;
   }
-  files.value.push(...selected); event.target.value = '';
+  files.value.push(...selected);
 }
 async function addDictionary() {
   if (!dictionary.name.trim() || busy.value) return;
@@ -149,24 +156,46 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload));
 </script>
 
 <template>
-  <ExpenseDialog :title="title" :busy="busy" @close="close">
-    <form ref="formElement" class="expense-form" @submit.prevent="save">
+  <ExpenseDialog :title="title" :editor="!paymentMode" :subtitle="withPayment ? 'Дані витрати та підтвердження оплати' : 'Дані та планування витрати'" :busy="busy" @close="close">
+    <form ref="formElement" class="expense-form expense-editor-form" @submit.prevent="save">
       <p v-if="paymentMode" class="expense-form-context"><strong>{{ expense.title }}</strong><span>Залишилося: {{ money(currentExpense.remaining_amount, currentExpense.currency) }}</span></p>
-      <fieldset :disabled="busy || !!savedDetail" class="expense-fields">
-        <template v-if="!paymentMode">
-          <label class="span-2">За що платимо <input v-model="form.title" name="title" maxlength="255" required placeholder="Наприклад, реклама Meta за вересень" :aria-invalid="!!fieldError('title')"></label>
-          <label>Отримувач <input v-model="form.recipient" name="recipient" maxlength="255" placeholder="Компанія або людина" :aria-invalid="!!fieldError('recipient')"></label>
-          <label>Категорія <span class="expense-select-with-action"><select v-model="form.category_id" name="category_id" required :aria-invalid="!!fieldError('category_id')"><option value="" disabled>Оберіть категорію</option><option v-for="item in meta.categories" :key="item.id" :value="item.id">{{ item.name }}</option></select><button type="button" class="expense-mini-add" aria-label="Створити категорію" @click="dictionary.kind = 'categories'">+</button></span></label>
-          <label class="span-2">Група платежів <span class="expense-select-with-action"><select v-model="form.group_id" name="group_id" :aria-invalid="!!fieldError('group_id')"><option value="">Без групи</option><option v-for="item in meta.groups" :key="item.id" :value="item.id">{{ item.name }}</option></select><button type="button" class="expense-mini-add" aria-label="Створити групу" @click="dictionary.kind = 'groups'">+</button></span></label>
-        </template>
-        <label>{{ paymentMode ? 'Сума цієї оплати' : 'Сума' }} <input v-model="form.amount" name="amount" inputmode="decimal" required placeholder="0.00" :aria-invalid="!!fieldError('amount')"></label>
-        <label>Валюта <select v-model="form.currency" name="currency" :disabled="paymentMode || hasPaid" :aria-invalid="!!fieldError('currency')"><option v-for="currency in meta.currencies" :key="currency">{{ currency }}</option></select></label>
-        <label v-if="form.currency !== 'UAH'" class="span-2">{{ withPayment ? 'Курс оплати до гривні' : 'Очікуваний курс до гривні' }} <input v-if="withPayment" v-model="form.exchange_rate" name="exchange_rate" inputmode="decimal" required :aria-invalid="!!fieldError('exchange_rate')"><input v-else v-model="form.expected_exchange_rate" name="expected_exchange_rate" inputmode="decimal" required :aria-invalid="!!fieldError('expected_exchange_rate')"><small>Скільки гривень за 1 {{ form.currency }}. Курс вводиться вручну.</small></label>
-        <label>{{ withPayment ? 'Звідки оплачено' : 'Очікуване джерело' }} <span class="expense-select-with-action"><select v-model="form.account_id" name="account_id" :required="withPayment" :aria-invalid="!!fieldError('account_id')"><option value="">{{ withPayment ? 'Оберіть рахунок' : 'Ще не визначено' }}</option><option v-for="item in meta.accounts" :key="item.id" :value="item.id">{{ item.name }}</option></select><button type="button" class="expense-mini-add" aria-label="Створити рахунок" @click="dictionary.kind = 'accounts'">+</button></span></label>
-        <label v-if="withPayment">Дата оплати <input v-model="form.paid_on" name="paid_on" type="date" :max="meta.today" required :aria-invalid="!!fieldError('paid_on')"></label>
-        <label v-else>Оплатити до <input v-model="form.due_on" name="due_on" type="date" required :aria-invalid="!!fieldError('due_on')"></label>
-        <label class="span-2">Коментар <textarea v-model="form.note" name="note" rows="3" maxlength="5000" placeholder="Деталі, які допоможуть згадати цю витрату" :aria-invalid="!!fieldError('note')"></textarea></label>
-      </fieldset>
+      <div class="expense-editor-grid" :class="{ 'expense-editor-compact': paymentMode }">
+        <fieldset :disabled="busy || !!savedDetail" class="expense-fields expense-editor-main">
+          <section v-if="!paymentMode" class="expense-editor-block" aria-label="За що платимо">
+            <h3>За що платимо</h3>
+            <div class="expense-editor-block-fields">
+              <label class="span-2">Назва витрати <input v-model="form.title" name="title" maxlength="255" required placeholder="Наприклад, реклама Meta за вересень" :aria-invalid="!!fieldError('title')"></label>
+              <label>Отримувач <input v-model="form.recipient" name="recipient" maxlength="255" placeholder="Компанія або людина" :aria-invalid="!!fieldError('recipient')"></label>
+              <label>Категорія <span class="expense-select-with-action"><select v-model="form.category_id" name="category_id" required :aria-invalid="!!fieldError('category_id')"><option value="" disabled>Оберіть категорію</option><option v-for="item in meta.categories" :key="item.id" :value="item.id">{{ item.name }}</option></select><button type="button" class="expense-mini-add" aria-label="Створити категорію" @click="dictionary.kind = 'categories'">+</button></span></label>
+              <label class="span-2">Група платежів <span class="expense-select-with-action"><select v-model="form.group_id" name="group_id" :aria-invalid="!!fieldError('group_id')"><option value="">Без групи</option><option v-for="item in meta.groups" :key="item.id" :value="item.id">{{ item.name }}</option></select><button type="button" class="expense-mini-add" aria-label="Створити групу" @click="dictionary.kind = 'groups'">+</button></span></label>
+            </div>
+          </section>
+          <section class="expense-editor-block" :aria-label="withPayment ? 'Деталі оплати' : 'Деталі витрати'">
+            <h3>{{ withPayment ? 'Деталі оплати' : 'Деталі витрати' }}</h3>
+            <div class="expense-editor-block-fields expense-editor-payment-fields">
+              <label>{{ paymentMode ? 'Сума цієї оплати' : 'Сума' }} <input v-model="form.amount" name="amount" inputmode="decimal" required placeholder="0.00" :aria-invalid="!!fieldError('amount')"></label>
+              <label>Валюта <select v-model="form.currency" name="currency" :disabled="paymentMode || hasPaid" :aria-invalid="!!fieldError('currency')"><option v-for="currency in meta.currencies" :key="currency">{{ currency }}</option></select></label>
+              <label v-if="form.currency !== 'UAH'" class="span-2">{{ withPayment ? 'Курс оплати до гривні' : 'Очікуваний курс до гривні' }} <input v-if="withPayment" v-model="form.exchange_rate" name="exchange_rate" inputmode="decimal" required :aria-invalid="!!fieldError('exchange_rate')"><input v-else v-model="form.expected_exchange_rate" name="expected_exchange_rate" inputmode="decimal" required :aria-invalid="!!fieldError('expected_exchange_rate')"><small>Скільки гривень за 1 {{ form.currency }}. Курс вводиться вручну.</small></label>
+              <label class="span-2">{{ withPayment ? 'Звідки оплачено' : 'Очікуване джерело' }} <span class="expense-select-with-action"><select v-model="form.account_id" name="account_id" :required="withPayment" :aria-invalid="!!fieldError('account_id')"><option value="">{{ withPayment ? 'Оберіть рахунок' : 'Ще не визначено' }}</option><option v-for="item in meta.accounts" :key="item.id" :value="item.id">{{ item.name }}</option></select><button type="button" class="expense-mini-add" aria-label="Створити рахунок" @click="dictionary.kind = 'accounts'">+</button></span></label>
+              <label v-if="withPayment" class="span-2">Дата оплати <input v-model="form.paid_on" name="paid_on" type="date" :max="meta.today" required :aria-invalid="!!fieldError('paid_on')"></label>
+              <label v-else class="span-2">Оплатити до <input v-model="form.due_on" name="due_on" type="date" required :aria-invalid="!!fieldError('due_on')"></label>
+            </div>
+          </section>
+        </fieldset>
+        <fieldset :disabled="busy || !!savedDetail" class="expense-fields expense-editor-block expense-editor-comment" :class="{ 'span-2': !withPayment }">
+          <label><span class="expense-editor-block-title">Коментар</span><textarea v-model="form.note" name="note" rows="3" maxlength="5000" placeholder="Деталі цієї оплати" :aria-invalid="!!fieldError('note')"></textarea></label>
+        </fieldset>
+        <section v-if="withPayment" class="expense-editor-block expense-editor-receipts">
+          <div class="expense-editor-block-heading"><h3>Квитанції</h3><span>Необов’язково</span></div>
+          <div class="expense-receipt-upload" :class="{ invalid: fileError, 'is-disabled': busy }" @dragover.prevent @drop.prevent="dropFiles">
+            <span class="expense-drop-label"><i class="bi bi-paperclip" aria-hidden="true"></i> Перетягніть файли або</span>
+            <input ref="fileInput" class="expense-file-input" tabindex="-1" type="file" multiple accept="image/jpeg,image/png,image/webp,application/pdf" :disabled="busy" aria-label="Прикріпити квитанції" :aria-invalid="fileError" @change="selectFiles">
+            <button type="button" class="expense-button" :disabled="busy" @click="fileInput.click()">Обрати файли</button>
+            <ul v-if="files.length" class="expense-file-list"><li v-for="(file, index) in files" :key="index"><i class="bi bi-file-earmark" aria-hidden="true"></i><span>{{ file.name }}</span><button type="button" :disabled="busy" :aria-label="'Прибрати ' + file.name" @click="files.splice(index, 1)">×</button></li></ul>
+          </div>
+          <small class="expense-editor-file-help">PDF, JPG, PNG, WebP · до 10 МБ · до 10 файлів</small>
+        </section>
+      </div>
       <section v-if="dictionary.kind" class="expense-dictionary" aria-label="Новий запис довідника">
         <strong>{{ { categories: 'Нова категорія', accounts: 'Новий рахунок', groups: 'Нова група' }[dictionary.kind] }}</strong>
         <label>Назва <input v-model="dictionary.name" maxlength="255" :disabled="busy" placeholder="Введіть назву" @keydown.enter.prevent="addDictionary"></label>
@@ -174,13 +203,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload));
         <label v-if="dictionary.kind === 'groups'">Опис <input v-model="dictionary.note" maxlength="5000" :disabled="busy"></label>
         <div class="expense-button-row"><button type="button" class="expense-button" :disabled="busy" @click="dictionary.kind = ''; dictionary.name = ''">Скасувати</button><button type="button" class="expense-button primary" :disabled="busy || !dictionary.name.trim()" @click="addDictionary">Додати</button></div>
       </section>
-      <section v-if="withPayment" class="expense-receipt-upload" :class="{ invalid: fileError }">
-        <div><strong>Квитанції до оплати</strong><small>Фото JPG, PNG, WebP або PDF · до 10 МБ · до 10 файлів</small></div>
-        <input ref="fileInput" class="expense-file-input" tabindex="-1" type="file" multiple accept="image/jpeg,image/png,image/webp,application/pdf" :disabled="busy" aria-label="Прикріпити квитанції" :aria-invalid="fileError" @change="selectFiles">
-        <button type="button" class="expense-button" :disabled="busy" @click="fileInput.click()"><i class="bi bi-paperclip" aria-hidden="true"></i> Прикріпити файли</button>
-        <ul v-if="files.length" class="expense-file-list"><li v-for="(file, index) in files" :key="index"><i class="bi bi-file-earmark" aria-hidden="true"></i><span>{{ file.name }}</span><button type="button" :disabled="busy" :aria-label="'Прибрати ' + file.name" @click="files.splice(index, 1)">×</button></li></ul>
-      </section>
-      <footer class="expense-form-footer"><button type="button" class="expense-button" :disabled="busy" @click="close">{{ savedDetail ? 'Закрити' : 'Скасувати' }}</button><button v-if="conflict" type="button" class="expense-button" :disabled="busy" @click="refreshVersion">Оновити версію</button><button type="submit" class="expense-button primary" :disabled="busy || !!dictionary.kind">{{ busy ? 'Збереження…' : savedDetail ? (files.length ? 'Повторити завантаження' : 'Готово') : 'Зберегти' }}</button></footer>
+      <footer class="expense-form-footer"><span v-if="withPayment" class="expense-editor-footer-note"><i class="bi bi-info-circle" aria-hidden="true"></i> Квитанцію можна додати пізніше</span><div class="expense-editor-footer-actions"><button type="button" class="expense-button" :disabled="busy" @click="close">{{ savedDetail ? 'Закрити' : 'Скасувати' }}</button><button v-if="conflict" type="button" class="expense-button" :disabled="busy" @click="refreshVersion">Оновити версію</button><button type="submit" class="expense-button primary" :disabled="busy || !!dictionary.kind">{{ busy ? 'Збереження…' : savedDetail ? (files.length ? 'Повторити завантаження' : 'Готово') : withPayment ? 'Зберегти оплату' : 'Зберегти' }}</button></div></footer>
     </form>
   </ExpenseDialog>
   <Toast v-bind="toast" @close="closeToast" @action="runAction" @secondary="runSecondary" />

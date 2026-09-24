@@ -28,6 +28,22 @@ beforeEach(() => { vi.clearAllMocks(); vi.spyOn(window, 'confirm').mockReturnVal
 afterEach(() => { wrapper?.unmount(); document.body.innerHTML = ''; vi.restoreAllMocks(); });
 
 describe('Редактор витрат', () => {
+  it('приймає перетягнуту квитанцію, перевіряє ліміт і завантажує її після збереження оплати', async () => {
+    const created = { ...expense, id: 9, payments: [{ ...payment, id: 99 }] };
+    api.createExpense.mockResolvedValue({ data: { data: created } });
+    api.uploadExpenseReceipts.mockResolvedValue({ data: { data: created } });
+    open(); await fillNew();
+    const file = new File(['receipt'], 'delivery.pdf', { type: 'application/pdf' });
+    const zone = wrapper.get('.expense-receipt-upload');
+    await zone.trigger('drop', { dataTransfer: { files: [file] } });
+    await zone.trigger('drop', { dataTransfer: { files: Array(10).fill(file) } });
+    expect(wrapper.get('[role="alert"]').text()).toContain('не більше 10 квитанцій');
+    expect(wrapper.findAll('.expense-file-list li')).toHaveLength(1);
+    await submit();
+    expect(api.uploadExpenseReceipts).toHaveBeenCalledWith(9, 99, [file]);
+    expect(wrapper.emitted('saved')).toHaveLength(1);
+  });
+
   it('залишає чернетку та файли після помилки сервера і підсвічує поле', async () => {
     api.createExpense.mockRejectedValue({ response: { status: 422, data: { errors: { title: ['Назва вже зайнята.'] } } } });
     open(); await fillNew(); await attachFile(); await submit();

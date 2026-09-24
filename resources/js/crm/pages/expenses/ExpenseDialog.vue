@@ -1,6 +1,6 @@
 <script setup>
 import { nextTick, onBeforeUnmount, onMounted, ref, useId } from 'vue';
-const props = defineProps({ title: { type: String, required: true }, wide: Boolean, busy: Boolean });
+const props = defineProps({ title: { type: String, required: true }, wide: Boolean, editor: Boolean, subtitle: String, busy: Boolean });
 const emit = defineEmits(['close']);
 const panel = ref(null), titleId = useId();
 let previousFocus, previousOverflow;
@@ -23,8 +23,8 @@ onBeforeUnmount(() => { document.body.style.overflow = previousOverflow; previou
 <template>
   <Teleport to="body">
     <div class="expense-overlay" @mousedown.self="!busy && emit('close')">
-      <section ref="panel" class="expense-dialog" :class="{ 'expense-dialog-wide': wide }" role="dialog" aria-modal="true" :aria-labelledby="titleId" tabindex="-1" @keydown="keydown">
-        <header class="expense-dialog-head"><h2 :id="titleId">{{ title }}</h2><button type="button" class="expense-icon-button" aria-label="Закрити діалог" :disabled="busy" @click="emit('close')"><i class="bi bi-x-lg" aria-hidden="true"></i></button></header>
+      <section ref="panel" class="expense-dialog" :class="{ 'expense-dialog-wide': wide, 'expense-dialog-editor': editor }" role="dialog" aria-modal="true" :aria-labelledby="titleId" tabindex="-1" @keydown="keydown">
+        <header class="expense-dialog-head"><div><h2 :id="titleId">{{ title }}</h2><p v-if="subtitle" class="expense-dialog-subtitle">{{ subtitle }}</p></div><button type="button" class="expense-icon-button" aria-label="Закрити діалог" :disabled="busy" @click="emit('close')"><i class="bi bi-x-lg" aria-hidden="true"></i></button></header>
         <slot />
       </section>
     </div>
