@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref, useId, watch } from 'vue';
 import ExpenseDialog from './ExpenseDialog.vue';
 import Toast from '@/crm/components/ui/Toast.vue';
 import { useToast } from '@/crm/composables/useToast';
@@ -11,6 +11,10 @@ const emit = defineEmits(['close', 'saved', 'changed', 'dictionary']);
 const { toast, showToast, closeToast, runAction, runSecondary } = useToast();
 const currentExpense = ref(props.expense), savedDetail = ref(null), savedPaymentId = ref(null);
 const busy = ref(false), errors = ref({}), files = ref([]), fileInput = ref(null), formElement = ref(null), conflict = ref(false);
+const readingClipboard = ref(false), receiptArea = ref(null), previews = ref(new Map());
+const clipboardHintId = useId();
+const imageTypes = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' };
+let disposed = false;
 const key = requestKey();
 const paymentMode = computed(() => ['add-payment', 'edit-payment'].includes(props.mode));
 const withPayment = computed(() => props.mode === 'new-paid' || paymentMode.value);
@@ -54,8 +58,67 @@ function selectFiles(event) {
 function dropFiles(event) {
   if (!busy.value) addFiles([...event.dataTransfer.files]);
 }
+function focusReceiptArea(event) {
+  if (!event.target.closest?.('button, input, a, select, textarea')) receiptArea.value?.focus();
+}
+function pasteFiles(event) {
+  const items = [...(event.clipboardData?.items || [])];
+  const images = items.length
+    ? items.filter(item => item.kind === 'file' && item.type.startsWith('image/')).map(item => item.getAsFile()).filter(Boolean)
+    : [...(event.clipboardData?.files || [])].filter(file => file.type.startsWith('image/'));
+  // Звичайний текст не перехоплюємо; зображення додаємо лише в блоці квитанцій.
+  if (!images.length) return;
+  event.preventDefault();
+  if (!readingClipboard.value) addFiles(images);
+}
+function clipboardNotice(message) {
+  if (disposed) return;
+  showToast({ type: 'error', title: 'Не вдалося вставити скріншот', messages: [message],
+    actionLabel: 'Вставити клавішами', onAction: () => receiptArea.value?.focus() });
+}
+async function pasteFromClipboard() {
+  if (busy.value || readingClipboard.value) return;
+  if (!navigator.clipboard?.read) {
+    clipboardNotice('Браузер не підтримує вставлення кнопкою. Скопіюйте зображення й натисніть Ctrl+V або ⌘V у блоці «Квитанції».');
+    return;
+  }
+  readingClipboard.value = true;
+  try {
+    // Читаємо буфер лише після явного натискання, по одному формату кожного зображення.
+    const items = await navigator.clipboard.read();
+    if (disposed) return;
+    const selected = [];
+    for (const item of items) {
+      const type = Object.keys(imageTypes).find(type => item.types.includes(type));
+      if (!type) continue;
+      const blob = await item.getType(type);
+      if (disposed) return;
+      selected.push(new File([blob], `Скріншот-${Date.now()}-${selected.length + 1}.${imageTypes[type]}`, { type }));
+    }
+    if (!selected.length) {
+      clipboardNotice('У буфері немає зображення PNG, JPG або WebP. Спочатку скопіюйте скріншот.');
+      return;
+    }
+    addFiles(selected);
+  } catch (error) {
+    clipboardNotice(error?.name === 'NotAllowedError'
+      ? 'Браузер не надав доступ до буфера. Натисніть Ctrl+V або ⌘V у блоці «Квитанції» чи оберіть файл.'
+      : 'Не вдалося прочитати зображення з буфера. Скопіюйте скріншот ще раз і вставте через Ctrl+V або ⌘V.');
+  } finally { readingClipboard.value = false; }
+}
+// Звільняємо локальні прев’ю після видалення, збереження або закриття форми.
+watch(() => [...files.value], selected => {
+  const next = new Map(previews.value);
+  for (const [file, url] of next) {
+    if (!selected.includes(file)) { URL.revokeObjectURL(url); next.delete(file); }
+  }
+  for (const file of selected) {
+    if (imageTypes[file.type] && !next.has(file)) next.set(file, URL.createObjectURL(file));
+  }
+  previews.value = next;
+}, { flush: 'sync' });
 function addFiles(selected) {
-  if (busy.value) return;
+  if (busy.value || disposed || !selected.length) return;
   if (selected.length + files.value.length + existingReceiptCount.value > 10) {
     validation(['До однієї оплати можна додати не більше 10 квитанцій.'], { files: ['Забагато файлів.'] });
     return;
@@ -89,7 +152,7 @@ async function refreshVersion() {
   finally { busy.value = false; }
 }
 async function save() {
-  if (busy.value) return;
+  if (busy.value || readingClipboard.value) return;
   if (!savedDetail.value) {
     const amount = minor(form.amount), fields = {};
     if (amount === null || amount <= 0n) fields.amount = ['Введіть додатну суму, не більше двох знаків після коми.'];
@@ -150,9 +213,13 @@ function close() {
   if (dirty.value && !window.confirm(message)) return;
   emit('close');
 }
-function beforeUnload(event) { if (dirty.value || busy.value) { event.preventDefault(); event.returnValue = ''; } }
+function beforeUnload(event) { if (dirty.value || busy.value || readingClipboard.value) { event.preventDefault(); event.returnValue = ''; } }
 onMounted(() => window.addEventListener('beforeunload', beforeUnload));
-onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload));
+onBeforeUnmount(() => {
+  disposed = true;
+  window.removeEventListener('beforeunload', beforeUnload);
+  for (const url of previews.value.values()) URL.revokeObjectURL(url);
+});
 </script>
 
 <template>
@@ -185,13 +252,17 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload));
         <fieldset :disabled="busy || !!savedDetail" class="expense-fields expense-editor-block expense-editor-comment" :class="{ 'span-2': !withPayment }">
           <label><span class="expense-editor-block-title">Коментар</span><textarea v-model="form.note" name="note" rows="3" maxlength="5000" placeholder="Деталі цієї оплати" :aria-invalid="!!fieldError('note')"></textarea></label>
         </fieldset>
-        <section v-if="withPayment" class="expense-editor-block expense-editor-receipts">
+        <section v-if="withPayment" ref="receiptArea" class="expense-editor-block expense-editor-receipts" tabindex="0" role="region" aria-label="Квитанції: вставлення з буфера" :aria-describedby="clipboardHintId" @paste="pasteFiles" @click="focusReceiptArea">
           <div class="expense-editor-block-heading"><h3>Квитанції</h3><span>Необов’язково</span></div>
+          <div class="expense-clipboard-row">
+            <button type="button" class="expense-button" :disabled="busy || readingClipboard" :aria-describedby="clipboardHintId" @click="pasteFromClipboard"><i class="bi bi-clipboard" aria-hidden="true"></i> {{ readingClipboard ? 'Вставлення…' : 'Вставити з буфера' }}</button>
+            <small :id="clipboardHintId">Додає скопійований скріншот. Також можна натиснути Ctrl+V / ⌘V у цьому блоці.</small>
+          </div>
           <div class="expense-receipt-upload" :class="{ invalid: fileError, 'is-disabled': busy }" @dragover.prevent @drop.prevent="dropFiles">
             <span class="expense-drop-label"><i class="bi bi-paperclip" aria-hidden="true"></i> Перетягніть файли або</span>
             <input ref="fileInput" class="expense-file-input" tabindex="-1" type="file" multiple accept="image/jpeg,image/png,image/webp,application/pdf" :disabled="busy" aria-label="Прикріпити квитанції" :aria-invalid="fileError" @change="selectFiles">
             <button type="button" class="expense-button" :disabled="busy" @click="fileInput.click()">Обрати файли</button>
-            <ul v-if="files.length" class="expense-file-list"><li v-for="(file, index) in files" :key="index"><i class="bi bi-file-earmark" aria-hidden="true"></i><span>{{ file.name }}</span><button type="button" :disabled="busy" :aria-label="'Прибрати ' + file.name" @click="files.splice(index, 1)">×</button></li></ul>
+            <ul v-if="files.length" class="expense-file-list"><li v-for="(file, index) in files" :key="index"><img v-if="previews.get(file)" class="expense-file-preview" :src="previews.get(file)" :alt="'Прев’ю: ' + file.name"><i v-else class="bi bi-file-earmark" aria-hidden="true"></i><span>{{ file.name }}</span><button type="button" :disabled="busy" :aria-label="'Прибрати ' + file.name" @click="files.splice(index, 1)">×</button></li></ul>
           </div>
           <small class="expense-editor-file-help">PDF, JPG, PNG, WebP · до 10 МБ · до 10 файлів</small>
         </section>
@@ -203,7 +274,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload));
         <label v-if="dictionary.kind === 'groups'">Опис <input v-model="dictionary.note" maxlength="5000" :disabled="busy"></label>
         <div class="expense-button-row"><button type="button" class="expense-button" :disabled="busy" @click="dictionary.kind = ''; dictionary.name = ''">Скасувати</button><button type="button" class="expense-button primary" :disabled="busy || !dictionary.name.trim()" @click="addDictionary">Додати</button></div>
       </section>
-      <footer class="expense-form-footer"><span v-if="withPayment" class="expense-editor-footer-note"><i class="bi bi-info-circle" aria-hidden="true"></i> Квитанцію можна додати пізніше</span><div class="expense-editor-footer-actions"><button type="button" class="expense-button" :disabled="busy" @click="close">{{ savedDetail ? 'Закрити' : 'Скасувати' }}</button><button v-if="conflict" type="button" class="expense-button" :disabled="busy" @click="refreshVersion">Оновити версію</button><button type="submit" class="expense-button primary" :disabled="busy || !!dictionary.kind">{{ busy ? 'Збереження…' : savedDetail ? (files.length ? 'Повторити завантаження' : 'Готово') : withPayment ? 'Зберегти оплату' : 'Зберегти' }}</button></div></footer>
+      <footer class="expense-form-footer"><span v-if="withPayment" class="expense-editor-footer-note"><i class="bi bi-info-circle" aria-hidden="true"></i> Квитанцію можна додати пізніше</span><div class="expense-editor-footer-actions"><button type="button" class="expense-button" :disabled="busy" @click="close">{{ savedDetail ? 'Закрити' : 'Скасувати' }}</button><button v-if="conflict" type="button" class="expense-button" :disabled="busy" @click="refreshVersion">Оновити версію</button><button type="submit" class="expense-button primary" :disabled="busy || readingClipboard || !!dictionary.kind">{{ busy ? 'Збереження…' : savedDetail ? (files.length ? 'Повторити завантаження' : 'Готово') : withPayment ? 'Зберегти оплату' : 'Зберегти' }}</button></div></footer>
     </form>
   </ExpenseDialog>
   <Toast v-bind="toast" @close="closeToast" @action="runAction" @secondary="runSecondary" />

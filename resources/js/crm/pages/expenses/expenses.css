@@ -59,3 +59,10 @@
   .expense-editor-grid,.expense-editor-main{gap:12px}
   .expense-editor-footer-actions{width:100%}
 }
+
+/* Вставлення скріншота доступне і кнопкою, і клавішами в блоці квитанцій. */
+.expense-editor-receipts:focus{outline:2px solid #b6a9f1;outline-offset:3px}
+.expense-clipboard-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.expense-clipboard-row>small{flex:1;min-width:150px;color:#657188;font-size:11px;line-height:1.5}
+.expense-file-preview{width:84px;height:64px;object-fit:contain;flex-shrink:0;border:1px solid #e7e0f6;border-radius:5px;background:#f7f5fb}
+.expense-file-list li>button{flex-shrink:0}

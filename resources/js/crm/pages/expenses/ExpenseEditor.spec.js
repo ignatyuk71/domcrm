@@ -24,8 +24,18 @@ async function attachFile(file = new File(['receipt'], 'receipt.pdf', { type: 'a
   Object.defineProperty(input.element, 'files', { value: [file], configurable: true });
   await input.trigger('change');
 }
-beforeEach(() => { vi.clearAllMocks(); vi.spyOn(window, 'confirm').mockReturnValue(true); });
-afterEach(() => { wrapper?.unmount(); document.body.innerHTML = ''; vi.restoreAllMocks(); });
+const clipboardButton = () => wrapper.findAll('button').find(button => button.text().includes('Вставити з буфера') || button.text() === 'Вставлення…');
+const clipboardItem = (type = 'image/png') => ({ types: [type], getType: vi.fn().mockResolvedValue(new Blob(['screenshot'], { type })) });
+let readClipboard;
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.spyOn(window, 'confirm').mockReturnValue(true);
+  readClipboard = vi.fn();
+  vi.spyOn(navigator, 'clipboard', 'get').mockReturnValue({ read: readClipboard });
+  vi.spyOn(URL, 'createObjectURL').mockImplementation(() => `blob:preview-${Math.random()}`);
+  vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+});
+afterEach(() => { wrapper?.unmount(); wrapper = null; document.body.innerHTML = ''; vi.restoreAllMocks(); });
 
 describe('Редактор витрат', () => {
   it('приймає перетягнуту квитанцію, перевіряє ліміт і завантажує її після збереження оплати', async () => {
@@ -130,5 +140,102 @@ describe('Редактор витрат', () => {
     expect(wrapper.get('[role="alert"]').text()).toContain('script.html');
     expect(wrapper.get('.expense-file-list').text()).toContain('receipt.pdf');
     expect(wrapper.get('.expense-file-list').text()).not.toContain('script.html');
+  });
+});
+
+
+describe('Скріншоти квитанцій із буфера', () => {
+  it('читає буфер тільки після натискання, показує прев’ю та надсилає зображення разом з оплатою', async () => {
+    const item = clipboardItem();
+    item.types.push('image/jpeg', 'text/html');
+    readClipboard.mockResolvedValue([item]);
+    const created = { ...expense, payments: [payment] };
+    api.createExpense.mockResolvedValue({ data: { data: created } });
+    api.uploadExpenseReceipts.mockResolvedValue({ data: { data: created } });
+    open(); await fillNew();
+    expect(readClipboard).not.toHaveBeenCalled();
+    expect(wrapper.text()).toContain('Додає скопійований скріншот');
+    await clipboardButton().trigger('click'); await flushPromises();
+    expect(item.getType).toHaveBeenCalledExactlyOnceWith('image/png');
+    expect(wrapper.findAll('.expense-file-list li')).toHaveLength(1);
+    const image = wrapper.get('.expense-file-preview');
+    const previewUrl = image.attributes('src');
+    expect(previewUrl).toMatch(/^blob:preview-/);
+    expect(api.uploadExpenseReceipts).not.toHaveBeenCalled();
+    await submit();
+    const uploaded = api.uploadExpenseReceipts.mock.calls[0][2][0];
+    expect(uploaded).toBeInstanceOf(File);
+    expect(uploaded.type).toBe('image/png');
+    expect(uploaded.name).toMatch(/^Скріншот-.*\.png$/);
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith(previewUrl);
+  });
+
+  it('вставляє клавішами лише в квитанціях і не перехоплює текст у коментарі', async () => {
+    open(); await flushPromises();
+    const file = new File(['screenshot'], 'screen.png', { type: 'image/png' });
+    const screenshotData = { items: [{ kind: 'file', type: file.type, getAsFile: () => file }] };
+    const imagePaste = new Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(imagePaste, 'clipboardData', { value: screenshotData });
+    await wrapper.get('.expense-drop-label').trigger('click');
+    const area = wrapper.get('.expense-editor-receipts');
+    expect(document.activeElement).toBe(area.element);
+    area.element.dispatchEvent(imagePaste); await flushPromises();
+    expect(imagePaste.defaultPrevented).toBe(true);
+    expect(wrapper.findAll('.expense-file-preview')).toHaveLength(1);
+    const textPaste = new Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(textPaste, 'clipboardData', { value: { items: [{ kind: 'string', type: 'text/plain' }] } });
+    wrapper.get('[name="note"]').element.dispatchEvent(textPaste);
+    expect(textPaste.defaultPrevented).toBe(false);
+    expect(readClipboard).not.toHaveBeenCalled();
+  });
+
+  it.each(['empty', 'denied', 'unsupported'])('пояснює проблему буфера %s, залишаючи чернетку й квитанції', async scenario => {
+    if (scenario === 'empty') readClipboard.mockResolvedValue([clipboardItem('text/plain')]);
+    if (scenario === 'denied') readClipboard.mockRejectedValue(new DOMException('Denied', 'NotAllowedError'));
+    if (scenario === 'unsupported') vi.spyOn(navigator, 'clipboard', 'get').mockReturnValue(undefined);
+    open(); await fillNew(); await attachFile();
+    await clipboardButton().trigger('click'); await flushPromises();
+    expect(wrapper.get('[role="alert"]').text()).toContain('Не вдалося вставити скріншот');
+    expect(wrapper.get('[name="title"]').element.value).toBe('Реклама за вересень');
+    expect(wrapper.findAll('.expense-file-list li')).toHaveLength(1);
+    const action = wrapper.findAll('button').find(button => button.text() === 'Вставити клавішами');
+    await action.trigger('click');
+    expect(document.activeElement).toBe(wrapper.get('.expense-editor-receipts').element);
+  });
+
+  it('звільняє прев’ю видалених файлів і решти вкладень при закритті', async () => {
+    open();
+    await attachFile(new File(['first'], 'first.png', { type: 'image/png' }));
+    await attachFile(new File(['second'], 'second.jpg', { type: 'image/jpeg' }));
+    const urls = wrapper.findAll('.expense-file-preview').map(image => image.attributes('src'));
+    await wrapper.get('[aria-label="Прибрати first.png"]').trigger('click');
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith(urls[0]);
+    expect(URL.revokeObjectURL).not.toHaveBeenCalledWith(urls[1]);
+    wrapper.unmount(); wrapper = null;
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith(urls[1]);
+  });
+
+  it('не дозволяє зберегти оплату до завершення читання та ігнорує результат після закриття', async () => {
+    let resolveRead;
+    readClipboard.mockReturnValue(new Promise(resolve => { resolveRead = resolve; }));
+    open(); await fillNew();
+    await clipboardButton().trigger('click');
+    expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeDefined();
+    await submit();
+    expect(api.createExpense).not.toHaveBeenCalled();
+    wrapper.unmount(); wrapper = null;
+    const item = clipboardItem();
+    resolveRead([item]); await flushPromises();
+    expect(item.getType).not.toHaveBeenCalled();
+    expect(URL.createObjectURL).not.toHaveBeenCalled();
+  });
+
+  it('дотримується ліміту з урахуванням наявних квитанцій і не створює прев’ю відхиленого файлу', async () => {
+    readClipboard.mockResolvedValue([clipboardItem()]);
+    open({ mode: 'edit-payment', expense, payment: { ...payment, receipts: Array(10).fill({ id: 1 }) } });
+    await clipboardButton().trigger('click'); await flushPromises();
+    expect(wrapper.get('[role="alert"]').text()).toContain('не більше 10 квитанцій');
+    expect(URL.createObjectURL).not.toHaveBeenCalled();
+    expect(wrapper.find('.expense-file-list').exists()).toBe(false);
   });
 });
