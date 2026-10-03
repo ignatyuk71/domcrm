@@ -8,15 +8,15 @@ use App\Models\FiscalReceipt;
 use App\Models\Order;
 use App\Models\Status;
 use App\Services\FiscalQueueService;
+use App\Services\FiscalizationEligibility;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
 class FiscalizeDeliveredOrders extends Command
 {
-    // Оновив опис, щоб він відповідав реальності
     protected $signature = 'fiscal:delivered';
-    protected $description = 'Автоматична фіскалізація залишків ТІЛЬКИ для забраних замовлень (статус Успішно)';
+    protected $description = 'Фіскалізація отриманих замовлень і підтверджених онлайн-оплат WayForPay';
 
     public function handle(): int
     {
@@ -33,7 +33,7 @@ class FiscalizeDeliveredOrders extends Command
         }
         $statusIds = config('fiscal.status_ids', []);
 
-        // Нам потрібен ТІЛЬКИ фінальний статус, який означає "Забрав/Успішно"
+        // Для післяплати чекаємо отримання; WayForPay має окрему умову підтвердженої оплати.
         $fiscalizedCode = 'delivered_paid';
         $fiscalizedId = Status::query()
             ->where('type', 'order')
@@ -48,23 +48,23 @@ class FiscalizeDeliveredOrders extends Command
             ]);
         }
 
-        $this->info("Пошук замовлень для фіскалізації (Status ID: {$fiscalizedId})...");
+        $this->info('Пошук отриманих замовлень і підтверджених онлайн-оплат для фіскалізації...');
+        $eligibility = app(FiscalizationEligibility::class);
 
-        Order::with(['items', 'fiscalReceipts'])
-            // ГОЛОВНА ЗМІНА: Шукаємо тільки статус 11. 
-            // Статус 6 (Прибуло) ігноруємо, щоб не бити чек завчасно.
-            ->where('status_id', $fiscalizedId) 
-            ->where(function ($q) {
-                // Беремо тільки ті, де ще немає повної оплати
-                $q->where('payment_status', '!=', 'paid')
-                    ->orWhereNull('payment_status');
-            })
-            // Обробляємо шматками по 50, щоб не грузити пам'ять
-            ->chunk(50, function ($orders) use ($fiscalizedId, $queueEnabled, $withinWindow, $beforeQueueTime, $queueAt, $cronLog) {
+        $eligibility->candidates(Order::with(['items', 'payment', 'statusRef']), $fiscalizedId)
+            // paid не є доказом чека; пагінація за ID не пропускає рядки після оновлення.
+            ->chunkById(50, function ($orders) use ($queueEnabled, $withinWindow, $beforeQueueTime, $queueAt, $cronLog, $eligibility) {
                 $queueService = app(FiscalQueueService::class);
                 
                 foreach ($orders as $order) {
                     $totalOrderCents = (int) round($order->items->sum('total') * 100);
+                    if ($eligibility->isWayForPay($order)
+                        && ! $eligibility->hasConfirmedOnlinePayment($order, $totalOrderCents)) {
+                        $cronLog->warning('Fiscal skip: online payment is not confirmed for current total/currency', [
+                            'order_id' => $order->id,
+                        ]);
+                        continue;
+                    }
                     
                     // Рахуємо суму вже існуючих успішних чеків продажу
                     $alreadyPaid = (int) $order->fiscalReceipts()
@@ -107,20 +107,22 @@ class FiscalizeDeliveredOrders extends Command
                         continue;
                     }
 
-                    // Якщо ще не час фіскалізації або вікно закрите — складаємо в чергу
-                    if ($queueEnabled && (!$withinWindow || $beforeQueueTime)) {
-                        $queueService->enqueue($order, $remaining, FiscalReceipt::TYPE_SELL);
-                        $cronLog->info('Fiscal queued', [
-                            'order_id' => $order->id,
-                            'status_id' => $order->status_id,
-                            'status' => $order->status,
-                            'payment_status' => $order->payment_status,
-                            'total_cents' => $totalOrderCents,
-                            'already_paid_cents' => $alreadyPaid,
-                            'remaining_cents' => $remaining,
-                            'queue_at' => $queueAt?->toDateTimeString(),
-                            'reason' => $beforeQueueTime ? 'before_queue_time' : 'outside_window',
-                        ]);
+                    // Одна черга для онлайн-оплат і післяплати: повтори не обходять ліміт спроб.
+                    if ($queueEnabled) {
+                        $queued = $queueService->enqueue($order, $remaining, FiscalReceipt::TYPE_SELL);
+                        if ($queued?->wasRecentlyCreated) {
+                            $cronLog->info('Fiscal queued', [
+                                'order_id' => $order->id,
+                                'status_id' => $order->status_id,
+                                'status' => $order->status,
+                                'payment_status' => $order->payment_status,
+                                'total_cents' => $totalOrderCents,
+                                'already_paid_cents' => $alreadyPaid,
+                                'remaining_cents' => $remaining,
+                                'queue_at' => $queueAt?->toDateTimeString(),
+                                'reason' => ! $withinWindow ? 'outside_window' : ($beforeQueueTime ? 'before_queue_time' : 'ready'),
+                            ]);
+                        }
                         continue;
                     }
 
@@ -140,11 +142,11 @@ class FiscalizeDeliveredOrders extends Command
                         continue;
                     }
 
-                    $this->info("Клієнт забрав! Фіскалізація залишку для #{$order->id}: " . ($remaining / 100) . " грн");
+                    $this->info("Фіскалізація залишку для #{$order->id}: " . ($remaining / 100) . ' грн');
 
                     try {
                         // 3. Б'ємо чек синхронно
-                        FiscalizeOrderJob::dispatchSync($order, FiscalReceipt::TYPE_SELL, $remaining);
+                        FiscalizeOrderJob::dispatchSync($order, FiscalReceipt::TYPE_SELL, $remaining, automatic: true);
 
                         // Каса Checkbox обробляє ТІЛЬКИ один запит одночасно — без паузи
                         // пачка чеків (особливо backlog) ловить HTTP 429 "Занадто часто".

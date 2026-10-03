@@ -6,6 +6,7 @@ use App\Models\FiscalReceipt;
 use App\Models\Order;
 use App\Models\Status;
 use App\Services\CheckboxService;
+use App\Services\FiscalizationEligibility;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -23,15 +24,17 @@ class FiscalizeOrderJob implements ShouldQueue, ShouldBeUnique
     public Order $order;
     public string $type;
     public ?int $amountCents;
+    public bool $automatic = false;
 
-    // Час життя блокування (60 секунд)
-    public int $uniqueFor = 60;
+    // Покриває послідовні запити авторизації, перевірки UUID, зміни та створення чека.
+    public int $uniqueFor = 180;
 
-    public function __construct(Order $order, string $type = FiscalReceipt::TYPE_SELL, ?int $amountCents = null)
+    public function __construct(Order $order, string $type = FiscalReceipt::TYPE_SELL, ?int $amountCents = null, bool $automatic = false)
     {
         $this->order = $order;
         $this->type = $type;
         $this->amountCents = $amountCents;
+        $this->automatic = $automatic;
     }
 
     public function uniqueId(): string
@@ -41,15 +44,15 @@ class FiscalizeOrderJob implements ShouldQueue, ShouldBeUnique
 
     public function handle(CheckboxService $checkbox): void
     {
-        $lock = Cache::lock("fiscal:order:{$this->order->id}:{$this->type}", 60);
+        $lock = Cache::lock("fiscal:order:{$this->order->id}:{$this->type}", 180);
         if (!$lock->get()) {
             Log::warning("Fiscal Job Skipped: lock busy for Order #{$this->order->id}");
             return;
         }
 
         try {
-            // 1. Вантажимо товари
-            $this->order->loadMissing(['items.product.color', 'items.variant', 'fiscalReceipts']);
+            // Черга могла чекати: читаємо актуальні товари та оплату вже під блокуванням.
+            $this->order->refresh()->loadMissing(['items.product.color', 'items.variant', 'fiscalReceipts', 'payment']);
 
             // 2. Рахуємо суму вручну з items (щоб уникнути помилок, якщо в order->total 0)
             $calculatedTotal = $this->order->items->sum('total');
@@ -60,6 +63,15 @@ class FiscalizeOrderJob implements ShouldQueue, ShouldBeUnique
             }
 
             $totalOrderCents = (int) round($calculatedTotal * 100);
+            $eligibility = app(FiscalizationEligibility::class);
+            if ($this->automatic && ($eligibility->isBlocked($this->order)
+                || ($eligibility->isWayForPay($this->order)
+                    && ! $eligibility->hasConfirmedOnlinePayment($this->order, $totalOrderCents)))) {
+                Log::warning('Автофіскалізацію пропущено: стан замовлення або оплата змінилися', [
+                    'order_id' => $this->order->id,
+                ]);
+                return;
+            }
             $targetAmount = $this->amountCents ?? $totalOrderCents;
 
             // 3. Формуємо товари (передаємо розраховану загальну суму)
@@ -88,7 +100,7 @@ class FiscalizeOrderJob implements ShouldQueue, ShouldBeUnique
             $prior = $this->order->fiscalReceipts()
                 ->where('type', $this->type)
                 ->whereNotNull('uuid')
-                ->where('status', '!=', FiscalReceipt::STATUS_SUCCESS)
+                ->whereIn('status', [FiscalReceipt::STATUS_PENDING, FiscalReceipt::STATUS_PROCESSING, FiscalReceipt::STATUS_ERROR])
                 ->latest('id')
                 ->first();
             $receiptUuid = $prior?->uuid ?? (string) Str::uuid();
@@ -193,9 +205,9 @@ class FiscalizeOrderJob implements ShouldQueue, ShouldBeUnique
             // 5. Формуємо назву: заголовок - колір - розмір - sku
             $product = $item->product;
             $variant = $item->variant;
-            $baseTitle = $product?->title ?? 'Товар';
-            $size = trim((string) ($variant?->size ?? ''));
-            $code = trim((string) ($variant?->sku ?? $product?->sku ?? ''));
+            $baseTitle = $product?->title ?? $item->product_title ?? 'Товар';
+            $size = trim((string) ($variant?->size ?? $item->size ?? ''));
+            $code = trim((string) ($variant?->sku ?? $product?->sku ?? $item->sku ?? ''));
 
             if ($size !== '') {
                 $sizeSuffix = " ({$size})";
@@ -237,12 +249,7 @@ class FiscalizeOrderJob implements ShouldQueue, ShouldBeUnique
     {
         $alreadyPaid = $this->getAlreadyPaidAmount();
 
-        $hasPending = $this->order->fiscalReceipts()
-            ->where('type', $this->type)
-            ->whereIn('status', [FiscalReceipt::STATUS_PENDING, FiscalReceipt::STATUS_PROCESSING])
-            ->exists();
-
-        if ($hasPending) return false;
+        // Власник lock перевіряє незавершений UUID у Checkbox нижче, замість вічного пропуску.
 
         if ($this->type === FiscalReceipt::TYPE_RETURN) {
             if ($alreadyPaid <= 0) {
@@ -316,6 +323,11 @@ class FiscalizeOrderJob implements ShouldQueue, ShouldBeUnique
 
     private function updateOrderStatusIfNeeded(int $totalOrder): void
     {
+        // Онлайн-чек не означає доставку: не завершуємо пакування чи трекінг НП.
+        if ($this->type !== FiscalReceipt::TYPE_SELL || app(FiscalizationEligibility::class)->isWayForPay($this->order)) {
+            return;
+        }
+
         if ($this->getAlreadyPaidAmount() >= $totalOrder) {
             $updates = [];
             $fiscalizedCode = 'delivered_paid';

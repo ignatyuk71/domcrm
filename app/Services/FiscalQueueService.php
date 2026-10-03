@@ -8,31 +8,60 @@ use App\Models\FiscalQueue;
 use App\Models\FiscalReceipt;
 use App\Models\Order;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class FiscalQueueService
 {
     public function enqueue(Order $order, int $amountCents, string $type, ?Carbon $availableAt = null): ?FiscalQueue
     {
-        $exists = FiscalQueue::query()
-            ->where('order_id', $order->id)
-            ->whereIn('status', [FiscalQueue::STATUS_WAITING, FiscalQueue::STATUS_PROCESSING])
-            ->first();
-
-        if ($exists) {
-            return $exists;
+        if ($amountCents <= 0) {
+            return null;
         }
 
-        $settings = CheckboxSetting::current();
-        $availableAt = $availableAt ?? ($settings?->nextQueueAvailableAt(now()) ?? now());
+        return DB::transaction(function () use ($order, $amountCents, $type, $availableAt) {
+            // Повторне підтвердження та крон не створюють паралельних елементів черги.
+            Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
+            $exists = FiscalQueue::query()
+                ->where('order_id', $order->id)
+                ->where('type', $type)
+                ->whereIn('status', [FiscalQueue::STATUS_WAITING, FiscalQueue::STATUS_PROCESSING, FiscalQueue::STATUS_ERROR])
+                ->first();
 
-        return FiscalQueue::create([
-            'order_id' => $order->id,
-            'type' => $type,
-            'amount_cents' => $amountCents,
-            'available_at' => $availableAt,
-            'status' => FiscalQueue::STATUS_WAITING,
-        ]);
+            if ($exists) {
+                // Вичерпані спроби не обходимо створенням нового елемента без помилки.
+                return $exists;
+            }
+
+            $settings = CheckboxSetting::current();
+
+            return FiscalQueue::create([
+                'order_id' => $order->id,
+                'type' => $type,
+                'amount_cents' => $amountCents,
+                'available_at' => $availableAt ?? ($settings?->nextQueueAvailableAt(now()) ?? now()),
+                'status' => FiscalQueue::STATUS_WAITING,
+            ]);
+        });
+    }
+
+    public function enqueueConfirmedOnlinePayment(Order $order): ?FiscalQueue
+    {
+        $settings = CheckboxSetting::current();
+        if (! $settings?->enabled || ! $settings->queue_enabled) {
+            return null;
+        }
+
+        $eligibility = app(FiscalizationEligibility::class);
+        $totalCents = (int) round((float) $order->items()->sum('total') * 100);
+        if (! $eligibility->hasConfirmedOnlinePayment($order, $totalCents) || $eligibility->isBlocked($order)) {
+            return null;
+        }
+
+        $fiscalizedCents = (int) $order->fiscalReceipts()->where('type', FiscalReceipt::TYPE_SELL)
+            ->where('status', FiscalReceipt::STATUS_SUCCESS)->sum('total_amount');
+
+        return $this->enqueue($order, $totalCents - $fiscalizedCents, FiscalReceipt::TYPE_SELL);
     }
 
     /** Скільки разів повторюємо помилковий елемент, перш ніж лишити його в ERROR. */
@@ -42,13 +71,15 @@ class FiscalQueueService
     {
         $processed = 0;
 
-        // Беремо нові (waiting) і помилкові з невичерпаними спробами (авторетрай) —
-        // транзієнтні збої («зміна ще відкривається») самовідновлюються, без накопичення сміття.
+        // Відновлюємо також обробку, перервану падінням процесу; UUID чека перевіряє джоба.
         $items = FiscalQueue::query()
             ->where('available_at', '<=', now())
             ->where(function ($q) {
                 $q->where('status', FiscalQueue::STATUS_WAITING)
                     ->orWhere(fn ($e) => $e->where('status', FiscalQueue::STATUS_ERROR)
+                        ->where('attempts', '<', self::MAX_ATTEMPTS))
+                    ->orWhere(fn ($stale) => $stale->where('status', FiscalQueue::STATUS_PROCESSING)
+                        ->where('updated_at', '<=', now()->subMinutes(10))
                         ->where('attempts', '<', self::MAX_ATTEMPTS));
             })
             ->orderBy('available_at')
@@ -56,20 +87,46 @@ class FiscalQueueService
             ->get();
 
         foreach ($items as $item) {
-            $item->update(['status' => FiscalQueue::STATUS_PROCESSING]);
+            // Забираємо елемент атомарно: інший обробник міг уже взяти його після SELECT.
+            $claimed = FiscalQueue::query()->whereKey($item->id)->where('status', $item->status)
+                ->where('updated_at', $item->getRawOriginal('updated_at'))
+                ->where('attempts', $item->attempts)->update(['status' => FiscalQueue::STATUS_PROCESSING]);
+            if (! $claimed) {
+                continue;
+            }
+            $item->status = FiscalQueue::STATUS_PROCESSING;
 
             try {
                 $order = Order::query()->with(['items', 'fiscalReceipts'])->find($item->order_id);
-                if (!$order) {
+                if (! $order) {
                     $item->update([
                         'status' => FiscalQueue::STATUS_ERROR,
-                        'last_error' => 'Order not found',
+                        'last_error' => 'Замовлення не знайдено',
+                        'attempts' => self::MAX_ATTEMPTS,
                         'processed_at' => now(),
                     ]);
+
                     continue;
                 }
 
                 $totalOrderCents = (int) round($order->items->sum('total') * 100);
+                $eligibility = app(FiscalizationEligibility::class);
+                if ($item->type === FiscalReceipt::TYPE_SELL && $eligibility->isBlocked($order)) {
+                    $item->update(['status' => FiscalQueue::STATUS_SKIPPED, 'processed_at' => now()]);
+
+                    continue;
+                }
+                if ($item->type === FiscalReceipt::TYPE_SELL && $eligibility->isWayForPay($order)
+                    && ! $eligibility->hasConfirmedOnlinePayment($order, $totalOrderCents)) {
+                    $item->update([
+                        'status' => FiscalQueue::STATUS_ERROR,
+                        'attempts' => self::MAX_ATTEMPTS,
+                        'last_error' => 'Онлайн-оплата не підтверджує поточну суму та валюту замовлення',
+                        'processed_at' => now(),
+                    ]);
+
+                    continue;
+                }
                 $alreadyPaid = (int) $order->fiscalReceipts()
                     ->where('status', FiscalReceipt::STATUS_SUCCESS)
                     ->where('type', FiscalReceipt::TYPE_SELL)
@@ -81,10 +138,13 @@ class FiscalQueueService
                         'status' => FiscalQueue::STATUS_SKIPPED,
                         'processed_at' => now(),
                     ]);
+
                     continue;
                 }
 
-                FiscalizeOrderJob::dispatchSync($order, $item->type, $item->amount_cents);
+                // Після ручного чека передоплати залишок міг зменшитися вже після enqueue.
+                $amountCents = min((int) $item->amount_cents, $remaining);
+                FiscalizeOrderJob::dispatchSync($order, $item->type, $amountCents, automatic: true);
 
                 // Каса Checkbox = один запит одночасно. Пауза між чеками черги
                 // страхує від HTTP 429 при обробці пачки.
@@ -99,7 +159,7 @@ class FiscalQueueService
                     ->sum('total_amount');
 
                 if ($paidAfter > $alreadyPaid) {
-                    $item->update(['status' => FiscalQueue::STATUS_SUCCESS, 'processed_at' => now()]);
+                    $item->update(['status' => FiscalQueue::STATUS_SUCCESS, 'last_error' => null, 'processed_at' => now()]);
                     $processed++;
                 } else {
                     // Чека немає → не брешемо «success», лишаємо на авторетрай.
@@ -120,7 +180,7 @@ class FiscalQueueService
                     'processed_at' => now(),
                 ]);
 
-                Log::channel('cron_fiscal')->error("Fiscal Queue Error #{$item->id}: " . $e->getMessage());
+                Log::channel('cron_fiscal')->error("Fiscal Queue Error #{$item->id}: ".$e->getMessage());
             }
         }
 

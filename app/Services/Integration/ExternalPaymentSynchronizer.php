@@ -3,12 +3,13 @@
 namespace App\Services\Integration;
 
 use App\Models\Order;
+use App\Services\FiscalQueueService;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 
 class ExternalPaymentSynchronizer
 {
-    /** Викликається у транзакції імпорту; фіскальні дані та передоплату не змінює. */
+    /** Оплата й черга зберігаються разом; зовнішні запити Checkbox тут не виконуються. */
     public function sync(Order $order, array $data): void
     {
         $status = $data['status'] ?? null;
@@ -60,5 +61,8 @@ class ExternalPaymentSynchronizer
         }
         $payment->update($updates);
         $order->update(['payment_status' => $status]);
+        $order->unsetRelation('payment');
+
+        app(FiscalQueueService::class)->enqueueConfirmedOnlinePayment($order);
     }
 }
