@@ -71,7 +71,7 @@ class AutomaticFiscalizationTest extends TestCase
     private function order(string $status = 'new', string $paymentStatus = 'paid', array $payment = []): Order
     {
         $order = Order::create([
-            'order_number' => 'AUTO-'.Str::uuid(), 'status' => $status,
+            'order_number' => 'AUTO-'.Str::ulid(), 'status' => $status,
             'status_id' => Status::where('code', $status)->value('id'),
             'payment_status' => $paymentStatus, 'currency' => 'UAH',
         ]);
