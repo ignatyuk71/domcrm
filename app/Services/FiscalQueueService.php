@@ -54,7 +54,8 @@ class FiscalQueueService
 
         $eligibility = app(FiscalizationEligibility::class);
         $totalCents = (int) round((float) $order->items()->sum('total') * 100);
-        if (! $eligibility->hasConfirmedOnlinePayment($order, $totalCents) || $eligibility->isBlocked($order)) {
+        if (! $eligibility->hasAutomaticFiscalizationStatus($order)
+            || ! $eligibility->hasConfirmedOnlinePayment($order, $totalCents) || $eligibility->isBlocked($order)) {
             return null;
         }
 
@@ -70,9 +71,19 @@ class FiscalQueueService
     public function processAvailable(int $limit = 25): int
     {
         $processed = 0;
+        $eligibility = app(FiscalizationEligibility::class);
 
         // Відновлюємо також обробку, перервану падінням процесу; UUID чека перевіряє джоба.
         $items = FiscalQueue::query()
+            // Старі онлайн-оплати в черзі чекають потрібного статусу й не затримують готові чеки.
+            ->whereIn('order_id', Order::query()->select('id')->where(function ($q) use ($eligibility) {
+                $q->where('status_id', $eligibility->automaticStatusId())
+                    ->orWhere('payment_status', 'refund')
+                    ->orWhereIn('status', FiscalizationEligibility::BLOCKED_STATUSES)
+                    ->orWhereHas('statusRef', fn ($s) => $s->whereIn('code', FiscalizationEligibility::BLOCKED_STATUSES))
+                    ->orWhereHas('fiscalReceipts', fn ($r) => $r->where('type', FiscalReceipt::TYPE_RETURN)
+                        ->where('status', FiscalReceipt::STATUS_SUCCESS));
+            }))
             ->where('available_at', '<=', now())
             ->where(function ($q) {
                 $q->where('status', FiscalQueue::STATUS_WAITING)
@@ -110,9 +121,14 @@ class FiscalQueueService
                 }
 
                 $totalOrderCents = (int) round($order->items->sum('total') * 100);
-                $eligibility = app(FiscalizationEligibility::class);
                 if ($item->type === FiscalReceipt::TYPE_SELL && $eligibility->isBlocked($order)) {
                     $item->update(['status' => FiscalQueue::STATUS_SKIPPED, 'processed_at' => now()]);
+
+                    continue;
+                }
+                if ($item->type === FiscalReceipt::TYPE_SELL && ! $eligibility->hasAutomaticFiscalizationStatus($order)) {
+                    // Статус міг змінитися після вибірки: очікування не витрачає спроби.
+                    $item->update(['status' => FiscalQueue::STATUS_WAITING, 'available_at' => now()->addMinutes(5)]);
 
                     continue;
                 }

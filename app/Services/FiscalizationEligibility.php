@@ -4,11 +4,23 @@ namespace App\Services;
 
 use App\Models\FiscalReceipt;
 use App\Models\Order;
+use App\Models\Status;
 use Illuminate\Database\Eloquent\Builder;
 
 class FiscalizationEligibility
 {
     public const BLOCKED_STATUSES = ['returned', 'cancelled', 'canceled', 'refund'];
+
+    public function automaticStatusId(): int
+    {
+        return (int) (Status::query()->where('type', 'order')->where('code', 'delivered_paid')->value('id')
+            ?? config('fiscal.status_ids.fiscalized', 11));
+    }
+
+    public function hasAutomaticFiscalizationStatus(Order $order): bool
+    {
+        return (int) $order->status_id === $this->automaticStatusId();
+    }
 
     /** Оплата WayForPay та стан доставки — незалежні події. */
     public function isWayForPay(Order $order): bool
@@ -51,19 +63,7 @@ class FiscalizationEligibility
     /** SQL звужує вибірку; підтверджену суму повторно перевіряємо перед чеком. */
     public function candidates(Builder $query, int $deliveredStatusId): Builder
     {
-        return $query->where(function (Builder $q) use ($deliveredStatusId) {
-            $q->where('status_id', $deliveredStatusId)
-                ->orWhere(function (Builder $online) {
-                    $online->where('payment_status', 'paid')
-                        ->whereHas('payment', function (Builder $payment) {
-                            $payment->where('paid_amount', '>', 0)
-                                ->where(function (Builder $provider) {
-                                    $provider->whereRaw('LOWER(TRIM(provider)) = ?', ['wayforpay'])
-                                        ->orWhereRaw('LOWER(TRIM(method)) = ?', ['wayforpay']);
-                                });
-                        });
-                });
-        })->where(function (Builder $q) {
+        return $query->where('status_id', $deliveredStatusId)->where(function (Builder $q) {
             $q->whereNull('payment_status')->orWhere('payment_status', '!=', 'refund');
         })->whereNotIn('status', self::BLOCKED_STATUSES)
             ->whereDoesntHave('statusRef', fn (Builder $q) => $q->whereIn('code', self::BLOCKED_STATUSES))

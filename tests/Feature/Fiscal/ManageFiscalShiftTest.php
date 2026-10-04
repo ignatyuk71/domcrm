@@ -50,7 +50,7 @@ class ManageFiscalShiftTest extends TestCase
     {
         $product = Product::create(['title' => 'Капці', 'sku' => 'M1', 'sale_price' => 500, 'currency' => 'UAH', 'is_active' => true]);
         $variant = ProductVariant::create(['product_id' => $product->id, 'size' => '38', 'sku' => 'M1-38', 'stock_qty' => 5, 'is_active' => true]);
-        $order = Order::create(['order_number' => 'M-' . uniqid(), 'status' => 'new', 'payment_status' => 'unpaid', 'currency' => 'UAH']);
+        $order = Order::create(['order_number' => 'M-' . uniqid(), 'status' => 'delivered_paid', 'status_id' => Status::where('code', 'delivered_paid')->value('id'), 'payment_status' => 'unpaid', 'currency' => 'UAH']);
         OrderItem::create([
             'order_id' => $order->id, 'product_id' => $product->id, 'product_variant_id' => $variant->id,
             'product_title' => 'Капці', 'sku' => 'M1-38', 'size' => '38', 'price' => 500, 'qty' => 1, 'total' => 500,

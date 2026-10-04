@@ -6,6 +6,7 @@ use App\Models\CheckboxSetting;
 use App\Models\ExternalOrderRaw;
 use App\Models\Order;
 use App\Models\OrderSource;
+use App\Models\Status;
 use App\Services\Integration\ExternalPaymentSynchronizer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -25,6 +26,7 @@ class OnlinePaymentFiscalQueueTest extends TestCase
         Carbon::setTestNow('2026-10-03 12:00:00');
         Http::preventStrayRequests();
         Http::fake();
+        Status::create(['type' => 'order', 'code' => 'delivered_paid', 'name' => 'Завершено']);
         CheckboxSetting::create([
             'enabled' => true, 'queue_enabled' => true,
             'open_time' => '08:00', 'close_time' => '23:00', 'queue_process_time' => '08:30',
@@ -57,7 +59,7 @@ class OnlinePaymentFiscalQueueTest extends TestCase
         ], $body);
     }
 
-    public function test_paid_import_persists_payment_and_queue_without_checkbox_request(): void
+    public function test_paid_import_persists_payment_without_fiscal_queue_or_checkbox_request(): void
     {
         $this->send([
             'method' => 'card', 'provider' => 'WayForPay', 'status' => 'paid',
@@ -67,12 +69,12 @@ class OnlinePaymentFiscalQueueTest extends TestCase
         $order = Order::firstOrFail();
         $this->assertSame('new', $order->status);
         $this->assertSame('paid', $order->payment_status);
-        $this->assertDatabaseHas('fiscal_queue', ['order_id' => $order->id, 'status' => 'waiting', 'amount_cents' => 50000]);
+        $this->assertDatabaseCount('fiscal_queue', 0);
         $this->assertDatabaseCount('fiscal_receipts', 0);
         Http::assertNothingSent();
     }
 
-    public function test_later_confirmation_enqueues_once_and_keeps_manager_work(): void
+    public function test_later_payment_confirmation_waits_for_final_status_and_keeps_manager_work(): void
     {
         $this->send(['method' => 'card', 'provider' => 'wayforpay', 'status' => 'unpaid'])
             ->assertJsonPath('status', 'processed');
@@ -82,9 +84,15 @@ class OnlinePaymentFiscalQueueTest extends TestCase
         $payment = ['status' => 'paid', 'paid_amount' => 500, 'currency' => 'UAH', 'transaction_id' => 'txn-2'];
         $this->send($payment, false)->assertJsonPath('status', 'processed');
         $this->send($payment, false)->assertJsonPath('duplicate', true);
-        $this->assertDatabaseCount('fiscal_queue', 1);
+        $this->assertDatabaseCount('fiscal_queue', 0);
         $this->assertSame('packing', $order->fresh()->status);
         $this->assertSame('Чернетка', $order->fresh()->comment_internal);
+        $this->assertSame('paid', $order->fresh()->payment_status);
+        $order->update(['status' => 'delivered_paid', 'status_id' => Status::where('code', 'delivered_paid')->value('id')]);
+        $this->artisan('fiscal:delivered')->assertSuccessful();
+        $this->artisan('fiscal:delivered')->assertSuccessful();
+        $this->assertDatabaseCount('fiscal_queue', 1);
+        $this->assertDatabaseCount('fiscal_receipts', 0);
         Http::assertNothingSent();
     }
 
@@ -106,6 +114,7 @@ class OnlinePaymentFiscalQueueTest extends TestCase
     {
         $this->send(['method' => 'card', 'provider' => 'wayforpay', 'status' => 'unpaid']);
         $order = Order::firstOrFail();
+        $order->update(['status' => 'delivered_paid', 'status_id' => Status::where('code', 'delivered_paid')->value('id')]);
         try {
             DB::transaction(function () use ($order) {
                 app(ExternalPaymentSynchronizer::class)->sync($order, ['status' => 'paid', 'paid_amount' => 500]);
@@ -121,7 +130,7 @@ class OnlinePaymentFiscalQueueTest extends TestCase
         Http::assertNothingSent();
     }
 
-    public function test_payment_recovery_preview_creates_no_queue_but_apply_enqueues(): void
+    public function test_payment_recovery_saves_payment_without_fiscalizing_new_order(): void
     {
         $this->send(['method' => 'card', 'provider' => 'wayforpay', 'status' => 'unpaid']);
         $raw = ExternalOrderRaw::firstOrFail();
@@ -134,7 +143,8 @@ class OnlinePaymentFiscalQueueTest extends TestCase
         $this->assertDatabaseCount('fiscal_queue', 0);
         $this->assertSame('unpaid', $order->fresh()->payment_status);
         $this->artisan('integrations:sync-payment', ['order' => $order->id, '--apply' => true])->assertSuccessful();
-        $this->assertDatabaseCount('fiscal_queue', 1);
+        $this->assertSame('paid', $order->fresh()->payment_status);
+        $this->assertDatabaseCount('fiscal_queue', 0);
         $this->assertDatabaseCount('fiscal_receipts', 0);
         Http::assertNothingSent();
     }

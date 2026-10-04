@@ -23,7 +23,7 @@ Schedule::command('fiscal:delivered')
     ->everyFiveMinutes()
     ->withoutOverlapping()
     ->onOneServer()
-    ->description('Автофіскалізація отриманих замовлень та онлайн-оплат кожні 5 хвилин');
+    ->description('Автофіскалізація замовлень у статусі «Завершено» кожні 5 хвилин');
 
 // Добираємо ціни старих/завершених ТТН; звичайний трекінг їх уже не опитує.
 Schedule::command('delivery:sync-costs --limit=500')

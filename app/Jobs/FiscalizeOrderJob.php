@@ -64,7 +64,8 @@ class FiscalizeOrderJob implements ShouldQueue, ShouldBeUnique
 
             $totalOrderCents = (int) round($calculatedTotal * 100);
             $eligibility = app(FiscalizationEligibility::class);
-            if ($this->automatic && ($eligibility->isBlocked($this->order)
+            if ($this->automatic && (! $eligibility->hasAutomaticFiscalizationStatus($this->order)
+                || $eligibility->isBlocked($this->order)
                 || ($eligibility->isWayForPay($this->order)
                     && ! $eligibility->hasConfirmedOnlinePayment($this->order, $totalOrderCents)))) {
                 Log::warning('Автофіскалізацію пропущено: стан замовлення або оплата змінилися', [

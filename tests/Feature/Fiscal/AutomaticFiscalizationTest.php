@@ -24,7 +24,7 @@ class AutomaticFiscalizationTest extends TestCase
     {
         parent::setUp();
         Carbon::setTestNow('2026-10-03 12:00:00');
-        foreach (['new', 'packing', 'delivered', 'delivered_paid', 'cancelled', 'returned'] as $code) {
+        foreach (['new', 'confirmed', 'packing', 'packed', 'shipped', 'delivered', 'delivered_paid', 'cancelled', 'returned'] as $code) {
             Status::create(['type' => 'order', 'code' => $code, 'name' => $code]);
         }
         CheckboxSetting::create([
@@ -68,7 +68,7 @@ class AutomaticFiscalizationTest extends TestCase
         });
     }
 
-    private function order(string $status = 'new', string $paymentStatus = 'paid', array $payment = []): Order
+    private function order(string $status = 'delivered_paid', string $paymentStatus = 'paid', array $payment = []): Order
     {
         $order = Order::create([
             'order_number' => 'AUTO-'.Str::ulid(), 'status' => $status,
@@ -101,16 +101,16 @@ class AutomaticFiscalizationTest extends TestCase
         $this->artisan('fiscal:shift-manager')->assertSuccessful();
     }
 
-    public function test_sweep_fiscalizes_confirmed_online_payment_without_completing_delivery(): void
+    public function test_sweep_fiscalizes_completed_online_order_once(): void
     {
-        $order = $this->order('packing');
+        $order = $this->order('delivered_paid');
         $this->tick();
         $this->tick();
 
         $this->assertDatabaseCount('fiscal_receipts', 1);
         $this->assertDatabaseCount('fiscal_queue', 1);
         $this->assertDatabaseHas('fiscal_receipts', ['order_id' => $order->id, 'status' => 'success', 'total_amount' => 50000]);
-        $this->assertSame('packing', $order->fresh()->status);
+        $this->assertSame('delivered_paid', $order->fresh()->status);
         $this->assertSame($order->status_id, $order->fresh()->status_id);
         $this->assertSame('paid', $order->fresh()->payment_status);
         $this->assertDatabaseCount('order_status_changes', 0);
@@ -119,6 +119,54 @@ class AutomaticFiscalizationTest extends TestCase
         Http::assertSent(fn ($r) => str_ends_with($r->url(), '/receipts/sell')
             && $r['goods'][0]['good']['name'] === 'Капці - 38'
             && $r['goods'][0]['good']['code'] === 'AUTO-38');
+    }
+
+    public function test_paid_online_orders_wait_for_final_status_with_and_without_queue(): void
+    {
+        foreach (['new', 'confirmed', 'packing', 'packed', 'shipped', 'delivered'] as $status) {
+            $order = $this->order($status);
+            $this->assertNull(app(FiscalQueueService::class)->enqueueConfirmedOnlinePayment($order));
+        }
+        foreach ([true, false] as $queueEnabled) {
+            CheckboxSetting::query()->update(['queue_enabled' => $queueEnabled]);
+            $this->tick();
+            $this->assertDatabaseCount('fiscal_queue', 0);
+            $this->assertDatabaseCount('fiscal_receipts', 0);
+        }
+        $this->assertSame(6, Order::where('payment_status', 'paid')->count());
+        Http::assertNotSent(fn ($r) => str_contains($r->url(), '/receipts/'));
+    }
+
+    public function test_previously_queued_online_orders_wait_without_using_attempts_and_resume_on_completion(): void
+    {
+        $new = $this->order('new');
+        $packing = $this->order('packing');
+        $queue = app(FiscalQueueService::class);
+        $item = $queue->enqueue($new, 50000, FiscalReceipt::TYPE_SELL);
+        $queue->enqueue($packing, 50000, FiscalReceipt::TYPE_SELL);
+        $this->tick();
+        $this->tick();
+        $this->assertDatabaseCount('fiscal_receipts', 0);
+        $this->assertSame('waiting', $item->fresh()->status);
+        $this->assertSame(0, (int) $item->fresh()->attempts);
+        Http::assertNotSent(fn ($r) => str_contains($r->url(), '/receipts/'));
+
+        $new->update(['status' => 'delivered_paid', 'status_id' => Status::where('code', 'delivered_paid')->value('id')]);
+        $this->tick();
+        $this->assertDatabaseCount('fiscal_queue', 2);
+        $this->assertDatabaseCount('fiscal_receipts', 1);
+        $this->assertSame('success', $item->fresh()->status);
+        $this->assertDatabaseMissing('fiscal_receipts', ['order_id' => $packing->id]);
+    }
+
+    public function test_automatic_job_rechecks_status_after_loading_stale_order(): void
+    {
+        $order = $this->order();
+        $job = new FiscalizeOrderJob($order, amountCents: 50000, automatic: true);
+        $order->fresh()->update(['status' => 'new', 'status_id' => Status::where('code', 'new')->value('id')]);
+        $job->handle(app(CheckboxService::class));
+        $this->assertDatabaseCount('fiscal_receipts', 0);
+        Http::assertNothingSent();
     }
 
     public function test_completed_paid_order_without_receipt_is_not_skipped(): void
@@ -208,7 +256,7 @@ class AutomaticFiscalizationTest extends TestCase
         $this->tick();
         $this->assertDatabaseCount('fiscal_queue', 0);
         $this->assertDatabaseHas('fiscal_receipts', ['order_id' => $order->id, 'status' => 'success']);
-        $this->assertSame('new', $order->fresh()->status);
+        $this->assertSame('delivered_paid', $order->fresh()->status);
     }
 
     public function test_cancelled_returned_and_refunded_orders_are_excluded_even_after_enqueue(): void
@@ -247,7 +295,7 @@ class AutomaticFiscalizationTest extends TestCase
         $this->assertSame('error', $prior->status);
         $this->assertStringContainsString('Тимчасова помилка Checkbox', $prior->error_message);
         $this->assertSame('paid', $order->fresh()->payment_status);
-        $this->assertSame('new', $order->fresh()->status);
+        $this->assertSame('delivered_paid', $order->fresh()->status);
 
         $this->fakeCheckbox();
         $this->tick();

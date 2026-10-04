@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Log;
 class FiscalizeDeliveredOrders extends Command
 {
     protected $signature = 'fiscal:delivered';
-    protected $description = 'Фіскалізація отриманих замовлень і підтверджених онлайн-оплат WayForPay';
+    protected $description = 'Фіскалізація замовлень у статусі «Завершено»';
 
     public function handle(): int
     {
@@ -33,7 +33,7 @@ class FiscalizeDeliveredOrders extends Command
         }
         $statusIds = config('fiscal.status_ids', []);
 
-        // Для післяплати чекаємо отримання; WayForPay має окрему умову підтвердженої оплати.
+        // Для всіх способів оплати чекаємо попереднього фінального статусу «Завершено».
         $fiscalizedCode = 'delivered_paid';
         $fiscalizedId = Status::query()
             ->where('type', 'order')
@@ -48,7 +48,7 @@ class FiscalizeDeliveredOrders extends Command
             ]);
         }
 
-        $this->info('Пошук отриманих замовлень і підтверджених онлайн-оплат для фіскалізації...');
+        $this->info('Пошук замовлень у статусі «Завершено» для фіскалізації...');
         $eligibility = app(FiscalizationEligibility::class);
 
         $eligibility->candidates(Order::with(['items', 'payment', 'statusRef']), $fiscalizedId)
