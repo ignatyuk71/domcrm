@@ -654,9 +654,15 @@
                             <span class="item-text-sub">Працівники та зарплата</span>
                         </a>
 
-                        <a href="{{ route('finance.index') }}" class="sidebar-link-sub {{ request()->is('finance*') ? 'active' : '' }}">
+                        <a href="{{ route('finance.index') }}" class="sidebar-link-sub {{ request()->routeIs('finance.index', 'finance.checkbox.*') ? 'active' : '' }}">
                             <span class="icon-frame"><i class="bi bi-wallet2"></i></span>
                             <span class="item-text-sub">Фінанси</span>
+                        </a>
+
+                        <a href="{{ route('finance.novapay.index') }}" class="sidebar-link-sub {{ request()->routeIs('finance.novapay.*') ? 'active' : '' }}"
+                           @if(request()->routeIs('finance.novapay.*')) aria-current="page" @endif>
+                            <span class="icon-frame"><i class="bi bi-bank"></i></span>
+                            <span class="item-text-sub">NovaPay</span>
                         </a>
 
                         <a href="{{ route('expenses.index') }}" class="sidebar-link-sub {{ request()->routeIs('expenses.*') ? 'active' : '' }}"

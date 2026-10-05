@@ -235,7 +235,15 @@ async function mountExpenses() {
     createApp(page).mount(el);
 }
 
+async function mountNovaPay() {
+    const el = document.querySelector('#crm-novapay');
+    if (!el) return;
+    const { default: page } = await import('./pages/finance/NovaPayPage.vue');
+    createApp(page).mount(el);
+}
+
 function autoMount() {
+    mountNovaPay();
     mountExpenses();
     mountWorkPayrollSettings();
     mountSettingsTelegram();

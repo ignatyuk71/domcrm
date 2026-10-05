@@ -208,6 +208,14 @@ Route::middleware('auth')->group(function () {
 
     // --- ФІНАНСИ / КАСА (Checkbox) ---
     Route::middleware('role:owner')->group(function () {
+        Route::prefix('finance/novapay')->name('finance.novapay.')->controller(\App\Http\Controllers\NovaPayController::class)->group(function () {
+            Route::get('/', 'index')->name('index');
+            Route::get('/data', 'data')->name('data');
+            Route::post('/connections', 'saveConnection')->middleware('throttle:10,1')->name('connections.save');
+            Route::post('/connections/{connection}/discover', 'discover')->middleware('throttle:10,1')->name('connections.discover');
+            Route::put('/accounts/{account}', 'updateAccount')->name('accounts.update');
+            Route::post('/accounts/{account}/refresh', 'refresh')->middleware('throttle:10,1')->name('accounts.refresh');
+        });
         Route::get('/finance', [FinanceController::class, 'index'])->name('finance.index');
         Route::get('/api/finance/checkbox', [FinanceController::class, 'data'])->name('finance.checkbox.data');
         Route::post('/finance/checkbox', [FinanceController::class, 'save'])->name('finance.checkbox.save');

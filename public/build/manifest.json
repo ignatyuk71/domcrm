@@ -1,4 +1,21 @@
 {
+  "../../../../../../../Users/ihnatiuk_myhailo/DOM-CRM/domcrm/node_modules/bootstrap-icons/font/fonts/bootstrap-icons.woff": {
+    "file": "assets/bootstrap-icons-BeopsB42.woff",
+    "src": "../../../../../../../Users/ihnatiuk_myhailo/DOM-CRM/domcrm/node_modules/bootstrap-icons/font/fonts/bootstrap-icons.woff"
+  },
+  "../../../../../../../Users/ihnatiuk_myhailo/DOM-CRM/domcrm/node_modules/bootstrap-icons/font/fonts/bootstrap-icons.woff2": {
+    "file": "assets/bootstrap-icons-mSm7cUeB.woff2",
+    "src": "../../../../../../../Users/ihnatiuk_myhailo/DOM-CRM/domcrm/node_modules/bootstrap-icons/font/fonts/bootstrap-icons.woff2"
+  },
+  "../../../../../../../Users/ihnatiuk_myhailo/DOM-CRM/domcrm/node_modules/vue/dist/vue.runtime.esm-bundler.js": {
+    "file": "assets/vue.runtime.esm-bundler-DqWj0K3Q.js",
+    "name": "vue.runtime.esm-bundler",
+    "src": "../../../../../../../Users/ihnatiuk_myhailo/DOM-CRM/domcrm/node_modules/vue/dist/vue.runtime.esm-bundler.js",
+    "isDynamicEntry": true,
+    "imports": [
+      "_runtime-dom.esm-bundler-DyeGK21J.js"
+    ]
+  },
   "_DateRangePicker-Bf20Zx2i.js": {
     "file": "assets/DateRangePicker-Bf20Zx2i.js",
     "name": "DateRangePicker",
@@ -43,28 +60,11 @@
       "_runtime-dom.esm-bundler-DyeGK21J.js"
     ]
   },
-  "_workTimeApi-DcnOaOb3.js": {
-    "file": "assets/workTimeApi-DcnOaOb3.js",
+  "_workTimeApi-ByrgA8Rn.js": {
+    "file": "assets/workTimeApi-ByrgA8Rn.js",
     "name": "workTimeApi",
     "imports": [
       "resources/js/crm/index.js"
-    ]
-  },
-  "node_modules/bootstrap-icons/font/fonts/bootstrap-icons.woff": {
-    "file": "assets/bootstrap-icons-BeopsB42.woff",
-    "src": "node_modules/bootstrap-icons/font/fonts/bootstrap-icons.woff"
-  },
-  "node_modules/bootstrap-icons/font/fonts/bootstrap-icons.woff2": {
-    "file": "assets/bootstrap-icons-mSm7cUeB.woff2",
-    "src": "node_modules/bootstrap-icons/font/fonts/bootstrap-icons.woff2"
-  },
-  "node_modules/vue/dist/vue.runtime.esm-bundler.js": {
-    "file": "assets/vue.runtime.esm-bundler-DqWj0K3Q.js",
-    "name": "vue.runtime.esm-bundler",
-    "src": "node_modules/vue/dist/vue.runtime.esm-bundler.js",
-    "isDynamicEntry": true,
-    "imports": [
-      "_runtime-dom.esm-bundler-DyeGK21J.js"
     ]
   },
   "resources/css/app.css": {
@@ -90,7 +90,7 @@
     ],
     "dynamicImports": [
       "resources/js/team.js",
-      "node_modules/vue/dist/vue.runtime.esm-bundler.js",
+      "../../../../../../../Users/ihnatiuk_myhailo/DOM-CRM/domcrm/node_modules/vue/dist/vue.runtime.esm-bundler.js",
       "resources/js/crm/components/ui/FlashToast.vue"
     ],
     "css": [
@@ -113,7 +113,7 @@
     ]
   },
   "resources/js/crm/index.js": {
-    "file": "assets/index-BYcDN4Vf.js",
+    "file": "assets/index-YNUK1NLN.js",
     "name": "index",
     "src": "resources/js/crm/index.js",
     "isEntry": true,
@@ -129,14 +129,15 @@
       "resources/js/crm/pages/work-time/WorkTimePage.vue",
       "resources/js/crm/pages/settings/SettingsTelegramPage.vue",
       "resources/js/crm/pages/settings/SettingsWorkPayrollPage.vue",
-      "resources/js/crm/pages/expenses/ExpensesPage.vue"
+      "resources/js/crm/pages/expenses/ExpensesPage.vue",
+      "resources/js/crm/pages/finance/NovaPayPage.vue"
     ],
     "css": [
       "assets/index-C4nv1HIf.css"
     ]
   },
   "resources/js/crm/pages/analytics/SalesAnalyticsPage.vue": {
-    "file": "assets/SalesAnalyticsPage-UKcyhhRD.js",
+    "file": "assets/SalesAnalyticsPage-Cs4C_IQ8.js",
     "name": "SalesAnalyticsPage",
     "src": "resources/js/crm/pages/analytics/SalesAnalyticsPage.vue",
     "isDynamicEntry": true,
@@ -152,7 +153,7 @@
     ]
   },
   "resources/js/crm/pages/costs/ProductionCostPage.vue": {
-    "file": "assets/ProductionCostPage-BnwIaJVA.js",
+    "file": "assets/ProductionCostPage-DgOtakAJ.js",
     "name": "ProductionCostPage",
     "src": "resources/js/crm/pages/costs/ProductionCostPage.vue",
     "isDynamicEntry": true,
@@ -170,7 +171,7 @@
     ]
   },
   "resources/js/crm/pages/expenses/ExpensesPage.vue": {
-    "file": "assets/ExpensesPage-DeOyzi6d.js",
+    "file": "assets/ExpensesPage-D-WZ6Q73.js",
     "name": "ExpensesPage",
     "src": "resources/js/crm/pages/expenses/ExpensesPage.vue",
     "isDynamicEntry": true,
@@ -186,8 +187,24 @@
       "assets/ExpensesPage-DXmB5-uW.css"
     ]
   },
+  "resources/js/crm/pages/finance/NovaPayPage.vue": {
+    "file": "assets/NovaPayPage-DDBBiUHs.js",
+    "name": "NovaPayPage",
+    "src": "resources/js/crm/pages/finance/NovaPayPage.vue",
+    "isDynamicEntry": true,
+    "imports": [
+      "_runtime-dom.esm-bundler-DyeGK21J.js",
+      "resources/js/crm/index.js",
+      "_Toast-D9u7N2qs.js",
+      "_useToast-BPfTk0ZN.js",
+      "_index-BXicX9F6.js"
+    ],
+    "css": [
+      "assets/NovaPayPage-i4lz0Mcl.css"
+    ]
+  },
   "resources/js/crm/pages/inventory/SoleInventoryPage.vue": {
-    "file": "assets/SoleInventoryPage-CmezW9rY.js",
+    "file": "assets/SoleInventoryPage-be6SsFBq.js",
     "name": "SoleInventoryPage",
     "src": "resources/js/crm/pages/inventory/SoleInventoryPage.vue",
     "isDynamicEntry": true,
@@ -202,7 +219,7 @@
     ]
   },
   "resources/js/crm/pages/settings/SettingsTelegramPage.vue": {
-    "file": "assets/SettingsTelegramPage-CrfGiVlR.js",
+    "file": "assets/SettingsTelegramPage-DQZgMEo2.js",
     "name": "SettingsTelegramPage",
     "src": "resources/js/crm/pages/settings/SettingsTelegramPage.vue",
     "isDynamicEntry": true,
@@ -217,7 +234,7 @@
     ]
   },
   "resources/js/crm/pages/settings/SettingsWorkPayrollPage.vue": {
-    "file": "assets/SettingsWorkPayrollPage-EErdMndX.js",
+    "file": "assets/SettingsWorkPayrollPage-CBSbd14-.js",
     "name": "SettingsWorkPayrollPage",
     "src": "resources/js/crm/pages/settings/SettingsWorkPayrollPage.vue",
     "isDynamicEntry": true,
@@ -225,7 +242,7 @@
       "_runtime-dom.esm-bundler-DyeGK21J.js",
       "_Toast-D9u7N2qs.js",
       "resources/js/crm/index.js",
-      "_workTimeApi-DcnOaOb3.js",
+      "_workTimeApi-ByrgA8Rn.js",
       "_useToast-BPfTk0ZN.js",
       "_index-BXicX9F6.js"
     ],
@@ -234,13 +251,13 @@
     ]
   },
   "resources/js/crm/pages/work-time/WorkTimePage.vue": {
-    "file": "assets/WorkTimePage-Br3ijCTn.js",
+    "file": "assets/WorkTimePage-B_2mbfyC.js",
     "name": "WorkTimePage",
     "src": "resources/js/crm/pages/work-time/WorkTimePage.vue",
     "isDynamicEntry": true,
     "imports": [
       "_runtime-dom.esm-bundler-DyeGK21J.js",
-      "_workTimeApi-DcnOaOb3.js",
+      "_workTimeApi-ByrgA8Rn.js",
       "_Toast-D9u7N2qs.js",
       "_useToast-BPfTk0ZN.js",
       "resources/js/crm/index.js",

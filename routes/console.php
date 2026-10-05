@@ -8,6 +8,16 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
+Schedule::command('novapay:sync')
+    ->cron('*/'.max(1, min(59, config('novapay.refresh_minutes', 5))).' * * * *')
+    ->withoutOverlapping()->onOneServer()
+    ->description('Оновлення балансу й операцій NovaPay');
+
+Schedule::command('novapay:sync --reconcile')
+    ->dailyAt('04:30')->timezone('Europe/Kyiv')
+    ->withoutOverlapping()->onOneServer()
+    ->description('Повторна звірка останніх днів NovaPay');
+
 /**
  * Крон на проді (Hetzner): /etc/cron.d/domcrm запускає schedule:run щохвилини,
  * тож інтервали нижче спрацьовують точно за розкладом.

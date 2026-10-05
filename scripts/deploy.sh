@@ -55,6 +55,9 @@ php artisan migrate --force
 ln -sfn "$RELEASE_DIR" "$APP_DIR/.current-next"
 mv -Tf "$APP_DIR/.current-next" "$APP_DIR/current"
 
+# Після перемикання фонова черга завершує поточну задачу й завантажує новий код.
+php artisan queue:restart
+
 # Скидаємо opcache після перемикання релізу.
 sudo -n /usr/bin/systemctl reload php8.4-fpm || systemctl reload php8.4-fpm || true
 
