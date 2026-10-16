@@ -24,7 +24,7 @@ class NovaPayController extends Controller
     public function data(Request $request)
     {
         $today = CarbonImmutable::now(config('novapay.timezone'))->toDateString();
-        $request->mergeIfMissing(['from' => $today, 'to' => $today, 'direction' => 'in']);
+        $request->mergeIfMissing(['from' => $today, 'to' => $today, 'direction' => 'all']);
         $filters = $request->validate([
             'account_id' => ['nullable', 'integer', 'min:1'],
             'from' => ['required', 'date_format:Y-m-d'],

@@ -236,7 +236,8 @@ class NovaPayTest extends TestCase
         $run = $this->syncRun($account, 'operations', '2026-10-05');
         $run->update(['status' => 'success', 'succeeded_at' => now()]);
         $this->getJson('/finance/novapay/data')->assertOk()->assertJsonPath('incoming_minor', '995000')
-            ->assertJsonPath('coverage_complete', true)->assertJsonPath('operations.total', 3);
+            ->assertJsonPath('coverage_complete', true)->assertJsonPath('operations.total', 4)
+            ->assertJsonFragment(['direction' => 'out']);
         $this->getJson('/finance/novapay/data?from=2026-10-04&to=2026-10-05')->assertOk()->assertJsonPath('incoming_minor', null);
         $this->getJson('/finance/novapay/data?direction=out')->assertOk()->assertJsonPath('incoming_minor', '995000')->assertJsonPath('operations.total', 1);
     }
