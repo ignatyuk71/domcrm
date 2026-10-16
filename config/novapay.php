@@ -9,6 +9,6 @@ return [
     'refresh_minutes' => (int) env('NOVAPAY_REFRESH_MINUTES', 5),
     // Увімкнути лише після звірки XML, ID, статусів і повноти виписки на реальному рахунку.
     'operations_verified' => (bool) env('NOVAPAY_OPERATIONS_VERIFIED', false),
-    // Заповнити лише за підтвердженими статусами API, без припущень за статусами доставки.
-    'operation_statuses' => [],
+    // Підтверджено на реальних платежах; невідомі статуси зупиняють імпорт періоду.
+    'operation_statuses' => ['Conducted' => 'posted'],
 ];

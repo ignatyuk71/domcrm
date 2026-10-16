@@ -11,7 +11,7 @@ const response = () => ({
     connections: [{ id: 1 }], account_id: 1,
     balance: { amount_minor: '2495000', received_at: '2026-10-05T12:00:00+03:00' }, incoming_minor: '995000',
     coverage_complete: true, operations_verified: true, refresh_minutes: 5,
-    operations: { data: [{ id: 1, booked_on: '2026-10-05', direction: 'in', amount_minor: '995000', status: 'posted', counterparty: 'NovaPay', purpose: 'Виплата післяплати' }], total: 1, last_page: 1, current_page: 1 },
+    operations: { data: [{ id: 1, booked_on: '2026-10-05', direction: 'in', amount_minor: '995000', status: 'posted', counterparty: 'NovaPay', counterparty_iban: 'UA2935 •••• 0002', status_changed_at: '2026-10-05T11:19:50Z', purpose: 'Виплата післяплати' }], total: 1, last_page: 1, current_page: 1 },
     sync: [], operations_updated_at: '2026-10-05T12:00:00+03:00',
 });
 
@@ -33,6 +33,9 @@ describe('Інтерфейс рахунку NovaPay', () => {
         expect(wrapper.text()).toContain('1 запис');
         expect(document.querySelector('.app-toast')).toBeNull();
         expect(http.post).not.toHaveBeenCalled();
+        expect(http.get.mock.calls[0][1].params).toMatchObject({ from: '2026-10-01', to: '2026-10-05', direction: 'all' });
+        expect(wrapper.text()).toContain('UA2935 •••• 0002');
+        expect(wrapper.text()).toContain('14:19:50');
     });
 
     it('змінює період надходжень і позначає неповноту, зберігаючи поточний баланс', async () => {

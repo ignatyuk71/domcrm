@@ -10,17 +10,23 @@ class ExtractNormalizer
     public function normalize(string $payload, NovaPayAccount $account, string $from, string $to): array
     {
         $xml = Xml::parse($payload);
-        if ($xml->documentElement?->localName !== 'Extract') {
+        if ($xml->documentElement?->localName !== 'Payments') {
             throw new NovaPayException('extract_contract', 'Формат виписки NovaPay відрізняється від перевіреного контракту.');
         }
         $records = [];
-        foreach (Xml::nodes($xml, 'Docs') as $node) {
-            // Ці поля слід звірити з реальною API-випискою до ввімкнення operations_verified.
-            $id = $node->getAttribute('UID');
+        foreach ($xml->documentElement->childNodes as $node) {
+            if (! $node instanceof \DOMElement) {
+                continue;
+            }
+            if ($node->localName !== 'Docs') {
+                throw new NovaPayException('extract_contract', 'Відповідь платежів містить непідтверджені секції. Період не імпортовано.');
+            }
+            $id = Xml::value($node, 'ID');
             $status = Xml::value($node, 'StatusDocument');
-            $date = Xml::value($node, 'PayDate');
-            $credit = Xml::value($node, 'CreditCodeIBAN');
-            $debit = Xml::value($node, 'DebitCodeIBAN');
+            // DayDate є і в надходжень, і у проведених списань із порожньою PayDate.
+            $date = Xml::value($node, 'DayDate');
+            $credit = strtoupper(Xml::value($node, 'CreditCodeIBAN'));
+            $debit = strtoupper(Xml::value($node, 'DebitCodeIBAN'));
             if ($id === '' || strlen($id) > 128 || $date === '' || $credit === $debit
                 || ! in_array($account->iban, [$credit, $debit], true)
                 || $node->getAttribute('CurrencyTag') !== $account->currency) {
@@ -44,10 +50,28 @@ class ExtractNormalizer
                 throw new NovaPayException('extract_contract', 'Потрібна перевірка нового статусу операції NovaPay.');
             }
             $incoming = $credit === $account->iban;
+            $counterpartyIban = $incoming ? $debit : $credit;
+            if ($counterpartyIban !== '' && ! preg_match('/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/D', $counterpartyIban)) {
+                throw new NovaPayException('extract_contract', 'Некоректний рахунок контрагента у відповіді NovaPay.');
+            }
+            $changed = Xml::value($node, 'Changed');
+            $changedAt = null;
+            if ($changed !== '') {
+                try {
+                    $changedAt = CarbonImmutable::createFromFormat('!d.m.Y H:i:s', $changed, $account->timezone);
+                    if (! $changedAt || $changedAt->format('d.m.Y H:i:s') !== $changed) {
+                        throw new \RuntimeException;
+                    }
+                } catch (\Throwable) {
+                    throw new NovaPayException('extract_contract', 'Некоректний час зміни статусу платежу NovaPay.');
+                }
+            }
             $records[] = [
                 'provider_id' => $id, 'booked_on' => $booked->toDateString(), 'direction' => $incoming ? 'in' : 'out',
                 'amount_minor' => $amount, 'status' => $mapped, 'source_status' => $status,
                 'counterparty' => Xml::value($node, $incoming ? 'DebitName' : 'CreditName'),
+                'counterparty_iban' => $counterpartyIban ?: null,
+                'status_changed_at' => $changedAt?->utc()->format('Y-m-d H:i:s'),
                 'purpose' => Xml::value($node, 'Purpose'),
             ];
         }

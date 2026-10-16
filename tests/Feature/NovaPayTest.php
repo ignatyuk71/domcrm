@@ -79,6 +79,31 @@ class NovaPayTest extends TestCase
         ];
     }
 
+    private function paymentsPayload(NovaPayAccount $account, array $rows): string
+    {
+        $xml = '<Payments>';
+        foreach ($rows as $row) {
+            $incoming = ($row['direction'] ?? 'in') === 'in';
+            $other = 'UA29358700000067320000000002';
+            $fields = [
+                'ID' => $row['id'] ?? 'doc-1', 'DayDate' => $row['date'] ?? '05.10.2026',
+                'PayDate' => $incoming ? '05.10.2026' : '',
+                'Changed' => $row['changed'] ?? '05.10.2026 14:19:50',
+                'StatusDocument' => $row['status'] ?? 'Conducted',
+                'CreditCodeIBAN' => $incoming ? $account->iban : $other,
+                'DebitCodeIBAN' => $incoming ? $other : $account->iban,
+                'CreditName' => 'Отримувач', 'DebitName' => 'Відправник', 'Purpose' => 'Тестова операція',
+            ];
+            $xml .= '<Docs Amount="'.($row['amount'] ?? '3913.31').'" CurrencyTag="UAH">';
+            foreach ($fields as $key => $value) {
+                $xml .= '<'.$key.'>'.htmlspecialchars($value, ENT_XML1).'</'.$key.'>';
+            }
+            $xml .= '</Docs>';
+        }
+
+        return $xml.'</Payments>';
+    }
+
     public function test_only_active_owner_can_view_or_modify_novapay(): void
     {
         foreach (['operator', 'packer'] as $role) {
@@ -248,9 +273,73 @@ class NovaPayTest extends TestCase
     public function test_unknown_extract_status_rejects_entire_response(): void
     {
         $account = $this->account();
-        $xml = '<Extract><Docs UID="1" Amount="10.00" CurrencyTag="UAH"><PayDate>05.10.2026</PayDate><CreditCodeIBAN>'.$account->iban.'</CreditCodeIBAN><DebitCodeIBAN>other</DebitCodeIBAN><StatusDocument>unknown</StatusDocument></Docs></Extract>';
+        $xml = $this->paymentsPayload($account, [['status' => 'unknown']]);
         $this->expectException(NovaPayException::class);
         app(ExtractNormalizer::class)->normalize($xml, $account, '2026-10-05', '2026-10-05');
+    }
+
+    public function test_real_payment_contract_imports_both_directions_without_outgoing_pay_date(): void
+    {
+        $this->owner();
+        config(['novapay.operations_verified' => true, 'app.timezone' => 'Europe/Kyiv']);
+        $account = $this->account();
+        $payload = $this->paymentsPayload($account, [
+            ['id' => 'in-1'],
+            ['id' => 'out-1', 'direction' => 'out', 'amount' => '2000.00', 'changed' => '05.10.2026 14:22:55'],
+        ]);
+        Http::fake(['*' => Http::response($this->soap('GetPaymentsList', '<payments>'.htmlspecialchars($payload, ENT_XML1).'</payments>'))]);
+        $run = $this->syncRun($account, 'operations', '2026-10-05');
+        (new SyncNovaPay($run->id))->handle(app(SyncService::class));
+        $this->assertSame('success', $run->fresh()->status);
+        $this->assertDatabaseCount('novapay_operations', 2);
+        Http::assertSent(fn ($request) => str_contains($request->body(), '<GetPaymentsList')
+            && str_contains($request->body(), '<date_type>0</date_type>'));
+
+        $response = $this->getJson('/finance/novapay/data?direction=all')->assertOk()
+            ->assertJsonPath('incoming_minor', '391331')->assertJsonPath('operations.total', 2)
+            ->assertJsonPath('operations.data.0.direction', 'out')
+            ->assertJsonPath('operations.data.0.status_changed_at', '2026-10-05T11:22:55+00:00')
+            ->assertJsonPath('operations.data.0.counterparty_iban', 'UA2935 •••• 0002');
+        $response->assertDontSee('UA29358700000067320000000002');
+        $this->getJson('/finance/novapay/data?direction=out')->assertJsonPath('operations.total', 1);
+
+        (new SyncNovaPay($this->syncRun($account, 'operations', '2026-10-05')->id))->handle(app(SyncService::class));
+        $this->assertDatabaseCount('novapay_operations', 2);
+        $this->assertDatabaseCount('novapay_operation_revisions', 0);
+    }
+
+    public function test_unknown_status_does_not_import_part_of_a_period_or_confirm_coverage(): void
+    {
+        config(['novapay.operations_verified' => true]);
+        $account = $this->account();
+        $payload = $this->paymentsPayload($account, [['id' => 'valid'], ['id' => 'new-status', 'status' => 'Unverified']]);
+        Http::fake(['*' => Http::response($this->soap('GetPaymentsList', '<payments>'.htmlspecialchars($payload, ENT_XML1).'</payments>'))]);
+        $run = $this->syncRun($account, 'operations', '2026-10-05');
+        (new SyncNovaPay($run->id))->handle(app(SyncService::class));
+        $this->assertSame('failed', $run->fresh()->status);
+        $this->assertNull($run->fresh()->succeeded_at);
+        $this->assertDatabaseCount('novapay_operations', 0);
+    }
+
+    public function test_duplicate_ids_invalid_dates_and_unexpected_sections_are_not_silent_empty_periods(): void
+    {
+        $account = $this->account();
+        $payloads = [
+            $this->paymentsPayload($account, [['id' => 'same'], ['id' => 'same']]),
+            $this->paymentsPayload($account, [['date' => '31.02.2026']]),
+            $this->paymentsPayload($account, [['date' => '06.10.2026']]),
+            $this->paymentsPayload($account, [['changed' => '05.10.2026 25:00:00']]),
+            '<Payments><Error>Не всі дані отримано</Error></Payments>',
+        ];
+        foreach ($payloads as $payload) {
+            try {
+                app(ExtractNormalizer::class)->normalize($payload, $account, '2026-10-05', '2026-10-05');
+                $this->fail('Некоректний період не повинен вважатися повним.');
+            } catch (NovaPayException $e) {
+                $this->assertSame('extract_contract', $e->reason);
+            }
+        }
+        $this->assertSame([], app(ExtractNormalizer::class)->normalize('<Payments/>', $account, '2026-10-05', '2026-10-05'));
     }
 
     public function test_money_never_uses_float_or_rounds_fractional_kopecks(): void

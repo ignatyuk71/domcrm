@@ -65,11 +65,13 @@ class NovaPayController extends Controller
                 $term = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $filters['search']).'%';
                 $query->where(fn ($builder) => $builder->whereRaw("counterparty LIKE ? ESCAPE '!'", [$term])->orWhereRaw("purpose LIKE ? ESCAPE '!'", [$term]));
             }
-            $operations = $query->orderByDesc('booked_on')->orderByDesc('id')->paginate(25)->through(fn ($operation) => [
+            $operations = $query->orderByDesc('booked_on')->orderByDesc('status_changed_at')->orderByDesc('id')->paginate(25)->through(fn ($operation) => [
                 'id' => $operation->id, 'booked_on' => $operation->booked_on->toDateString(),
                 'direction' => $operation->direction, 'amount_minor' => (string) $operation->amount_minor,
                 'status' => $operation->status, 'source_status' => $operation->source_status,
                 'counterparty' => $operation->counterparty, 'purpose' => $operation->purpose,
+                'counterparty_iban' => $operation->maskedCounterpartyIban(),
+                'status_changed_at' => $operation->status_changed_at?->utc()->toIso8601String(),
             ]);
         }
         $runs = NovaPaySyncRun::query()

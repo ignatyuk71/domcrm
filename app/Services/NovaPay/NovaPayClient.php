@@ -60,13 +60,15 @@ class NovaPayClient
         if (! config('novapay.operations_verified')) {
             throw new NovaPayException('contract_pending', 'Формат виписки, статуси та повнота API ще потребують перевірки на рахунку.');
         }
-        $result = $this->request($account->connection, 'GetAccountExtract', [
+        // Список платежів містить поточний день і списання з порожньою PayDate.
+        $result = $this->request($account->connection, 'GetPaymentsList', [
             'account_id' => (string) $account->provider_id,
             'date_from' => \Carbon\CarbonImmutable::parse($from)->format('d.m.Y'),
             'date_to' => \Carbon\CarbonImmutable::parse($to)->format('d.m.Y'),
+            'date_type' => '0',
         ]);
 
-        return app(ExtractNormalizer::class)->normalize(Xml::value($result, 'extract'), $account, $from, $to);
+        return app(ExtractNormalizer::class)->normalize(Xml::value($result, 'payments'), $account, $from, $to);
     }
 
     private function request(NovaPayConnection $connection, string $method, array $params = []): DOMElement
