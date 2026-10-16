@@ -21,7 +21,7 @@ class OperationImporter
                 if ($operation) {
                     DB::table('novapay_operation_revisions')->insert([
                         'operation_id' => $operation->id,
-                        'snapshot' => json_encode($operation->only(['provider_id', 'booked_on', 'direction', 'amount_minor', 'status', 'source_status', 'counterparty', 'counterparty_iban', 'status_changed_at', 'purpose']), JSON_THROW_ON_ERROR),
+                        'snapshot' => json_encode($operation->only(['provider_id', 'booked_on', 'direction', 'amount_minor', 'status', 'source_status', 'counterparty', 'counterparty_iban', 'status_changed_at', 'purpose', 'document_number', 'sender_name', 'sender_iban', 'sender_tax_code', 'recipient_name', 'recipient_iban', 'recipient_tax_code']), JSON_THROW_ON_ERROR),
                         'created_at' => now(),
                     ]);
                 }

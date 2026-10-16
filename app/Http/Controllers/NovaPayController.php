@@ -63,7 +63,11 @@ class NovaPayController extends Controller
             }
             if (! empty($filters['search'])) {
                 $term = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $filters['search']).'%';
-                $query->where(fn ($builder) => $builder->whereRaw("counterparty LIKE ? ESCAPE '!'", [$term])->orWhereRaw("purpose LIKE ? ESCAPE '!'", [$term]));
+                $query->where(fn ($builder) => $builder->whereRaw("counterparty LIKE ? ESCAPE '!'", [$term])
+                    ->orWhereRaw("purpose LIKE ? ESCAPE '!'", [$term])
+                    ->orWhereRaw("document_number LIKE ? ESCAPE '!'", [$term])
+                    ->orWhereRaw("sender_name LIKE ? ESCAPE '!'", [$term])
+                    ->orWhereRaw("recipient_name LIKE ? ESCAPE '!'", [$term]));
             }
             $operations = $query->orderByDesc('booked_on')->orderByDesc('status_changed_at')->orderByDesc('id')->paginate(25)->through(fn ($operation) => [
                 'id' => $operation->id, 'booked_on' => $operation->booked_on->toDateString(),
@@ -72,6 +76,15 @@ class NovaPayController extends Controller
                 'counterparty' => $operation->counterparty, 'purpose' => $operation->purpose,
                 'counterparty_iban' => $operation->maskedCounterpartyIban(),
                 'status_changed_at' => $operation->status_changed_at?->utc()->toIso8601String(),
+                'document_number' => $operation->document_number,
+                'sender' => [
+                    'name' => $operation->sender_name, 'iban' => $operation->maskedPartyIban('sender'),
+                    'tax_code' => $operation->sender_tax_code,
+                ],
+                'recipient' => [
+                    'name' => $operation->recipient_name, 'iban' => $operation->maskedPartyIban('recipient'),
+                    'tax_code' => $operation->recipient_tax_code,
+                ],
             ]);
         }
         $runs = NovaPaySyncRun::query()

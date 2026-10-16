@@ -50,6 +50,12 @@ class ExtractNormalizer
                 throw new NovaPayException('extract_contract', 'Потрібна перевірка нового статусу операції NovaPay.');
             }
             $incoming = $credit === $account->iban;
+            $validIban = fn (string $value) => preg_match('/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/D', $value) ? $value : null;
+            $optionalText = static function (string $field, int $limit) use ($node): ?string {
+                $value = Xml::value($node, $field);
+
+                return $value === '' ? null : mb_substr($value, 0, $limit);
+            };
             $counterpartyIban = $incoming ? $debit : $credit;
             // Реквізити контрагента необов'язкові: службовий номер не є IBAN і не скасовує рух коштів.
             if (! preg_match('/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/D', $counterpartyIban)) {
@@ -74,6 +80,14 @@ class ExtractNormalizer
                 'counterparty_iban' => $counterpartyIban ?: null,
                 'status_changed_at' => $changedAt?->utc()->format('Y-m-d H:i:s'),
                 'purpose' => Xml::value($node, 'Purpose'),
+                // Необов'язкові реквізити не блокують імпорт руху коштів.
+                'document_number' => $optionalText('Code', 128),
+                'sender_name' => $optionalText('DebitName', 255),
+                'sender_iban' => $validIban($debit),
+                'sender_tax_code' => $optionalText('DebitStateCode', 32),
+                'recipient_name' => $optionalText('CreditName', 255),
+                'recipient_iban' => $validIban($credit),
+                'recipient_tax_code' => $optionalText('CreditStateCode', 32),
             ];
         }
         if (count(array_unique(array_column($records, 'provider_id'))) !== count($records)) {

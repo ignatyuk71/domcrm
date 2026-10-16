@@ -87,12 +87,14 @@ class NovaPayTest extends TestCase
             $other = 'UA29358700000067320000000002';
             $fields = [
                 'ID' => $row['id'] ?? 'doc-1', 'DayDate' => $row['date'] ?? '05.10.2026',
+                'Code' => $row['number'] ?? '000123A0',
                 'PayDate' => $incoming ? '05.10.2026' : '',
                 'Changed' => $row['changed'] ?? '05.10.2026 14:19:50',
                 'StatusDocument' => $row['status'] ?? 'Conducted',
                 'CreditCodeIBAN' => $incoming ? $account->iban : $other,
                 'DebitCodeIBAN' => $incoming ? $other : $account->iban,
                 'CreditName' => 'Отримувач', 'DebitName' => 'Відправник', 'Purpose' => 'Тестова операція',
+                'DebitStateCode' => '0000000001', 'CreditStateCode' => '0000000002',
             ];
             $xml .= '<Docs Amount="'.($row['amount'] ?? '3913.31').'" CurrencyTag="UAH">';
             foreach ($fields as $key => $value) {
@@ -300,8 +302,17 @@ class NovaPayTest extends TestCase
             ->assertJsonPath('operations.data.0.direction', 'out')
             ->assertJsonPath('operations.data.0.status_changed_at', '2026-10-05T11:22:55+00:00')
             ->assertJsonPath('operations.data.0.counterparty_iban', 'UA2935 •••• 0002');
+        $response->assertJsonPath('operations.data.0.document_number', '000123A0')
+            ->assertJsonPath('operations.data.0.sender.name', 'Відправник')
+            ->assertJsonPath('operations.data.0.sender.iban', 'UA 29 358700 •••• 0001')
+            ->assertJsonPath('operations.data.0.sender.tax_code', '0000000001')
+            ->assertJsonPath('operations.data.0.recipient.name', 'Отримувач')
+            ->assertJsonPath('operations.data.0.recipient.iban', 'UA 29 358700 •••• 0002');
         $response->assertDontSee('UA29358700000067320000000002');
+        $response->assertDontSee($account->iban);
         $this->getJson('/finance/novapay/data?direction=out')->assertJsonPath('operations.total', 1);
+        $this->getJson('/finance/novapay/data?direction=all&search=000123A0')->assertJsonPath('operations.total', 2);
+        $this->getJson('/finance/novapay/data?direction=all&search='.urlencode('Отримувач'))->assertJsonPath('operations.total', 2);
 
         (new SyncNovaPay($this->syncRun($account, 'operations', '2026-10-05')->id))->handle(app(SyncService::class));
         $this->assertDatabaseCount('novapay_operations', 2);

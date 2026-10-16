@@ -37,8 +37,9 @@ const timestamp = value => value ? new Intl.DateTimeFormat('uk-UA', {
 }).format(new Date(value)) : 'Ще не отримано';
 const calendar = value => value ? value.split('-').reverse().join('.') : '—';
 const statusTime = value => value ? new Intl.DateTimeFormat('uk-UA', {
-    timeZone: account.value?.timezone || 'Europe/Kyiv', dateStyle: 'short', timeStyle: 'medium',
-}).format(new Date(value)) : '';
+    timeZone: account.value?.timezone || 'Europe/Kyiv', day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+}).format(new Date(value)).replace(',', '') : '';
 const statusLabels = { posted: 'Проведено', pending: 'Очікує підтвердження', cancelled: 'Скасовано' };
 const runLabels = { queued: 'У черзі', running: 'Оновлюється', retrying: 'Повторна спроба', success: 'Завершено', failed: 'Дані не оновлено' };
 const sourceLabels = { balance: 'Баланс', operations: 'Операції', discovery: 'Підключення' };
@@ -51,7 +52,7 @@ const accountState = computed(() => account.value?.requires_auth ? 'Потріб
     : pending.value ? 'Оновлюється' : !account.value?.enabled ? 'Оновлення на паузі'
     : !data.value?.balance ? 'Очікуємо дані' : balanceStale.value ? 'Дані не оновлено' : 'Дані актуальні');
 const latestOperationError = computed(() => data.value?.sync.find(run => run.source === 'operations')?.status === 'failed');
-const counterpartyInitial = value => Array.from((value || 'Операція').trim())[0]?.toUpperCase() || 'О';
+const operationAmount = value => money(value).replace(/ грн$/, ' UAH');
 const recordCount = count => {
     const remainder = count % 100;
     const ending = remainder >= 11 && remainder <= 14 ? 'записів' : count % 10 === 1 ? 'запис' : count % 10 >= 2 && count % 10 <= 4 ? 'записи' : 'записів';
@@ -285,7 +286,39 @@ onBeforeUnmount(() => { disposed = true; controller?.abort(); clearInterval(inte
                 <div v-if="tab === 'operations'" id="np-panel-operations" class="ledger-content" role="tabpanel" aria-labelledby="np-tab-operations">
                     <div class="operations-toolbar"><div class="search-field"><i class="bi bi-search" aria-hidden="true"></i><input v-model="filters.search" class="form-control" placeholder="Знайти контрагента або платіж…" aria-label="Пошук операцій" maxlength="120"><button v-if="filters.search" class="search-clear" aria-label="Очистити пошук" @click="filters.search = ''"><i class="bi bi-x" aria-hidden="true"></i></button></div><select v-model="filters.direction" class="form-select direction-select" aria-label="Напрям операцій"><option value="in">Надходження</option><option value="out">Витрати</option><option value="all">Усі операції</option></select></div>
                     <div v-if="!data.coverage_complete || latestOperationError" class="data-context"><i class="bi bi-info-circle" aria-hidden="true"></i><span>{{ latestOperationError ? 'Операції не оновлено. Відображаємо останні отримані дані.' : data.operations_verified ? 'Дані за вибраний період ще надходять. Підсумок буде доступний після завершення оновлення.' : 'Виписка стане доступна після перевірки підключення. Баланс оновлюється окремо.' }}</span></div>
-                    <div v-if="data.operations?.data.length" class="table-responsive"><table class="table operations-table align-middle"><thead><tr><th>Дата</th><th>Контрагент</th><th>Призначення</th><th class="text-end">Сума</th><th>Напрям</th><th>Статус</th></tr></thead><tbody><tr v-for="operation in data.operations.data" :key="operation.id"><td class="operation-date">{{ calendar(operation.booked_on) }}<small v-if="operation.status_changed_at" class="operation-detail" title="Час останньої зміни статусу в NovaPay">Статус: {{ statusTime(operation.status_changed_at) }}</small></td><td class="operation-counterparty"><div class="counterparty-cell"><span class="counterparty-avatar">{{ counterpartyInitial(operation.counterparty) }}</span><div><strong>{{ operation.counterparty || 'Контрагент не зазначений' }}</strong><small v-if="operation.counterparty_iban" class="operation-detail">{{ operation.counterparty_iban }}</small></div></div></td><td class="operation-purpose" :title="operation.purpose || ''">{{ operation.purpose || 'Без призначення' }}</td><td class="operation-amount" :class="{ 'operation-amount--in': operation.direction === 'in' }">{{ operation.direction === 'in' ? '+' : '−' }}{{ money(operation.amount_minor) }}</td><td class="operation-direction"><i class="bi" :class="operation.direction === 'in' ? 'bi-arrow-down-left' : 'bi-arrow-up-right'" aria-hidden="true"></i>{{ operation.direction === 'in' ? 'Надходження' : 'Витрата' }}</td><td class="operation-status"><span class="status-chip" :class="`status-chip--${operation.status}`"><span class="state-dot"></span>{{ statusLabels[operation.status] || 'Потрібна перевірка' }}</span></td></tr></tbody></table></div>
+                    <div v-if="data.operations?.data.length" class="table-responsive payment-list-scroll">
+                        <table class="table operations-table payment-list align-middle">
+                            <thead><tr><th scope="col">Документ</th><th scope="col">Дата</th><th scope="col">Відправник</th><th scope="col">Сума</th><th scope="col">Отримувач</th><th scope="col">Статус</th></tr></thead>
+                            <tbody>
+                                <tr v-for="operation in data.operations.data" :key="operation.id">
+                                    <td class="payment-document">
+                                        <strong>{{ operation.document_number || '—' }}</strong>
+                                        <details v-if="operation.purpose" class="payment-purpose"><summary>Призначення</summary><p>{{ operation.purpose }}</p></details>
+                                    </td>
+                                    <td class="payment-date">{{ calendar(operation.booked_on) }}</td>
+                                    <td class="payment-party payment-sender">
+                                        <span class="party-label">Відправник</span>
+                                        <strong :title="operation.sender?.name || ''">{{ operation.sender?.name || 'Не зазначено' }}</strong>
+                                        <span v-if="operation.sender?.iban" class="party-account">{{ operation.sender.iban }}</span>
+                                        <span v-if="operation.sender?.tax_code" class="party-tax" title="РНОКПП / ЄДРПОУ">{{ operation.sender.tax_code }}</span>
+                                    </td>
+                                    <td class="payment-amount" :class="operation.direction === 'in' ? 'payment-amount--in' : 'payment-amount--out'" :aria-label="`${operation.direction === 'in' ? 'Надходження' : 'Списання'}: ${operationAmount(operation.amount_minor)}`">
+                                        <span class="payment-sum" :title="operation.direction === 'in' ? 'Надходження' : 'Списання'"><i class="bi" :class="operation.direction === 'in' ? 'bi-arrow-down-left' : 'bi-arrow-up-right'" aria-hidden="true"></i>{{ operationAmount(operation.amount_minor) }}</span>
+                                    </td>
+                                    <td class="payment-party payment-recipient">
+                                        <span class="party-label">Отримувач</span>
+                                        <strong :title="operation.recipient?.name || ''">{{ operation.recipient?.name || 'Не зазначено' }}</strong>
+                                        <span v-if="operation.recipient?.iban" class="party-account">{{ operation.recipient.iban }}</span>
+                                        <span v-if="operation.recipient?.tax_code" class="party-tax" title="РНОКПП / ЄДРПОУ">{{ operation.recipient.tax_code }}</span>
+                                    </td>
+                                    <td class="payment-status">
+                                        <span class="status-chip" :class="`status-chip--${operation.status}`"><i v-if="operation.status === 'posted'" class="bi bi-check-circle" aria-hidden="true"></i>{{ statusLabels[operation.status] || 'Потрібна перевірка' }}</span>
+                                        <time v-if="operation.status_changed_at" :datetime="operation.status_changed_at" title="Час останньої зміни статусу в NovaPay">{{ statusTime(operation.status_changed_at) }}</time>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                     <div v-else class="empty-state"><span class="empty-state-icon"><i class="bi" :class="!account ? 'bi-bank' : filters.search ? 'bi-search' : 'bi-inbox'" aria-hidden="true"></i></span><h3>{{ !account ? 'Підключіть свій рахунок' : filters.search ? 'За цим пошуком нічого не знайдено' : !data.coverage_complete ? 'Очікуємо операції' : 'Операцій поки немає' }}</h3><p>{{ !account ? 'Баланс і рух коштів будуть доступні після підключення NovaPay.' : !data.coverage_complete ? 'Записи ще не отримані повністю. Відсутність рядків не підтверджує відсутність оплат.' : 'Спробуйте інший період або змініть фільтри.' }}</p><button v-if="!account" class="btn action-btn action-btn--primary" @click="openSettings()">Підключити NovaPay<i class="bi bi-arrow-right" aria-hidden="true"></i></button><button v-else-if="filters.search" class="text-action" @click="filters.search = ''">Очистити пошук<i class="bi bi-arrow-right" aria-hidden="true"></i></button></div>
                     <div class="ledger-footer"><span>{{ recordCount(data.operations?.total || 0) }}<span v-if="data.operations?.total"> · по 25 на сторінці</span></span><div v-if="data.operations?.last_page > 1" class="pagination-controls"><button class="icon-button" aria-label="Попередня сторінка" :disabled="filters.page <= 1 || loading" @click="filters.page--"><i class="bi bi-chevron-left" aria-hidden="true"></i></button><span>{{ data.operations.current_page }} <span class="text-secondary">/ {{ data.operations.last_page }}</span></span><button class="icon-button" aria-label="Наступна сторінка" :disabled="filters.page >= data.operations.last_page || loading" @click="filters.page++"><i class="bi bi-chevron-right" aria-hidden="true"></i></button></div><span v-else class="footer-note"><i class="bi bi-shield-check" aria-hidden="true"></i>Лише перегляд операцій</span></div>
                 </div>
@@ -415,16 +448,35 @@ onBeforeUnmount(() => { disposed = true; controller?.abort(); clearInterval(inte
 .operations-table td, .sync-table td { padding: 20px 16px; border-bottom: 1px solid #f1f1f6; color: #77778c; }
 .operations-table tr:last-child td { border-bottom: 0; }
 .operations-table tbody tr:hover td { background-color: #fdfcfe; }
-.operation-date { color: #85859a; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.operation-detail { display: block; margin-top: 3px; color: #9292a4; font-size: 10px; line-height: 1.6; font-weight: 400; }
-.counterparty-cell { display: flex; align-items: center; gap: 9px; }
-.counterparty-avatar { display: grid; place-items: center; width: 30px; height: 30px; flex-shrink: 0; background: #f4f0fc; border: 1px solid #eee8f9; border-radius: 9px; color: #987fbd; font-size: 11px; font-weight: 600; }
-.counterparty-cell strong { color: #595970; font-size: 12px; font-weight: 600; line-height: 1.7; max-width: 250px; overflow-wrap: anywhere; }
-.operation-purpose { min-width: 150px; max-width: 330px; line-height: 1.8; overflow-wrap: anywhere; }
-.operations-table td.operation-amount { color: #646477; font-weight: 650; font-size: 12px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.operations-table td.operation-amount--in { color: #368367; }
-.operation-direction { white-space: nowrap; font-size: 11px; }
-.operation-direction i { margin-right: 5px; color: #a0a0af; }
+/* Розташування платежів повторює порядок колонок бізнес-кабінету NovaPay. */
+.payment-list { min-width: 1080px; table-layout: fixed; margin-bottom: 0; }
+.payment-list th:nth-child(1) { width: 12%; }
+.payment-list th:nth-child(2) { width: 10%; }
+.payment-list th:nth-child(3), .payment-list th:nth-child(5) { width: 23%; }
+.payment-list th:nth-child(4) { width: 16%; }
+.payment-list th:nth-child(6) { width: 16%; }
+.payment-list td { height: 106px; padding-top: 19px; padding-bottom: 19px; border-color: #e7edf3; vertical-align: middle; }
+.payment-document strong, .payment-list .payment-date { color: #434b50; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.payment-document strong { display: block; overflow-wrap: anywhere; }
+.payment-date { white-space: nowrap; }
+.payment-purpose { margin-top: 6px; color: #9099a4; font-size: 10px; }
+.payment-purpose summary { cursor: pointer; width: fit-content; }
+.payment-purpose summary:hover { color: var(--np-purple); }
+.payment-purpose p { margin: 7px 0 0; font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; }
+.payment-party strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #444d51; font-size: 12px; font-weight: 600; line-height: 1.6; }
+.party-account, .party-tax { display: block; color: #858f9d; font-size: 11px; line-height: 1.7; font-variant-numeric: tabular-nums; }
+.party-account { white-space: nowrap; }
+.party-label { display: none; }
+.payment-sum { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.payment-sum i { display: inline-grid; place-items: center; flex-shrink: 0; width: 21px; height: 21px; border-radius: 50%; font-size: 12px; }
+.payment-amount--in .payment-sum { color: #259d88; }
+.payment-amount--in .payment-sum i { background: #e0f8f1; }
+.payment-amount--out .payment-sum { color: #4389db; }
+.payment-amount--out .payment-sum i { background: #eaf3ff; }
+.payment-status { white-space: nowrap; }
+.payment-status .status-chip { gap: 6px; padding: 7px 11px; border: 0; border-radius: 30px; font-size: 11px; font-weight: 600; }
+.payment-status .status-chip--posted { color: #237d70; background: #dcfbf3; }
+.payment-status time { display: block; margin-top: 8px; color: #858f9d; font-size: 10px; font-weight: 500; font-variant-numeric: tabular-nums; }
 .status-chip { display: inline-flex; align-items: center; gap: 5px; color: #92909d; background: #f4f4f7; border: 1px solid #eeeef3; padding: 4px 7px; border-radius: 5px; font-size: 10px; white-space: nowrap; }
 .status-chip--posted { background: #f0f8f3; color: #448063; border-color: #e3f0e8; }
 .status-chip--pending { background: #fff8ec; color: #b58c45; border-color: #f7edda; }
@@ -492,20 +544,19 @@ onBeforeUnmount(() => { disposed = true; controller?.abort(); clearInterval(inte
     .search-field { flex-basis: 100%; max-width: none; }
     .novapay-page .direction-select { width: 100%; margin: 0; }
     .data-context { margin: 0 16px 14px; font-size: 10px; }
-    .operations-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-    .operations-table, .operations-table tbody { display: block; }
-    .operations-table tbody tr { display: grid; grid-template-columns: 1fr auto; grid-template-areas: 'date status' 'counterparty amount' 'purpose purpose' 'direction direction'; gap: 10px 8px; padding: 18px 16px; border-bottom: 1px solid var(--np-border); }
-    .operations-table td, .operations-table td:first-child, .operations-table td:last-child { display: block; border: 0; padding: 0; }
-    .operation-date { grid-area: date; font-size: 10px; }
-    .operation-counterparty { grid-area: counterparty; min-width: 0; }
-    .operation-purpose { grid-area: purpose; max-width: none; min-width: 0; font-size: 10px; }
-    .operation-amount { grid-area: amount; align-self: center; }
-    .operations-table td.operation-amount { font-size: 11px; }
-    .operation-direction { grid-area: direction; font-size: 9px; }
-    .operation-status { grid-area: status; justify-self: end; }
-    .counterparty-cell { gap: 7px; }
-    .counterparty-cell strong { font-size: 10px; }
-    .counterparty-avatar { width: 26px; height: 26px; border-radius: 7px; }
+    .payment-list thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+    .payment-list, .payment-list tbody { display: block; min-width: 0; }
+    .payment-list tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'document date' 'sender sender' 'amount amount' 'recipient recipient' 'status status'; gap: 12px 8px; padding: 18px 16px; border-bottom: 1px solid var(--np-border); }
+    .payment-list td, .payment-list td:first-child, .payment-list td:last-child { display: block; height: auto; border: 0; padding: 0; min-width: 0; }
+    .payment-document { grid-area: document; }
+    .payment-date { grid-area: date; font-size: 11px; }
+    .payment-sender { grid-area: sender; }
+    .payment-recipient { grid-area: recipient; }
+    .payment-amount { grid-area: amount; padding-left: 2px !important; }
+    .payment-status { grid-area: status; display: flex !important; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+    .payment-status time { margin-top: 0; }
+    .party-label { display: block; margin-bottom: 3px; color: #a0a7b2; font-size: 9px; }
+    .payment-party strong { white-space: normal; overflow-wrap: anywhere; }
     .ledger-footer { padding: 14px 16px; }
     .footer-note { font-size: 9px; }
     .connection-content { padding: 16px; }
