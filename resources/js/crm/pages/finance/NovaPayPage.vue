@@ -89,6 +89,9 @@ function acceptSync() {
     for (const run of data.value.sync) {
         if (run.status === 'failed' && !observedFailures.has(run.id)) {
             observedFailures.add(run.id);
+            // Успішний повтор того самого періоду не повинен знову показувати стару помилку.
+            if (data.value.sync.some(newer => newer.id > run.id && newer.status === 'success'
+                && newer.source === run.source && newer.date_from === run.date_from && newer.date_to === run.date_to)) continue;
             showToast({ title: `${sourceLabels[run.source]}: дані не оновлено`, type: 'error',
                 messages: [run.error_message || 'Перевірте підключення та повторіть оновлення.'],
                 actionLabel: account.value?.requires_auth ? 'Відновити доступ' : 'Повторити',

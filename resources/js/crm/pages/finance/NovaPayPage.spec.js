@@ -25,6 +25,15 @@ beforeEach(() => {
 afterEach(() => { wrapper?.unmount(); wrapper = null; document.body.innerHTML = ''; vi.useRealTimers(); });
 
 describe('Інтерфейс рахунку NovaPay', () => {
+    it('не повторює помилку періоду, який уже успішно імпортовано', async () => {
+        http.get.mockResolvedValue({ data: { ...response(), sync: [
+            { id: 3, source: 'operations', date_from: '2026-10-01', date_to: '2026-10-01', status: 'success' },
+            { id: 2, source: 'operations', date_from: '2026-10-01', date_to: '2026-10-01', status: 'failed', error_message: 'Попередня помилка' },
+        ] } });
+        wrapper = mount(NovaPayPage, { attachTo: document.body });
+        await flushPromises();
+        expect(document.querySelector('.app-toast')).toBeNull();
+    });
     it('показує доступний залишок і вибраний рахунок без повідомлення про збереження', async () => {
         wrapper = mount(NovaPayPage, { attachTo: document.body });
         await flushPromises();

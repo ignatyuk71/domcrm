@@ -51,8 +51,9 @@ class ExtractNormalizer
             }
             $incoming = $credit === $account->iban;
             $counterpartyIban = $incoming ? $debit : $credit;
-            if ($counterpartyIban !== '' && ! preg_match('/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/D', $counterpartyIban)) {
-                throw new NovaPayException('extract_contract', 'Некоректний рахунок контрагента у відповіді NovaPay.');
+            // Реквізити контрагента необов'язкові: службовий номер не є IBAN і не скасовує рух коштів.
+            if (! preg_match('/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/D', $counterpartyIban)) {
+                $counterpartyIban = null;
             }
             $changed = Xml::value($node, 'Changed');
             $changedAt = null;

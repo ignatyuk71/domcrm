@@ -342,6 +342,18 @@ class NovaPayTest extends TestCase
         $this->assertSame([], app(ExtractNormalizer::class)->normalize('<Payments/>', $account, '2026-10-05', '2026-10-05'));
     }
 
+    public function test_non_iban_counterparty_reference_does_not_discard_a_valid_payment(): void
+    {
+        $account = $this->account();
+        $payload = str_replace('UA29358700000067320000000002', '29090000000001', $this->paymentsPayload($account, [['direction' => 'out']]));
+        $records = app(ExtractNormalizer::class)->normalize($payload, $account, '2026-10-05', '2026-10-05');
+        $this->assertCount(1, $records);
+        $this->assertSame('out', $records[0]['direction']);
+        $this->assertSame(391331, $records[0]['amount_minor']);
+        $this->assertNull($records[0]['counterparty_iban']);
+        $this->assertSame('Отримувач', $records[0]['counterparty']);
+    }
+
     public function test_money_never_uses_float_or_rounds_fractional_kopecks(): void
     {
         $this->assertSame(995001, Money::minor('9950.0100'));
