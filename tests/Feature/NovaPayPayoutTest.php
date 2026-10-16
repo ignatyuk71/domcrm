@@ -97,8 +97,51 @@ class NovaPayPayoutTest extends TestCase
         $this->assertSame(1, app(PayoutLedger::class)->data($account, '2026-10-01', '2026-10-16')['paid_orders_count']);
         $this->bank($account, 'bank-duplicate'); $importer->import($account, $this->records($account), '2026-10-01', '2026-10-16');
         $this->assertNull(NovaPayPayout::first()->operation_id);
-        $this->assertSame(0, app(PayoutLedger::class)->data($account, '2026-10-01', '2026-10-16')['paid_orders_count']);
+        $this->assertNull(app(PayoutLedger::class)->data($account, '2026-10-01', '2026-10-16')['paid_orders_count']);
         $this->assertNull(app(PayoutLedger::class)->data($account, '2026-09-01', '2026-09-30')['paid_orders_count']);
+    }
+
+    public function test_bank_credits_without_register_details_are_unknown_until_reconciled_even_after_successful_empty_import(): void
+    {
+        $account = $this->account(); $this->coverage($account);
+        $this->bank($account); $this->order('20450000000001');
+        $importer = app(PayoutImporter::class); $ledger = app(PayoutLedger::class);
+        $importer->import($account, $this->records($account), '2026-10-01', '2026-10-16');
+        $this->bank($account, 'today-1', '2026-10-16', 391331);
+        $this->bank($account, 'today-2', '2026-10-16', 759876);
+        $this->bank($account, 'other-sender', '2026-10-16', 100)->update(['sender_tax_code' => '00000000']);
+        $this->bank($account, 'outgoing', '2026-10-16', 200000)->update(['direction' => 'out']);
+        $this->bank($account, 'pending', '2026-10-16', 100)->update(['status' => 'pending']);
+        $other = $account->replicate(); $other->provider_id = 50; $other->iban = 'UA290000000000000000000000002'; $other->save();
+        $this->bank($other, 'other-account', '2026-10-16', 100);
+        $importer->import($account, [], '2026-10-16', '2026-10-16');
+        $data = $ledger->data($account, '2026-10-16', '2026-10-16');
+        $this->assertTrue($data['coverage_complete']);
+        $this->assertNull($data['paid_orders_count']);
+        $this->assertSame(0, $data['confirmed_paid_orders_count']);
+        $this->assertSame(2, $data['pending_incoming_count']);
+        $this->assertSame('1151207', $data['pending_incoming_minor']);
+        $this->assertSame(0, $data['rows']->total());
+        $this->assertSame(1, $ledger->data($account, '2026-10-15', '2026-10-15')['paid_orders_count']);
+        $month = $ledger->data($account, '2026-10-01', '2026-10-16');
+        $this->assertNull($month['paid_orders_count']); $this->assertSame(1, $month['confirmed_paid_orders_count']);
+
+        // Пізніша деталізація автоматично знімає очікування після точної звірки сум.
+        $records = [];
+        foreach ([['today-row-1', '3913.31', '20450000000002'], ['today-row-2', '7598.76', '20450000000003']] as [$id, $amount, $ttn]) {
+            $this->order($ttn, $id);
+            $records[] = app(PayoutNormalizer::class)->normalize($this->csv([
+                'Дата перерахунку коштів' => '16.10.2026 03:17', 'Номер реєстру' => $id,
+                'Сума принятих коштів' => $amount, 'Сума утриманої винагороди' => '0.00', 'Сума перерахованих коштів' => $amount,
+                '№ ЕН НП' => $ttn, 'Унікальний обліковий номер фінансової операції' => $id,
+            ]), $account, '2026-10-16', '2026-10-16')[0];
+        }
+        $importer->import($account, $records, '2026-10-16', '2026-10-16');
+        $data = $ledger->data($account, '2026-10-16', '2026-10-16');
+        $this->assertSame(2, $data['paid_orders_count']);
+        $this->assertSame(0, $data['pending_incoming_count']); $this->assertSame('0', $data['pending_incoming_minor']);
+        $this->assertSame('1151207', $data['matched_net_minor']);
+        $this->assertSame(3, $ledger->data($account, '2026-10-01', '2026-10-16')['paid_orders_count']);
     }
 
     public function test_invalid_csv_never_imports_partial_data_or_mixes_accounts(): void

@@ -28,6 +28,24 @@ beforeEach(() => {
 afterEach(() => { wrapper?.unmount(); wrapper = null; document.body.innerHTML = ''; vi.useRealTimers(); });
 
 describe('Інтерфейс рахунку NovaPay', () => {
+    it('не показує нуль чи відсутність виплат, коли гроші вже є, а деталізація запізнюється', async () => {
+        const payouts = { paid_orders_count: null, confirmed_paid_orders_count: 0, coverage_complete: true,
+            pending_incoming_count: 2, pending_incoming_minor: '1151207', matched_net_minor: '0',
+            rows: { data: [], current_page: 1, last_page: 1 } };
+        http.get.mockResolvedValue({ data: { ...response(), payouts } });
+        wrapper = mount(NovaPayPage);
+        await flushPromises();
+        expect(wrapper.get('[data-testid="paid-orders"]').text()).toBe('—');
+        await wrapper.findAll('button').find(button => button.text().includes('Переглянути замовлення')).trigger('click');
+        expect(wrapper.get('[data-testid="payout-pending"]').text()).toContain('11 512,07 грн');
+        expect(wrapper.get('#np-panel-payments').text()).toContain('Очікуємо деталізацію надходжень');
+        expect(wrapper.get('#np-panel-payments').text()).not.toContain('Виплат за цей період немає');
+        http.get.mockResolvedValue({ data: { ...response(), payouts: { ...payouts, confirmed_paid_orders_count: 417 } } });
+        await vi.advanceTimersByTimeAsync(15000);
+        await flushPromises();
+        expect(wrapper.get('[data-testid="paid-orders"]').text()).toBe('417');
+        expect(wrapper.text()).toContain('Деталізація надходжень ще не повна');
+    });
     it('показує підтверджені замовлення, комісію та посилання з реєстру післяплати', async () => {
         http.get.mockResolvedValue({ data: { ...response(), payouts: {
             paid_orders_count: 1, matched_net_minor: '49750', coverage_complete: true, unmatched: 0, ambiguous: 0, unconfirmed: 0,

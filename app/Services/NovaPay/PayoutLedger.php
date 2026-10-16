@@ -3,6 +3,7 @@
 namespace App\Services\NovaPay;
 
 use App\Models\NovaPayAccount;
+use App\Models\NovaPayOperation;
 use App\Models\NovaPayPayout;
 use App\Models\NovaPaySyncRun;
 use Carbon\CarbonImmutable;
@@ -34,6 +35,13 @@ class PayoutLedger
                 break;
             }
         }
+        // Успішне завантаження порожнього CSV не підтверджує відсутність виплат: банк може оновитися раніше.
+        $pendingIncoming = NovaPayOperation::where('account_id', $account->id)->where('direction', 'in')->where('status', 'posted')
+            ->where('sender_tax_code', '38324133')->whereBetween('booked_on', [$from, $to])
+            ->whereNotExists(fn ($query) => $query->selectRaw('1')->from('novapay_payouts as linked')
+                ->whereColumn('linked.operation_id', 'novapay_operations.id')->whereColumn('linked.account_id', 'novapay_operations.account_id')
+                ->where('linked.active', true))
+            ->selectRaw('COUNT(*) as count, COALESCE(SUM(amount_minor), 0) as amount')->first();
         $rows = $query->select('p.id', 'p.ttn', 'p.paid_on', 'p.register_number', 'p.gross_minor', 'p.fee_minor', 'p.net_minor', 'p.operation_id', 'o.id as order_id', 'o.order_number', 'm.candidates')
             ->orderByDesc('p.paid_on')->orderByDesc('p.id')->paginate(25, ['*'], 'payout_page', $page)->through(fn ($row) => [
                 'id' => $row->id, 'ttn' => $row->ttn, 'paid_on' => $row->paid_on, 'register_number' => $row->register_number,
@@ -44,7 +52,9 @@ class PayoutLedger
                 'confirmed' => $row->operation_id !== null,
             ]);
 
-        return ['coverage_complete' => $complete, 'paid_orders_count' => $complete ? (int) $summary->paid_orders : null,
+        return ['coverage_complete' => $complete, 'paid_orders_count' => $complete && ! $pendingIncoming->count ? (int) $summary->paid_orders : null,
+            'confirmed_paid_orders_count' => (int) $summary->paid_orders,
+            'pending_incoming_count' => (int) $pendingIncoming->count, 'pending_incoming_minor' => (string) $pendingIncoming->amount,
             'matched_net_minor' => (string) ($summary->matched_net ?? 0), 'unmatched' => (int) $summary->unmatched,
             'ambiguous' => (int) $summary->ambiguous, 'unconfirmed' => (int) $summary->unconfirmed,
             'updated_at' => $runs->max('succeeded_at')?->toIso8601String(), 'rows' => $rows];
