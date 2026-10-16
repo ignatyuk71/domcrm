@@ -11,4 +11,7 @@ return [
     'operations_verified' => (bool) env('NOVAPAY_OPERATIONS_VERIFIED', false),
     // Підтверджено на реальних платежах; невідомі статуси зупиняють імпорт періоду.
     'operation_statuses' => ['Conducted' => 'posted'],
+    'payouts_verified' => (bool) env('NOVAPAY_PAYOUTS_VERIFIED', false),
+    'register_download_host' => 'storage.googleapis.com',
+    'register_download_prefix' => '/prod-novaclients3-cod-statements/',
 ];

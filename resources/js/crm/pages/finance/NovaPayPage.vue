@@ -11,7 +11,7 @@ const initial = period('month');
 const filters = reactive({
     account_id: query.get('account_id') || '', from: query.get('from') || initial.from,
     to: query.get('to') || initial.to, direction: query.get('direction') || 'all', search: query.get('search') || '',
-    page: Number(query.get('page')) || 1,
+    page: Number(query.get('page')) || 1, payout_page: Number(query.get('payout_page')) || 1,
 });
 const data = ref(null);
 const loading = ref(true);
@@ -42,7 +42,7 @@ const statusTime = value => value ? new Intl.DateTimeFormat('uk-UA', {
 }).format(new Date(value)).replace(',', '') : '';
 const statusLabels = { posted: 'Проведено', pending: 'Очікує підтвердження', cancelled: 'Скасовано' };
 const runLabels = { queued: 'У черзі', running: 'Оновлюється', retrying: 'Повторна спроба', success: 'Завершено', failed: 'Дані не оновлено' };
-const sourceLabels = { balance: 'Баланс', operations: 'Операції', discovery: 'Підключення' };
+const sourceLabels = { balance: 'Баланс', operations: 'Операції', payouts: 'Реєстр післяплати', discovery: 'Підключення' };
 const periods = [['today', 'Сьогодні'], ['yesterday', 'Вчора'], ['week', '7 днів'], ['month', 'Місяць']];
 const selectedPeriod = computed(() => periods.find(([key]) => {
     const range = period(key, account.value?.timezone);
@@ -194,8 +194,9 @@ function selectPeriod(key) {
     Object.assign(filters, period(key, account.value?.timezone), { page: 1 });
 }
 function beforeUnload(event) { if (hasDraft.value) { event.preventDefault(); event.returnValue = ''; } }
-watch(() => [filters.account_id, filters.from, filters.to, filters.direction], () => { filters.page = 1; applyFilters(); });
+watch(() => [filters.account_id, filters.from, filters.to, filters.direction], () => { filters.page = 1; filters.payout_page = 1; applyFilters(); });
 watch(() => filters.page, applyFilters);
+watch(() => filters.payout_page, applyFilters);
 watch(() => filters.search, () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { filters.page = 1; applyFilters(); }, 350); });
 onMounted(() => {
     load();
@@ -267,9 +268,9 @@ onBeforeUnmount(() => { disposed = true; controller?.abort(); clearInterval(inte
                 </section>
                 <section class="metric-card" aria-label="Замовлення з отриманою оплатою">
                     <div class="metric-heading"><span>Оплачені замовлення</span><span class="metric-icon metric-icon--violet"><i class="bi bi-box-seam" aria-hidden="true"></i></span></div>
-                    <div class="metric-value">—</div>
-                    <div class="metric-description">Замовлення з підтвердженою виплатою</div>
-                    <div class="metric-footer"><span class="metric-tag"><i class="bi bi-hourglass-split" aria-hidden="true"></i>Деталізація ще не підключена</span></div>
+                    <div class="metric-value" data-testid="paid-orders">{{ data.payouts?.paid_orders_count ?? '—' }}</div>
+                    <div class="metric-description">Замовлення з виплатою, звіреною з надходженням</div>
+                    <div class="metric-footer"><button class="btn btn-sm action-btn--quiet" type="button" @click="tab = 'payments'">Переглянути замовлення <i class="bi bi-arrow-right" aria-hidden="true"></i></button></div>
                 </section>
             </div>
 
@@ -322,7 +323,15 @@ onBeforeUnmount(() => { disposed = true; controller?.abort(); clearInterval(inte
                     <div v-else class="empty-state"><span class="empty-state-icon"><i class="bi" :class="!account ? 'bi-bank' : filters.search ? 'bi-search' : 'bi-inbox'" aria-hidden="true"></i></span><h3>{{ !account ? 'Підключіть свій рахунок' : filters.search ? 'За цим пошуком нічого не знайдено' : !data.coverage_complete ? 'Очікуємо операції' : 'Операцій поки немає' }}</h3><p>{{ !account ? 'Баланс і рух коштів будуть доступні після підключення NovaPay.' : !data.coverage_complete ? 'Записи ще не отримані повністю. Відсутність рядків не підтверджує відсутність оплат.' : 'Спробуйте інший період або змініть фільтри.' }}</p><button v-if="!account" class="btn action-btn action-btn--primary" @click="openSettings()">Підключити NovaPay<i class="bi bi-arrow-right" aria-hidden="true"></i></button><button v-else-if="filters.search" class="text-action" @click="filters.search = ''">Очистити пошук<i class="bi bi-arrow-right" aria-hidden="true"></i></button></div>
                     <div class="ledger-footer"><span>{{ recordCount(data.operations?.total || 0) }}<span v-if="data.operations?.total"> · по 25 на сторінці</span></span><div v-if="data.operations?.last_page > 1" class="pagination-controls"><button class="icon-button" aria-label="Попередня сторінка" :disabled="filters.page <= 1 || loading" @click="filters.page--"><i class="bi bi-chevron-left" aria-hidden="true"></i></button><span>{{ data.operations.current_page }} <span class="text-secondary">/ {{ data.operations.last_page }}</span></span><button class="icon-button" aria-label="Наступна сторінка" :disabled="filters.page >= data.operations.last_page || loading" @click="filters.page++"><i class="bi bi-chevron-right" aria-hidden="true"></i></button></div><span v-else class="footer-note"><i class="bi bi-shield-check" aria-hidden="true"></i>Лише перегляд операцій</span></div>
                 </div>
-                <div v-else-if="tab === 'payments'" id="np-panel-payments" class="empty-state payments-empty" role="tabpanel" aria-labelledby="np-tab-payments"><span class="empty-state-icon"><i class="bi bi-receipt" aria-hidden="true"></i></span><span class="empty-state-tag">Деталізація післяплати</span><h3>Кожна оплата — до свого замовлення</h3><p>Після підключення реєстрів тут з’являться виплати за ТТН, суми після комісій і пов’язані замовлення. Деталізація ще не отримана.</p><div class="payments-note"><i class="bi bi-info-circle" aria-hidden="true"></i>Баланс рахунку оновлюється незалежно від деталізації.</div></div>
+                <div v-else-if="tab === 'payments'" id="np-panel-payments" class="ledger-content" role="tabpanel" aria-labelledby="np-tab-payments">
+                    <div class="data-context"><i class="bi bi-info-circle" aria-hidden="true"></i><span>Зіставлення за точною ТТН. Виплату підтверджуємо після звірки реєстру з банківським надходженням. Реєстр може надійти пізніше за гроші.</span></div>
+                    <div class="payout-summary"><span>За замовленнями зараховано: <strong>{{ money(data.payouts?.matched_net_minor) }}</strong></span><span>Без замовлення: {{ data.payouts?.unmatched || 0 }} · Неоднозначних: {{ data.payouts?.ambiguous || 0 }} · Очікують звірки: {{ data.payouts?.unconfirmed || 0 }}</span></div>
+                    <div v-if="data.payouts?.rows?.data.length" class="table-responsive"><table class="table operations-table align-middle"><thead><tr><th>Дата виплати</th><th>Замовлення / ТТН</th><th>Сплатив покупець</th><th>Комісія</th><th>Зараховано</th><th>Стан</th></tr></thead><tbody>
+                        <tr v-for="payout in data.payouts.rows.data" :key="payout.id"><td>{{ calendar(payout.paid_on) }}<small class="d-block text-secondary">{{ payout.register_number }}</small></td><td><a v-if="payout.order_url" :href="payout.order_url">№ {{ payout.order_number || payout.order_id }}</a><span v-else>{{ payout.match_status === 'ambiguous' ? 'Кілька замовлень із цією ТТН' : 'Замовлення не знайдено' }}</span><small class="d-block text-secondary">{{ payout.ttn }}</small></td><td>{{ money(payout.gross_minor) }}</td><td>{{ money(payout.fee_minor) }}</td><td>{{ money(payout.net_minor) }}</td><td><span class="status-chip" :class="payout.confirmed ? 'status-chip--posted' : 'status-chip--pending'">{{ payout.confirmed ? 'Зараховано' : 'Очікує звірки' }}</span></td></tr>
+                    </tbody></table></div>
+                    <div v-else class="empty-state"><span class="empty-state-icon"><i class="bi bi-receipt" aria-hidden="true"></i></span><h3>{{ data.payouts?.coverage_complete ? 'Виплат за цей період немає' : 'Очікуємо реєстр післяплати' }}</h3><p>Реєстр оновлюється автоматично. Невідомі дані не враховуються як нуль.</p></div>
+                    <div class="ledger-footer"><span>Реєстр: {{ timestamp(data.payouts?.updated_at) }}<span v-if="!data.payouts?.coverage_complete"> · Період ще не завантажено повністю</span></span><div v-if="data.payouts?.rows?.last_page > 1" class="pagination-controls"><button class="btn page-btn" aria-label="Попередня сторінка виплат" :disabled="data.payouts.rows.current_page <= 1 || loading" @click="filters.payout_page--"><i class="bi bi-chevron-left" aria-hidden="true"></i></button><span>{{ data.payouts.rows.current_page }} / {{ data.payouts.rows.last_page }}</span><button class="btn page-btn" aria-label="Наступна сторінка виплат" :disabled="data.payouts.rows.current_page >= data.payouts.rows.last_page || loading" @click="filters.payout_page++"><i class="bi bi-chevron-right" aria-hidden="true"></i></button></div></div>
+                </div>
                 <div v-else id="np-panel-sync" class="sync-content" role="tabpanel" aria-labelledby="np-tab-sync"><div class="table-responsive"><table class="table sync-table align-middle"><thead><tr><th>Джерело</th><th>Період</th><th>Стан</th><th>Останній успіх</th><th>Діагностика</th></tr></thead><tbody><tr v-for="run in data.sync" :key="run.id"><td class="fw-semibold"><i class="bi bi-arrow-repeat me-2 text-secondary" aria-hidden="true"></i>{{ sourceLabels[run.source] }}</td><td>{{ run.date_from ? calendar(run.date_from) : '—' }}</td><td><span class="status-chip" :class="run.status === 'success' ? 'status-chip--posted' : run.status === 'failed' ? 'status-chip--failed' : 'status-chip--pending'"><span class="state-dot"></span>{{ runLabels[run.status] }}</span></td><td>{{ timestamp(run.succeeded_at) }}</td><td class="sync-diagnostic">{{ run.error_message || '—' }}</td></tr><tr v-if="!data.sync.length"><td colspan="5"><div class="empty-state"><span class="empty-state-icon"><i class="bi bi-arrow-repeat" aria-hidden="true"></i></span><h3>Історія з’явиться після першого оновлення</h3><p>Тут можна перевірити стан отримання балансу та операцій.</p></div></td></tr></tbody></table></div></div>
             </section>
             <div class="page-footnote"><i class="bi bi-shield-lock" aria-hidden="true"></i>Захищене підключення<span>·</span>Доступ до фінансів лише для власника</div>
@@ -488,6 +497,7 @@ onBeforeUnmount(() => { disposed = true; controller?.abort(); clearInterval(inte
 .icon-button:hover { color: var(--np-purple); background: #f6f3fc; }
 .icon-button:disabled { opacity: .4; cursor: default; }
 .footer-note { display: flex; align-items: center; gap: 6px; }
+.payout-summary { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding: 16px 24px; color: var(--np-muted); font-size: 12px; }
 .empty-state { display: flex; flex-direction: column; align-items: center; padding: 48px 20px 52px; text-align: center; }
 .empty-state-icon { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 17px; color: #ad9bce; background: #f5f1fc; border: 1px solid #eee7f9; font-size: 25px; margin-bottom: 18px; }
 .empty-state h3 { font-size: 15px; font-weight: 600; color: #66667d; margin: 0 0 9px; }

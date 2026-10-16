@@ -71,6 +71,52 @@ class NovaPayClient
         return app(ExtractNormalizer::class)->normalize(Xml::value($result, 'payments'), $account, $from, $to);
     }
 
+    public function startPayoutRegister(NovaPayAccount $account, string $from, string $to): int
+    {
+        $result = $this->request($account->connection, 'GetRegister', [
+            'Type' => 1, 'ClientId' => $account->client_id,
+            'From' => \Carbon\CarbonImmutable::parse($from)->format('d.m.Y'),
+            'Into' => \Carbon\CarbonImmutable::parse($to)->format('d.m.Y'), 'FileExtension' => 'CSV',
+        ]);
+        $id = Xml::value($result, 'statement_id');
+        if (! ctype_digit($id) || (int) $id < 1 || (int) $id > 2147483647) {
+            throw new NovaPayException('register_contract', 'NovaPay не повернув ID реєстру післяплати.');
+        }
+
+        return (int) $id;
+    }
+
+    public function payoutRegister(NovaPayAccount $account, int $id): string
+    {
+        $result = $this->request($account->connection, 'DownloadRegister', ['Type' => 1, 'Id' => $id]);
+        if (Xml::value($result, 'status') !== 'created') {
+            throw new NovaPayException('register_pending', 'NovaPay ще формує реєстр післяплати. Перевіримо повторно.', true);
+        }
+        $url = Xml::value($result, 'url');
+        $parts = parse_url($url);
+        // Підписане посилання не зберігаємо і не передаємо йому JWT. Дозволене лише перевірене сховище.
+        if (! is_array($parts) || ($parts['scheme'] ?? '') !== 'https'
+            || ($parts['host'] ?? '') !== config('novapay.register_download_host')
+            || ! str_starts_with($parts['path'] ?? '', config('novapay.register_download_prefix'))
+            || isset($parts['user']) || isset($parts['pass']) || (isset($parts['port']) && $parts['port'] !== 443)
+            || Xml::value($result, 'file_type') !== 'CSV') {
+            throw new NovaPayException('register_download', 'Непідтверджена адреса або формат реєстру NovaPay.');
+        }
+        try {
+            $response = Http::connectTimeout(5)->timeout(25)->withOptions([
+                'allow_redirects' => false,
+                'progress' => static function ($total, $received) {
+                    if ($total > 10 * 1024 * 1024 || $received > 10 * 1024 * 1024) throw new \RuntimeException;
+                },
+            ])->get($url);
+            if (! $response->successful() || strlen($response->body()) > 10 * 1024 * 1024) throw new \RuntimeException;
+
+            return $response->body();
+        } catch (\Throwable) {
+            throw new NovaPayException('register_download', 'Не вдалося завантажити реєстр післяплати. Повторимо спробу.', true);
+        }
+    }
+
     private function request(NovaPayConnection $connection, string $method, array $params = []): DOMElement
     {
         try {

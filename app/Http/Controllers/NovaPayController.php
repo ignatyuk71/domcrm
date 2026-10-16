@@ -32,6 +32,7 @@ class NovaPayController extends Controller
             'direction' => ['required', 'in:in,out,all'],
             'search' => ['nullable', 'string', 'max:120'],
             'page' => ['nullable', 'integer', 'min:1'],
+            'payout_page' => ['nullable', 'integer', 'min:1'],
         ]);
         if (CarbonImmutable::parse($filters['from'])->diffInDays(CarbonImmutable::parse($filters['to'])) > 365) {
             throw ValidationException::withMessages(['to' => 'Оберіть період не довший за один рік.']);
@@ -102,6 +103,7 @@ class NovaPayController extends Controller
                 'id' => $item->id, 'verified_at' => $item->verified_at?->toIso8601String(), 'requires_auth' => $item->requires_auth,
             ]),
             'account_id' => $account?->id,
+            'payouts' => $account ? app(\App\Services\NovaPay\PayoutLedger::class)->data($account, $filters['from'], $filters['to'], $filters['payout_page'] ?? 1) : null,
             'balance' => $account?->balances->firstWhere('type', 'available') ? [
                 'amount_minor' => (string) $account->balances->firstWhere('type', 'available')->amount_minor,
                 'received_at' => $account->balances->firstWhere('type', 'available')->received_at->toIso8601String(),

@@ -48,6 +48,23 @@ class SyncService
 
             return;
         }
+        if ($run->source === 'payouts') {
+            if (! config('novapay.payouts_verified')) throw new NovaPayException('contract_pending', 'Імпорт реєстрів післяплати ще не увімкнено.');
+            $from = $run->date_from->toDateString();
+            $to = $run->date_to->toDateString();
+            if (! $run->statement_id) {
+                $run->update(['statement_id' => $this->client->startPayoutRegister($account, $from, $to)]);
+                // Генерація асинхронна: звільняємо worker, наступна спроба читає той самий реєстр.
+                throw new NovaPayException('register_pending', 'Реєстр післяплати замовлено. Очікуємо формування NovaPay.', true);
+            }
+            $records = app(PayoutNormalizer::class)->normalize($this->client->payoutRegister($account, $run->statement_id), $account, $from, $to);
+            DB::transaction(function () use ($account, $records, $run, $from, $to) {
+                app(PayoutImporter::class)->import($account, $records, $from, $to, $run->created_at->format('Y-m-d H:i:s'));
+                $this->succeed($run, count($records));
+            });
+
+            return;
+        }
         if ($run->source === 'operations') {
             $records = $this->client->operations($account, $run->date_from->toDateString(), $run->date_to->toDateString());
             DB::transaction(function () use ($account, $records, $run) {

@@ -28,6 +28,22 @@ beforeEach(() => {
 afterEach(() => { wrapper?.unmount(); wrapper = null; document.body.innerHTML = ''; vi.useRealTimers(); });
 
 describe('Інтерфейс рахунку NovaPay', () => {
+    it('показує підтверджені замовлення, комісію та посилання з реєстру післяплати', async () => {
+        http.get.mockResolvedValue({ data: { ...response(), payouts: {
+            paid_orders_count: 1, matched_net_minor: '49750', coverage_complete: true, unmatched: 0, ambiguous: 0, unconfirmed: 0,
+            updated_at: '2026-10-05T12:00:00+03:00', rows: { data: [{ id: 7, ttn: '20450000000001', paid_on: '2026-10-05', register_number: 'BO0001', gross_minor: '50000', fee_minor: '250', net_minor: '49750', order_number: '1001', order_url: '/orders/1/edit', confirmed: true, match_status: 'matched' }], current_page: 1, last_page: 1 },
+        } } });
+        wrapper = mount(NovaPayPage);
+        await flushPromises();
+        expect(wrapper.get('[data-testid="paid-orders"]').text()).toBe('1');
+        await wrapper.findAll('button').find(button => button.text().includes('Переглянути замовлення')).trigger('click');
+        const panel = wrapper.get('#np-panel-payments');
+        expect(panel.get('a').attributes('href')).toBe('/orders/1/edit');
+        expect(panel.text()).toContain('20450000000001');
+        expect(panel.text()).toContain('2,50 грн');
+        expect(panel.text()).toContain('497,50 грн');
+        expect(panel.text()).toContain('Зараховано');
+    });
     it('відрізняє списання та зберігає відправника й отримувача у своїх колонках', async () => {
         const data = response();
         data.operations.data[0] = { ...data.operations.data[0], direction: 'out', amount_minor: '200000',
@@ -93,7 +109,7 @@ describe('Інтерфейс рахунку NovaPay', () => {
         expect(wrapper.find('input[aria-label="Початок періоду"]').exists()).toBe(true);
         await wrapper.get('#np-tab-operations').trigger('keydown', { key: 'ArrowRight' });
         expect(wrapper.get('#np-tab-payments').attributes('aria-selected')).toBe('true');
-        expect(wrapper.get('#np-panel-payments').text()).toContain('Деталізація ще не отримана');
+        expect(wrapper.get('#np-panel-payments').text()).toContain('Очікуємо реєстр післяплати');
         await wrapper.get('#np-tab-payments').trigger('keydown', { key: 'End' });
         expect(wrapper.get('#np-tab-sync').attributes('tabindex')).toBe('0');
     });

@@ -11,10 +11,10 @@ use Illuminate\Support\Facades\Cache;
 
 class SyncDispatcher
 {
-    public function enqueue(NovaPayConnection $connection, string $source, ?NovaPayAccount $account = null, ?string $date = null): ?NovaPaySyncRun
+    public function enqueue(NovaPayConnection $connection, string $source, ?NovaPayAccount $account = null, ?string $date = null, ?string $dateTo = null): ?NovaPaySyncRun
     {
-        $key = 'novapay:dispatch:'.$connection->id.':'.($account?->id ?? 0).':'.$source.':'.$date;
-        return Cache::lock($key, 10)->get(function () use ($connection, $source, $account, $date) {
+        $key = 'novapay:dispatch:'.$connection->id.':'.($account?->id ?? 0).':'.$source.':'.$date.':'.$dateTo;
+        return Cache::lock($key, 10)->get(function () use ($connection, $source, $account, $date, $dateTo) {
             $pending = NovaPaySyncRun::query()->where('connection_id', $connection->id)
                 ->where('account_id', $account?->id)->where('source', $source)->where('date_from', $date)
                 ->whereIn('status', ['queued', 'running', 'retrying'])->exists();
@@ -23,7 +23,7 @@ class SyncDispatcher
             }
             $run = NovaPaySyncRun::create([
                 'connection_id' => $connection->id, 'account_id' => $account?->id,
-                'source' => $source, 'date_from' => $date, 'date_to' => $date, 'status' => 'queued',
+                'source' => $source, 'date_from' => $date, 'date_to' => $dateTo ?? $date, 'status' => 'queued',
             ]);
             try {
                 // NovaPay завжди виконується у фоні, навіть коли загальна черга CRM — sync.
@@ -58,6 +58,12 @@ class SyncDispatcher
             if (! in_array($date, $completed, true) || $date === $today->toDateString() || ($reconcile && $date >= $reconcileFrom)) {
                 $count += $this->enqueue($connection, 'operations', $account, $date) ? 1 : 0;
             }
+        }
+
+        if (config('novapay.payouts_verified')) {
+            $last = NovaPaySyncRun::where('account_id', $account->id)->where('source', 'payouts')->where('status', 'success')->max('date_to');
+            $payoutFrom = $last ? max($from, $reconcile ? $reconcileFrom : CarbonImmutable::parse($last)->subDay()->toDateString()) : $from;
+            $count += $this->enqueue($connection, 'payouts', $account, $payoutFrom, $today->toDateString()) ? 1 : 0;
         }
 
         return $count;

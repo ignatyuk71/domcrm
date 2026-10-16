@@ -11,6 +11,7 @@ class OperationImporter
     public function import(NovaPayAccount $account, array $records): void
     {
         DB::transaction(function () use ($account, $records) {
+            NovaPayAccount::whereKey($account->id)->lockForUpdate()->firstOrFail();
             foreach ($records as $record) {
                 $fingerprint = hash('sha256', json_encode($record, JSON_THROW_ON_ERROR));
                 $operation = NovaPayOperation::query()->where('account_id', $account->id)
@@ -29,6 +30,7 @@ class OperationImporter
                     ...$record, 'account_id' => $account->id, 'fingerprint' => $fingerprint,
                 ])->save();
             }
+            if ($records !== []) app(PayoutImporter::class)->reconcile($account, min(array_column($records, 'booked_on')), max(array_column($records, 'booked_on')));
         });
     }
 }
