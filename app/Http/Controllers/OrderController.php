@@ -309,6 +309,23 @@ class OrderController extends Controller
         ]);
     }
 
+    /** Змінюємо лише статус оплати, зберігаючи підтверджені реквізити платежу. */
+    public function updatePaymentStatus(Request $request, Order $order): JsonResponse
+    {
+        $data = $request->validate([
+            'payment_status' => ['required', 'string', 'in:unpaid,prepayment,paid,refund'],
+        ]);
+
+        $order->update(['payment_status' => $data['payment_status']]);
+
+        return response()->json([
+            'data' => [
+                'payment_status' => $order->payment_status,
+                'payment' => $order->payment()->first(),
+            ],
+        ]);
+    }
+
     /** ГЕНЕРАЦІЯ ТТН НОВОЇ ПОШТИ (З ПІДТРИМКОЮ TTN_REF) */
     public function generateTTN(\App\Models\Order $order, \App\Services\NovaPoshtaService $np): JsonResponse
     {

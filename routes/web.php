@@ -139,6 +139,7 @@ Route::middleware('auth')->group(function () {
         // Додаткові дії з замовленням
         Route::patch('/orders/{order}/tags', 'updateTags')->name('orders.tags');
         Route::patch('/orders/{order}/status', 'updateStatus')->name('orders.updateStatus');
+        Route::patch('/orders/{order}/payment-status', 'updatePaymentStatus')->name('orders.updatePaymentStatus');
         Route::patch('/orders/{order}/comment', 'updateComment')->name('orders.updateComment');
         
         // Нова Пошта: Генерація, Анулювання та Друк

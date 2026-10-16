@@ -4,14 +4,13 @@
   import {
     formatCurrency,
     formatDate,
-    getPaymentClass,
-    getPaymentIcon,
   } from '@/crm/utils/orderDisplay';
   import FiscalBlock from '@/crm/components/orders/list/FiscalBlock.vue';
   import DeliveryStatusLabel from '@/crm/components/orders/list/DeliveryStatusLabel.vue';
   import ProductPhotoModal from '@/crm/components/ui/ProductPhotoModal.vue';
   import OrderTagPicker from '@/crm/components/orders/list/OrderTagPicker.vue';
   import OrderStatusPicker from '@/crm/components/orders/list/OrderStatusPicker.vue';
+  import OrderPaymentStatusPicker from '@/crm/components/orders/list/OrderPaymentStatusPicker.vue';
 
   const selectedPhoto = ref(null);
   
@@ -140,10 +139,7 @@
         <div class="order-summary-right">
           <OrderStatusPicker v-if="statusEditor" :key="order.id" :order="order" :editor="statusEditor" />
   
-          <span class="payment-pill" :class="getPaymentClass(order.payment_status)">
-            <i class="bi me-1" :class="getPaymentIcon(order.payment_status)"></i>
-            {{ order.payment_status_label }}
-          </span>
+          <OrderPaymentStatusPicker :key="order.id" :order="order" />
         </div>
       </div>
   
@@ -556,7 +552,6 @@
   
   .order-summary-right { grid-column: 2; grid-row: 1; display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
   .order-summary-right :deep(.status-picker) { flex: 1; min-width: 0; }
-  .payment-pill { display: inline-flex; align-items: center; flex-shrink: 0; gap: 4px; min-height: 28px; font-size: 0.8rem; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: #f1f5f9; border: 1px solid #e2e8f0; color: #475569; white-space: nowrap; }
   
   /* TAGS */
   .order-tags-bar { margin-top: 8px; padding: 8px 12px; background: rgba(255, 255, 255, 0.6); border-radius: 10px; border: 1px dashed #cbd5e1; display: grid; grid-template-columns: minmax(0, 2fr) minmax(230px, 1fr); gap: 10px 16px; }
