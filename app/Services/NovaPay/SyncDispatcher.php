@@ -37,6 +37,22 @@ class SyncDispatcher
         }) ?: null;
     }
 
+    public function refreshToday(NovaPayAccount $account): int
+    {
+        $connection = $account->connection;
+        if (! $account->enabled || $connection->requires_auth) {
+            return 0;
+        }
+        $count = $this->enqueue($connection, 'balance', $account) ? 1 : 0;
+        if (config('novapay.operations_verified')) {
+            // Ручна кнопка оновлює лише сьогодні; прогалини й реєстр обробляє планова синхронізація.
+            $today = CarbonImmutable::now($account->timezone)->toDateString();
+            $count += $this->enqueue($connection, 'operations', $account, $today) ? 1 : 0;
+        }
+
+        return $count;
+    }
+
     public function refresh(NovaPayAccount $account, bool $reconcile = false): int
     {
         $connection = $account->connection;

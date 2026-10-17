@@ -209,6 +209,6 @@ class NovaPayController extends Controller
             return response()->json(['message' => 'Увімкніть рахунок і перевірте авторизацію NovaPay.'], 422);
         }
 
-        return response()->json(['queued' => $dispatcher->refresh($account)], 202);
+        return response()->json(['queued' => $dispatcher->refreshToday($account)], 202);
     }
 }
