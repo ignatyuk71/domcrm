@@ -10,7 +10,8 @@ const response = () => ({
     accounts: [{ id: 1, connection_id: 1, client_name: 'ФОП Тест', iban: 'UA2935 •••• 0001', currency: 'UAH', timezone: 'Europe/Kyiv', enabled: true, requires_auth: false }],
     connections: [{ id: 1 }], account_id: 1,
     balance: { amount_minor: '2495000', received_at: '2026-10-05T12:00:00+03:00' }, incoming_minor: '995000',
-    coverage_complete: true, operations_verified: true, refresh_minutes: 5,
+    coverage_complete: true, operations_verified: true,
+    refresh_schedule: { times: ['14:30', '20:15', '23:45'], timezone: 'Europe/Kyiv', previous_at: '2026-10-04T20:45:00Z', next_at: '2026-10-05T11:30:00Z', grace_minutes: 10 },
     operations: { data: [{ id: 1, document_number: '000123A0', booked_on: '2026-10-05', direction: 'in', amount_minor: '995000', status: 'posted', counterparty: 'NovaPay', counterparty_iban: 'UA2935 •••• 0002', status_changed_at: '2026-10-05T11:19:50Z', purpose: 'Виплата післяплати',
         sender: { name: 'NovaPay', iban: 'UA 29 358700 •••• 0002', tax_code: '0000000002' },
         recipient: { name: 'ФОП Тест', iban: 'UA 29 358700 •••• 0001', tax_code: '0000000001' },
@@ -30,6 +31,43 @@ beforeEach(() => {
 afterEach(() => { wrapper?.unmount(); wrapper = null; document.body.innerHTML = ''; vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe('Інтерфейс рахунку NovaPay', () => {
+    it('між трьома сеансами зберігає актуальність балансу й показує чесний розклад', async () => {
+        vi.setSystemTime(new Date('2026-10-05T10:00:00Z'));
+        http.get.mockResolvedValue({ data: { ...response(), balance: { amount_minor: '2495000', received_at: '2026-10-04T20:46:00Z' } } });
+        wrapper = mount(NovaPayPage);
+        await flushPromises();
+        expect(wrapper.get('.state-pill').text()).toBe('Дані актуальні');
+        expect(wrapper.get('[data-testid="refresh-schedule"]').text()).toContain('14:30, 20:15, 23:45');
+        expect(wrapper.get('[data-testid="refresh-schedule"]').text()).toContain('також вручну');
+        expect(wrapper.text()).toContain('Час за Києвом');
+        await vi.advanceTimersByTimeAsync(15000);
+        await flushPromises();
+        expect(http.post).not.toHaveBeenCalled();
+    });
+    it('позначає пропущений сеанс після часу на виконання черги, а не через десять хвилин від отримання', async () => {
+        vi.setSystemTime(new Date('2026-10-05T11:35:00Z'));
+        http.get.mockResolvedValue({ data: { ...response(), refresh_schedule: { ...response().refresh_schedule, previous_at: '2026-10-05T11:30:00Z', next_at: '2026-10-05T17:15:00Z' } } });
+        wrapper = mount(NovaPayPage);
+        await flushPromises();
+        expect(wrapper.get('.state-pill').text()).toBe('Дані актуальні');
+        await vi.advanceTimersByTimeAsync(6 * 60000);
+        await flushPromises();
+        expect(wrapper.get('.state-pill').text()).toBe('Дані не оновлено');
+        expect(wrapper.get('[data-testid="balance"]').text()).toBe('24 950,00 грн');
+        expect(http.post).not.toHaveBeenCalled();
+    });
+    it('залишає ручне оновлення за кнопкою без автоматичних запитів синхронізації від polling', async () => {
+        http.post.mockResolvedValue({ data: { queued: 1 } });
+        wrapper = mount(NovaPayPage);
+        await flushPromises();
+        await wrapper.findAll('button').find(button => button.text() === 'Оновити дані').trigger('click');
+        await flushPromises();
+        expect(http.post).toHaveBeenCalledOnce();
+        expect(http.post.mock.calls[0][0]).toBe('/finance/novapay/accounts/1/refresh');
+        await vi.advanceTimersByTimeAsync(15000);
+        await flushPromises();
+        expect(http.post).toHaveBeenCalledOnce();
+    });
     it('не показує нуль чи відсутність виплат, коли гроші вже є, а деталізація запізнюється', async () => {
         const payouts = { paid_orders_count: null, confirmed_paid_orders_count: 0, coverage_complete: true,
             pending_incoming_count: 2, pending_incoming_minor: '1151207', matched_net_minor: '0',

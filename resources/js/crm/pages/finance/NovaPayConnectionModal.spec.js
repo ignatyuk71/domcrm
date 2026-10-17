@@ -8,7 +8,8 @@ vi.mock('@/crm/api/http', () => ({ default: { get: vi.fn(), post: vi.fn(), put: 
 const response = () => ({
     accounts: [{ id: 1, connection_id: 1, client_name: 'ФОП Тест', iban: 'UA2935 •••• 0001', currency: 'UAH', timezone: 'Europe/Kyiv', enabled: true, requires_auth: false }],
     connections: [{ id: 1 }], account_id: 1, balance: null, incoming_minor: null,
-    coverage_complete: false, operations_verified: true, refresh_minutes: 5,
+    coverage_complete: false, operations_verified: true,
+    refresh_schedule: { times: ['14:30', '20:15', '23:45'], timezone: 'Europe/Kyiv', previous_at: '2026-10-16T20:45:00Z', next_at: '2026-10-17T11:30:00Z', grace_minutes: 10 },
     operations: { data: [], total: 0, last_page: 1, current_page: 1 }, sync: [],
 });
 let wrapper;

@@ -28,9 +28,17 @@ const account = computed(() => data.value?.accounts.find(item => item.id === dat
 const pending = computed(() => data.value?.sync.some(run => ['queued', 'running', 'retrying'].includes(run.status)) || false);
 const now = ref(Date.now());
 const lastBalanceRun = computed(() => data.value?.sync.find(run => run.source === 'balance'));
+const scheduledRefreshOverdue = computed(() => {
+    const schedule = data.value?.refresh_schedule;
+    if (!schedule?.previous_at || !data.value?.balance?.received_at) return false;
+    const due = new Date(schedule.previous_at).getTime();
+    // Між сеансами останній баланс лишається актуальним; даємо черзі час завершити оновлення.
+    return now.value > due + schedule.grace_minutes * 60000
+        && new Date(data.value.balance.received_at).getTime() < due;
+});
 const balanceStale = computed(() => Boolean(data.value?.balance && (
     account.value?.requires_auth || !account.value?.enabled || lastBalanceRun.value?.status === 'failed'
-    || now.value - new Date(data.value.balance.received_at).getTime() > Math.max(10, (data.value.refresh_minutes || 5) * 2) * 60000
+    || scheduledRefreshOverdue.value
 )));
 const hasDraft = computed(() => Boolean(connection.login || connection.refresh_token || connection.public_certificate));
 const timestamp = value => value ? new Intl.DateTimeFormat('uk-UA', {
@@ -302,7 +310,7 @@ onBeforeUnmount(() => { disposed = true; settingsDialog.value?.close(); restoreS
                 </section>
             </div>
 
-            <div class="freshness-row"><span><i class="bi bi-clock-history" aria-hidden="true"></i>Баланс: <strong>{{ timestamp(data.balance?.received_at) }}</strong></span><span>Операції: <strong>{{ timestamp(data.operations_updated_at) }}</strong></span><span class="timezone-label"><i class="bi bi-globe2" aria-hidden="true"></i>Час за Києвом</span></div>
+            <div class="freshness-row"><span><i class="bi bi-clock-history" aria-hidden="true"></i>Баланс: <strong>{{ timestamp(data.balance?.received_at) }}</strong></span><span>Операції: <strong>{{ timestamp(data.operations_updated_at) }}</strong></span><span v-if="data.refresh_schedule" data-testid="refresh-schedule" :title="`Наступне планове оновлення: ${timestamp(data.refresh_schedule.next_at)}`"><i class="bi bi-arrow-repeat" aria-hidden="true"></i>Автооновлення: {{ data.refresh_schedule.times.join(', ') }} · також вручну</span><span class="timezone-label"><i class="bi bi-globe2" aria-hidden="true"></i>Час за Києвом</span></div>
 
             <section class="ledger-panel">
                 <div class="ledger-heading"><div><h2>{{ tab === 'operations' ? 'Рух коштів' : tab === 'payments' ? 'Оплати замовлень' : 'Історія оновлень' }}<span v-if="tab === 'operations' && data.operations?.total" class="count-badge">{{ data.operations.total }}</span></h2><p>{{ tab === 'operations' ? 'Фактичні операції вашого бізнес-рахунку' : tab === 'payments' ? 'Деталізація післяплати та зв’язки із замовленнями' : 'Стан отримання даних із NovaPay' }}</p></div><span class="ledger-source"><span class="state-dot"></span>Дані NovaPay</span></div>

@@ -7,6 +7,7 @@ use App\Models\NovaPayConnection;
 use App\Models\NovaPayOperation;
 use App\Models\NovaPaySyncRun;
 use App\Services\NovaPay\NovaPayException;
+use App\Services\NovaPay\RefreshSchedule;
 use App\Services\NovaPay\SyncDispatcher;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
@@ -122,7 +123,7 @@ class NovaPayController extends Controller
             ]),
             'operations_updated_at' => $account ? NovaPaySyncRun::query()->where('account_id', $account->id)
                 ->where('source', 'operations')->whereNotNull('succeeded_at')->orderByDesc('succeeded_at')->first()?->succeeded_at?->toIso8601String() : null,
-            'refresh_minutes' => config('novapay.refresh_minutes'),
+            'refresh_schedule' => app(RefreshSchedule::class)->data(),
         ]);
     }
 

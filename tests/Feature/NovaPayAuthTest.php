@@ -4,12 +4,12 @@ namespace Tests\Feature;
 
 use App\Jobs\SyncNovaPay;
 use App\Models\{NovaPayBalance, NovaPayConnection, NovaPaySyncRun, User};
-use App\Services\NovaPay\{NovaPayClient, NovaPayException, SyncDispatcher, SyncService};
+use App\Services\NovaPay\{AuthTokenJournal, NovaPayClient, NovaPayException, SyncDispatcher, SyncService};
 use GuzzleHttp\Exception\ConnectException;
 use GuzzleHttp\Psr7\Request as GuzzleRequest;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
-use Illuminate\Support\Facades\{DB, Http, Queue};
+use Illuminate\Support\Facades\{DB, File, Http, Queue};
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -22,6 +22,9 @@ class NovaPayAuthTest extends TestCase
         parent::setUp();
         $this->travelTo(\Carbon\Carbon::parse('2026-10-17 09:00:00', 'Europe/Kyiv'));
         Http::preventStrayRequests(); Queue::fake();
+        $directory = sys_get_temp_dir().'/novapay-auth-test-'.\Illuminate\Support\Str::uuid();
+        config(['novapay.auth_journal_directory' => $directory]);
+        $this->beforeApplicationDestroyed(fn () => File::deleteDirectory($directory));
     }
 
     private function account()
@@ -124,6 +127,156 @@ class NovaPayAuthTest extends TestCase
         Http::fake(['*' => Http::sequence()->push($this->auth($this->jwt(180)))->push($this->balance())]);
         app(NovaPayClient::class)->balance($account);
         $this->assertSame(now()->addSeconds(120)->getTimestamp(), $account->connection->fresh()->token_expires_at->getTimestamp());
+    }
+
+    public function test_long_jwt_is_not_artificially_rotated_after_two_hours(): void
+    {
+        $account = $this->account(); $calls = 0;
+        Http::fake(function ($request) use (&$calls) {
+            if (str_contains($request->body(), 'UserAuthenticationJWT')) { $calls++; return Http::response($this->auth($this->jwt(43200))); }
+            return Http::response($this->balance());
+        });
+        $client = app(NovaPayClient::class); $client->balance($account);
+        $this->assertSame(now()->addSeconds(43140)->getTimestamp(), $account->connection->fresh()->token_expires_at->getTimestamp());
+        $this->travel(6)->hours(); $client->balance($account);
+        $this->assertSame(1, $calls); Http::assertSentCount(3);
+    }
+
+    public static function invalidExpiries(): array
+    {
+        return ['без exp' => [[]], 'текст' => [['exp' => 'tomorrow']], 'минуле' => [['exp' => 1]],
+            'дробове' => [['exp' => 1900000000.25]], 'завелике' => [['exp' => PHP_INT_MAX]], 'масив' => [['exp' => []]]];
+    }
+
+    #[DataProvider('invalidExpiries')]
+    public function test_invalid_expiry_preserves_rotated_pair_and_does_not_loop(array $payload): void
+    {
+        $account = $this->account();
+        $jwt = 'header.'.rtrim(strtr(base64_encode(json_encode($payload)), '+/', '-_'), '=').'.signature';
+        Http::fake(['*' => Http::response($this->auth($jwt))]);
+        foreach (range(1, 2) as $attempt) {
+            try { app(NovaPayClient::class)->balance($account); $this->fail('Некоректний строк має призупинити авторизацію.'); }
+            catch (NovaPayException $e) { $this->assertSame('auth_invalid_expiry', $e->reason); }
+        }
+        $connection = $account->connection->fresh();
+        $this->assertSame('NEW-REFRESH', $connection->refresh_token);
+        $this->assertSame('NEW-CERT', $connection->public_certificate);
+        $this->assertTrue($connection->requires_auth); $this->assertNull($connection->access_token);
+        Http::assertSentCount(1);
+    }
+
+    public function test_database_failure_recovers_encrypted_pair_without_repeating_authentication(): void
+    {
+        $account = $this->account(); $failed = false;
+        NovaPayConnection::saving(function ($connection) use (&$failed) {
+            if (! $failed && $connection->refresh_token === 'NEW-REFRESH') { $failed = true; throw new \RuntimeException('SECRET-SQL'); }
+        });
+        Http::fake(['*' => Http::sequence()->push($this->auth($this->jwt(7200)))->push($this->balance())]);
+        try { app(NovaPayClient::class)->balance($account); $this->fail('Очікувалася помилка запису БД.'); }
+        catch (NovaPayException $e) {
+            $this->assertSame('auth_persistence', $e->reason); $this->assertTrue($e->retryable);
+            $this->assertStringNotContainsString('SECRET', $e->getMessage());
+        }
+        $this->assertSame('SECRET-REFRESH', $account->connection->fresh()->refresh_token);
+        $path = config('novapay.auth_journal_directory').'/'.$account->connection_id.'.enc';
+        $this->assertStringNotContainsString('NEW-REFRESH', file_get_contents($path));
+        $this->assertSame(0600, fileperms($path) & 0777);
+        $this->assertSame('received', app(AuthTokenJournal::class)->read($account->connection_id)['phase']);
+        app(NovaPayClient::class)->balance($account);
+        $this->assertSame('NEW-REFRESH', $account->connection->fresh()->refresh_token);
+        $this->assertFalse($account->connection->fresh()->requires_auth);
+        $this->assertFileDoesNotExist($path); Http::assertSentCount(2);
+    }
+
+    public function test_jwt_expiring_during_database_write_retries_with_saved_pair_without_pausing(): void
+    {
+        $account = $this->account(); $delayed = false; $authCalls = 0;
+        NovaPayConnection::saving(function ($connection) use (&$delayed) {
+            if (! $delayed && $connection->refresh_token === 'NEW-REFRESH') { $delayed = true; $this->travel(3)->minutes(); }
+        });
+        Http::fake(function ($request) use (&$authCalls) {
+            if (str_contains($request->body(), 'UserAuthenticationJWT')) {
+                $authCalls++;
+                if ($authCalls === 2) $this->assertStringContainsString('NEW-REFRESH', $request->body());
+                return Http::response($this->auth($this->jwt(180)));
+            }
+            return Http::response($this->balance());
+        });
+        try { app(NovaPayClient::class)->balance($account); $this->fail('Прострочений під час запису JWT не можна надсилати.'); }
+        catch (NovaPayException $e) { $this->assertSame('auth_expired_response', $e->reason); $this->assertTrue($e->retryable); }
+        Http::assertSentCount(1);
+        $this->assertFalse($account->connection->fresh()->requires_auth);
+        $this->assertSame('NEW-REFRESH', $account->connection->fresh()->refresh_token);
+        app(NovaPayClient::class)->balance($account);
+        $this->assertSame(2, $authCalls); Http::assertSentCount(3);
+    }
+
+    public function test_recovery_after_jwt_expiry_rotates_known_new_pair_without_manual_authorization(): void
+    {
+        $account = $this->account(); $journal = app(AuthTokenJournal::class);
+        $journal->write($account->connection_id, ['base' => $journal->fingerprint($account->connection), 'phase' => 'received',
+            'received_at' => now()->subDay()->getTimestamp(), 'credentials' => [
+                'refresh_token' => 'RECOVERED-REFRESH', 'public_certificate' => 'RECOVERED-CERT', 'access_token' => $this->jwt(-3600),
+            ]]);
+        Http::fake(function ($request) {
+            if (str_contains($request->body(), 'UserAuthenticationJWT')) {
+                $this->assertStringContainsString('RECOVERED-REFRESH', $request->body());
+                $this->assertStringContainsString('RECOVERED-CERT', $request->body());
+                $this->assertStringNotContainsString('SECRET-REFRESH', $request->body());
+                return Http::response($this->auth($this->jwt(7200)));
+            }
+            return Http::response($this->balance());
+        });
+        app(NovaPayClient::class)->balance($account);
+        $this->assertFalse($account->connection->fresh()->requires_auth);
+        $this->assertSame('NEW-REFRESH', $account->connection->fresh()->refresh_token);
+        $this->assertNull($journal->read($account->connection_id)); Http::assertSentCount(2);
+    }
+
+    public function test_interrupted_rotation_is_not_replayed_and_stale_journal_does_not_overwrite_owner_credentials(): void
+    {
+        $account = $this->account(); $journal = app(AuthTokenJournal::class);
+        $journal->write($account->connection_id, ['base' => $journal->fingerprint($account->connection), 'phase' => 'pending']);
+        try { app(NovaPayClient::class)->balance($account); $this->fail('Невизначену ротацію не можна повторювати.'); }
+        catch (NovaPayException $e) { $this->assertSame('auth_uncertain', $e->reason); }
+        Http::assertNothingSent();
+        $account->connection->update(['requires_auth' => false, 'refresh_token' => 'OWNER-REFRESH', 'public_certificate' => 'OWNER-CERT',
+            'access_token' => 'OWNER-JWT', 'token_expires_at' => now()->addHour(), 'auth_error_code' => null, 'auth_error_message' => null]);
+        Http::fake(function ($request) {
+            $this->assertStringNotContainsString('UserAuthenticationJWT', $request->body());
+            $this->assertStringContainsString('OWNER-JWT', $request->body());
+            return Http::response($this->balance());
+        });
+        app(NovaPayClient::class)->balance($account);
+        $this->assertSame('OWNER-REFRESH', $account->connection->fresh()->refresh_token);
+        $this->assertNull($journal->read($account->connection_id)); Http::assertSentCount(1);
+    }
+
+    public function test_unreadable_journal_or_unwritable_storage_blocks_authentication_without_exposing_secrets(): void
+    {
+        $account = $this->account(); $directory = config('novapay.auth_journal_directory');
+        mkdir($directory, 0700, true); file_put_contents($directory.'/'.$account->connection_id.'.enc', 'SECRET-CORRUPT');
+        try { app(NovaPayClient::class)->balance($account); $this->fail('Пошкоджений журнал має блокувати ротацію.'); }
+        catch (NovaPayException $e) { $this->assertSame('auth_storage', $e->reason); $this->assertStringNotContainsString('SECRET', $e->getMessage()); }
+        config(['novapay.auth_journal_directory' => $directory.'/'.$account->connection_id.'.enc/blocked']);
+        try { app(NovaPayClient::class)->balance($account); $this->fail('Незаписуване сховище має блокувати ротацію.'); }
+        catch (NovaPayException $e) { $this->assertSame('auth_storage', $e->reason); }
+        $this->assertFalse($account->connection->fresh()->requires_auth); Http::assertNothingSent();
+    }
+
+    public function test_old_data_request_denial_does_not_pause_newly_saved_owner_credentials(): void
+    {
+        $account = $this->account();
+        $account->connection->update(['access_token' => 'OLD-JWT', 'token_expires_at' => now()->addHour()]);
+        Http::fake(function () use ($account) {
+            $account->connection->fresh()->update(['refresh_token' => 'OWNER-REFRESH', 'public_certificate' => 'OWNER-CERT',
+                'access_token' => 'OWNER-JWT', 'token_expires_at' => now()->addHour()]);
+            return Http::response('', 401);
+        });
+        try { app(NovaPayClient::class)->balance($account); $this->fail('Очікувалася відмова старого запиту.'); }
+        catch (NovaPayException $e) { $this->assertSame('authorization', $e->reason); }
+        $this->assertFalse($account->connection->fresh()->requires_auth);
+        $this->assertSame('OWNER-JWT', $account->connection->fresh()->access_token);
     }
 
     public function test_rate_limit_preserves_refresh_pair_and_existing_job_retry(): void

@@ -1,5 +1,6 @@
 <?php
 
+use App\Services\NovaPay\RefreshSchedule;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -8,15 +9,15 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-Schedule::command('novapay:sync')
-    ->cron('*/'.max(1, min(59, config('novapay.refresh_minutes', 5))).' * * * *')
-    ->withoutOverlapping()->onOneServer()
-    ->description('Оновлення балансу й операцій NovaPay');
-
-Schedule::command('novapay:sync --reconcile')
-    ->dailyAt('04:30')->timezone('Europe/Kyiv')
-    ->withoutOverlapping()->onOneServer()
-    ->description('Повторна звірка останніх днів NovaPay');
+$novaPayTimes = app(RefreshSchedule::class)->times();
+foreach ($novaPayTimes as $index => $time) {
+    // Звірка входить до останнього сеансу, без додаткової нічної авторизації.
+    $reconcile = $index === array_key_last($novaPayTimes);
+    Schedule::command($reconcile ? 'novapay:sync --reconcile' : 'novapay:sync')
+        ->dailyAt($time)->timezone(config('novapay.timezone'))
+        ->withoutOverlapping()->onOneServer()
+        ->description($reconcile ? 'Оновлення NovaPay зі звіркою останніх днів' : 'Оновлення балансу й операцій NovaPay');
+}
 
 /**
  * Крон на проді (Hetzner): /etc/cron.d/domcrm запускає schedule:run щохвилини,

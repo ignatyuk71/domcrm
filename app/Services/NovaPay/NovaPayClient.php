@@ -119,11 +119,22 @@ class NovaPayClient
 
     private function request(NovaPayConnection $connection, string $method, array $params = []): DOMElement
     {
+        $jwt = $this->token($connection);
         try {
-            return $this->soap($method, ['request_ref' => (string) Str::uuid(), 'jwt' => $this->token($connection), ...$params]);
+            return $this->soap($method, ['request_ref' => (string) Str::uuid(), 'jwt' => $jwt, ...$params]);
         } catch (NovaPayException $e) {
-            if ($e->reason === 'authorization' && ! $connection->requires_auth) {
-                $this->pauseAuthorization($connection, $e);
+            if ($e->reason === 'authorization') {
+                try {
+                    Cache::lock('novapay:auth:'.$connection->id, 45)->block(3, function () use ($connection, $jwt, $e) {
+                        $connection->refresh();
+                        // Відмова старого запиту не повинна скасувати нові параметри власника чи іншої задачі.
+                        if (! $connection->requires_auth && hash_equals($jwt, $connection->access_token ?? '')) {
+                            $this->pauseAuthorization($connection, $e);
+                        }
+                    });
+                } catch (LockTimeoutException) {
+                    throw new NovaPayException('busy', 'Авторизація NovaPay вже оновлюється. Повторимо запит пізніше.', true);
+                }
             }
             throw $e;
         }
@@ -134,46 +145,91 @@ class NovaPayClient
         try {
             return Cache::lock('novapay:auth:'.$connection->id, 45)->block(3, function () use ($connection) {
                 $connection->refresh();
-                if ($connection->requires_auth) {
-                    throw new NovaPayException($connection->auth_error_code ?: 'authorization',
-                        $connection->auth_error_message ?: 'Оновлення доступу NovaPay призупинено. Перевірте підключення та історію синхронізації.');
+                if ($connection->requires_auth) $this->throwPaused($connection);
+                $journal = app(AuthTokenJournal::class);
+                $record = $journal->read($connection->id);
+                if ($record !== null) {
+                    if (! hash_equals($record['base'], $journal->fingerprint($connection))) {
+                        // Власник уже замінив параметри або нова пара вже записана в БД.
+                        $journal->forget($connection->id);
+                    } elseif ($record['phase'] === 'received') {
+                        $recovered = $this->persistRotation($connection, $record['credentials'], $journal, $record['received_at']);
+                        if ($recovered !== null) return $recovered;
+                    } else {
+                        $failure = new NovaPayException('auth_uncertain', 'Попереднє оновлення доступу NovaPay перервалося без збереженої відповіді. Повторну одноразову ротацію призупинено до перевірки підключення.');
+                        $this->pauseAuthorization($connection, $failure);
+                        throw $failure;
+                    }
                 }
-                if ($connection->access_token && $connection->token_expires_at?->isFuture()) {
-                    return $connection->access_token;
-                }
+                if ($connection->access_token && $connection->token_expires_at?->isFuture()) return $connection->access_token;
+                $record = ['base' => $journal->fingerprint($connection), 'phase' => 'pending'];
+                // Намір записуємо до HTTP: після аварії не використаємо стару пару повторно наосліп.
+                $journal->write($connection->id, $record);
                 try {
                     $result = $this->soap('UserAuthenticationJWT', [
                         'request_ref' => (string) Str::uuid(), 'refresh_token' => $connection->refresh_token,
                         'login' => $connection->login, 'public_certificate' => $connection->public_certificate,
                     ]);
-                    $jwt = Xml::value($result, 'jwt');
-                    $refresh = Xml::value($result, 'refresh_token');
-                    $certificate = Xml::value($result, 'public_certificate');
-                    if ($jwt === '' || $refresh === '' || $certificate === '') {
+                    $credentials = ['access_token' => Xml::value($result, 'jwt'),
+                        'refresh_token' => Xml::value($result, 'refresh_token'),
+                        'public_certificate' => Xml::value($result, 'public_certificate')];
+                    if (in_array('', $credentials, true)) {
                         throw new NovaPayException('incomplete_response', 'NovaPay повернув неповну відповідь оновлення доступу.');
                     }
-                    // Ротацію зберігаємо до інших запитів; старий refresh token може бути вже відкликаний.
-                    $connection->forceFill([
-                        'refresh_token' => $refresh, 'public_certificate' => $certificate,
-                        'access_token' => $jwt, 'token_expires_at' => now()->addSeconds($this->tokenLifetime($jwt)),
-                        'auth_error_code' => null, 'auth_error_message' => null,
-                    ])->save();
-
-                    return $jwt;
                 } catch (NovaPayException $e) {
-                    if ($e->reason !== 'rate_limit') {
-                        // Втрата відповіді не доводить прострочення токена. Не повторюємо невизначену одноразову ротацію.
-                        $failure = $e->reason === 'authorization' ? $e : new NovaPayException('auth_'.$e->reason,
-                            'Не вдалося оновити доступ NovaPay. '.$e->getMessage().' Оновлення призупинено до перевірки підключення; необхідність заміни токена не підтверджена.');
-                        $this->pauseAuthorization($connection, $failure);
-                        throw $failure;
+                    if ($e->reason === 'rate_limit') {
+                        $journal->forget($connection->id);
+                        throw $e;
                     }
-                    throw $e;
+                    $failure = $e->reason === 'authorization' ? $e : new NovaPayException('auth_'.$e->reason,
+                        'Не вдалося оновити доступ NovaPay. '.$e->getMessage().' Оновлення призупинено до перевірки підключення; необхідність заміни токена не підтверджена.');
+                    $this->pauseAuthorization($connection, $failure);
+                    throw $failure;
                 }
+                $receivedAt = now()->getTimestamp();
+                try {
+                    $journal->write($connection->id, [...$record, 'phase' => 'received', 'credentials' => $credentials, 'received_at' => $receivedAt]);
+                } catch (NovaPayException) {
+                    // Якщо диск відмовив після відповіді, нижче ще намагаємося зберегти нову пару в БД.
+                }
+                $jwt = $this->persistRotation($connection, $credentials, $journal, $receivedAt);
+                if ($jwt === null) {
+                    throw new NovaPayException('auth_expired_response', 'Строк JWT NovaPay закінчився під час збереження. Нову пару доступу збережено; повторимо запит із нею.', true);
+                }
+
+                return $jwt;
             });
         } catch (LockTimeoutException) {
             throw new NovaPayException('busy', 'Авторизація NovaPay вже оновлюється. Повторимо запит пізніше.', true);
         }
+    }
+
+    private function persistRotation(NovaPayConnection $connection, array $credentials, AuthTokenJournal $journal, int $receivedAt): ?string
+    {
+        $expiry = $this->tokenExpiry($credentials['access_token'], $receivedAt);
+        $usable = $expiry?->isFuture() ?? false;
+        $failure = $expiry === null ? new NovaPayException('auth_invalid_expiry', 'NovaPay повернув JWT без коректного майбутнього строку дії. Нову пару доступу збережено, повторні ротації призупинено до перевірки відповіді провайдера.') : null;
+        try {
+            // Отриману пару зберігаємо навіть за некоректного exp; старий refresh уже може бути відкликаний.
+            $saved = $connection->forceFill([...$credentials,
+                'access_token' => $usable ? $credentials['access_token'] : null,
+                'token_expires_at' => $usable ? $expiry : null, 'requires_auth' => $failure !== null,
+                'auth_error_code' => $failure?->reason, 'auth_error_message' => $failure?->getMessage(),
+            ])->save();
+            if (! $saved) throw new \RuntimeException;
+        } catch (\Throwable) {
+            throw new NovaPayException('auth_persistence', 'Не вдалося записати отриману пару доступу NovaPay у базу. Наступна спроба перевірить захищений журнал; повторне використання невизначеної старої пари заблоковано.', true);
+        }
+        $journal->forget($connection->id);
+        if ($failure) throw $failure;
+
+        return $usable && $expiry->isFuture() ? $credentials['access_token'] : null;
+    }
+
+    private function throwPaused(NovaPayConnection $connection): never
+    {
+        throw new NovaPayException($connection->auth_error_code ?: 'authorization',
+            $connection->auth_error_message ?: 'Оновлення доступу NovaPay призупинено. Перевірте підключення та історію синхронізації.');
     }
 
     private function pauseAuthorization(NovaPayConnection $connection, NovaPayException $failure): void
@@ -183,14 +239,17 @@ class NovaPayClient
             'auth_error_code' => $failure->reason, 'auth_error_message' => $failure->getMessage()])->save();
     }
 
-    private function tokenLifetime(string $jwt): int
+    private function tokenExpiry(string $jwt, int $receivedAt): ?\Carbon\CarbonImmutable
     {
         $parts = explode('.', $jwt);
-        $payload = json_decode(base64_decode(strtr($parts[1] ?? '', '-_', '+/')), true);
-        $expiry = $payload['exp'] ?? null;
+        if (count($parts) !== 3 || ! preg_match('/^[A-Za-z0-9_-]+$/D', $parts[1])) return null;
+        $decoded = base64_decode(strtr($parts[1], '-_', '+/'), true);
+        $payload = $decoded === false ? null : json_decode($decoded, true);
+        $expiry = is_array($payload) ? ($payload['exp'] ?? null) : null;
+        // Строк провайдера із запасом хвилина, без штучного обмеження двома годинами.
+        if (! is_int($expiry) || $expiry <= $receivedAt + 60 || $expiry > 253402300799) return null;
 
-        // Використовуємо строк JWT із запасом хвилина, максимум дві години, без зайвих ротацій кожні 5 хвилин.
-        return is_numeric($expiry) ? max(0, min(7200, (int) $expiry - now()->getTimestamp() - 60)) : 0;
+        return \Carbon\CarbonImmutable::createFromTimestampUTC($expiry - 60)->setTimezone(config('app.timezone'));
     }
 
     private function soap(string $method, array $params): DOMElement
