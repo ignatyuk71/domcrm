@@ -390,6 +390,7 @@ Route::middleware('auth')->group(function () {
 
     // --- ФІСКАЛІЗАЦІЯ (Checkbox) ---
     Route::middleware('role:owner,operator')->controller(FiscalController::class)->prefix('api')->name('fiscal.')->group(function () {
+        Route::get('/fiscal/availability', 'availability')->name('availability');
         Route::post('/orders/{order}/fiscalize', 'fiscalize')->name('fiscalize');
         Route::post('/orders/{order}/refund', 'refund')->name('refund');
         Route::get('/orders/{order}/fiscal-status', 'status')->name('status');

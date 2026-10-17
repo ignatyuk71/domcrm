@@ -11,3 +11,7 @@ export function refund(orderId) {
 export function fetchFiscalStatus(orderId) {
   return http.get(`/api/orders/${orderId}/fiscal-status`);
 }
+
+export function fetchFiscalAvailability() {
+  return http.get('/api/fiscal/availability');
+}

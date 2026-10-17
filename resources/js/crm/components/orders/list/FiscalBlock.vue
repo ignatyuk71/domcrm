@@ -1,6 +1,9 @@
 <script setup>
   import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
   import { fiscalize, refund, fetchFiscalStatus } from '@/crm/api/fiscal';
+  import Toast from '@/crm/components/ui/Toast.vue';
+  import { useToast } from '@/crm/composables/useToast';
+  import { useFiscalAvailability } from '@/crm/composables/useFiscalAvailability';
   import { formatDate, formatTime } from '@/crm/utils/orderDisplay';
   
   // --- PROPS ---
@@ -15,9 +18,15 @@
   const state = reactive({
     receipt: props.receipt,
     loading: false,
-    error: '',
   });
   
+  const { toast, showToast, closeToast, runAction } = useToast();
+  const { available, disabledReason, refresh, blockFromResponse } = useFiscalAvailability({
+    onError: (message, retry) => showToast({
+      type: 'error', title: 'Стан каси недоступний', messages: [message],
+      actionLabel: 'Повторити перевірку', onAction: retry,
+    }),
+  });
   let pollTimer = null;
   
   // --- COMPUTED ---
@@ -86,8 +95,8 @@
         && !isPending.value;
   });
   
-  const actionDisabled = computed(() => state.loading || isPending.value);
-  const errorMessage = computed(() => state.error || state.receipt?.error_message || '');
+  const actionDisabled = computed(() => state.loading || isPending.value || !available.value);
+  const errorMessage = computed(() => state.receipt?.error_message || '');
   
   const lastReceiptDate = computed(() => {
     const lastSuccess = allReceipts.value[allReceipts.value.length - 1];
@@ -125,7 +134,7 @@
 
   const confirmOpen = ref(false);
   const confirmType = ref('sell');
-  const confirmLoading = computed(() => actionDisabled.value);
+  const confirmLoading = computed(() => state.loading);
   const confirmTitle = computed(() =>
     confirmType.value === 'prepay' ? 'Фіскалізувати аванс?' : 'Фіскалізувати повний чек?'
   );
@@ -147,22 +156,36 @@
   }
   
   async function runFiscalize(type = 'sell') {
-    if (state.loading) return;
+    if (actionDisabled.value) return false;
     state.loading = true;
-    state.error = '';
     try {
+      // Каса могла закритися, поки працівник читав підтвердження.
+      await refresh();
+      if (!available.value) return false;
       const apiCall = type === 'return' ? refund(props.orderId) : fiscalize(props.orderId, type);
       const { data } = await apiCall;
       state.receipt = data;
       startPolling();
+      return true;
     } catch (err) {
-      state.error = err.response?.data?.message || err.message || 'Помилка API';
+      blockFromResponse(err.response?.data);
+      showToast({
+        type: 'error', title: 'Чек не сформовано',
+        messages: [err.response?.data?.message || err.message || 'Помилка API'],
+        actionLabel: 'Повторити',
+        onAction: async () => {
+          await refresh();
+          if (available.value) openConfirm(type);
+        },
+      });
+      return false;
     } finally {
       state.loading = false;
     }
   }
 
   function openConfirm(type) {
+    if (actionDisabled.value) return;
     confirmType.value = type;
     confirmOpen.value = true;
   }
@@ -173,8 +196,7 @@
   }
 
   async function confirmFiscalize() {
-    await runFiscalize(confirmType.value);
-    confirmOpen.value = false;
+    if (await runFiscalize(confirmType.value)) confirmOpen.value = false;
   }
   
   async function pollStatus() {
@@ -295,6 +317,7 @@
             v-if="showPrepayButton"
             class="btn-modern btn-prepay"
             :disabled="actionDisabled"
+            :title="disabledReason || undefined"
             @click="openConfirm('prepay')"
           >
             <div class="d-flex align-items-center gap-2">
@@ -310,6 +333,7 @@
             v-if="showMainButton"
             class="btn-modern btn-main"
             :disabled="actionDisabled"
+            :title="disabledReason || undefined"
             @click="openConfirm('sell')"
           >
              <div class="d-flex align-items-center gap-2">
@@ -327,6 +351,7 @@
                 v-if="canRefund"
                 class="btn-modern btn-refund flex-grow-1"
                 :disabled="actionDisabled"
+                :title="disabledReason || undefined"
                 @click="openConfirm('return')"
               >
                 <i class="bi bi-arrow-counterclockwise"></i>
@@ -346,6 +371,8 @@
       </div>
     </div>
 
+    <Toast v-bind="toast" @close="closeToast" @action="runAction" />
+
     <Teleport to="body">
       <div v-if="confirmOpen" class="fiscal-confirm-overlay" @click.self="closeConfirm">
         <div class="fiscal-confirm-card">
@@ -359,7 +386,7 @@
           </div>
           <div class="d-flex justify-content-end gap-2 mt-3">
             <button class="btn btn-light" type="button" @click="closeConfirm">Скасувати</button>
-            <button class="btn btn-danger" type="button" :disabled="confirmLoading" @click="confirmFiscalize">
+            <button class="btn btn-danger" type="button" :disabled="actionDisabled" :title="disabledReason || undefined" @click="confirmFiscalize">
               <span v-if="!confirmLoading">Так, фіскалізувати</span>
               <span v-else class="spinner-border spinner-border-sm"></span>
             </button>

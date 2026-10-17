@@ -18,6 +18,11 @@ vi.mock('@/crm/api/orders', () => ({
 vi.mock('@/crm/api/statuses', () => ({ fetchStatuses: vi.fn() }));
 vi.mock('@/crm/api/tags', () => ({ fetchTags: vi.fn() }));
 
+// Доступність каси окремо перевіряється у FiscalAvailability-тестах.
+vi.mock('@/crm/composables/useFiscalAvailability', () => ({
+  useFiscalAvailability: () => ({ available: true, disabledReason: '' }),
+}));
+
 let wrapper;
 
 beforeEach(() => {

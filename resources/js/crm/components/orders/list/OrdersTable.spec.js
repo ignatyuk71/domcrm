@@ -17,6 +17,11 @@ const order = (overrides = {}) => ({
   currency: 'UAH',
   ...overrides,
 });
+// Доступність каси окремо перевіряється у FiscalAvailability-тестах.
+vi.mock('@/crm/composables/useFiscalAvailability', () => ({
+  useFiscalAvailability: () => ({ available: true, disabledReason: '' }),
+}));
+
 let wrapper;
 
 beforeEach(() => {

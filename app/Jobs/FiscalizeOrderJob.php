@@ -25,16 +25,18 @@ class FiscalizeOrderJob implements ShouldQueue, ShouldBeUnique
     public string $type;
     public ?int $amountCents;
     public bool $automatic = false;
+    public bool $manual = false;
 
     // Покриває послідовні запити авторизації, перевірки UUID, зміни та створення чека.
     public int $uniqueFor = 180;
 
-    public function __construct(Order $order, string $type = FiscalReceipt::TYPE_SELL, ?int $amountCents = null, bool $automatic = false)
+    public function __construct(Order $order, string $type = FiscalReceipt::TYPE_SELL, ?int $amountCents = null, bool $automatic = false, bool $manual = false)
     {
         $this->order = $order;
         $this->type = $type;
         $this->amountCents = $amountCents;
         $this->automatic = $automatic;
+        $this->manual = $manual;
     }
 
     public function uniqueId(): string
@@ -137,7 +139,7 @@ class FiscalizeOrderJob implements ShouldQueue, ShouldBeUnique
             ]);
 
             // 4. Відправляємо в сервіс (передаємо наш UUID як id чека)
-            $response = $checkbox->createReceipt($this->order, $this->type, $effectiveAmount, $goods, $receiptUuid);
+            $response = $checkbox->createReceipt($this->order, $this->type, $effectiveAmount, $goods, $receiptUuid, allowShiftOpening: ! $this->manual);
 
             if (!$response) {
                 throw new \Exception('Empty response from Checkbox Service');

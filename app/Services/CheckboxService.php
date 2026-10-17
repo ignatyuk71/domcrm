@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Exceptions\FiscalShiftUnavailableException;
 use App\Models\FiscalLog;
 use App\Models\FiscalReceipt;
 use App\Models\Order;
@@ -170,6 +171,36 @@ class CheckboxService
         return null;
     }
 
+    /** Стан каси для ручної дії: лише читання, без автоматичного відкриття зміни. */
+    public function manualFiscalizationAvailability(?string $token = null): array
+    {
+        try {
+            $shift = $this->getCurrentShift($token);
+            $status = strtoupper((string) ($shift['status'] ?? 'UNKNOWN'));
+        } catch (\Throwable $e) {
+            $status = 'UNKNOWN';
+        }
+
+        if ($status === 'OPENED') {
+            return [
+                'available' => true,
+                'shift_status' => 'OPENED',
+                'code' => null,
+                'message' => 'Каса відкрита',
+            ];
+        }
+
+        return (new FiscalShiftUnavailableException($status))->payload();
+    }
+
+    public function assertManualFiscalizationAvailable(?string $token = null): void
+    {
+        $availability = $this->manualFiscalizationAvailability($token);
+        if (! $availability['available']) {
+            throw new FiscalShiftUnavailableException($availability['shift_status']);
+        }
+    }
+
     private function extractShiftStatus($payload): ?string
     {
         if (!is_array($payload)) {
@@ -203,11 +234,22 @@ class CheckboxService
      * Основний метод створення чека.
      * ОНОВЛЕНО: Додано аргумент $customGoods для передачі списку товарів ззовні.
      */
-    public function createReceipt(Order $order, string $type = FiscalReceipt::TYPE_SELL, ?int $amountCents = null, array $customGoods = [], ?string $receiptId = null): ?array
+    public function createReceipt(Order $order, string $type = FiscalReceipt::TYPE_SELL, ?int $amountCents = null, array $customGoods = [], ?string $receiptId = null, bool $allowShiftOpening = true): ?array
     {
-        $token = $this->auth();
+        try {
+            $token = $this->auth();
+        } catch (\Throwable $e) {
+            if (! $allowShiftOpening) {
+                throw new FiscalShiftUnavailableException();
+            }
+            throw $e;
+        }
 
-        if (!$token || !$this->ensureShift($token)) {
+        if (! $allowShiftOpening && ! $token) {
+            throw new FiscalShiftUnavailableException();
+        }
+
+        if ($allowShiftOpening && (! $token || ! $this->ensureShift($token))) {
             Log::error("Checkbox: Auth or Shift failed for Order #{$order->id}");
             return null;
         }
@@ -218,6 +260,11 @@ class CheckboxService
         // розрізняється прапором is_return:true в goods (окремого receipts/return
         // у Checkbox немає, POST на нього дає 405 Method Not Allowed).
         $endpoint = 'receipts/sell';
+
+        // Стан міг змінитися після натискання кнопки: перевіряємо знову перед POST чека.
+        if (! $allowShiftOpening) {
+            $this->assertManualFiscalizationAvailable($token);
+        }
 
         $start = microtime(true);
         $response = $this->client($token)->post($this->url($endpoint), $payload);

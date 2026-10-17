@@ -2,16 +2,24 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\FiscalShiftUnavailableException;
 use App\Http\Controllers\Controller;
 use App\Jobs\FiscalizeOrderJob;
 use App\Models\FiscalReceipt;
 use App\Models\Order;
+use App\Services\CheckboxService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 
 class FiscalController extends Controller
 {
+    public function availability(CheckboxService $checkbox): JsonResponse
+    {
+        return response()->json($checkbox->manualFiscalizationAvailability())
+            ->header('Cache-Control', 'no-store');
+    }
+
     /**
      * Запуск фіскалізації (Продаж або Передоплата).
      */
@@ -153,9 +161,13 @@ class FiscalController extends Controller
     private function runFiscalJob(Order $order, string $type, ?int $amount = null): JsonResponse
     {
         try {
+            app(CheckboxService::class)->assertManualFiscalizationAvailable();
+
             // Використовуємо dispatchSync, щоб фронтенд одразу отримав результат або помилку.
             // Якщо треба background processing - замінити на dispatch()
-            FiscalizeOrderJob::dispatchSync($order, $type, $amount);
+            FiscalizeOrderJob::dispatchSync($order, $type, $amount, manual: true);
+        } catch (FiscalShiftUnavailableException $e) {
+            return response()->json($e->payload(), $e->httpStatus());
         } catch (\Throwable $e) {
             Log::error('Fiscalize Job Failed (Sync)', [
                 'order_id' => $order->id,

@@ -1,5 +1,8 @@
 <script setup>
   import { computed, onMounted, onUnmounted, ref } from 'vue';
+  import Toast from '@/crm/components/ui/Toast.vue';
+  import { useToast } from '@/crm/composables/useToast';
+  import { useFiscalAvailability } from '@/crm/composables/useFiscalAvailability';
   import OrderDetails from '@/crm/components/orders/list/OrderDetails.vue';
   import DeliveryStatusLabel from '@/crm/components/orders/list/DeliveryStatusLabel.vue';
   import {
@@ -35,6 +38,13 @@
     'save-comment': null,
   });
 
+  const { toast, showToast, closeToast, runAction } = useToast();
+  const { available: fiscalAvailable, disabledReason: fiscalDisabledReason } = useFiscalAvailability({
+    onError: (message, retry) => showToast({
+      type: 'error', title: 'Стан каси недоступний', messages: [message],
+      actionLabel: 'Повторити перевірку', onAction: retry,
+    }),
+  });
   const ttnConfirmOpen = ref(false);
   const ttnConfirmOrder = ref(null);
 
@@ -404,10 +414,11 @@
                 <div
                   v-else
                   class="fiscal-widget widget-empty"
-                  :class="{ 'widget-error': order.latestFiscalReceipt?.status === 'error' }"
-                  title="Натисніть, щоб фіскалізувати"
+                  :class="{ 'widget-error': order.latestFiscalReceipt?.status === 'error', 'widget-disabled': !fiscalAvailable }"
+                  :title="fiscalDisabledReason || 'Натисніть, щоб фіскалізувати'"
+                  :aria-disabled="!fiscalAvailable"
                   role="button"
-                  @click.stop="$emit('quick-fiscalize', order)"
+                  @click.stop="fiscalAvailable && $emit('quick-fiscalize', order)"
                 >
                   <div class="d-flex align-items-center justify-content-between w-100 gap-2">
                     <span class="widget-price">
@@ -557,6 +568,7 @@
       </div>
     </div>
   </div>
+  <Toast v-bind="toast" @close="closeToast" @action="runAction" />
 </template>
 
 <style scoped>
@@ -585,6 +597,9 @@
 .widget-empty:hover .widget-price { color: #1e293b; }
 .widget-icon-muted { font-size: 0.9rem; opacity: 0.4; transition: color 0.2s; }
 .widget-empty:hover .widget-icon-muted { color: #3b82f6; opacity: 1; }
+.widget-empty.widget-disabled { cursor: not-allowed; }
+.widget-empty.widget-disabled:hover { border-style: dashed; border-color: #cbd5e1; color: #64748b; background: #fff; }
+.widget-empty.widget-disabled:hover .widget-icon-muted { color: inherit; }
 .widget-empty.widget-error { background: #fef2f2; color: #b91c1c; border-color: #fca5a5; border-style: solid; }
 .delivery-widget { display: flex; flex-direction: column; justify-content: center; padding: 6px 10px; background: #fff; border-radius: 8px; border: 1px solid #e2e8f0; min-height: 48px; transition: all 0.2s; max-width: 180px; }
 .delivery-widget:hover { border-color: #cbd5e1; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.03); }
