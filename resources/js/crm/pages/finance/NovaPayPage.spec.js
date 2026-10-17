@@ -22,10 +22,12 @@ beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-10-05T09:00:00Z'));
     vi.clearAllMocks();
+    vi.spyOn(HTMLDialogElement.prototype, 'showModal').mockImplementation(function () { this.setAttribute('open', ''); });
+    vi.spyOn(HTMLDialogElement.prototype, 'close').mockImplementation(function () { this.removeAttribute('open'); });
     window.history.replaceState(null, '', '/finance/novapay');
     http.get.mockImplementation(async () => ({ data: response() }));
 });
-afterEach(() => { wrapper?.unmount(); wrapper = null; document.body.innerHTML = ''; vi.useRealTimers(); });
+afterEach(() => { wrapper?.unmount(); wrapper = null; document.body.innerHTML = ''; vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe('Інтерфейс рахунку NovaPay', () => {
     it('не показує нуль чи відсутність виплат, коли гроші вже є, а деталізація запізнюється', async () => {

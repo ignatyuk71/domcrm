@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import http from '@/crm/api/http';
 import Toast from '@/crm/components/ui/Toast.vue';
 import { useToast } from '@/crm/composables/useToast';
@@ -18,6 +18,7 @@ const loading = ref(true);
 const busy = ref('');
 const tab = ref('operations');
 const settingsOpen = ref(false);
+const settingsDialog = ref(null);
 const customPeriodOpen = ref(false);
 const connection = reactive({ connection_id: '', login: '', refresh_token: '', public_certificate: '' });
 const errors = ref({});
@@ -117,7 +118,6 @@ async function load(silent = false) {
         const response = await http.get('/finance/novapay/data', { params: filters, signal: controller.signal });
         if (id !== requestId || disposed) return;
         data.value = response.data;
-        if (!data.value.accounts.length) settingsOpen.value = true;
         acceptSync();
     } catch (error) {
         if (error.code !== 'ERR_CANCELED' && id === requestId && !disposed) fail(error);
@@ -133,10 +133,37 @@ async function perform(name, action) {
     finally { busy.value = ''; }
 }
 
-function openSettings(id = '') {
-    connection.connection_id = id;
+function openSettings(id) {
+    // Повторне відкриття не стирає чернетку й не переносить її на інше підключення.
+    if (!hasDraft.value) connection.connection_id = id ?? account.value?.connection_id ?? data.value?.connections[0]?.id ?? '';
     settingsOpen.value = true;
 }
+
+function closeSettings() {
+    if (!busy.value) settingsOpen.value = false;
+}
+
+let settingsFocus, settingsOverflow;
+function restoreSettingsPage() {
+    if (settingsOverflow !== undefined) document.body.style.overflow = settingsOverflow;
+    if (settingsFocus?.isConnected) settingsFocus.focus();
+    settingsOverflow = undefined; settingsFocus = null;
+}
+watch(settingsOpen, async open => {
+    await nextTick();
+    const dialog = settingsDialog.value;
+    if (!dialog || disposed || open !== settingsOpen.value) return;
+    if (open && !dialog.open) {
+        settingsFocus = document.activeElement;
+        settingsOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        dialog.showModal();
+        (dialog.querySelector('.is-invalid') || dialog.querySelector('select, input') || dialog).focus();
+    } else if (!open) {
+        dialog.close();
+        restoreSettingsPage();
+    }
+});
 
 function saveConnection() {
     return perform('connect', async () => {
@@ -144,6 +171,7 @@ function saveConnection() {
         errors.value = {};
         connection.connection_id = response.data.connection_id;
         connection.login = ''; connection.refresh_token = ''; connection.public_certificate = '';
+        settingsOpen.value = false;
         if (response.data.run_id) pendingIds.value = [response.data.run_id];
         success('Параметри збережено. Перевірка підключення виконується у фоні.');
         await load(true);
@@ -203,7 +231,7 @@ onMounted(() => {
     window.addEventListener('beforeunload', beforeUnload);
     interval = setInterval(() => { now.value = Date.now(); if (!busy.value && !document.hidden) load(true); }, 15000);
 });
-onBeforeUnmount(() => { disposed = true; controller?.abort(); clearInterval(interval); clearTimeout(searchTimer); window.removeEventListener('beforeunload', beforeUnload); });
+onBeforeUnmount(() => { disposed = true; settingsDialog.value?.close(); restoreSettingsPage(); controller?.abort(); clearInterval(interval); clearTimeout(searchTimer); window.removeEventListener('beforeunload', beforeUnload); });
 </script>
 
 <template>
@@ -219,31 +247,31 @@ onBeforeUnmount(() => { disposed = true; controller?.abort(); clearInterval(inte
             </div>
             <div class="heading-actions">
                 <a href="/finance" class="btn action-btn action-btn--quiet"><i class="bi bi-wallet2" aria-hidden="true"></i><span>Каса</span></a>
-                <button class="btn action-btn action-btn--quiet" type="button" :aria-expanded="settingsOpen" aria-controls="np-settings" @click="settingsOpen = !settingsOpen"><i class="bi bi-sliders" aria-hidden="true"></i><span>Підключення</span></button>
+                <button class="btn action-btn action-btn--quiet" type="button" aria-haspopup="dialog" aria-controls="np-settings" @click="openSettings()"><i class="bi bi-sliders" aria-hidden="true"></i><span>Підключення</span></button>
                 <button class="btn action-btn action-btn--primary" type="button" :disabled="Boolean(busy) || pending || !account?.enabled || account?.requires_auth" @click="refresh"><i class="bi bi-arrow-repeat" :class="{ spinning: pending }" aria-hidden="true"></i><span>{{ pending ? 'Оновлюється…' : 'Оновити дані' }}</span></button>
             </div>
         </header>
 
-        <section v-if="settingsOpen" id="np-settings" class="connection-panel" aria-labelledby="np-settings-title">
+        <dialog ref="settingsDialog" id="np-settings" class="connection-panel connection-dialog" aria-labelledby="np-settings-title" aria-describedby="np-settings-description" aria-modal="true" :aria-busy="Boolean(busy)" @cancel.prevent="closeSettings" @click.self="closeSettings">
             <div class="panel-heading">
-                <div class="panel-heading-copy"><span class="section-icon"><i class="bi bi-link-45deg" aria-hidden="true"></i></span><div><h2 id="np-settings-title">Підключення бізнес-рахунку</h2><p>Безпечний доступ до балансу та виписки.</p></div></div>
-                <button v-if="data?.accounts.length" class="icon-button" aria-label="Згорнути підключення" @click="settingsOpen = false"><i class="bi bi-chevron-up" aria-hidden="true"></i></button>
+                <div class="panel-heading-copy"><span class="section-icon"><i class="bi bi-link-45deg" aria-hidden="true"></i></span><div><h2 id="np-settings-title">Підключення бізнес-рахунку</h2><p id="np-settings-description">Безпечний доступ до балансу та виписки.</p></div></div>
+                <button type="button" class="icon-button" aria-label="Закрити підключення" :disabled="Boolean(busy)" @click="closeSettings"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
             </div>
             <div class="connection-content">
                 <p class="setup-help">У бізнес-кабінеті NovaPay відкрийте <strong>Система → Налаштування → API</strong>, увімкніть доступ для підприємства та згенеруйте параметри підключення.</p>
                 <form @submit.prevent="saveConnection">
                     <fieldset :disabled="Boolean(busy)">
                         <div class="row g-3">
-                            <div v-if="data?.connections.length" class="col-md-6"><label for="np-connection" class="form-label">Підключення</label><select id="np-connection" v-model="connection.connection_id" class="form-select"><option value="">Нове підключення</option><option v-for="item in data.connections" :key="item.id" :value="item.id">Підключення №{{ item.id }}{{ item.requires_auth ? ' — відновити доступ' : '' }}</option></select></div>
-                            <div v-if="!connection.connection_id" class="col-md-6"><label for="np-login" class="form-label">Логін NovaPay</label><input id="np-login" v-model.trim="connection.login" class="form-control" :class="{ 'is-invalid': errors.login }" :aria-invalid="Boolean(errors.login)" autocomplete="off" placeholder="Логін бізнес-кабінету" required></div>
-                            <div class="col-md-6"><label for="np-token" class="form-label">Новий Refresh Token</label><input id="np-token" v-model.trim="connection.refresh_token" class="form-control" :class="{ 'is-invalid': errors.refresh_token }" :aria-invalid="Boolean(errors.refresh_token)" type="password" autocomplete="new-password" placeholder="Вставте згенерований токен" required></div>
-                            <div class="col-md-6"><label for="np-certificate" class="form-label">Відкритий сертифікат</label><textarea id="np-certificate" v-model.trim="connection.public_certificate" class="form-control certificate-field" :class="{ 'is-invalid': errors.public_certificate }" :aria-invalid="Boolean(errors.public_certificate)" rows="3" spellcheck="false" autocomplete="off" placeholder="Вставте сертифікат із NovaPay" required></textarea></div>
+                            <div v-if="data?.connections.length" :class="connection.connection_id ? 'col-12' : 'col-md-6'"><label for="np-connection" class="form-label">Підключення</label><select id="np-connection" v-model="connection.connection_id" class="form-select"><option value="">Нове підключення</option><option v-for="item in data.connections" :key="item.id" :value="item.id">Підключення №{{ item.id }}{{ item.requires_auth ? ' — відновити доступ' : '' }}</option></select></div>
+                            <div v-if="!connection.connection_id" :class="data?.connections.length ? 'col-md-6' : 'col-12'"><label for="np-login" class="form-label">Логін NovaPay</label><input id="np-login" v-model.trim="connection.login" class="form-control" :class="{ 'is-invalid': errors.login }" :aria-invalid="Boolean(errors.login)" autocomplete="off" placeholder="Логін бізнес-кабінету" required></div>
+                            <div class="col-12"><label for="np-token" class="form-label">Новий Refresh Token</label><input id="np-token" v-model.trim="connection.refresh_token" class="form-control" :class="{ 'is-invalid': errors.refresh_token }" :aria-invalid="Boolean(errors.refresh_token)" type="password" autocomplete="new-password" placeholder="Вставте згенерований токен" required></div>
+                            <div class="col-12"><label for="np-certificate" class="form-label">Відкритий сертифікат</label><textarea id="np-certificate" v-model.trim="connection.public_certificate" class="form-control certificate-field" :class="{ 'is-invalid': errors.public_certificate }" :aria-invalid="Boolean(errors.public_certificate)" rows="5" spellcheck="false" autocomplete="off" placeholder="Вставте сертифікат із NovaPay" required></textarea></div>
                         </div>
-                        <div class="connection-footer"><div class="d-flex flex-wrap gap-2"><button class="btn action-btn action-btn--primary" type="submit"><i class="bi bi-link-45deg" aria-hidden="true"></i>{{ busy === 'connect' ? 'Зберігаємо…' : 'Зберегти й перевірити' }}</button><button v-if="data?.connections.length" class="btn action-btn action-btn--quiet" type="button" @click="discover">Повторити перевірку</button></div><span class="secure-note"><i class="bi bi-shield-lock" aria-hidden="true"></i>Токен зашифровано після збереження</span></div>
+                        <div class="connection-footer"><div class="d-flex flex-wrap gap-2"><button class="btn action-btn action-btn--quiet" type="button" @click="closeSettings">Закрити</button><button class="btn action-btn action-btn--primary" type="submit"><i class="bi bi-link-45deg" aria-hidden="true"></i>{{ busy === 'connect' ? 'Зберігаємо…' : 'Зберегти й перевірити' }}</button><button v-if="data?.connections.length" class="btn action-btn action-btn--quiet" type="button" @click="discover">Повторити перевірку</button></div><span class="secure-note"><i class="bi bi-shield-lock" aria-hidden="true"></i>Токен зашифровано після збереження</span></div>
                     </fieldset>
                 </form>
             </div>
-        </section>
+        </dialog>
 
         <div v-if="loading && !data" class="loading-state" role="status"><span class="spinner-border spinner-border-sm"></span>Завантажуємо рахунок…</div>
         <button v-else-if="!data" class="btn action-btn action-btn--primary" @click="load()">Повторити завантаження</button>
@@ -337,7 +365,7 @@ onBeforeUnmount(() => { disposed = true; controller?.abort(); clearInterval(inte
             </section>
             <div class="page-footnote"><i class="bi bi-shield-lock" aria-hidden="true"></i>Захищене підключення<span>·</span>Доступ до фінансів лише для власника</div>
         </template>
-        <Toast v-bind="toast" @close="closeToast" @action="runAction" @secondary="runSecondary" />
+        <Toast v-bind="toast" :teleport-to="settingsOpen && settingsDialog ? settingsDialog : 'body'" @close="closeToast" @action="runAction" @secondary="runSecondary" />
     </div>
 </template>
 
@@ -366,7 +394,9 @@ onBeforeUnmount(() => { disposed = true; controller?.abort(); clearInterval(inte
 .novapay-page .form-control.is-invalid, .novapay-page .form-select.is-invalid { border-color: #dc3545; }
 .novapay-page .form-label { color: #545467; font-size: 12px; font-weight: 600; }
 .connection-panel, .ledger-panel { border: 1px solid var(--np-border); background: #fff; border-radius: 16px; box-shadow: 0 3px 14px #24243803; overflow: hidden; }
-.connection-panel { margin-bottom: 22px; }
+.connection-dialog { width: min(720px, calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 32px); margin: auto; padding: 0; color: var(--np-ink); overflow: auto; box-shadow: 0 24px 80px #17132938; }
+.connection-dialog::backdrop { background: #15112580; backdrop-filter: blur(3px); }
+.connection-dialog .panel-heading { position: sticky; top: 0; z-index: 1; background: #fff; }
 .panel-heading { padding: 20px 24px; justify-content: space-between; border-bottom: 1px solid var(--np-border); }
 .panel-heading-copy { gap: 12px; }
 .section-icon { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; color: var(--np-purple); background: #f1edfc; font-size: 20px; }
