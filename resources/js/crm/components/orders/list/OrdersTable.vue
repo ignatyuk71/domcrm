@@ -6,8 +6,6 @@
     formatCurrency,
     formatDate,
     formatStatusDuration,
-    getPaymentClass,
-    getPaymentIcon,
     getStatusIcon,
     getStatusStyle,
     paymentLabels,
@@ -271,10 +269,9 @@
                   <span class="phone-text">{{ order.phone }}</span>
                   <span
                     class="payment-status-badge"
-                    :class="getPaymentClass(paymentStatusKey(order))"
+                    :data-payment-status="paymentStatusKey(order)"
                     :title="`Статус оплати: ${paymentStatusLabel(order)}`"
                   >
-                    <i class="bi" :class="getPaymentIcon(paymentStatusKey(order))" aria-hidden="true"></i>
                     <span>{{ paymentStatusLabel(order) }}</span>
                   </span>
                 </div>
@@ -667,8 +664,12 @@
 .tag-amber { background: #fef3c7; color: #b45309; }
 .tag-gray { background: #f3f4f6; color: #4b5563; }
 .status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 8px; font-size: 0.8rem; font-weight: 600; border: 1px solid rgba(0, 0, 0, 0.03); }
-.payment-status-badge { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; max-width: 100%; padding: 3px 8px; border: 1px solid; border-radius: 7px; background-color: #fff !important; font-size: 0.7rem; font-weight: 600; line-height: 1.2; white-space: nowrap; }
-.payment-status-badge i { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 0.8rem; }
+.payment-status-badge { --payment-accent: #94a3b8; --payment-background: #f1f5f9; display: inline-flex; align-items: center; box-sizing: border-box; min-height: 26px; width: 128px; max-width: 100%; padding: 4px 9px; border: 0; border-inline-start: 4px solid var(--payment-accent); border-radius: 2px; background: var(--payment-background); color: #334155; font-size: 0.7rem; font-weight: 600; line-height: 1.2; white-space: nowrap; }
+.payment-status-badge span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.payment-status-badge[data-payment-status="unpaid"] { --payment-accent: #f08088; --payment-background: #fff1f2; }
+.payment-status-badge[data-payment-status="paid"] { --payment-accent: #34a977; --payment-background: #edf9f2; }
+.payment-status-badge[data-payment-status="prepayment"] { --payment-accent: #e6ad33; --payment-background: #fff8eb; }
+.payment-status-badge[data-payment-status="refund"] { --payment-accent: #94a3b8; --payment-background: #f3f4f6; }
 .order-status-age { display: flex; align-items: center; gap: 5px; margin-top: 6px; color: #64748b; font-size: 0.7rem; line-height: 1.3; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .product-stack { display: flex; align-items: center; padding-left: 8px; }
 .product-thumb { width: 62px; height: 62px; border-radius: 10px; border: 2px solid #fff; overflow: hidden; margin-left: -10px; background: #fff; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08); position: relative; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease; }
