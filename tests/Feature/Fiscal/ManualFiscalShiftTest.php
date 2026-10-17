@@ -40,7 +40,7 @@ class ManualFiscalShiftTest extends TestCase
     private function order(): Order
     {
         $order = Order::create([
-            'order_number' => 'MANUAL-' . Str::uuid(),
+            'order_number' => 'MANUAL-' . Str::random(12),
             'status' => 'new',
             'payment_status' => 'unpaid',
             'currency' => 'UAH',
