@@ -6,11 +6,15 @@ import { useToast } from '@/crm/composables/useToast';
 import { getPaymentClass, getPaymentIcon, paymentLabels } from '@/crm/utils/orderDisplay';
 import { paymentSummary } from '@/crm/utils/orderPayment';
 
-const props = defineProps({ order: { type: Object, required: true } });
+const props = defineProps({
+  order: { type: Object, required: true },
+  variant: { type: String, default: 'select', validator: (value) => ['select', 'buttons'].includes(value) },
+});
 const statuses = ['unpaid', 'prepayment', 'paid', 'refund'];
 const normalize = (status) => status === 'prepaid' ? 'prepayment' : status || '';
 const selectedStatus = ref(normalize(props.order.payment_status));
 const saving = ref(false);
+const requestedStatus = ref(null);
 const failed = ref(false);
 const { toast, showToast, closeToast, runAction } = useToast();
 const currentStatus = computed(() => normalize(props.order.payment_status));
@@ -20,6 +24,7 @@ watch(currentStatus, (status) => { selectedStatus.value = status; });
 async function saveStatus(status) {
   if (saving.value || !statuses.includes(status) || status === currentStatus.value) return;
   saving.value = true;
+  requestedStatus.value = status;
   const order = props.order;
 
   try {
@@ -61,13 +66,44 @@ async function saveStatus(status) {
     // До підтвердження сервера в замовленні залишається попередній статус.
     selectedStatus.value = currentStatus.value;
     saving.value = false;
+    requestedStatus.value = null;
   }
 }
 </script>
 
 <template>
   <div class="payment-status-picker" @click.stop @keydown.stop>
-    <div class="payment-status-control" :class="[getPaymentClass(currentStatus), { 'has-error': failed }]">
+    <div
+      v-if="variant === 'buttons'"
+      class="payment-status-buttons"
+      :class="{ 'has-error': failed }"
+      role="group"
+      aria-label="Статус оплати"
+      :aria-invalid="failed || undefined"
+    >
+      <span class="payment-status-label" aria-hidden="true">Оплата:</span>
+      <button
+        v-for="status in statuses"
+        :key="status"
+        type="button"
+        class="payment-status-button"
+        :class="currentStatus === status ? ['is-active', getPaymentClass(status)] : []"
+        :data-status="status"
+        :aria-pressed="currentStatus === status"
+        :disabled="saving"
+        @click="saveStatus(status)"
+      >
+        <span
+          v-if="saving && requestedStatus === status"
+          class="spinner-border spinner-border-sm payment-button-icon"
+          role="status"
+          aria-label="Збереження статусу оплати"
+        ></span>
+        <i v-else class="bi payment-button-icon" :class="getPaymentIcon(status)" aria-hidden="true"></i>
+        <span>{{ paymentLabels[status] }}</span>
+      </button>
+    </div>
+    <div v-else class="payment-status-control" :class="[getPaymentClass(currentStatus), { 'has-error': failed }]">
       <span v-if="saving" class="spinner-border spinner-border-sm payment-status-icon" role="status" aria-label="Збереження статусу оплати"></span>
       <i v-else class="bi payment-status-icon" :class="getPaymentIcon(currentStatus)" aria-hidden="true"></i>
       <select
@@ -89,7 +125,16 @@ async function saveStatus(status) {
 </template>
 
 <style scoped>
-.payment-status-picker { flex-shrink: 0; }
+.payment-status-picker { flex-shrink: 0; min-width: 0; }
+.payment-status-buttons { display: flex; align-items: center; gap: 6px; max-width: 100%; padding: 0 2px; border-radius: 7px; overflow-x: auto; scrollbar-width: thin; }
+.payment-status-label { margin-right: 2px; color: #64748b; font-size: 0.78rem; font-weight: 600; white-space: nowrap; }
+.payment-status-button { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; gap: 6px; height: 28px; padding: 0 9px; border: 1px solid #d8e1ec; border-radius: 7px; background: #fff; color: #475569; font: inherit; font-size: 0.78rem; font-weight: 600; line-height: 1; white-space: nowrap; cursor: pointer; transition: border-color 0.15s, background-color 0.15s; }
+.payment-status-button:not(.is-active):hover { border-color: #94a3b8; background-color: #f8fafc; }
+.payment-status-button:focus-visible { outline: 2px solid #3b82f6; outline-offset: -2px; }
+.payment-status-button:disabled { cursor: wait; }
+.payment-status-button.is-active[data-status="refund"] { background-color: #f3e8ff !important; border-color: #d8b4fe !important; color: #6b21a8 !important; }
+.payment-button-icon { flex-shrink: 0; width: 14px; height: 14px; font-size: 14px; }
+.payment-button-icon.bi { display: inline-flex; align-items: center; justify-content: center; }
 .payment-status-control { position: relative; display: inline-flex; align-items: center; border-radius: 999px; }
 .payment-pill { appearance: none; min-height: 28px; width: 160px; padding: 4px 28px 4px 30px; border: 1px solid #e2e8f0; border-radius: inherit; background-color: #f1f5f9; color: #475569; font: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
 .payment-pill:focus-visible { outline: 2px solid #3b82f6; outline-offset: 2px; }

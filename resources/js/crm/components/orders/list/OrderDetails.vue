@@ -14,18 +14,6 @@
 
   const selectedPhoto = ref(null);
   
-  const paymentLabels = {
-    cod: 'Накладений платіж',
-    card: 'На рахунок IBAN',
-    prepay: 'Часткова передоплата',
-    cash: 'Готівка',
-    cashless: 'Безготівковий',
-  };
-  
-  function paymentLabel(value) {
-    return paymentLabels[value] || value || '—';
-  }
-  
   const props = defineProps({
     order: { type: Object, required: true },
     copiedTtn: { type: String, default: '' },
@@ -106,41 +94,35 @@
   <template>
     <div class="details-wrapper">
       <div class="order-summary-bar">
-        <div class="order-summary-left">
-          <div class="order-id-line">
-            <span class="summary-label">Замовлення</span>
-            <span class="summary-number font-monospace">#{{ order.order_number }}</span>
-            <span v-if="order.external_id" class="small text-muted">На сайті: #{{ order.external_id }}</span>
+        <div class="order-summary-top">
+          <div class="order-summary-info">
+            <div class="order-id-line">
+              <span class="summary-label">Замовлення</span>
+              <span class="summary-number font-monospace">#{{ order.order_number }}</span>
+              <span v-if="order.external_id" class="summary-external">На сайті: #{{ order.external_id }}</span>
+            </div>
+
+            <div class="order-meta-line">
+              <span class="meta-item">
+                <i class="bi bi-clock-history text-muted" aria-hidden="true"></i>
+                {{ formatDate(order.created_at) }}
+              </span>
+
+              <span
+                v-if="order.source_name"
+                class="meta-item summary-source"
+                :title="order.source_name"
+              >
+                <i :class="order.source_icon || 'bi bi-globe2'" aria-hidden="true"></i>
+                <span>{{ order.source_name }}</span>
+              </span>
+            </div>
           </div>
-  
-          <div class="order-meta-line">
-            <span class="meta-item">
-              <i class="bi bi-clock-history me-1 text-muted"></i>
-              {{ formatDate(order.created_at) }}
-            </span>
-  
-            <span
-              class="meta-item source-pill"
-              v-if="order.source_name"
-              :style="order.source_color
-                ? {
-                    color: order.source_color,
-                    borderColor: order.source_color + '40',
-                    backgroundColor: order.source_color + '10',
-                  }
-                : {}"
-            >
-              <i v-if="order.source_icon" :class="order.source_icon" class="me-1"></i>
-              {{ order.source_name }}
-            </span>
-          </div>
+
+          <OrderPaymentStatusPicker :key="order.id" :order="order" variant="buttons" />
         </div>
-  
-        <div class="order-summary-right">
-          <OrderStatusPicker v-if="statusEditor" :key="order.id" :order="order" :editor="statusEditor" />
-  
-          <OrderPaymentStatusPicker :key="order.id" :order="order" />
-        </div>
+
+        <OrderStatusPicker v-if="statusEditor" :key="order.id" :order="order" :editor="statusEditor" />
       </div>
   
       <div class="order-tags-bar">
@@ -527,13 +509,9 @@
     box-sizing: border-box;
   }
   
-  /* HEADER */
+  /* Компактна шапка: дані й оплата зверху, статуси окремим рядком. */
   .order-summary-bar {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    align-items: start;
-    gap: 6px 16px;
-    padding: 12px 14px;
+    min-width: 0;
     background: #ffffff;
     border: 1px solid #e2e8f0;
     border-radius: 10px;
@@ -541,17 +519,22 @@
     box-shadow: 0 1px 3px rgba(0,0,0,0.02);
   }
   
-  .order-summary-left { display: contents; }
-  .order-id-line { grid-column: 1; grid-row: 1; display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
-  .summary-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.12em; opacity: 0.6; font-weight: 700; color: #64748b; }
-  .summary-number { font-size: 1rem; font-weight: 800; padding: 0 8px; border-radius: 6px; background: #f1f5f9; color: #0f172a; border: 1px solid #e2e8f0; }
-  
-  .order-meta-line { grid-column: 1 / -1; grid-row: 2; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 0.8rem; }
-  .meta-item { display: inline-flex; align-items: center; gap: 4px; color: #475569; }
-  .source-pill { border-radius: 999px; padding: 2px 10px; border: 1px solid transparent; font-size: 0.75rem; font-weight: 600; }
-  
-  .order-summary-right { grid-column: 2; grid-row: 1; display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
-  .order-summary-right :deep(.status-picker) { flex: 1; min-width: 0; }
+  .order-summary-top { display: flex; align-items: center; justify-content: space-between; gap: 12px 16px; min-height: 44px; padding: 7px 12px; }
+  .order-summary-info { display: flex; align-items: center; gap: 12px; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
+  .order-id-line { display: flex; align-items: center; gap: 8px; flex-shrink: 0; white-space: nowrap; }
+  .summary-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.12em; font-weight: 700; color: #94a3b8; }
+  .summary-number { font-size: 0.95rem; font-weight: 800; padding: 1px 8px; border-radius: 6px; background: #f1f5f9; color: #0f172a; border: 1px solid #e2e8f0; line-height: 22px; }
+  .summary-external { margin-left: 4px; padding-left: 12px; border-left: 1px solid #e2e8f0; font-size: 0.75rem; color: #64748b; }
+  .order-meta-line { display: flex; align-items: center; gap: 12px; min-width: 0; font-size: 0.75rem; }
+  .meta-item { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; padding-left: 12px; border-left: 1px solid #e2e8f0; color: #64748b; white-space: nowrap; }
+  .summary-source { font-weight: 600; color: #475569; }
+  .order-summary-bar :deep(.status-picker) { border-top: 1px solid #e2e8f0; }
+
+  @media (max-width: 1199.98px) {
+    .order-summary-top { flex-wrap: wrap; gap: 6px 12px; }
+    .order-summary-info { flex: 1 1 100%; }
+    .order-summary-top :deep(.payment-status-picker) { margin-left: auto; max-width: 100%; }
+  }
   
   /* TAGS */
   .order-tags-bar { margin-top: 8px; padding: 8px 12px; background: rgba(255, 255, 255, 0.6); border-radius: 10px; border: 1px dashed #cbd5e1; display: grid; grid-template-columns: minmax(0, 2fr) minmax(230px, 1fr); gap: 10px 16px; }
@@ -715,8 +698,12 @@
   @media (max-width: 991.98px) { .products-footer { grid-template-columns: 1fr; } }
   @media (max-width: 767.98px) {
     .details-wrapper { padding: 0; margin-top: -1px; }
-    .order-summary-bar { grid-template-columns: minmax(0, 1fr); gap: 8px; border-radius: 0; border: none; border-bottom: 1px solid #e2e8f0; }
-    .order-summary-right { grid-column: 1; grid-row: 3; width: 100%; }
+    .order-summary-bar { border-radius: 0; border: none; border-bottom: 1px solid #e2e8f0; }
+    .order-summary-top { padding-inline: 10px; }
+    .order-summary-info { gap: 8px; }
+    .summary-label { display: none; }
+    .order-meta-line { gap: 8px; }
+    .meta-item, .summary-external { padding-left: 8px; }
     .panel-card { border-radius: 0; border-left: none; border-right: none; box-shadow: none; }
     .clean-table th, .clean-table td { padding: 6px 6px; font-size: 0.75rem; }
     .product-thumb-lg { width: 42px; height: 42px; }
