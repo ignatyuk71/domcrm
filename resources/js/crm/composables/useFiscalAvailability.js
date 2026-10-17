@@ -4,7 +4,7 @@ import { fetchFiscalAvailability } from '@/crm/api/fiscal';
 const initialState = () => ({ available: false, shift_status: 'UNKNOWN', code: null, message: 'Перевіряємо стан каси…' });
 const state = reactive(initialState());
 const consumers = new Set();
-const pollInterval = 60_000;
+const pollInterval = 20 * 60_000;
 let timer = null;
 let inFlight = null;
 let generation = 0;

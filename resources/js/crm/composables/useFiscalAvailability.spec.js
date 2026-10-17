@@ -54,7 +54,7 @@ describe('спільна доступність каси', () => {
     expect(fetchFiscalAvailability).toHaveBeenCalledTimes(1);
   });
 
-  it('оновлює спільний стан після відкриття каси через focus та раз на хвилину', async () => {
+  it('оновлює спільний стан після відкриття каси через focus та кожні 20 хвилин', async () => {
     fetchFiscalAvailability.mockResolvedValueOnce({ data: closed });
     const first = consumer();
     const second = consumer();
@@ -66,7 +66,9 @@ describe('спільна доступність каси', () => {
     await flushPromises();
     expect(fetchFiscalAvailability).toHaveBeenCalledTimes(2);
     expect(first.vm.available).toBe(true);
-    await vi.advanceTimersByTimeAsync(60_000);
+    await vi.advanceTimersByTimeAsync(20 * 60_000 - 1);
+    expect(fetchFiscalAvailability).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1);
     expect(fetchFiscalAvailability).toHaveBeenCalledTimes(3);
   });
 

@@ -105,7 +105,7 @@ describe('ручна фіскалізація та каса', () => {
     await flushPromises();
     expect(fiscalize).not.toHaveBeenCalled();
     fetchFiscalAvailability.mockResolvedValue({ data: opened });
-    await vi.advanceTimersByTimeAsync(60_000);
+    await vi.advanceTimersByTimeAsync(20 * 60_000);
     expect(fiscalize).not.toHaveBeenCalled();
     expect(wrapper.get('.btn-main').attributes('disabled')).toBeUndefined();
   });
