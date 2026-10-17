@@ -7,7 +7,7 @@ vi.mock('@/crm/api/http', () => ({ default: { get: vi.fn(), post: vi.fn(), put: 
 
 const response = () => ({
     accounts: [{ id: 1, connection_id: 1, client_name: 'ФОП Тест', iban: 'UA2935 •••• 0001', currency: 'UAH', timezone: 'Europe/Kyiv', enabled: true, requires_auth: false }],
-    connections: [{ id: 1 }], account_id: 1, balance: null, incoming_minor: null,
+    connections: [{ id: 1, has_refresh_token: true, has_public_certificate: true, requires_auth: false, verified_at: '2026-10-17T08:00:00Z' }], account_id: 1, balance: null, incoming_minor: null,
     coverage_complete: false, operations_verified: true,
     refresh_schedule: { times: ['14:30', '20:15', '23:45'], timezone: 'Europe/Kyiv', previous_at: '2026-10-16T20:45:00Z', next_at: '2026-10-17T11:30:00Z', grace_minutes: 10 },
     operations: { data: [], total: 0, last_page: 1, current_page: 1 }, sync: [],
@@ -27,6 +27,8 @@ async function openConnection() {
 }
 async function fillConnection() {
     await dialog().get('#np-connection').setValue('1');
+    const replace = dialog().findAll('button').find(button => button.text() === 'Замінити параметри');
+    if (replace) await replace.trigger('click');
     await dialog().get('#np-token').setValue('test-refresh-token');
     await dialog().get('#np-certificate').setValue('test-public-certificate');
 }
@@ -119,8 +121,10 @@ describe('Модальне підключення NovaPay', () => {
         expect(document.body.style.overflow).toBe('auto');
         expect(document.querySelector('.app-toast')?.textContent).toContain('Параметри збережено');
         await openConnection();
-        expect(dialog().get('#np-token').element.value).toBe('');
-        expect(dialog().get('#np-certificate').element.value).toBe('');
+        expect(dialog().find('#np-token').exists()).toBe(false);
+        expect(dialog().find('#np-certificate').exists()).toBe(false);
+        expect(dialog().get('[data-testid="saved-refresh-token"]').text()).toContain('Збережено');
+        expect(dialog().get('[data-testid="saved-certificate"]').text()).toContain('Збережено');
     });
 
     it('не закривається через хрестик чи Escape під час збереження', async () => {
@@ -155,6 +159,108 @@ describe('Модальне підключення NovaPay', () => {
         expect(http.get).toHaveBeenCalledTimes(2);
         expect(isOpen()).toBe(false);
         expect(HTMLDialogElement.prototype.showModal).toHaveBeenCalledOnce();
+        expect(http.post).not.toHaveBeenCalled();
+    });
+
+    it('показує збережену пару маскою та станом, без порожніх полів і повторного збереження', async () => {
+        await openPage();
+        await openConnection();
+        expect(dialog().get('[data-testid="saved-refresh-token"]').text()).toContain('Збережено');
+        expect(dialog().get('[data-testid="saved-certificate"]').text()).toContain('Збережено');
+        expect(dialog().text()).toContain('Остання успішна перевірка:');
+        expect(dialog().text()).toContain('Повторно вводити їх не потрібно');
+        expect(dialog().find('#np-token').exists()).toBe(false);
+        expect(dialog().find('#np-certificate').exists()).toBe(false);
+        expect(dialog().find('button[type="submit"]').exists()).toBe(false);
+        await dialog().get('form').trigger('submit');
+        await vi.advanceTimersByTimeAsync(15000);
+        await flushPromises();
+        expect(http.post).not.toHaveBeenCalled();
+        expect(dialog().get('[data-testid="saved-refresh-token"]').text()).toContain('Збережено');
+    });
+
+    it('перевіряє збережене підключення окремо, без надсилання пари токенів', async () => {
+        http.post.mockResolvedValue({ data: { run_id: 33 } });
+        await openPage(); await openConnection();
+        await dialog().findAll('button').find(button => button.text() === 'Перевірити підключення').trigger('click');
+        await flushPromises();
+        expect(http.post).toHaveBeenCalledExactlyOnceWith('/finance/novapay/connections/1/discover');
+        expect(isOpen()).toBe(true);
+        expect(dialog().get('[data-testid="saved-certificate"]').text()).toContain('Збережено');
+    });
+
+    it('замінює лише явно введену повну пару та не надсилає маску чи порожні значення', async () => {
+        let submitted;
+        http.post.mockImplementation(async (url, payload) => {
+            submitted = { url, payload: { ...payload } };
+            return { data: { connection_id: 1 } };
+        });
+        await openPage(); await openConnection();
+        await dialog().findAll('button').find(button => button.text() === 'Замінити параметри').trigger('click');
+        expect(dialog().get('#np-token').element.value).toBe('');
+        expect(dialog().get('#np-certificate').element.value).toBe('');
+        expect(dialog().get('button[type="submit"]').attributes('disabled')).toBeDefined();
+        await dialog().get('#np-token').setValue('new-pair-refresh');
+        await dialog().get('form').trigger('submit'); await flushPromises();
+        expect(http.post).not.toHaveBeenCalled();
+        expect(dialog().get('#np-connection').attributes('disabled')).toBeDefined();
+        await dialog().get('#np-certificate').setValue('new-pair-certificate');
+        await dialog().get('form').trigger('submit'); await flushPromises();
+        expect(http.post).toHaveBeenCalledOnce();
+        expect(submitted).toEqual({ url: '/finance/novapay/connections', payload: {
+            connection_id: 1, login: '', refresh_token: 'new-pair-refresh', public_certificate: 'new-pair-certificate',
+        } });
+        expect(isOpen()).toBe(false);
+    });
+
+    it('скасовує заміну й повертає збережений стан без запису на сервер', async () => {
+        await openPage(); await openConnection(); await fillConnection();
+        await dialog().findAll('button').find(button => button.text() === 'Скасувати заміну').trigger('click');
+        expect(dialog().find('#np-token').exists()).toBe(false);
+        expect(document.activeElement).toBe(dialog().get('#np-replace').element);
+        expect(dialog().get('[data-testid="saved-refresh-token"]').text()).toContain('Збережено');
+        expect(http.post).not.toHaveBeenCalled();
+        await dialog().findAll('button').find(button => button.text() === 'Замінити параметри').trigger('click');
+        expect(dialog().get('#np-token').element.value).toBe('');
+    });
+
+    it('повтор toast після скасування заміни не надсилає очищену пару', async () => {
+        http.post.mockRejectedValue({ response: { data: { message: 'Не вдалося зберегти параметри.' } } });
+        await openPage(); await openConnection(); await fillConnection();
+        await dialog().get('form').trigger('submit'); await flushPromises();
+        expect(http.post).toHaveBeenCalledOnce();
+        await dialog().findAll('button').find(button => button.text() === 'Скасувати заміну').trigger('click');
+        await dialog().get('.app-toast').findAll('button').find(button => button.text() === 'Повторити').trigger('click');
+        await flushPromises();
+        expect(http.post).toHaveBeenCalledOnce();
+        expect(dialog().find('#np-token').exists()).toBe(false);
+    });
+
+    it('повтор невдалої перевірки не ігнорує нову чернетку параметрів', async () => {
+        http.post.mockRejectedValue({ response: { data: { message: 'Не вдалося запустити перевірку.' } } });
+        await openPage(); await openConnection();
+        await dialog().findAll('button').find(button => button.text() === 'Перевірити підключення').trigger('click');
+        await flushPromises();
+        await fillConnection();
+        await dialog().get('.app-toast').findAll('button').find(button => button.text() === 'Повторити').trigger('click');
+        await flushPromises();
+        expect(http.post).toHaveBeenCalledOnce();
+        expect(dialog().get('#np-token').element.value).toBe('test-refresh-token');
+    });
+
+    it('розрізняє відсутню пару й збережену пару, що потребує перевірки', async () => {
+        http.get.mockResolvedValue({ data: { ...response(), connections: [{ ...response().connections[0], has_public_certificate: false, verified_at: null }] } });
+        await openPage(); await openConnection();
+        expect(dialog().get('[data-testid="saved-refresh-token"]').text()).toContain('Збережено');
+        expect(dialog().get('[data-testid="saved-certificate"]').text()).toContain('Не збережено');
+        expect(dialog().find('#np-token').exists()).toBe(true);
+        wrapper.unmount(); wrapper = null;
+        http.get.mockResolvedValue({ data: { ...response(), connections: [{ ...response().connections[0], requires_auth: true }] } });
+        await openPage(); await openConnection();
+        expect(dialog().get('[data-testid="saved-refresh-token"]').text()).toContain('Збережено');
+        expect(dialog().text()).toContain('Доступ потребує перевірки');
+        expect(dialog().text()).not.toContain('Остання успішна перевірка:');
+        expect(dialog().findAll('button').find(button => button.text() === 'Перевірити підключення').attributes('disabled')).toBeDefined();
         expect(http.post).not.toHaveBeenCalled();
     });
 });

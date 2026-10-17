@@ -19,6 +19,7 @@ const busy = ref('');
 const tab = ref('operations');
 const settingsOpen = ref(false);
 const settingsDialog = ref(null);
+const editingConnection = ref(false);
 const customPeriodOpen = ref(false);
 const connection = reactive({ connection_id: '', login: '', refresh_token: '', public_certificate: '' });
 const errors = ref({});
@@ -41,6 +42,11 @@ const balanceStale = computed(() => Boolean(data.value?.balance && (
     || scheduledRefreshOverdue.value
 )));
 const hasDraft = computed(() => Boolean(connection.login || connection.refresh_token || connection.public_certificate));
+const selectedConnection = computed(() => data.value?.connections.find(item => String(item.id) === String(connection.connection_id)));
+const hasSavedCredentials = computed(() => Boolean(selectedConnection.value?.has_refresh_token && selectedConnection.value?.has_public_certificate));
+const showConnectionEditor = computed(() => !selectedConnection.value || !hasSavedCredentials.value || editingConnection.value || hasDraft.value);
+const canSaveConnection = computed(() => Boolean(showConnectionEditor.value && connection.refresh_token.trim()
+    && connection.public_certificate.trim() && (connection.connection_id || connection.login.trim())));
 const timestamp = value => value ? new Intl.DateTimeFormat('uk-UA', {
     timeZone: account.value?.timezone || 'Europe/Kyiv', dateStyle: 'short', timeStyle: 'short',
 }).format(new Date(value)) : 'Ще не отримано';
@@ -134,17 +140,34 @@ async function load(silent = false) {
     }
 }
 
-async function perform(name, action) {
+async function perform(name, action, retry) {
     if (busy.value) return;
     busy.value = name;
-    try { await action(); } catch (error) { fail(error, () => perform(name, action)); }
+    try { await action(); } catch (error) { fail(error, retry || (() => perform(name, action))); }
     finally { busy.value = ''; }
 }
 
 function openSettings(id) {
     // Повторне відкриття не стирає чернетку й не переносить її на інше підключення.
-    if (!hasDraft.value) connection.connection_id = id ?? account.value?.connection_id ?? data.value?.connections[0]?.id ?? '';
+    if (!hasDraft.value) {
+        connection.connection_id = id ?? account.value?.connection_id ?? data.value?.connections[0]?.id ?? '';
+        editingConnection.value = false;
+    }
     settingsOpen.value = true;
+}
+
+async function editConnection() {
+    editingConnection.value = true;
+    await nextTick();
+    settingsDialog.value?.querySelector('#np-token')?.focus();
+}
+
+async function cancelReplacement() {
+    connection.login = ''; connection.refresh_token = ''; connection.public_certificate = '';
+    errors.value = {};
+    editingConnection.value = false;
+    await nextTick();
+    settingsDialog.value?.querySelector('#np-replace')?.focus();
 }
 
 function closeSettings() {
@@ -174,27 +197,31 @@ watch(settingsOpen, async open => {
 });
 
 function saveConnection() {
+    // Маска збережених даних не є значенням форми; надсилаємо лише введену нову пару.
+    if (!canSaveConnection.value) return;
+    const id = String(connection.connection_id);
     return perform('connect', async () => {
         const response = await http.post('/finance/novapay/connections', connection);
         errors.value = {};
         connection.connection_id = response.data.connection_id;
         connection.login = ''; connection.refresh_token = ''; connection.public_certificate = '';
+        editingConnection.value = false;
         settingsOpen.value = false;
         if (response.data.run_id) pendingIds.value = [response.data.run_id];
         success('Параметри збережено. Перевірка підключення виконується у фоні.');
         await load(true);
-    });
+    }, () => { if (String(connection.connection_id) === id) saveConnection(); });
 }
 
 function discover() {
-    const id = connection.connection_id || account.value?.connection_id || data.value?.connections[0]?.id;
-    if (!id) { openSettings(); return; }
+    const id = connection.connection_id;
+    if (!id || selectedConnection.value?.requires_auth || !hasSavedCredentials.value || hasDraft.value) return;
     return perform('discover', async () => {
         const response = await http.post(`/finance/novapay/connections/${id}/discover`);
         pendingIds.value = response.data.run_id ? [response.data.run_id] : [];
         success(response.data.run_id ? 'Перевірку підключення поставлено у чергу.' : 'Перевірка вже виконується.');
         await load(true);
-    });
+    }, () => { if (String(connection.connection_id) === String(id)) discover(); });
 }
 
 function toggleAccount() {
@@ -230,6 +257,7 @@ function selectPeriod(key) {
     Object.assign(filters, period(key, account.value?.timezone), { page: 1 });
 }
 function beforeUnload(event) { if (hasDraft.value) { event.preventDefault(); event.returnValue = ''; } }
+watch(() => String(connection.connection_id), () => { editingConnection.value = false; errors.value = {}; });
 watch(() => [filters.account_id, filters.from, filters.to, filters.direction], () => { filters.page = 1; filters.payout_page = 1; applyFilters(); });
 watch(() => filters.page, applyFilters);
 watch(() => filters.payout_page, applyFilters);
@@ -266,16 +294,26 @@ onBeforeUnmount(() => { disposed = true; settingsDialog.value?.close(); restoreS
                 <button type="button" class="icon-button" aria-label="Закрити підключення" :disabled="Boolean(busy)" @click="closeSettings"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
             </div>
             <div class="connection-content">
-                <p class="setup-help">У бізнес-кабінеті NovaPay відкрийте <strong>Система → Налаштування → API</strong>, увімкніть доступ для підприємства та згенеруйте параметри підключення.</p>
+                <p v-if="showConnectionEditor" class="setup-help">У бізнес-кабінеті NovaPay відкрийте <strong>Система → Налаштування → API</strong>, увімкніть доступ для підприємства та згенеруйте параметри підключення.</p>
+                <p v-else class="setup-help">Параметри вже збережені та використовуються для оновлення даних. Повторно вводити їх не потрібно.</p>
                 <form @submit.prevent="saveConnection">
                     <fieldset :disabled="Boolean(busy)">
                         <div class="row g-3">
-                            <div v-if="data?.connections.length" :class="connection.connection_id ? 'col-12' : 'col-md-6'"><label for="np-connection" class="form-label">Підключення</label><select id="np-connection" v-model="connection.connection_id" class="form-select"><option value="">Нове підключення</option><option v-for="item in data.connections" :key="item.id" :value="item.id">Підключення №{{ item.id }}{{ item.requires_auth ? ' — відновити доступ' : '' }}</option></select></div>
+                            <div v-if="data?.connections.length" :class="connection.connection_id ? 'col-12' : 'col-md-6'"><label for="np-connection" class="form-label">Підключення</label><select id="np-connection" v-model="connection.connection_id" class="form-select" :disabled="hasDraft"><option value="">Нове підключення</option><option v-for="item in data.connections" :key="item.id" :value="item.id">Підключення №{{ item.id }}{{ item.requires_auth ? ' — відновити доступ' : '' }}</option></select></div>
+                            <div v-if="selectedConnection" class="col-12" data-testid="saved-credentials">
+                                <dl class="saved-credentials">
+                                    <div class="saved-credential" data-testid="saved-refresh-token"><dt><i class="bi bi-key" aria-hidden="true"></i>Refresh Token<span>{{ selectedConnection.has_refresh_token ? 'Збережено' : 'Не збережено' }}</span></dt><dd><span v-if="selectedConnection.has_refresh_token" class="credential-mask" aria-hidden="true">•••• •••• •••• ••••</span><span v-else>Токен відсутній</span><small>{{ selectedConnection.has_refresh_token ? 'Значення приховано' : 'Додайте параметри нижче' }}</small></dd></div>
+                                    <div class="saved-credential" data-testid="saved-certificate"><dt><i class="bi bi-file-earmark-lock" aria-hidden="true"></i>Сертифікат<span>{{ selectedConnection.has_public_certificate ? 'Збережено' : 'Не збережено' }}</span></dt><dd><span>{{ selectedConnection.has_public_certificate ? 'У захищеному сховищі' : 'Сертифікат відсутній' }}</span><small>{{ selectedConnection.has_public_certificate ? 'Використовується для доступу' : 'Додайте параметри нижче' }}</small></dd></div>
+                                </dl>
+                                <p class="credential-check"><i class="bi bi-shield-lock" aria-hidden="true"></i>{{ selectedConnection.requires_auth ? 'Доступ потребує перевірки. Перегляньте діагностику синхронізації.' : selectedConnection.verified_at ? `Остання успішна перевірка: ${timestamp(selectedConnection.verified_at)}` : 'Успішну перевірку підключення ще не підтверджено.' }}</p>
+                            </div>
                             <div v-if="!connection.connection_id" :class="data?.connections.length ? 'col-md-6' : 'col-12'"><label for="np-login" class="form-label">Логін NovaPay</label><input id="np-login" v-model.trim="connection.login" class="form-control" :class="{ 'is-invalid': errors.login }" :aria-invalid="Boolean(errors.login)" autocomplete="off" placeholder="Логін бізнес-кабінету" required></div>
-                            <div class="col-12"><label for="np-token" class="form-label">Новий Refresh Token</label><input id="np-token" v-model.trim="connection.refresh_token" class="form-control" :class="{ 'is-invalid': errors.refresh_token }" :aria-invalid="Boolean(errors.refresh_token)" type="password" autocomplete="new-password" placeholder="Вставте згенерований токен" required></div>
-                            <div class="col-12"><label for="np-certificate" class="form-label">Відкритий сертифікат</label><textarea id="np-certificate" v-model.trim="connection.public_certificate" class="form-control certificate-field" :class="{ 'is-invalid': errors.public_certificate }" :aria-invalid="Boolean(errors.public_certificate)" rows="5" spellcheck="false" autocomplete="off" placeholder="Вставте сертифікат із NovaPay" required></textarea></div>
+                            <template v-if="showConnectionEditor">
+                                <div class="col-12"><label for="np-token" class="form-label">Новий Refresh Token</label><input id="np-token" v-model.trim="connection.refresh_token" class="form-control" :class="{ 'is-invalid': errors.refresh_token }" :aria-invalid="Boolean(errors.refresh_token)" type="password" autocomplete="new-password" placeholder="Вставте новий згенерований токен" required></div>
+                                <div class="col-12"><label for="np-certificate" class="form-label">Новий відкритий сертифікат</label><textarea id="np-certificate" v-model.trim="connection.public_certificate" class="form-control certificate-field" :class="{ 'is-invalid': errors.public_certificate }" :aria-invalid="Boolean(errors.public_certificate)" rows="5" spellcheck="false" autocomplete="off" placeholder="Вставте новий сертифікат із NovaPay" required></textarea></div>
+                            </template>
                         </div>
-                        <div class="connection-footer"><div class="d-flex flex-wrap gap-2"><button class="btn action-btn action-btn--quiet" type="button" @click="closeSettings">Закрити</button><button class="btn action-btn action-btn--primary" type="submit"><i class="bi bi-link-45deg" aria-hidden="true"></i>{{ busy === 'connect' ? 'Зберігаємо…' : 'Зберегти й перевірити' }}</button><button v-if="data?.connections.length" class="btn action-btn action-btn--quiet" type="button" @click="discover">Повторити перевірку</button></div><span class="secure-note"><i class="bi bi-shield-lock" aria-hidden="true"></i>Токен зашифровано після збереження</span></div>
+                        <div class="connection-footer"><div class="d-flex flex-wrap gap-2"><button class="btn action-btn action-btn--quiet" type="button" @click="closeSettings">Закрити</button><button v-if="showConnectionEditor" class="btn action-btn action-btn--primary" type="submit" :disabled="!canSaveConnection"><i class="bi bi-link-45deg" aria-hidden="true"></i>{{ busy === 'connect' ? 'Зберігаємо…' : selectedConnection ? 'Зберегти нові параметри' : 'Зберегти й перевірити' }}</button><button v-else class="btn action-btn action-btn--primary" type="button" :disabled="selectedConnection.requires_auth" @click="discover"><i class="bi bi-arrow-repeat" aria-hidden="true"></i>Перевірити підключення</button><button v-if="selectedConnection && !showConnectionEditor" id="np-replace" class="btn action-btn action-btn--quiet" type="button" @click="editConnection">Замінити параметри</button><button v-else-if="selectedConnection && hasSavedCredentials" class="btn action-btn action-btn--quiet" type="button" @click="cancelReplacement">Скасувати заміну</button></div><span class="secure-note"><i class="bi bi-shield-lock" aria-hidden="true"></i>{{ selectedConnection ? 'Збережені значення приховано' : 'Токен шифрується під час збереження' }}</span></div>
                     </fieldset>
                 </form>
             </div>
@@ -414,6 +452,15 @@ onBeforeUnmount(() => { disposed = true; settingsDialog.value?.close(); restoreS
 .setup-help { font-size: 12px; color: #737386; line-height: 1.8; margin-bottom: 20px; }
 .setup-help strong { color: #53536b; font-weight: 600; }
 .certificate-field { font-family: ui-monospace, monospace; }
+.saved-credentials { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: 12px; margin: 4px 0 12px; }
+.saved-credential { min-width: 0; padding: 16px; border: 1px solid #e5e0f1; border-radius: 12px; background: #faf9fd; }
+.saved-credential dt { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; font-size: 12px; font-weight: 600; color: #545467; }
+.saved-credential dt i { color: var(--np-purple); }
+.saved-credential dt span { margin-left: auto; padding: 3px 6px; border-radius: 5px; background: #eeebf5; color: #675d7e; font-size: 10px; }
+.saved-credential dd { display: flex; flex-direction: column; gap: 7px; margin: 16px 0 0; color: #353549; font-size: 13px; font-weight: 500; }
+.saved-credential dd small { color: var(--np-muted); font-size: 11px; font-weight: 400; }
+.credential-mask { letter-spacing: 2px; }
+.credential-check { display: flex; align-items: baseline; gap: 7px; margin: 0; color: var(--np-muted); font-size: 11px; line-height: 1.6; }
 .connection-footer { flex-wrap: wrap; justify-content: space-between; gap: 16px; margin-top: 20px; }
 .secure-note { display: flex; align-items: center; gap: 7px; color: var(--np-muted); font-size: 11px; }
 .secure-note i { color: var(--np-purple); }

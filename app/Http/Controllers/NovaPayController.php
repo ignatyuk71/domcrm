@@ -102,6 +102,8 @@ class NovaPayController extends Controller
             ]),
             'connections' => NovaPayConnection::query()->get()->map(fn ($item) => [
                 'id' => $item->id, 'verified_at' => $item->verified_at?->toIso8601String(), 'requires_auth' => $item->requires_auth,
+                'has_refresh_token' => $item->getRawOriginal('refresh_token') !== null && $item->getRawOriginal('refresh_token') !== '',
+                'has_public_certificate' => $item->getRawOriginal('public_certificate') !== null && $item->getRawOriginal('public_certificate') !== '',
             ]),
             'account_id' => $account?->id,
             'payouts' => $account ? app(\App\Services\NovaPay\PayoutLedger::class)->data($account, $filters['from'], $filters['to'], $filters['payout_page'] ?? 1) : null,
