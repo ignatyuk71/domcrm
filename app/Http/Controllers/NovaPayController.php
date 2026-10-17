@@ -118,12 +118,22 @@ class NovaPayController extends Controller
                 'date_from' => $run->date_from?->toDateString(), 'date_to' => $run->date_to?->toDateString(),
                 'created_at' => $run->created_at->toIso8601String(),
                 'succeeded_at' => $run->succeeded_at?->toIso8601String(),
-                'error_code' => $run->error_code, 'error_message' => $run->error_message,
+                'error_code' => $run->error_code, 'error_message' => $this->syncErrorMessage($run),
             ]),
             'operations_updated_at' => $account ? NovaPaySyncRun::query()->where('account_id', $account->id)
                 ->where('source', 'operations')->whereNotNull('succeeded_at')->orderByDesc('succeeded_at')->first()?->succeeded_at?->toIso8601String() : null,
             'refresh_minutes' => config('novapay.refresh_minutes'),
         ]);
+    }
+
+    private function syncErrorMessage(NovaPaySyncRun $run): ?string
+    {
+        // Старий обробник стирав причину збою. Не подаємо його загальний текст як доказ недійсності токена.
+        if ($run->error_code === 'authorization' && $run->error_message === 'Авторизацію NovaPay не підтверджено. Згенеруйте нові параметри доступу в бізнес-кабінеті.') {
+            return 'Попередній збій оновлення доступу NovaPay. Точну причину не збережено; необхідність заміни токена не підтверджена.';
+        }
+
+        return $run->error_message;
     }
 
     public function saveConnection(Request $request, SyncDispatcher $dispatcher)
@@ -151,6 +161,7 @@ class NovaPayController extends Controller
                 return NovaPayConnection::updateOrCreate(['login' => $login], [
                     'refresh_token' => trim($data['refresh_token']), 'public_certificate' => trim($data['public_certificate']),
                     'access_token' => null, 'token_expires_at' => null, 'requires_auth' => false,
+                    'auth_error_code' => null, 'auth_error_message' => null,
                     'verified_at' => null, 'updated_by' => $request->user()->id,
                 ]);
             });

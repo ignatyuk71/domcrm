@@ -122,8 +122,8 @@ class NovaPayClient
         try {
             return $this->soap($method, ['request_ref' => (string) Str::uuid(), 'jwt' => $this->token($connection), ...$params]);
         } catch (NovaPayException $e) {
-            if ($e->reason === 'authorization') {
-                $connection->update(['requires_auth' => true, 'access_token' => null, 'token_expires_at' => null]);
+            if ($e->reason === 'authorization' && ! $connection->requires_auth) {
+                $this->pauseAuthorization($connection, $e);
             }
             throw $e;
         }
@@ -135,7 +135,8 @@ class NovaPayClient
             return Cache::lock('novapay:auth:'.$connection->id, 45)->block(3, function () use ($connection) {
                 $connection->refresh();
                 if ($connection->requires_auth) {
-                    throw new NovaPayException('authorization', 'Потрібно відновити авторизацію NovaPay у налаштуваннях підключення.');
+                    throw new NovaPayException($connection->auth_error_code ?: 'authorization',
+                        $connection->auth_error_message ?: 'Оновлення доступу NovaPay призупинено. Перевірте підключення та історію синхронізації.');
                 }
                 if ($connection->access_token && $connection->token_expires_at?->isFuture()) {
                     return $connection->access_token;
@@ -149,20 +150,23 @@ class NovaPayClient
                     $refresh = Xml::value($result, 'refresh_token');
                     $certificate = Xml::value($result, 'public_certificate');
                     if ($jwt === '' || $refresh === '' || $certificate === '') {
-                        throw new NovaPayException('authorization', 'Неповна відповідь авторизації NovaPay. Відновіть параметри доступу.');
+                        throw new NovaPayException('incomplete_response', 'NovaPay повернув неповну відповідь оновлення доступу.');
                     }
                     // Ротацію зберігаємо до інших запитів; старий refresh token може бути вже відкликаний.
                     $connection->forceFill([
                         'refresh_token' => $refresh, 'public_certificate' => $certificate,
                         'access_token' => $jwt, 'token_expires_at' => now()->addSeconds($this->tokenLifetime($jwt)),
+                        'auth_error_code' => null, 'auth_error_message' => null,
                     ])->save();
 
                     return $jwt;
                 } catch (NovaPayException $e) {
                     if ($e->reason !== 'rate_limit') {
-                        // Після втрати відповіді неможливо безпечно повторити одноразову ротацію.
-                        $connection->forceFill(['requires_auth' => true, 'access_token' => null, 'token_expires_at' => null])->save();
-                        throw new NovaPayException('authorization', 'Авторизацію NovaPay не підтверджено. Згенеруйте нові параметри доступу в бізнес-кабінеті.');
+                        // Втрата відповіді не доводить прострочення токена. Не повторюємо невизначену одноразову ротацію.
+                        $failure = $e->reason === 'authorization' ? $e : new NovaPayException('auth_'.$e->reason,
+                            'Не вдалося оновити доступ NovaPay. '.$e->getMessage().' Оновлення призупинено до перевірки підключення; необхідність заміни токена не підтверджена.');
+                        $this->pauseAuthorization($connection, $failure);
+                        throw $failure;
                     }
                     throw $e;
                 }
@@ -172,13 +176,21 @@ class NovaPayClient
         }
     }
 
+    private function pauseAuthorization(NovaPayConnection $connection, NovaPayException $failure): void
+    {
+        // Зберігаємо лише безпечну причину, щоб наступні задачі не замінили її загальним повідомленням.
+        $connection->forceFill(['requires_auth' => true, 'access_token' => null, 'token_expires_at' => null,
+            'auth_error_code' => $failure->reason, 'auth_error_message' => $failure->getMessage()])->save();
+    }
+
     private function tokenLifetime(string $jwt): int
     {
         $parts = explode('.', $jwt);
         $payload = json_decode(base64_decode(strtr($parts[1] ?? '', '-_', '+/')), true);
         $expiry = $payload['exp'] ?? null;
 
-        return is_numeric($expiry) ? max(0, min(240, (int) $expiry - time() - 30)) : 0;
+        // Використовуємо строк JWT із запасом хвилина, максимум дві години, без зайвих ротацій кожні 5 хвилин.
+        return is_numeric($expiry) ? max(0, min(7200, (int) $expiry - now()->getTimestamp() - 60)) : 0;
     }
 
     private function soap(string $method, array $params): DOMElement
@@ -203,8 +215,13 @@ class NovaPayClient
                 ->withHeaders(['SOAPAction' => '"http://tempuri.org/IClientAPIService/'.$method.'"'])
                 ->withBody($document->saveXML(), 'text/xml; charset=utf-8')
                 ->post(config('novapay.endpoint'));
-        } catch (ConnectionException) {
-            throw new NovaPayException('network', 'NovaPay недоступний. Останні отримані дані збережено.', true);
+        } catch (ConnectionException $e) {
+            $previous = $e->getPrevious();
+            $context = $previous && method_exists($previous, 'getHandlerContext') ? $previous->getHandlerContext() : [];
+            $timedOut = ($context['errno'] ?? null) === 28;
+            throw new NovaPayException($timedOut ? 'timeout' : 'network',
+                $timedOut ? 'NovaPay не відповів у відведений час. Останні отримані дані збережено.'
+                    : 'Немає з’єднання з NovaPay. Останні отримані дані збережено.', true);
         }
         if ($response->status() === 429) {
             throw new NovaPayException('rate_limit', 'Перевищено ліміт запитів NovaPay. Оновлення буде повторено пізніше.', true);
@@ -213,7 +230,7 @@ class NovaPayClient
             throw new NovaPayException('authorization', 'NovaPay відхилив доступ. Перевірте авторизацію підключення.');
         }
         if (! $response->successful()) {
-            throw new NovaPayException('provider_http', 'NovaPay не підтвердив запит. Останні отримані дані збережено.', $response->serverError());
+            throw new NovaPayException('provider_http', 'NovaPay повернув HTTP '.$response->status().'. Останні отримані дані збережено.', $response->serverError());
         }
         $xml = Xml::parse($response->body());
         if (Xml::nodes($xml, 'Fault') !== []) {
