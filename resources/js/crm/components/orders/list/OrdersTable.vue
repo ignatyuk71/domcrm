@@ -6,8 +6,11 @@
     formatCurrency,
     formatDate,
     formatStatusDuration,
+    getPaymentClass,
+    getPaymentIcon,
     getStatusIcon,
     getStatusStyle,
+    paymentLabels,
   } from '@/crm/utils/orderDisplay';
   
   const props = defineProps({
@@ -36,6 +39,9 @@
 
   const ttnConfirmOpen = ref(false);
   const ttnConfirmOrder = ref(null);
+
+  const paymentStatusKey = (order) => order.payment_status === 'prepaid' ? 'prepayment' : order.payment_status;
+  const paymentStatusLabel = (order) => paymentLabels[paymentStatusKey(order)] || order.payment_status_label || '—';
 
   const paymentMethodOptions = {
     cod: { label: 'Накладений платіж', icon: 'bi-cash-coin' },
@@ -162,6 +168,7 @@
             <th class="th-w-200">Клієнт / Джерело</th>
             <th class="th-w-110">Теги</th>
             <th class="th-w-140">Контакт</th>
+            <th class="th-w-140" scope="col">Статус оплати</th>
             <th class="th-w-140">Статус</th>
             <th class="th-w-150">Товари</th>
             <th class="th-w-100">Сума</th>
@@ -262,6 +269,14 @@
                   <i class="bi bi-chat-left-text-fill me-1"></i>
                   {{ order.comment }}
                 </div>
+              </td>
+
+              <td class="cell-payment">
+                <span class="payment-status-caption">Оплата:</span>
+                <span class="status-badge payment-status-badge" :class="getPaymentClass(paymentStatusKey(order))">
+                  <i class="bi" :class="getPaymentIcon(paymentStatusKey(order))" aria-hidden="true"></i>
+                  <span>{{ paymentStatusLabel(order) }}</span>
+                </span>
               </td>
 
               <td class="cell-status">
@@ -504,7 +519,7 @@
             </tr>
 
             <tr v-if="expandedRows.has(order.id)" class="details-row">
-              <td colspan="11" class="p-0 border-0">
+              <td colspan="12" class="p-0 border-0">
                 <div class="details-wrapper">
                   <OrderDetails
                     :order="order"
@@ -647,6 +662,8 @@
 .tag-amber { background: #fef3c7; color: #b45309; }
 .tag-gray { background: #f3f4f6; color: #4b5563; }
 .status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 8px; font-size: 0.8rem; font-weight: 600; border: 1px solid rgba(0, 0, 0, 0.03); }
+.payment-status-badge { white-space: nowrap; }
+.payment-status-caption { display: none; }
 .order-status-age { display: flex; align-items: center; gap: 5px; margin-top: 6px; color: #64748b; font-size: 0.7rem; line-height: 1.3; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .product-stack { display: flex; align-items: center; padding-left: 8px; }
 .product-thumb { width: 62px; height: 62px; border-radius: 10px; border: 2px solid #fff; overflow: hidden; margin-left: -10px; background: #fff; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08); position: relative; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease; }
@@ -774,7 +791,7 @@
   .orders-container { padding: 10px; }
   .orders-table thead { display: none; }
   .orders-table, .orders-table tbody, .orders-table tr { display: block; width: 100%; }
-  .order-row { display: grid !important; grid-template-columns: auto 1fr; grid-template-areas: 'id client' 'status status' 'phone phone' 'fiscal fiscal' 'date date'; gap: 10px; margin-bottom: 12px; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02); }
+  .order-row { display: grid !important; grid-template-columns: auto 1fr; grid-template-areas: 'id client' 'status status' 'phone phone' 'payment payment' 'fiscal fiscal' 'date date'; gap: 10px; margin-bottom: 12px; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02); }
   .order-row.row-expanded { margin-bottom: 0; border-bottom: none; border-bottom-left-radius: 0; border-bottom-right-radius: 0; box-shadow: none; z-index: 10; }
   .order-row td { display: block; border: none; padding: 0 !important; width: 100% !important; box-sizing: border-box; }
   .cell-expand { display: none !important; }
@@ -782,6 +799,8 @@
   .cell-client { grid-area: client; margin-bottom: 0; display: flex; align-items: center; }
   .cell-status { grid-area: status; justify-self: flex-start; }
   .cell-phone { grid-area: phone; font-size: 0.9rem; }
+  .cell-payment { grid-area: payment; }
+  .payment-status-caption { display: inline; margin-right: 8px; color: #64748b; font-size: 0.75rem; }
   .cell-fiscal { grid-area: fiscal; text-align: left !important; }
   .cell-fiscal .fiscal-widget { align-items: flex-start !important; min-width: 0; }
   .cell-date { grid-area: date; margin-top: 4px; padding-top: 8px !important; border-top: 1px dashed #e2e8f0 !important; display: flex !important; }
