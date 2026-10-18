@@ -162,14 +162,17 @@ class OrderSearchTest extends TestCase
     #[DataProvider('nameSearches')]
     public function test_searches_names_by_each_word_in_any_order_and_case(string $search, array $matches): void
     {
-        $this->order(Customer::create(['first_name' => 'Зоряна', 'last_name' => 'Гордієнко']));
-        $this->order(Customer::create(['first_name' => 'Зоряна', 'last_name' => 'Бондар']));
-        $this->order(Customer::create(['first_name' => 'Олег', 'last_name' => 'Гордієнко']));
-        $this->order(Customer::create(['first_name' => 'ЗОРЯНА ГОРДІЄНКО']));
-        $recipient = $this->order();
+        $orders = [
+            $this->order(Customer::create(['first_name' => 'Зоряна', 'last_name' => 'Гордієнко'])),
+            $this->order(Customer::create(['first_name' => 'Зоряна', 'last_name' => 'Бондар'])),
+            $this->order(Customer::create(['first_name' => 'Олег', 'last_name' => 'Гордієнко'])),
+            $this->order(Customer::create(['first_name' => 'ЗОРЯНА ГОРДІЄНКО'])),
+            $recipient = $this->order(),
+        ];
         $recipient->delivery()->create(['delivery_type' => 'warehouse', 'recipient_name' => 'Гордієнко Зоряна']);
 
-        $this->assertSearchReturns($search, $matches);
+        // MySQL не скидає AUTO_INCREMENT після відкату тестової транзакції.
+        $this->assertSearchReturns($search, array_map(fn (int $position) => $orders[$position - 1]->id, $matches));
     }
 
     public static function nameSearches(): array

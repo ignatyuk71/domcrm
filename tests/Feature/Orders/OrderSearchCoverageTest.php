@@ -167,14 +167,14 @@ class OrderSearchCoverageTest extends TestCase
         $this->order(['first_name' => 'Наталія', 'last_name' => 'Савчук', 'phone' => '+380 (68) 507-11-24'], [
             'ttn' => '96000000000000',
         ]);
-        $this->order(['first_name' => 'Наталія', 'last_name' => 'Савчук', 'phone' => '+380 73 000 00 00'], [
+        $byTtn = $this->order(['first_name' => 'Наталія', 'last_name' => 'Савчук', 'phone' => '+380 73 000 00 00'], [
             'ttn' => '20685079624000',
         ]);
 
         // Розділювачі не ділять число на незалежні умови для різних полів.
         $this->assertMatches('Савчук +380 (68) 507-96-24', [$match->id]);
         $this->assertMatches('+380 (68) 507-96-24 Наталія', [$match->id]);
-        $this->assertMatches('Наталія 507 96 24', [3, $match->id]);
+        $this->assertMatches('Наталія 507 96 24', [$byTtn->id, $match->id]);
     }
 
     public function test_copied_formatting_and_order_number_prefixes_are_supported(): void

@@ -197,10 +197,34 @@ final class OrderSearch
         });
     }
 
-    /** Усі значення передаємо параметрами; REPLACE сумісний із MySQL і SQLite. */
+    /** Усі значення нормалізації передаємо параметрами для обох драйверів БД. */
     private function expression(Builder $query, string $column, array $replacements): array
     {
         $sql = $query->getQuery()->getGrammar()->wrap($column);
+        if ($query->getConnection()->getDriverName() === 'sqlite') {
+            // Старі SQLite переповнюють стек парсера на десятках вкладених REPLACE.
+            static $registered = null;
+            $registered ??= new \WeakMap();
+            $connection = $query->getConnection();
+            foreach ([$connection->getPdo(), $connection->getReadPdo()] as $pdo) {
+                if (isset($registered[$pdo])) {
+                    continue;
+                }
+                $pdo->sqliteCreateFunction('domcrm_search_replace',
+                    static function (?string $value, string $map): ?string {
+                        if ($value === null) {
+                            return null;
+                        }
+                        $replacements = json_decode($map, true, flags: JSON_THROW_ON_ERROR);
+
+                        return str_replace(array_keys($replacements), array_values($replacements), $value);
+                    }, 2, \PDO::SQLITE_DETERMINISTIC);
+                $registered[$pdo] = true;
+            }
+
+            return ['domcrm_search_replace('.$sql.', ?)', [json_encode($replacements, JSON_THROW_ON_ERROR)]];
+        }
+
         $bindings = [];
         foreach ($replacements as $from => $to) {
             $sql = 'REPLACE('.$sql.', ?, ?)';
