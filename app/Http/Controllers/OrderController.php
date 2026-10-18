@@ -11,6 +11,7 @@ use App\Models\OrderPayment;
 use App\Models\Tag;
 use App\Models\Status;
 use App\Models\OrderSource;
+use App\Services\Orders\OrderSearch;
 use App\Services\Orders\OrderService;
 use App\Support\DeliveryStatusMapper;
 use Illuminate\Http\JsonResponse;
@@ -22,7 +23,7 @@ use Illuminate\Validation\ValidationException;
 
 class OrderController extends Controller
 {
-    public function __construct(private OrderService $orders)
+    public function __construct(private OrderService $orders, private OrderSearch $orderSearch)
     {
     }
 
@@ -39,6 +40,13 @@ class OrderController extends Controller
     /** JSON-список замовлень з базовими фільтрами (для Vue-таблиці). */
     public function list(Request $request): JsonResponse
     {
+        $request->validate([
+            'search' => ['nullable', 'string', 'max:200'],
+        ], [
+            'search.string' => 'Введіть пошуковий запит текстом.',
+            'search.max' => 'Пошуковий запит має містити не більше 200 символів.',
+        ]);
+
         $perPage = min((int) $request->get('per_page', 20), 100);
 
         $orders = Order::query()
@@ -109,21 +117,7 @@ class OrderController extends Controller
                 });
             })
             ->when($request->filled('search'), function ($q) use ($request) {
-                $term = trim((string) $request->get('search'));
-                $q->where(function ($inner) use ($term) {
-                    $inner->where('order_number', 'like', "%{$term}%")
-                        ->orWhere('search_blob', 'like', "%{$term}%")
-                        // ДОДАНО: Пошук за номером ТТН
-                        ->orWhereHas('delivery', function ($dq) use ($term) {
-                            $dq->where('ttn', 'like', "%{$term}%");
-                        })
-                        ->orWhereHas('customer', function ($cq) use ($term) {
-                            $cq->where('first_name', 'like', "%{$term}%")
-                                ->orWhere('last_name', 'like', "%{$term}%")
-                                ->orWhere('phone', 'like', "%{$term}%")
-                                ->orWhere('email', 'like', "%{$term}%");
-                        });
-                });
+                $this->orderSearch->apply($q, (string) $request->get('search'));
             })
             ->when($request->filled('tag_ids'), function ($q) use ($request) {
                 $tagIds = array_filter((array) $request->get('tag_ids'));

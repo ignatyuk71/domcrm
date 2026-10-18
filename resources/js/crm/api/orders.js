@@ -1,7 +1,7 @@
 import http from './http';
 
-export function listOrders(params = {}) {
-    return http.get('/orders/list', { params });
+export function listOrders(params = {}, config = {}) {
+    return http.get('/orders/list', { ...config, params });
 }
 
 export function deleteOrder(id) {

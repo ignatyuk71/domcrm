@@ -13,7 +13,10 @@
               @input="onSearch"
               type="text"
               class="form-control search-input"
-              placeholder="Пошук (ПІБ, телефон, ТТН)..."
+              :class="{ 'is-invalid': searchInvalid }"
+              :aria-invalid="searchInvalid ? 'true' : undefined"
+              aria-label="Пошук замовлень за ім’ям, телефоном, ТТН або номером замовлення"
+              placeholder="Пошук (ім’я, телефон, ТТН, № замовлення)..."
             />
           </div>
 
@@ -147,6 +150,7 @@ import { computed, ref } from 'vue';
 
 const props = defineProps({
   search: { type: String, default: '' },
+  searchInvalid: { type: Boolean, default: false },
   statusChips: { type: Array, default: () => [] },
   isStatusActive: { type: Function, required: true },
   holdFilterEnabled: { type: Boolean, default: false },

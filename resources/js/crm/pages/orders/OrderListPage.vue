@@ -24,6 +24,7 @@
 
     <OrdersTopbar
       v-model:search="filters.search"
+      :search-invalid="searchInvalid"
       :status-chips="statusChips"
       :is-status-active="isStatusActive"
       :hold-filter-enabled="true"
@@ -36,6 +37,8 @@
       @toggle-hold="toggleHoldFilter"
       @update:hold-days="updateHoldDays"
     />
+
+    <Toast v-bind="toast" @close="closeToast" @action="runAction" />
 
     <div class="card border-0 shadow-sm overflow-hidden">
       <OrdersTable
@@ -80,17 +83,19 @@
 
 <script setup>
 import { paymentSummary } from '@/crm/utils/orderPayment';
-import { onMounted, reactive, ref, watch } from 'vue';
+import { onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import axios from 'axios';
 import OrdersTable from '@/crm/components/orders/list/OrdersTable.vue';
 import OrdersTopbar from '@/crm/components/orders/list/OrdersTopbar.vue';
 import OrdersPagination from '@/crm/components/orders/list/OrdersPagination.vue';
 import CustomerQuickView from '@/crm/components/orders/list/CustomerQuickView.vue';
+import Toast from '@/crm/components/ui/Toast.vue';
 import { listOrders, deleteOrder, updateOrderComment } from '@/crm/api/orders';
 import { useOrderTags } from '@/crm/composables/useOrderTags';
 import { applyOrderStatus, useOrderStatuses } from '@/crm/composables/useOrderStatuses';
 import { getCustomer } from '@/crm/api/customers';
 import { useTtnCopy } from '@/crm/composables/useTtnCopy';
+import { useToast } from '@/crm/composables/useToast';
 import {
   buildPhotoUrl,
   paymentLabels,
@@ -101,6 +106,8 @@ const orders = ref([]);
 const statusEditor = useOrderStatuses((id) => orders.value.find((order) => String(order.id) === String(id)), updateStatusCounts);
 const tagEditor = useOrderTags((id) => orders.value.find((order) => String(order.id) === String(id)));
 const { copiedTtn, copyTtn } = useTtnCopy();
+const { toast, showToast, closeToast, runAction } = useToast();
+const searchInvalid = ref(false);
 const expandedRows = ref(new Set());
 const loading = ref(false);
 const deletingId = ref(null);
@@ -117,6 +124,8 @@ const holdFilterActive = ref(false);
 const filters = reactive({ search: '', statuses: [], payment_status: '', delivery_hold_days: null, page: 1, per_page: 30 });
 const perPageOptions = [15, 30, 60];
 let searchTimer;
+let listRequestId = 0;
+let listController;
 
 const statusChips = ref([{ value: '', label: 'Всі', icon: 'bi-grid', color: null }]);
 const countableStatusCodes = new Set(['new', 'in_process', 'confirmed', 'reserved', 'packing', 'packed', 'shipped', 'delivered']);
@@ -264,17 +273,25 @@ async function refreshDeliveryStatus(order) {
 }
 
 async function fetchData() {
+  clearTimeout(searchTimer);
+  const requestId = ++listRequestId;
+  listController?.abort();
+  const controller = new AbortController();
+  listController = controller;
+  const params = {
+    page: filters.page,
+    per_page: filters.per_page,
+    search: filters.search || undefined,
+    // Статуси передаємо рядком, щоб серіалізація масиву не впливала на фільтрацію.
+    status_ids: filters.statuses?.length ? filters.statuses.join(',') : undefined,
+    payment_status: filters.payment_status || undefined,
+    delivery_hold_days: filters.delivery_hold_days || undefined,
+  };
   loading.value = true;
   try {
-    const { data } = await listOrders({
-      page: filters.page,
-      per_page: filters.per_page,
-      search: filters.search || undefined,
-      // Send as comma-separated string to avoid array serialization edge cases
-      status_ids: filters.statuses?.length ? filters.statuses.join(',') : undefined,
-      payment_status: filters.payment_status || undefined,
-      delivery_hold_days: filters.delivery_hold_days || undefined,
-    });
+    const { data } = await listOrders(params, { signal: controller.signal });
+    // Навіть якщо запит уже завершився на сервері, його стара відповідь не змінює новий пошук.
+    if (requestId !== listRequestId) return;
 
     const payload = data.data || data?.data?.data || [];
     orders.value = payload.map(mapOrder);
@@ -294,9 +311,25 @@ async function fetchData() {
       buildStatusChips();
     }
   } catch (error) {
-    console.error(error);
+    if (requestId !== listRequestId || controller.signal.aborted || axios.isCancel(error)) return;
+    const details = error.response?.data;
+    searchInvalid.value = Boolean(details?.errors?.search);
+    const messages = Object.values(details?.errors || {}).flat();
+    showToast({
+      type: 'error',
+      title: 'Не вдалося оновити список замовлень',
+      messages: [
+        params.search ? `Пошук: «${params.search}». Попередні результати не оновлено.` : 'Список не оновлено. Спробуйте ще раз.',
+        ...(messages.length ? messages : [details?.message || error.message || 'Перевірте з’єднання та повторіть запит.']),
+      ],
+      actionLabel: 'Повторити',
+      onAction: fetchData,
+    });
   } finally {
-    loading.value = false;
+    if (requestId === listRequestId) {
+      loading.value = false;
+      listController = null;
+    }
   }
 }
 
@@ -414,12 +447,21 @@ function toggleHoldFilter() {
   fetchData();
 }
 
-function handleSearch() {
+function handleSearch(value) {
   clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => {
-    filters.page = 1;
-    fetchData();
-  }, 300);
+  if (typeof value === 'string') filters.search = value;
+  // Скасовуємо попередній запит одразу, ще до затримки нового запиту.
+  invalidateListRequest();
+  filters.page = 1;
+  searchInvalid.value = false;
+  loading.value = true;
+  searchTimer = setTimeout(fetchData, 300);
+}
+
+function invalidateListRequest() {
+  listRequestId++;
+  listController?.abort();
+  listController = null;
 }
 
 function isStatusActive(val) {
@@ -544,6 +586,10 @@ onMounted(fetchData);
 watch(() => statusEditor.statuses, buildStatusChips);
 onMounted(statusEditor.loadStatuses);
 onMounted(tagEditor.loadTags);
+onBeforeUnmount(() => {
+  clearTimeout(searchTimer);
+  invalidateListRequest();
+});
 </script>
 
 <style scoped>

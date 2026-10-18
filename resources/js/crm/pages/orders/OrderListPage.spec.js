@@ -4,6 +4,8 @@ import axios from 'axios';
 import OrderListPage from './OrderListPage.vue';
 import OrdersTable from '@/crm/components/orders/list/OrdersTable.vue';
 import OrdersTopbar from '@/crm/components/orders/list/OrdersTopbar.vue';
+import OrdersPagination from '@/crm/components/orders/list/OrdersPagination.vue';
+import Toast from '@/crm/components/ui/Toast.vue';
 import { listOrders, updateOrderTags, updateOrderStatus } from '@/crm/api/orders';
 import { fetchStatuses } from '@/crm/api/statuses';
 import { fetchTags } from '@/crm/api/tags';
@@ -27,6 +29,7 @@ let wrapper;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  listOrders.mockReset();
   fetchTags.mockResolvedValue({ data: { data: [] } });
   fetchStatuses.mockResolvedValue({ data: { data: [] } });
   listOrders.mockResolvedValue({
@@ -56,6 +59,168 @@ afterEach(() => {
   wrapper = null;
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
+describe('універсальний пошук замовлень', () => {
+  const result = (id) => ({ data: {
+    data: [{ id, order_number: String(id), items: [] }],
+    current_page: 1, last_page: 4, total: 4, status_counts: { 5: id },
+  } });
+  const deferred = () => {
+    let resolve, reject;
+    const promise = new Promise((done, fail) => { resolve = done; reject = fail; });
+    return { promise, resolve, reject };
+  };
+  const mountSearch = () => {
+    wrapper = shallowMount(OrderListPage, { global: { stubs: { OrdersTopbar: false } } });
+    return wrapper.find('.search-input');
+  };
+
+  it.each(['12345', '+38 (099) 111-22-33', 'Гордієнко Зоряна', 'Зоряна Гордієнко'])('надсилає запит %s без спотворення та скидає сторінку', async (search) => {
+    vi.useFakeTimers();
+    listOrders.mockResolvedValue(result(1));
+    const input = mountSearch();
+    await flushPromises();
+    wrapper.findComponent(OrdersPagination).vm.$emit('change-page', 3);
+    await flushPromises();
+    expect(listOrders.mock.calls.at(-1)[0].page).toBe(3);
+
+    await input.setValue(search);
+    await vi.advanceTimersByTimeAsync(299);
+    expect(listOrders).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(listOrders.mock.calls.at(-1)[0]).toMatchObject({ search, page: 1 });
+  });
+
+  it('об’єднує швидке введення в один запит і очищення повертає загальний список', async () => {
+    vi.useFakeTimers();
+    const input = mountSearch();
+    await flushPromises();
+    for (const value of ['1', '12', '12345']) {
+      await input.setValue(value);
+      await vi.advanceTimersByTimeAsync(100);
+    }
+    await vi.advanceTimersByTimeAsync(200);
+    expect(listOrders).toHaveBeenCalledTimes(2);
+    expect(listOrders.mock.calls.at(-1)[0].search).toBe('12345');
+
+    await input.setValue('');
+    await vi.advanceTimersByTimeAsync(300);
+    expect(listOrders.mock.calls.at(-1)[0].search).toBeUndefined();
+  });
+
+  it('старі відповіді не замінюють нові результати, пагінацію та лічильники', async () => {
+    vi.useFakeTimers();
+    const older = deferred();
+    const newer = deferred();
+    listOrders.mockResolvedValueOnce(result(1)).mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise);
+    fetchStatuses.mockResolvedValue({ data: { data: [{ id: 5, code: 'shipped', name: 'Відправлено' }] } });
+    const input = mountSearch();
+    await flushPromises();
+    await input.setValue('12345');
+    await vi.advanceTimersByTimeAsync(300);
+    const olderSignal = listOrders.mock.calls[1][1]?.signal;
+    await input.setValue('Гордієнко');
+    expect(olderSignal?.aborted).toBe(true);
+    await vi.advanceTimersByTimeAsync(300);
+
+    newer.resolve({ data: { ...result(22).data, total: 22, last_page: 22 } });
+    await flushPromises();
+    older.resolve(result(11));
+    await flushPromises();
+    expect(wrapper.findComponent(OrdersTable).props('orders').map((order) => order.id)).toEqual([22]);
+    expect(wrapper.findComponent(OrdersPagination).props('meta')).toMatchObject({ total: 22, last_page: 22 });
+    expect(wrapper.findComponent(OrdersTopbar).props('statusChips').find((chip) => chip.value === 5).label).toContain('22');
+    expect(wrapper.findComponent(OrdersTable).props('loading')).toBe(false);
+  });
+
+  it('відкидає стару відповідь одразу після нового вводу, ще до завершення затримки', async () => {
+    vi.useFakeTimers();
+    const older = deferred();
+    listOrders.mockResolvedValueOnce(result(1)).mockReturnValueOnce(older.promise);
+    const input = mountSearch();
+    await flushPromises();
+    await input.setValue('12345');
+    await vi.advanceTimersByTimeAsync(300);
+    await input.setValue('Зоряна');
+    older.resolve(result(11));
+    await flushPromises();
+    expect(wrapper.findComponent(OrdersTable).props('orders').map((order) => order.id)).toEqual([1]);
+    expect(wrapper.findComponent(OrdersTable).props('loading')).toBe(true);
+  });
+
+  it('показує помилку з повтором, зберігаючи запит і попередні результати', async () => {
+    vi.useFakeTimers();
+    listOrders.mockResolvedValueOnce(result(1)).mockRejectedValueOnce({ response: { data: { message: 'Пошуковий сервіс недоступний' } } });
+    const input = mountSearch();
+    await flushPromises();
+    await input.setValue('12345');
+    await vi.advanceTimersByTimeAsync(300);
+    await flushPromises();
+    const notice = wrapper.findComponent(Toast);
+    expect(notice.props()).toMatchObject({ show: true, type: 'error', actionLabel: 'Повторити' });
+    expect(notice.props('messages').join(' ')).toContain('Пошуковий сервіс недоступний');
+    expect(notice.props('messages').join(' ')).toContain('12345');
+    expect(input.element.value).toBe('12345');
+    expect(wrapper.findComponent(OrdersTable).props('orders')[0].id).toBe(1);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(notice.props('show')).toBe(true);
+
+    listOrders.mockResolvedValueOnce(result(2));
+    notice.vm.$emit('action');
+    await flushPromises();
+    expect(listOrders.mock.calls.at(-1)[0].search).toBe('12345');
+    expect(wrapper.findComponent(OrdersTable).props('orders')[0].id).toBe(2);
+  });
+
+  it('не показує помилки скасованих запитів і не вимикає завантаження нового', async () => {
+    vi.useFakeTimers();
+    const older = deferred();
+    const newer = deferred();
+    listOrders.mockResolvedValueOnce(result(1)).mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise);
+    const input = mountSearch();
+    await flushPromises();
+    await input.setValue('12345');
+    await vi.advanceTimersByTimeAsync(300);
+    await input.setValue('Зоряна');
+    await vi.advanceTimersByTimeAsync(300);
+    older.reject(new Error('Стара помилка'));
+    await flushPromises();
+    expect(wrapper.findComponent(OrdersTable).props('loading')).toBe(true);
+    expect(wrapper.findComponent(Toast).props('show')).toBe(false);
+    newer.resolve(result(2));
+    await flushPromises();
+  });
+
+  it('підсвічує некоректний запит і зберігає пояснення сервера до виправлення', async () => {
+    vi.useFakeTimers();
+    const message = 'Пошуковий запит має містити не більше 200 символів.';
+    listOrders.mockRejectedValueOnce({ response: { data: { errors: { search: [message] } } } });
+    const input = mountSearch();
+    await flushPromises();
+    expect(input.attributes('aria-invalid')).toBe('true');
+    expect(wrapper.findComponent(Toast).props('messages')).toContain(message);
+    await input.setValue('12345');
+    expect(input.attributes('aria-invalid')).toBeUndefined();
+    expect(wrapper.findComponent(Toast).props('show')).toBe(true);
+  });
+
+  it('скасовує запити й відкладений пошук при виході зі сторінки', async () => {
+    vi.useFakeTimers();
+    const pending = deferred();
+    listOrders.mockReturnValueOnce(pending.promise);
+    const input = mountSearch();
+    const signal = listOrders.mock.calls[0][1]?.signal;
+    await input.setValue('12345');
+    wrapper.unmount();
+    wrapper = null;
+    await vi.advanceTimersByTimeAsync(300);
+    expect(signal?.aborted).toBe(true);
+    expect(listOrders).toHaveBeenCalledTimes(1);
+    pending.resolve(result(1));
+    await flushPromises();
+  });
 });
 
 describe('оновлення доставки у списку замовлень', () => {
