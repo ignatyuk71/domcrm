@@ -36,6 +36,13 @@ Schedule::command('fiscal:delivered')
     ->onOneServer()
     ->description('Автофіскалізація замовлень у статусі «Завершено» кожні 5 хвилин');
 
+Schedule::command('fiscal:shipped-paid')
+    ->cron('0 9,15,21 * * *')
+    ->timezone('Europe/Kyiv')
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->description('Фіскалізація оплачених відправлених замовлень тричі на день');
+
 // Добираємо ціни старих/завершених ТТН; звичайний трекінг їх уже не опитує.
 Schedule::command('delivery:sync-costs --limit=500')
     ->hourly()

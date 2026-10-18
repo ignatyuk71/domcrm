@@ -26,17 +26,19 @@ class FiscalizeOrderJob implements ShouldQueue, ShouldBeUnique
     public ?int $amountCents;
     public bool $automatic = false;
     public bool $manual = false;
+    public bool $shippedPaid = false;
 
     // Покриває послідовні запити авторизації, перевірки UUID, зміни та створення чека.
     public int $uniqueFor = 180;
 
-    public function __construct(Order $order, string $type = FiscalReceipt::TYPE_SELL, ?int $amountCents = null, bool $automatic = false, bool $manual = false)
+    public function __construct(Order $order, string $type = FiscalReceipt::TYPE_SELL, ?int $amountCents = null, bool $automatic = false, bool $manual = false, bool $shippedPaid = false)
     {
         $this->order = $order;
         $this->type = $type;
         $this->amountCents = $amountCents;
         $this->automatic = $automatic;
         $this->manual = $manual;
+        $this->shippedPaid = $shippedPaid;
     }
 
     public function uniqueId(): string
@@ -66,7 +68,14 @@ class FiscalizeOrderJob implements ShouldQueue, ShouldBeUnique
 
             $totalOrderCents = (int) round($calculatedTotal * 100);
             $eligibility = app(FiscalizationEligibility::class);
-            if ($this->automatic && (! $eligibility->hasAutomaticFiscalizationStatus($this->order)
+            if ($this->shippedPaid && ($this->type !== FiscalReceipt::TYPE_SELL
+                || ! $eligibility->hasConfirmedShippedPayment($this->order, $totalOrderCents))) {
+                Log::warning('Фіскалізацію відправленого замовлення пропущено: стан або оплата змінилися', [
+                    'order_id' => $this->order->id,
+                ]);
+                return;
+            }
+            if (! $this->shippedPaid && $this->automatic && (! $eligibility->hasAutomaticFiscalizationStatus($this->order)
                 || $eligibility->isBlocked($this->order)
                 || ($eligibility->isWayForPay($this->order)
                     && ! $eligibility->hasConfirmedOnlinePayment($this->order, $totalOrderCents)))) {
@@ -326,6 +335,10 @@ class FiscalizeOrderJob implements ShouldQueue, ShouldBeUnique
 
     private function updateOrderStatusIfNeeded(int $totalOrder): void
     {
+        if ($this->shippedPaid) {
+            return;
+        }
+
         // Онлайн-чек не означає доставку: не завершуємо пакування чи трекінг НП.
         if ($this->type !== FiscalReceipt::TYPE_SELL || app(FiscalizationEligibility::class)->isWayForPay($this->order)) {
             return;

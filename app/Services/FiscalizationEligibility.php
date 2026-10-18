@@ -6,10 +6,15 @@ use App\Models\FiscalReceipt;
 use App\Models\Order;
 use App\Models\Status;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 
 class FiscalizationEligibility
 {
     public const BLOCKED_STATUSES = ['returned', 'cancelled', 'canceled', 'refund'];
+
+    private const ACCOUNT_METHODS = ['card', 'invoice', 'transfer', 'bank_transfer', 'bank', 'cashless'];
+
+    private const AFTER_SHIPPING_STATUSES = ['shipped', 'delivered'];
 
     public function automaticStatusId(): int
     {
@@ -58,6 +63,53 @@ class FiscalizationEligibility
             || in_array($order->statusRef?->code, self::BLOCKED_STATUSES, true)
             || $order->fiscalReceipts()->where('type', FiscalReceipt::TYPE_RETURN)
                 ->where('status', FiscalReceipt::STATUS_SUCCESS)->exists();
+    }
+
+    /** Окремий допуск для трьох запусків після відправлення. */
+    public function hasConfirmedShippedPayment(Order $order, int $totalCents): bool
+    {
+        $order->loadMissing(['statusRef', 'payment']);
+        $status = $order->statusRef;
+        $shipped = $status
+            ? $status->type === 'order' && in_array($status->code, self::AFTER_SHIPPING_STATUSES, true)
+            : in_array($order->status, self::AFTER_SHIPPING_STATUSES, true);
+
+        if (! $shipped || $order->payment_status !== 'paid' || $totalCents <= 0 || $this->isBlocked($order)) {
+            return false;
+        }
+
+        if ($this->isWayForPay($order)) {
+            return $this->hasConfirmedOnlinePayment($order, $totalCents);
+        }
+
+        return $order->payment
+            && trim((string) $order->payment->provider) === ''
+            && in_array(strtolower(trim((string) $order->payment->method)), self::ACCOUNT_METHODS, true);
+    }
+
+    public function shippedPaidCandidates(Builder $query): Builder
+    {
+        return $query->where('payment_status', 'paid')
+            ->where(function (Builder $q) {
+                $q->whereHas('statusRef', fn (Builder $status) => $status
+                    ->where('type', 'order')->whereIn('code', self::AFTER_SHIPPING_STATUSES))
+                    ->orWhere(fn (Builder $legacy) => $legacy->whereDoesntHave('statusRef')
+                        ->whereIn('status', self::AFTER_SHIPPING_STATUSES));
+            })
+            ->whereHas('payment', function (Builder $payment) {
+                $payment->whereRaw('LOWER(TRIM(provider)) = ?', ['wayforpay'])
+                    ->orWhereRaw('LOWER(TRIM(method)) = ?', ['wayforpay'])
+                    ->orWhere(fn (Builder $account) => $account
+                        ->whereIn(DB::raw('LOWER(TRIM(method))'), self::ACCOUNT_METHODS)
+                        ->where(fn (Builder $provider) => $provider->whereNull('provider')->orWhereRaw("TRIM(provider) = ''")));
+            })
+            ->whereNotIn('status', self::BLOCKED_STATUSES)
+            ->whereDoesntHave('fiscalReceipts', fn (Builder $receipt) => $receipt
+                ->where('type', FiscalReceipt::TYPE_RETURN)->where('status', FiscalReceipt::STATUS_SUCCESS))
+            ->whereRaw('ROUND(COALESCE((SELECT SUM(total) FROM order_items WHERE order_items.order_id = orders.id), 0) * 100)
+                > COALESCE((SELECT SUM(total_amount) FROM fiscal_receipts WHERE fiscal_receipts.order_id = orders.id
+                    AND fiscal_receipts.type = ? AND fiscal_receipts.status = ?), 0)',
+                [FiscalReceipt::TYPE_SELL, FiscalReceipt::STATUS_SUCCESS]);
     }
 
     /** SQL звужує вибірку; підтверджену суму повторно перевіряємо перед чеком. */
