@@ -33,7 +33,8 @@ const dictionary = reactive({ kind: '', name: '', color: '#6954df', note: '' });
 const dirty = computed(() => JSON.stringify(form) !== baseline || files.value.length > 0 || !!dictionary.name);
 const hasPaid = computed(() => Number(currentExpense.value?.paid_amount || 0) > 0);
 const existingReceiptCount = computed(() => props.payment?.receipts?.length || 0);
-const fieldError = name => errors.value[name] || errors.value[`payment.${name}`];
+const fieldError = name => errors.value[name] || errors.value[`payment.${name}`] || (name === 'account_id' && errors.value.balance);
+const balanceSelected = computed(() => props.meta.accounts.some(account => String(account.id) === String(form.account_id) && account.system_key === 'balance'));
 const fileError = computed(() => Object.keys(errors.value).some(name => name.startsWith('files')));
 const maximumPayment = computed(() => {
   if (!paymentMode.value) return null;
@@ -44,6 +45,10 @@ const maximumPayment = computed(() => {
 watch(() => form.currency, currency => { if (currency === 'UAH') { form.expected_exchange_rate = '1'; form.exchange_rate = '1'; } });
 function fail(error, retry = save, heading = 'Не вдалося зберегти') {
   errors.value = error?.response?.data?.errors || errors.value;
+  if (error?.response?.data?.errors?.balance) {
+    showToast({ type: 'error', title: 'Недостатньо коштів на балансі', messages: error.response.data.errors.balance, duration: 0 });
+    return;
+  }
   conflict.value = (error?.response?.status === 409 && !!currentExpense.value && !error?.response?.data?.message?.includes('ключ')) || conflict.value;
   showToast({ type: 'error', title: heading, messages: [error?.response?.status === 409 && !conflict.value ? (error.response.data?.message || 'Не вдалося повторити створення. Перевірте попередню оплату в реєстрі, перш ніж створювати нову.') : expenseError(error)], actionLabel: conflict.value ? 'Оновити версію' : 'Повторити', onAction: conflict.value ? refreshVersion : retry });
 }
@@ -157,7 +162,6 @@ async function save() {
     const amount = minor(form.amount), fields = {};
     if (amount === null || amount <= 0n) fields.amount = ['Введіть додатну суму, не більше двох знаків після коми.'];
     if (!paymentMode.value && !form.title.trim()) fields.title = ['Вкажіть, за що платите.'];
-    if (!paymentMode.value && !form.category_id) fields.category_id = ['Оберіть категорію.'];
     if (withPayment.value && !form.account_id) fields.account_id = ['Оберіть джерело оплати.'];
     if (withPayment.value && (!form.paid_on || form.paid_on > props.meta.today)) fields.paid_on = ['Дата оплати не може бути в майбутньому.'];
     if (!paymentMode.value && !form.due_on) fields.due_on = ['Вкажіть дату витрати.'];
@@ -180,7 +184,7 @@ async function save() {
           : await createExpensePayment(currentExpense.value.id, { ...payload, idempotency_key: key });
       } else {
         const payload = {
-          title: form.title.trim(), recipient: form.recipient.trim() || null, category_id: form.category_id, group_id: form.group_id || null,
+          title: form.title.trim(), recipient: form.recipient.trim() || null, category_id: form.category_id || null, group_id: form.group_id || null,
           account_id: form.account_id || null, amount: String(form.amount).replace(',', '.'), currency: form.currency,
           expected_exchange_rate: form.currency === 'UAH' ? '1' : String(withPayment.value ? form.exchange_rate : form.expected_exchange_rate).replace(',', '.'),
           due_on: props.mode === 'new-paid' ? form.paid_on : form.due_on, note: form.note || null,
@@ -232,8 +236,6 @@ onBeforeUnmount(() => {
             <h3>За що платимо</h3>
             <div class="expense-editor-block-fields">
               <label class="span-2">Назва витрати <input v-model="form.title" name="title" maxlength="255" required placeholder="Наприклад, реклама Meta за вересень" :aria-invalid="!!fieldError('title')"></label>
-              <label>Отримувач <input v-model="form.recipient" name="recipient" maxlength="255" placeholder="Компанія або людина" :aria-invalid="!!fieldError('recipient')"></label>
-              <label>Категорія <span class="expense-select-with-action"><select v-model="form.category_id" name="category_id" required :aria-invalid="!!fieldError('category_id')"><option value="" disabled>Оберіть категорію</option><option v-for="item in meta.categories" :key="item.id" :value="item.id">{{ item.name }}</option></select><button type="button" class="expense-mini-add" aria-label="Створити категорію" @click="dictionary.kind = 'categories'">+</button></span></label>
               <label class="span-2">Група платежів <span class="expense-select-with-action"><select v-model="form.group_id" name="group_id" :aria-invalid="!!fieldError('group_id')"><option value="">Без групи</option><option v-for="item in meta.groups" :key="item.id" :value="item.id">{{ item.name }}</option></select><button type="button" class="expense-mini-add" aria-label="Створити групу" @click="dictionary.kind = 'groups'">+</button></span></label>
             </div>
           </section>
@@ -243,7 +245,7 @@ onBeforeUnmount(() => {
               <label>{{ paymentMode ? 'Сума цієї оплати' : 'Сума' }} <input v-model="form.amount" name="amount" inputmode="decimal" required placeholder="0.00" :aria-invalid="!!fieldError('amount')"></label>
               <label>Валюта <select v-model="form.currency" name="currency" :disabled="paymentMode || hasPaid" :aria-invalid="!!fieldError('currency')"><option v-for="currency in meta.currencies" :key="currency">{{ currency }}</option></select></label>
               <label v-if="form.currency !== 'UAH'" class="span-2">{{ withPayment ? 'Курс оплати до гривні' : 'Очікуваний курс до гривні' }} <input v-if="withPayment" v-model="form.exchange_rate" name="exchange_rate" inputmode="decimal" required :aria-invalid="!!fieldError('exchange_rate')"><input v-else v-model="form.expected_exchange_rate" name="expected_exchange_rate" inputmode="decimal" required :aria-invalid="!!fieldError('expected_exchange_rate')"><small>Скільки гривень за 1 {{ form.currency }}. Курс вводиться вручну.</small></label>
-              <label class="span-2">{{ withPayment ? 'Звідки оплачено' : 'Очікуване джерело' }} <span class="expense-select-with-action"><select v-model="form.account_id" name="account_id" :required="withPayment" :aria-invalid="!!fieldError('account_id')"><option value="">{{ withPayment ? 'Оберіть рахунок' : 'Ще не визначено' }}</option><option v-for="item in meta.accounts" :key="item.id" :value="item.id">{{ item.name }}</option></select><button type="button" class="expense-mini-add" aria-label="Створити рахунок" @click="dictionary.kind = 'accounts'">+</button></span></label>
+              <label class="span-2">{{ withPayment ? 'Джерело оплати' : 'Очікуване джерело' }} <span class="expense-select-with-action"><select v-model="form.account_id" name="account_id" :required="withPayment" :aria-invalid="!!fieldError('account_id')"><option value="">{{ withPayment ? 'Оберіть джерело' : 'Ще не визначено' }}</option><option v-for="item in meta.accounts" :key="item.id" :value="item.id">{{ item.name }}</option></select><button type="button" class="expense-mini-add" aria-label="Створити рахунок" @click="dictionary.kind = 'accounts'">+</button></span><small v-if="balanceSelected">Доступно на балансі: {{ meta.balance ? money(meta.balance.amount) : '—' }}<template v-if="form.currency !== 'UAH'"> · списання у гривні за курсом оплати</template></small></label>
               <label v-if="withPayment" class="span-2">Дата оплати <input v-model="form.paid_on" name="paid_on" type="date" :max="meta.today" required :aria-invalid="!!fieldError('paid_on')"></label>
               <label v-else class="span-2">Оплатити до <input v-model="form.due_on" name="due_on" type="date" required :aria-invalid="!!fieldError('due_on')"></label>
             </div>

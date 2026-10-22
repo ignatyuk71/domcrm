@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ExpenseController;
+use App\Http\Controllers\ExpenseBalanceController;
 use App\Http\Controllers\ExpenseReceiptController;
 use Illuminate\Support\Facades\Route;
 
@@ -8,6 +9,8 @@ Route::middleware(['auth', 'verified', 'role:owner'])->group(function () {
     Route::get('/expenses', fn () => response()->view('expenses.index')->header('Cache-Control', 'no-store, private'))->name('expenses.index');
     Route::prefix('api/expenses')->group(function () {
         Route::get('meta', [ExpenseController::class, 'meta']);
+        Route::get('balance', [ExpenseBalanceController::class, 'index']);
+        Route::post('balance', [ExpenseBalanceController::class, 'store']);
         Route::get('export', [ExpenseController::class, 'export']);
         Route::post('categories', [ExpenseController::class, 'category']);
         Route::post('accounts', [ExpenseController::class, 'account']);

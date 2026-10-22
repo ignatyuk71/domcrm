@@ -2,6 +2,8 @@ import http from '@/crm/api/http';
 
 const base = '/api/expenses';
 export const fetchExpenseMeta = () => http.get(`${base}/meta`);
+export const fetchExpenseBalance = params => http.get(`${base}/balance`, { params });
+export const topUpExpenseBalance = payload => http.post(`${base}/balance`, payload);
 export const fetchExpenses = params => http.get(base, { params });
 export const fetchExpense = id => http.get(`${base}/${id}`);
 export const createExpense = payload => http.post(base, payload);

@@ -6,6 +6,7 @@ import { useToast } from '@/crm/composables/useToast';
 import { todayInKyiv, parseDate, dateISO } from '@/crm/utils/dateRange';
 import ExpenseDialog from './ExpenseDialog.vue';
 import ExpenseEditor from './ExpenseEditor.vue';
+import ExpenseBalance from './ExpenseBalance.vue';
 import { money, shortDate } from './expenseUtils';
 import { fetchExpenseMeta, fetchExpenses, fetchExpense, deleteExpense, deleteExpensePayment, deleteExpenseReceipt, exportExpenses, expenseError } from '@/crm/services/expensesApi';
 import './expenses.css';
@@ -14,13 +15,13 @@ const today = todayInKyiv(), end = parseDate(today); end.setMonth(end.getMonth()
 const filters = reactive({ view: 'payments', from: today.slice(0, 8) + '01', to: dateISO(end), q: '', category_id: '', account_id: '', group_id: '', missing_receipts: false, page: 1 });
 const query = ref(''), meta = ref({ categories: [], accounts: [], groups: [], currencies: ['UAH', 'USD', 'EUR', 'PLN', 'CNY'], today });
 const report = ref(null), loading = ref(true), ready = ref(false), busy = ref(false), detail = ref(null), editor = ref(null), chartMode = ref('categories');
+const balanceRefresh = ref(0);
 const { toast, showToast, closeToast, runAction, runSecondary } = useToast();
 let requestSequence = 0, queryTimer, errorScope = '';
 const summary = computed(() => report.value?.summary || {});
 const rows = computed(() => report.value?.data || []);
 const pagination = computed(() => report.value?.meta || { current_page: 1, last_page: 1, total: 0 });
 const chartItems = computed(() => [...(report.value?.breakdown?.[chartMode.value] || [])].sort((a, b) => Number(b.amount) - Number(a.amount)));
-const accounts = computed(() => [...(report.value?.breakdown?.accounts || [])].sort((a, b) => Number(b.amount) - Number(a.amount)));
 const topCategory = computed(() => [...(report.value?.breakdown?.categories || [])].sort((a, b) => Number(b.amount) - Number(a.amount))[0]);
 const chartNames = { categories: 'Категорії', recipients: 'Отримувачі', groups: 'Групи' };
 const tableNames = { payments: 'Оплати', planned: 'До оплати', groups: 'Групи платежів' };
@@ -68,7 +69,7 @@ async function openExpense(id) {
 }
 function edit(mode, payment = null) { editor.value = { mode, expense: detail.value, payment }; }
 function dictionaryAdded(kind, item) { meta.value[kind] = [...meta.value[kind], item]; }
-function changed(expense) { if (detail.value?.id === expense.id) detail.value = expense; load(); }
+function changed(expense) { if (detail.value?.id === expense.id) detail.value = expense; ++balanceRefresh.value; load(); }
 function saved(expense) { detail.value = expense; editor.value = null; load(); success('Дані збережено.'); }
 function filterChart(item) {
   if (chartMode.value === 'categories') filters.category_id = item.id;
@@ -76,20 +77,19 @@ function filterChart(item) {
   else if (chartMode.value === 'recipients') { query.value = item.name; filters.q = item.name; }
   filters.view = 'payments';
 }
-function filterAccount(account) { filters.account_id = account.id; filters.view = 'payments'; }
 function groupPayments(group) { filters.group_id = group.id; filters.view = 'payments'; }
 async function removeExpense() {
   const expense = detail.value;
   if (!expense || busy.value || !window.confirm(`Видалити «${expense.title}», усі її оплати та квитанції? Цю дію не можна скасувати.`)) return;
   busy.value = true;
-  try { await deleteExpense(expense.id, expense.version); detail.value = null; await load(); success('Витрату видалено.'); }
+  try { await deleteExpense(expense.id, expense.version); detail.value = null; ++balanceRefresh.value; await load(); success('Витрату видалено.'); }
   catch (error) { fail(error, error.response?.status === 409 ? () => openExpense(expense.id) : removeExpense); }
   finally { busy.value = false; }
 }
 async function removePayment(payment) {
   if (busy.value || !window.confirm(`Видалити оплату ${money(payment.amount, payment.currency)} та її квитанції? Неоплачений залишок збільшиться.`)) return;
   busy.value = true;
-  try { detail.value = (await deleteExpensePayment(detail.value.id, payment.id, detail.value.version)).data.data; await load(); success('Оплату видалено.'); }
+  try { detail.value = (await deleteExpensePayment(detail.value.id, payment.id, detail.value.version)).data.data; ++balanceRefresh.value; await load(); success('Оплату видалено.'); }
   catch (error) { fail(error, error.response?.status === 409 ? () => openExpense(detail.value.id) : () => removePayment(payment)); }
   finally { busy.value = false; }
 }
@@ -146,7 +146,7 @@ onBeforeUnmount(() => { clearTimeout(queryTimer); requestSequence++; });
         <div v-if="chartItems.length" class="expense-bars"><button type="button" v-for="(item, index) in chartItems" :key="item.id ?? item.name" class="expense-bar-row" :aria-label="'Показати оплати: ' + item.name" :disabled="chartMode === 'groups' && !item.id" @click="filterChart(item)"><div class="expense-bar-title"><span><i :style="{ background: item.color || ['#6954df', '#9380ec', '#ada0ed', '#c0b7ef'][index % 4] }"></i>{{ item.name }}</span><strong>{{ money(item.amount) }} <small>{{ chartPercent(item.amount) }}%</small></strong></div><div class="expense-bar-track"><div :style="{ width: chartWidth(item.amount), background: item.color || '#9380ec' }"></div></div></button></div>
         <div v-else class="expense-empty-chart"><i class="bi bi-bar-chart" aria-hidden="true"></i><span>{{ loading ? 'Завантаження…' : 'За цими умовами оплат ще немає' }}</span></div>
       </article>
-      <article class="expense-card expense-sources"><div class="expense-section-title"><div><h2>Звідки оплачено</h2><p>Рахунки та готівка</p></div><i class="bi bi-wallet2" aria-hidden="true"></i></div><div v-if="accounts.length" class="expense-account-list"><button type="button" v-for="account in accounts" :key="account.id" class="expense-account" :aria-label="'Показати оплати з рахунку ' + account.name" @click="filterAccount(account)"><span class="expense-account-icon"><i class="bi bi-bank" aria-hidden="true"></i></span><div><span>{{ account.name }}</span><small>{{ chartPercent(account.amount) }}% усіх оплат</small></div><strong>{{ money(account.amount) }}</strong></button></div><div v-else class="expense-empty-chart"><i class="bi bi-wallet2" aria-hidden="true"></i><span>{{ loading ? 'Завантаження…' : 'Рахунки з’являться після оплати' }}</span></div><p class="expense-account-note">Показано витрати з рахунків, а не їхні залишки.</p></article>
+      <ExpenseBalance v-if="ready" :accounts="meta.accounts" :refresh-key="balanceRefresh" @updated="meta.balance = $event" />
     </section>
     <section class="expense-card expense-register" aria-label="Реєстр витрат" :aria-busy="loading">
       <div class="expense-register-head"><div class="expense-tabs" role="group" aria-label="Вид реєстру"><button v-for="(name, value) in tableNames" :key="value" :class="{ active: filters.view === value }" :aria-pressed="filters.view === value" @click="filters.view = value">{{ name }}</button></div><span class="expense-record-count">{{ pagination.total }} записів</span></div>

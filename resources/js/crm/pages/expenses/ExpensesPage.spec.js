@@ -10,7 +10,7 @@ const expense = { id: 7, title: 'Реклама', category_id: 1, amount: '120.0
 const response = title => ({ summary: { paid_amount: '120.00', paid_count: 1, pending_amount: '0.00', pending_count: 0, missing_receipts_count: 0, demo_count: 0 }, breakdown: { categories: [{ id: 1, name: 'Реклама', color: '#6954df', amount: '120.00' }], accounts: [{ id: 2, name: 'Рахунок', amount: '120.00' }], recipients: [], groups: [] }, data: [{ ...payment, title }], meta: { current_page: 1, last_page: 1, total: 1, per_page: 25 } });
 const clone = value => JSON.parse(JSON.stringify(value));
 let wrapper;
-async function open() { wrapper = mount(ExpensesPage, { global: { stubs: { teleport: true } }, attachTo: document.body }); await flushPromises(); }
+async function open() { wrapper = mount(ExpensesPage, { global: { stubs: { teleport: true, ExpenseBalance: true } }, attachTo: document.body }); await flushPromises(); }
 beforeEach(() => {
   vi.clearAllMocks(); vi.spyOn(window, 'confirm').mockReturnValue(true);
   api.fetchExpenseMeta.mockResolvedValue({ data: { categories: [payment.category], accounts: [payment.account], groups: [], currencies: ['UAH'], today: '2026-09-21' } });
@@ -27,7 +27,7 @@ describe('Сторінка витрат', () => {
     expect(wrapper.find('.expense-demo').exists()).toBe(false);
     await wrapper.get('.expense-bars button').trigger('click'); await flushPromises();
     expect(api.fetchExpenses.mock.lastCall[0].category_id).toBe(1);
-    await wrapper.get('.expense-account').trigger('click'); await flushPromises();
+    await wrapper.get('[aria-label="Фільтр рахунку"]').setValue('2'); await flushPromises();
     expect(api.fetchExpenses.mock.lastCall[0].account_id).toBe(2);
   });
 

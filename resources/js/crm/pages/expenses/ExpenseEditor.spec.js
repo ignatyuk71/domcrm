@@ -15,7 +15,6 @@ const open = props => { wrapper = mount(ExpenseEditor, { props: { mode: 'new-pai
 const submit = async () => { await wrapper.get('form').trigger('submit'); await flushPromises(); };
 async function fillNew() {
   await wrapper.get('[name="title"]').setValue('Реклама за вересень');
-  await wrapper.get('[name="category_id"]').setValue('1');
   await wrapper.get('[name="account_id"]').setValue('2');
   await wrapper.get('[name="amount"]').setValue('50.25');
 }
@@ -38,6 +37,28 @@ beforeEach(() => {
 afterEach(() => { wrapper?.unmount(); wrapper = null; document.body.innerHTML = ''; vi.restoreAllMocks(); });
 
 describe('Редактор витрат', () => {
+  it('прибирає отримувача й категорію з форми та зберігає їхні старі значення', async () => {
+    const legacy = { ...expense, recipient: 'Постачальник' };
+    api.updateExpense.mockResolvedValue({ data: { data: legacy } });
+    open({ mode: 'edit-expense', expense: legacy });
+    expect(wrapper.find('[name="category_id"]').exists()).toBe(false);
+    expect(wrapper.find('[name="recipient"]').exists()).toBe(false);
+    await wrapper.get('[name="title"]').setValue('Оновлена витрата'); await submit();
+    expect(api.updateExpense).toHaveBeenCalledWith(7, expect.objectContaining({ category_id: 1, recipient: 'Постачальник' }));
+  });
+
+  it('при нестачі балансу показує тільки повідомлення й залишає чернетку', async () => {
+    api.createExpense.mockRejectedValue({ response: { status: 422, data: { errors: { balance: ['На балансі: 1800.00 грн. Сума оплати: 2000.00 грн. Не вистачає: 200.00 грн.'] } } } });
+    open({ meta: { ...meta, accounts: [...meta.accounts, { id: 3, name: 'Баланс', system_key: 'balance' }], balance: { amount: '1800.00' } } });
+    await fillNew(); await wrapper.get('[name="account_id"]').setValue('3');
+    await wrapper.get('[name="amount"]').setValue('2000'); await submit();
+    expect(wrapper.get('[role="alert"]').text()).toContain('Не вистачає: 200.00');
+    expect(wrapper.find('.app-toast-actions').exists()).toBe(false);
+    expect(wrapper.get('[name="account_id"]').attributes('aria-invalid')).toBe('true');
+    expect(wrapper.get('[name="amount"]').element.value).toBe('2000');
+    expect(wrapper.emitted('saved')).toBeUndefined();
+  });
+
   it('приймає перетягнуту квитанцію, перевіряє ліміт і завантажує її після збереження оплати', async () => {
     const created = { ...expense, id: 9, payments: [{ ...payment, id: 99 }] };
     api.createExpense.mockResolvedValue({ data: { data: created } });

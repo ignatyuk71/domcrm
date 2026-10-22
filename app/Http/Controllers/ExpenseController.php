@@ -9,6 +9,7 @@ use App\Models\ExpenseGroup;
 use App\Models\ExpensePayment;
 use App\Models\User;
 use App\Services\Expenses\ExpenseData;
+use App\Services\Expenses\ExpenseBalanceService;
 use App\Services\Expenses\ExpenseQuery;
 use App\Services\Expenses\Money;
 use App\Services\Expenses\ReceiptFiles;
@@ -21,7 +22,7 @@ class ExpenseController extends Controller
 {
     public function meta()
     {
-        return response()->json(['categories' => ExpenseCategory::orderBy('id')->get(['id', 'name', 'color']), 'accounts' => ExpenseAccount::orderBy('id')->get(['id', 'name']), 'groups' => ExpenseGroup::orderByDesc('id')->get(['id', 'name', 'note']), 'currencies' => ['UAH', 'USD', 'EUR', 'PLN', 'CNY'], 'today' => now('Europe/Kyiv')->toDateString()])->header('Cache-Control', 'no-store, private');
+        return response()->json(['categories' => ExpenseCategory::orderBy('id')->get(['id', 'name', 'color']), 'accounts' => ExpenseAccount::orderBy('id')->get(['id', 'name', 'system_key']), 'groups' => ExpenseGroup::orderByDesc('id')->get(['id', 'name', 'note']), 'currencies' => ['UAH', 'USD', 'EUR', 'PLN', 'CNY'], 'today' => now('Europe/Kyiv')->toDateString()])->header('Cache-Control', 'no-store, private');
     }
 
     public function category(Request $request)
@@ -112,10 +113,14 @@ class ExpenseController extends Controller
     public function destroy(Request $request, Expense $expense)
     {
         $data = $request->validate(['version' => ['required', 'integer', 'min:1']], $this->messages());
-        DB::transaction(function () use ($expense, $data) {
+        DB::transaction(function () use ($expense, $data, $request) {
             $locked = Expense::whereKey($expense->id)->lockForUpdate()->firstOrFail();
             $this->checkVersion($locked, $data);
             $paths = DB::table('expense_receipts')->join('expense_payments', 'expense_payments.id', '=', 'expense_receipts.payment_id')->where('expense_payments.expense_id', $locked->id)->pluck('expense_receipts.path')->all();
+            foreach ($locked->payments as $payment) {
+                $payment->setRelation('expense', $locked);
+                app(ExpenseBalanceService::class)->syncPayment($payment, $request->user()->id, true);
+            }
             $locked->delete();
             ReceiptFiles::deleteAfterCommit($paths);
         }, 3);
@@ -168,11 +173,13 @@ class ExpenseController extends Controller
     {
         abort_unless($payment->expense_id === $expense->id, 404);
         $data = $request->validate(['version' => ['required', 'integer', 'min:1']], $this->messages());
-        $expense = DB::transaction(function () use ($expense, $payment, $data) {
+        $expense = DB::transaction(function () use ($expense, $payment, $data, $request) {
             $locked = Expense::whereKey($expense->id)->lockForUpdate()->firstOrFail();
             $this->checkVersion($locked, $data);
             $current = $locked->payments()->whereKey($payment->id)->firstOrFail();
             $paths = $current->receipts()->pluck('path')->all();
+            $current->setRelation('expense', $locked);
+            app(ExpenseBalanceService::class)->syncPayment($current, $request->user()->id, true);
             $current->delete();
             $locked->increment('version');
             ReceiptFiles::deleteAfterCommit($paths);
@@ -193,7 +200,7 @@ class ExpenseController extends Controller
             fputcsv($stream, ['Дата', 'За що', 'Отримувач', 'Категорія', 'Група', 'Рахунок', 'Сума', 'Валюта', 'Курс', 'Сума, грн', 'Коментар'], ';', '"', '');
             foreach ($query->lazyById(250, 'expense_payments.id', 'id') as $payment) {
                 $e = $payment->expense;
-                $row = [$payment->paid_on, $e->title, $e->recipient, $e->category->name, $e->group?->name, $payment->account->name, Money::display($payment->amount_minor), $e->currency, $payment->exchange_rate, Money::display($payment->amount_uah_minor), $payment->note];
+                $row = [$payment->paid_on, $e->title, $e->recipient, $e->category?->name, $e->group?->name, $payment->account->name, Money::display($payment->amount_minor), $e->currency, $payment->exchange_rate, Money::display($payment->amount_uah_minor), $payment->note];
                 $row = array_map(function ($value) {
                     $text = (string) ($value ?? '');
 
@@ -208,7 +215,7 @@ class ExpenseController extends Controller
     private function expenseRules(): array
     {
         return ['title' => ['required', 'string', 'max:255'], 'recipient' => ['nullable', 'string', 'max:255'],
-            'category_id' => ['required', 'integer', 'exists:expense_categories,id'], 'group_id' => ['nullable', 'integer', 'exists:expense_groups,id'],
+            'category_id' => ['nullable', 'integer', 'exists:expense_categories,id'], 'group_id' => ['nullable', 'integer', 'exists:expense_groups,id'],
             'account_id' => ['nullable', 'integer', 'exists:expense_accounts,id'], 'amount' => $this->amountRules(),
             'currency' => ['required', Rule::in(['UAH', 'USD', 'EUR', 'PLN', 'CNY'])], 'expected_exchange_rate' => $this->rateRules(),
             'due_on' => ['required', 'date_format:Y-m-d'], 'note' => ['nullable', 'string', 'max:10000']];
@@ -255,8 +262,10 @@ class ExpenseController extends Controller
         if ($payment) {
             $payment->update($attributes);
         } else {
-            $expense->payments()->create($attributes + ['created_by' => $userId, 'idempotency_key' => $data['idempotency_key'] ?? null, 'request_hash' => $hash]);
+            $payment = $expense->payments()->create($attributes + ['created_by' => $userId, 'idempotency_key' => $data['idempotency_key'] ?? null, 'request_hash' => $hash]);
         }
+        $payment->setRelation('expense', $expense);
+        app(ExpenseBalanceService::class)->syncPayment($payment, $userId);
     }
 
     private function checkVersion(Expense $expense, array $data): void

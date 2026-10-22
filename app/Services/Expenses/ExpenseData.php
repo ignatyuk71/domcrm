@@ -13,7 +13,7 @@ final class ExpenseData
 
         return [
             'id' => $payment->id, 'expense_id' => $expense->id, 'title' => $expense->title, 'recipient' => $expense->recipient,
-            'category' => $expense->category->only(['id', 'name', 'color']), 'group' => $expense->group?->only(['id', 'name']),
+            'category' => $expense->category?->only(['id', 'name', 'color']), 'group' => $expense->group?->only(['id', 'name']),
             'account' => $payment->account->only(['id', 'name']), 'amount' => Money::display($payment->amount_minor),
             'currency' => $expense->currency, 'exchange_rate' => $payment->exchange_rate, 'amount_uah' => Money::display($payment->amount_uah_minor),
             'paid_on' => $payment->paid_on, 'note' => $payment->note, 'is_demo' => $expense->is_demo, 'expense_version' => $expense->version,
@@ -31,7 +31,7 @@ final class ExpenseData
 
         return [
             'id' => $expense->id, 'title' => $expense->title, 'recipient' => $expense->recipient,
-            'category' => $expense->category->only(['id', 'name', 'color']), 'group' => $expense->group?->only(['id', 'name']),
+            'category' => $expense->category?->only(['id', 'name', 'color']), 'group' => $expense->group?->only(['id', 'name']),
             'account' => $expense->account?->only(['id', 'name']), 'amount' => Money::display($expense->amount_minor),
             'currency' => $expense->currency, 'expected_exchange_rate' => $expense->expected_exchange_rate,
             'paid_amount' => Money::display($paid), 'remaining_amount' => Money::display($remaining),
