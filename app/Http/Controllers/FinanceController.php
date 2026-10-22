@@ -7,6 +7,7 @@ use App\Models\FiscalReceipt;
 use App\Models\FiscalQueue;
 use App\Services\CheckboxService;
 use App\Services\FiscalQueueService;
+use App\Services\FiscalPaymentBreakdown;
 use Illuminate\Http\Request;
 
 class FinanceController extends Controller
@@ -26,7 +27,7 @@ class FinanceController extends Controller
         ]);
     }
 
-    public function data(CheckboxService $checkbox)
+    public function data(CheckboxService $checkbox, FiscalPaymentBreakdown $paymentBreakdown)
     {
         $this->authorizeAccess();
 
@@ -57,11 +58,14 @@ class FinanceController extends Controller
         $hourlyCounts = array_fill(0, 24, 0);
         $hourlyAmounts = array_fill(0, 24, 0);
         $todayTotal = 0;
+        $paymentTotals = ['account_cents' => 0, 'cod_cents' => 0, 'other_cents' => 0];
 
         FiscalReceipt::query()
             ->whereBetween('created_at', [$todayStart, $todayEnd])
-            ->get(['type', 'status', 'total_amount', 'created_at'])
-            ->each(function (FiscalReceipt $receipt) use (&$hourlyCounts, &$hourlyAmounts, &$todayTotal, $timezone) {
+            ->with(['order:id', 'order.payment:id,order_id,method'])
+            ->select(['id', 'order_id', 'type', 'status', 'total_amount', 'created_at', 'meta'])
+            ->lazyById(250)
+            ->each(function (FiscalReceipt $receipt) use (&$hourlyCounts, &$hourlyAmounts, &$todayTotal, &$paymentTotals, $paymentBreakdown, $timezone) {
                 $hour = (int) $receipt->created_at->copy()->timezone($timezone)->hour;
 
                 if ($hour < 0 || $hour > 23) {
@@ -70,13 +74,18 @@ class FinanceController extends Controller
 
                 $hourlyCounts[$hour]++;
 
-                if ($receipt->status !== FiscalReceipt::STATUS_SUCCESS || $receipt->type !== FiscalReceipt::TYPE_SELL) {
+                if ($receipt->status !== FiscalReceipt::STATUS_SUCCESS
+                    || !in_array($receipt->type, [FiscalReceipt::TYPE_SELL, FiscalReceipt::TYPE_RETURN], true)) {
                     return;
                 }
 
-                $amount = (int) $receipt->total_amount;
+                // Сума повернення додатна в БД, тому віднімаємо її в годину повернення.
+                $amount = (int) $receipt->total_amount * ($receipt->type === FiscalReceipt::TYPE_RETURN ? -1 : 1);
                 $hourlyAmounts[$hour] += $amount;
                 $todayTotal += $amount;
+                foreach ($paymentBreakdown->amounts($receipt) as $category => $value) {
+                    $paymentTotals[$category] += $value;
+                }
             });
 
         foreach ($hourlyAmounts as $hour => $amount) {
@@ -115,6 +124,7 @@ class FinanceController extends Controller
             'receipts' => [
                 'date' => $todayStart->toDateString(),
                 'daily_total' => $todayTotal,
+                'payment_breakdown' => $paymentTotals,
                 'hourly_counts' => $hourlyCounts,
                 'hourly_amounts' => $hourlyAmounts,
                 'items' => $todayReceipts->map(fn ($receipt) => [

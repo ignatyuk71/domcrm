@@ -1,29 +1,7 @@
 <template>
   <div class="finance-page container-fluid py-4 position-relative">
     
-    <!-- TOAST NOTIFICATIONS (Спливаючі повідомлення) -->
-    <div class="toast-container position-fixed top-0 end-0 p-4" style="z-index: 1070;">
-      <transition-group name="toast-slide">
-        <div 
-          v-for="toast in toasts" 
-          :key="toast.id" 
-          class="custom-toast mb-3 shadow-lg d-flex align-items-center"
-          :class="toast.type === 'success' ? 'toast-success' : 'toast-error'"
-        >
-          <div class="toast-icon-box">
-             <i class="bi" :class="toast.type === 'success' ? 'bi-check-lg' : 'bi-exclamation-triangle-fill'"></i>
-          </div>
-          <div class="toast-content ps-3 pe-4 py-3">
-             <div class="toast-title">{{ toast.type === 'success' ? 'Успішно' : 'Помилка' }}</div>
-             <div class="toast-msg">{{ toast.message }}</div>
-          </div>
-          <button class="btn-close me-3 small" @click="removeToast(toast.id)"></button>
-          
-          <!-- Прогрес бар часу -->
-          <div class="toast-progress" :style="{ animationDuration: '5000ms' }"></div>
-        </div>
-      </transition-group>
-    </div>
+    <Toast v-bind="toast" @close="closeToast" @action="runAction" />
 
     <!-- HEADER SECTION -->
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
@@ -282,6 +260,29 @@
       </div>
     </div>
 
+    <!-- Компактний розподіл фіскального виторгу після графіка. -->
+    <section class="card border-0 shadow-sm mb-4 payment-breakdown" aria-label="Розподіл оплат за сьогодні" :aria-busy="loading.chart">
+      <div class="payment-breakdown__items">
+        <div class="payment-breakdown__item">
+          <i class="bi bi-credit-card text-primary payment-breakdown__icon" aria-hidden="true"></i>
+          <div>
+            <div class="payment-breakdown__label">На рахунок / картку</div>
+            <div class="payment-breakdown__amount">{{ paymentAmount('account_cents') }}</div>
+          </div>
+        </div>
+        <div class="payment-breakdown__item">
+          <i class="bi bi-box-seam text-indigo payment-breakdown__icon" aria-hidden="true"></i>
+          <div>
+            <div class="payment-breakdown__label">Післяплата / NovaPay</div>
+            <div class="payment-breakdown__amount">{{ paymentAmount('cod_cents') }}</div>
+          </div>
+        </div>
+      </div>
+      <div v-if="paymentBreakdown?.other_cents" class="payment-breakdown__other">
+        Інші / не визначено: {{ paymentAmount('other_cents') }}
+      </div>
+    </section>
+
     <!-- MODAL (НАЛАШТУВАННЯ) -->
     <transition name="fade">
       <div v-if="showSettingsModal" class="modal-backdrop" @click.self="closeSettingsModal">
@@ -401,6 +402,8 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import { formatCurrency, formatTime, getDisplayHour } from '@/crm/utils/orderDisplay';
 import ApexChart from 'vue3-apexcharts';
+import Toast from '@/crm/components/ui/Toast.vue';
+import { useToast } from '@/crm/composables/useToast';
 import {
   fetchFinanceSettings,
   saveFinanceSettings,
@@ -411,7 +414,7 @@ import {
 } from '@/crm/services/financeApi';
 
 const loading = reactive({ save: false, test: false, shift: false, queue: false, chart: false });
-const toasts = ref([]); // Замінено notice на масив toasts
+const { toast, showToast, closeToast, runAction } = useToast();
 const shiftStatus = ref('unknown'); 
 const shiftMessage = ref('Отримання статусу...');
 const queueCount = ref(0);
@@ -422,6 +425,10 @@ const hasPassword = ref(false);
 const receipts = ref([]);
 const dailyTotalCents = ref(0);
 const hourlyAmounts = ref([]);
+const paymentBreakdown = ref(null);
+const paymentAmount = (category) => paymentBreakdown.value?.[category] == null
+  ? '—'
+  : formatCurrency(Number(paymentBreakdown.value[category]) / 100);
 
 const form = reactive({
   api_url: '', 
@@ -471,7 +478,7 @@ const connectionStatusColor = computed(() => {
 });
 const dailyTotalFormatted = computed(() => formatCurrency(Number(dailyTotalCents.value || 0) / 100));
 
-// --- CHART DATA (Сума в гривнях, тільки success + sell) ---
+// Суми в гривнях: успішні продажі мінус повернення.
 const chartSeries = computed(() => {
   const hoursData = new Array(24).fill(0);
   if (Array.isArray(hourlyAmounts.value) && hourlyAmounts.value.length === 24) {
@@ -480,10 +487,10 @@ const chartSeries = computed(() => {
     });
   } else if (receipts.value.length) {
     receipts.value.forEach((r) => {
-      if (r?.status !== 'success' || r?.type !== 'sell') return;
+      if (r?.status !== 'success' || !['sell', 'return'].includes(r?.type)) return;
       const h = getDisplayHour(r.created_at);
       if (h >= 0 && h < 24) {
-        hoursData[h] += (r.total_amount || 0) / 100;
+        hoursData[h] += (r.type === 'return' ? -1 : 1) * (r.total_amount || 0) / 100;
       }
     });
   }
@@ -538,14 +545,10 @@ const formatReceiptAmount = (a) => formatCurrency(Number(a||0)/100);
 const formatReceiptTime = (v) => v ? formatTime(v) : '-';
 
 // --- Actions (TOASTS) ---
-const showNotice = (type, message) => { 
-  const id = Date.now();
-  toasts.value.push({ id, type, message });
-  setTimeout(() => removeToast(id), 5000);
-};
-
-const removeToast = (id) => {
-  toasts.value = toasts.value.filter(t => t.id !== id);
+const showNotice = (type, message) => {
+  // Успіх іншої дії не перекриває невиправлену помилку.
+  if (type === 'success' && toast.show && toast.type === 'error') return;
+  showToast({ type: type === 'success' ? 'success' : 'error', title: type === 'success' ? 'Успішно' : 'Помилка', messages: [message] });
 };
 
 const openSettingsModal = () => showSettingsModal.value = true;
@@ -569,11 +572,16 @@ const loadSettings = async () => {
     receipts.value = data.receipts?.items || [];
     dailyTotalCents.value = data.receipts?.daily_total || 0;
     hourlyAmounts.value = data.receipts?.hourly_amounts || [];
+    paymentBreakdown.value = data.receipts?.payment_breakdown || null;
     shiftStatus.value = normalizeStatus(data.shift_status);
     shiftMessage.value = getStatusMsg(shiftStatus.value);
   } catch(e) { 
     console.error(e);
-    showNotice('danger', 'Не вдалося отримати статус зміни'); 
+    showToast({
+      type: 'error', title: 'Не вдалося завантажити дані каси',
+      messages: [e.response?.data?.message || e.message || 'Перевірте з’єднання та повторіть спробу.'],
+      actionLabel: 'Повторити', onAction: loadSettings,
+    });
   }
   finally { loading.chart = false; }
 };
@@ -645,48 +653,29 @@ onMounted(loadSettings);
 .x-small { font-size: 0.7rem; letter-spacing: 0.5px; }
 .ls-1 { letter-spacing: 1px; }
 
-/* --- TOASTS STYLES --- */
-.custom-toast {
-  width: 350px;
-  background: #fff;
-  border-radius: 12px;
-  overflow: hidden;
-  position: relative;
-  transition: all 0.3s ease;
-  border-left: 4px solid transparent;
-}
-.toast-success { border-left-color: #198754; }
-.toast-error { border-left-color: #dc3545; }
-
-.toast-icon-box {
-  width: 50px; height: 100%; min-height: 60px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 1.5rem;
-}
-.toast-success .toast-icon-box { background: rgba(25, 135, 84, 0.1); color: #198754; }
-.toast-error .toast-icon-box { background: rgba(220, 53, 69, 0.1); color: #dc3545; }
-
-.toast-content { flex: 1; }
-.toast-title { font-weight: 700; font-size: 0.95rem; margin-bottom: 2px; }
-.toast-msg { font-size: 0.85rem; color: #64748b; line-height: 1.3; }
-
-.toast-progress {
-  position: absolute; bottom: 0; left: 0; height: 3px; background: rgba(0,0,0,0.1); width: 100%;
-  animation: toastProgress linear forwards;
-}
-@keyframes toastProgress { from { width: 100%; } to { width: 0%; } }
-
-/* Toast Transitions */
-.toast-slide-enter-active, .toast-slide-leave-active { transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
-.toast-slide-enter-from { transform: translateX(100%); opacity: 0; }
-.toast-slide-leave-to { transform: translateX(100%); opacity: 0; }
-.toast-slide-move { transition: transform 0.4s ease; }
-
 /* KPI CARDS */
 .stat-card { transition: transform 0.2s; border-radius: 12px; position: relative; }
 .stat-card:hover { transform: translateY(-2px); }
 .icon-shape { width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; }
 .progress-line { height: 3px; width: 100%; position: absolute; bottom: 0; left: 0; }
+
+/* Дві суми в одному блоці; на вузьких екранах зберігаємо читабельність. */
+.payment-breakdown { border-radius: 12px; padding: 16px 24px; }
+.payment-breakdown__items { display: flex; }
+.payment-breakdown__item { flex: 1; min-width: 0; display: flex; align-items: center; gap: 16px; }
+.payment-breakdown__item + .payment-breakdown__item { border-left: 1px solid #e2e8f0; padding-left: 32px; margin-left: 24px; }
+.payment-breakdown__icon { font-size: 1.65rem; line-height: 1; flex-shrink: 0; }
+.payment-breakdown__label { font-size: 0.85rem; color: #64748b; }
+.payment-breakdown__amount { font-size: 1.15rem; font-weight: 700; color: #0f172a; font-variant-numeric: tabular-nums; }
+.payment-breakdown__other { font-size: 0.8rem; color: #64748b; margin-top: 10px; }
+@media (max-width: 575.98px) {
+  .payment-breakdown { padding: 14px 16px; }
+  .payment-breakdown__item { gap: 8px; }
+  .payment-breakdown__item + .payment-breakdown__item { padding-left: 12px; margin-left: 12px; }
+  .payment-breakdown__icon { font-size: 1.1rem; }
+  .payment-breakdown__label { font-size: 0.75rem; }
+  .payment-breakdown__amount { font-size: 1rem; }
+}
 
 /* --- GLASSMORPHISM STYLES --- */
 .bg-gradient-primary {
