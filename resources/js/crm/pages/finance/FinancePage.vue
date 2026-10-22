@@ -269,6 +269,7 @@
             <div class="payment-breakdown__label">На рахунок / картку</div>
             <div class="payment-breakdown__amount">{{ paymentAmount('account_cents') }}</div>
           </div>
+          <span class="payment-breakdown__count" title="Успішні чеки продажу та повернення за сьогодні">Чеків: {{ paymentReceiptCount('account') }}</span>
         </div>
         <div class="payment-breakdown__item">
           <i class="bi bi-box-seam text-indigo payment-breakdown__icon" aria-hidden="true"></i>
@@ -276,10 +277,11 @@
             <div class="payment-breakdown__label">Післяплата / NovaPay</div>
             <div class="payment-breakdown__amount">{{ paymentAmount('cod_cents') }}</div>
           </div>
+          <span class="payment-breakdown__count" title="Успішні чеки продажу та повернення за сьогодні">Чеків: {{ paymentReceiptCount('cod') }}</span>
         </div>
       </div>
-      <div v-if="paymentBreakdown?.other_cents" class="payment-breakdown__other">
-        Інші / не визначено: {{ paymentAmount('other_cents') }}
+      <div v-if="paymentBreakdown?.other_cents || paymentReceiptCounts?.other" class="payment-breakdown__other">
+        Інші / не визначено: {{ paymentAmount('other_cents') }} · Чеків: {{ paymentReceiptCount('other') }}
       </div>
     </section>
 
@@ -426,6 +428,8 @@ const receipts = ref([]);
 const dailyTotalCents = ref(0);
 const hourlyAmounts = ref([]);
 const paymentBreakdown = ref(null);
+const paymentReceiptCounts = ref(null);
+const paymentReceiptCount = (category) => paymentReceiptCounts.value?.[category] ?? '—';
 const paymentAmount = (category) => paymentBreakdown.value?.[category] == null
   ? '—'
   : formatCurrency(Number(paymentBreakdown.value[category]) / 100);
@@ -573,6 +577,7 @@ const loadSettings = async () => {
     dailyTotalCents.value = data.receipts?.daily_total || 0;
     hourlyAmounts.value = data.receipts?.hourly_amounts || [];
     paymentBreakdown.value = data.receipts?.payment_breakdown || null;
+    paymentReceiptCounts.value = data.receipts?.payment_receipt_counts || null;
     shiftStatus.value = normalizeStatus(data.shift_status);
     shiftMessage.value = getStatusMsg(shiftStatus.value);
   } catch(e) { 
@@ -662,19 +667,21 @@ onMounted(loadSettings);
 /* Дві суми в одному блоці; на вузьких екранах зберігаємо читабельність. */
 .payment-breakdown { border-radius: 12px; padding: 16px 24px; }
 .payment-breakdown__items { display: flex; }
-.payment-breakdown__item { flex: 1; min-width: 0; display: flex; align-items: center; gap: 16px; }
+.payment-breakdown__item { flex: 1; min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 16px; }
 .payment-breakdown__item + .payment-breakdown__item { border-left: 1px solid #e2e8f0; padding-left: 32px; margin-left: 24px; }
 .payment-breakdown__icon { font-size: 1.65rem; line-height: 1; flex-shrink: 0; }
 .payment-breakdown__label { font-size: 0.85rem; color: #64748b; }
 .payment-breakdown__amount { font-size: 1.15rem; font-weight: 700; color: #0f172a; font-variant-numeric: tabular-nums; }
+.payment-breakdown__count { font-size: 0.75rem; font-weight: 500; color: #64748b; white-space: nowrap; background: #f8fafc; border-radius: 6px; padding: 4px 8px; }
 .payment-breakdown__other { font-size: 0.8rem; color: #64748b; margin-top: 10px; }
 @media (max-width: 575.98px) {
   .payment-breakdown { padding: 14px 16px; }
-  .payment-breakdown__item { gap: 8px; }
+  .payment-breakdown__item { grid-template-columns: auto minmax(0, 1fr); column-gap: 8px; row-gap: 4px; }
   .payment-breakdown__item + .payment-breakdown__item { padding-left: 12px; margin-left: 12px; }
   .payment-breakdown__icon { font-size: 1.1rem; }
   .payment-breakdown__label { font-size: 0.75rem; }
   .payment-breakdown__amount { font-size: 1rem; }
+  .payment-breakdown__count { grid-column: 2; justify-self: start; }
 }
 
 /* --- GLASSMORPHISM STYLES --- */

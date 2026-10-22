@@ -59,13 +59,14 @@ class FinanceController extends Controller
         $hourlyAmounts = array_fill(0, 24, 0);
         $todayTotal = 0;
         $paymentTotals = ['account_cents' => 0, 'cod_cents' => 0, 'other_cents' => 0];
+        $paymentReceiptCounts = ['account' => 0, 'cod' => 0, 'other' => 0];
 
         FiscalReceipt::query()
             ->whereBetween('created_at', [$todayStart, $todayEnd])
             ->with(['order:id', 'order.payment:id,order_id,method'])
             ->select(['id', 'order_id', 'type', 'status', 'total_amount', 'created_at', 'meta'])
             ->lazyById(250)
-            ->each(function (FiscalReceipt $receipt) use (&$hourlyCounts, &$hourlyAmounts, &$todayTotal, &$paymentTotals, $paymentBreakdown, $timezone) {
+            ->each(function (FiscalReceipt $receipt) use (&$hourlyCounts, &$hourlyAmounts, &$todayTotal, &$paymentTotals, &$paymentReceiptCounts, $paymentBreakdown, $timezone) {
                 $hour = (int) $receipt->created_at->copy()->timezone($timezone)->hour;
 
                 if ($hour < 0 || $hour > 23) {
@@ -85,6 +86,10 @@ class FinanceController extends Controller
                 $todayTotal += $amount;
                 foreach ($paymentBreakdown->amounts($receipt) as $category => $value) {
                     $paymentTotals[$category] += $value;
+                    // Один успішний чек рахуємо один раз у кожній його категорії, включно з поверненням.
+                    if ($value !== 0) {
+                        $paymentReceiptCounts[str_replace('_cents', '', $category)]++;
+                    }
                 }
             });
 
@@ -125,6 +130,7 @@ class FinanceController extends Controller
                 'date' => $todayStart->toDateString(),
                 'daily_total' => $todayTotal,
                 'payment_breakdown' => $paymentTotals,
+                'payment_receipt_counts' => $paymentReceiptCounts,
                 'hourly_counts' => $hourlyCounts,
                 'hourly_amounts' => $hourlyAmounts,
                 'items' => $todayReceipts->map(fn ($receipt) => [

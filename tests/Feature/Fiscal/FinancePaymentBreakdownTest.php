@@ -33,7 +33,8 @@ class FinancePaymentBreakdownTest extends TestCase
 
         $this->getJson('/api/finance/checkbox')->assertOk()
             ->assertJsonPath('receipts.daily_total', 1535200)
-            ->assertJsonPath('receipts.payment_breakdown', ['account_cents' => 875000, 'cod_cents' => 660200, 'other_cents' => 0]);
+            ->assertJsonPath('receipts.payment_breakdown', ['account_cents' => 875000, 'cod_cents' => 660200, 'other_cents' => 0])
+            ->assertJsonPath('receipts.payment_receipt_counts', ['account' => 1, 'cod' => 1, 'other' => 0]);
         Http::assertNothingSent();
     }
 
@@ -49,7 +50,8 @@ class FinancePaymentBreakdownTest extends TestCase
         $sale->order->payment->update(['method' => 'card']);
         $this->getJson('/api/finance/checkbox')->assertOk()
             ->assertJsonPath('receipts.daily_total', 60000)
-            ->assertJsonPath('receipts.payment_breakdown', ['account_cents' => 20000, 'cod_cents' => 40000, 'other_cents' => 0]);
+            ->assertJsonPath('receipts.payment_breakdown', ['account_cents' => 20000, 'cod_cents' => 40000, 'other_cents' => 0])
+            ->assertJsonPath('receipts.payment_receipt_counts', ['account' => 1, 'cod' => 2, 'other' => 0]);
     }
 
     public function test_separate_prepayment_and_cod_receipts_do_not_count_the_whole_order_twice(): void
@@ -63,7 +65,8 @@ class FinancePaymentBreakdownTest extends TestCase
 
         $this->getJson('/api/finance/checkbox')->assertOk()
             ->assertJsonPath('receipts.daily_total', 100000)
-            ->assertJsonPath('receipts.payment_breakdown', ['account_cents' => 20000, 'cod_cents' => 80000, 'other_cents' => 0]);
+            ->assertJsonPath('receipts.payment_breakdown', ['account_cents' => 20000, 'cod_cents' => 80000, 'other_cents' => 0])
+            ->assertJsonPath('receipts.payment_receipt_counts', ['account' => 1, 'cod' => 1, 'other' => 0]);
     }
 
     public function test_old_receipts_fall_back_to_order_payment_without_guessing_ambiguous_prepayments(): void
@@ -74,7 +77,8 @@ class FinancePaymentBreakdownTest extends TestCase
         $this->receipt(null, 7000, [['type' => 'CASHLESS', 'label' => 'Безготівково', 'value' => 7000]]);
 
         $this->getJson('/api/finance/checkbox')->assertOk()
-            ->assertJsonPath('receipts.payment_breakdown', ['account_cents' => 10000, 'cod_cents' => 30000, 'other_cents' => 12000]);
+            ->assertJsonPath('receipts.payment_breakdown', ['account_cents' => 10000, 'cod_cents' => 30000, 'other_cents' => 12000])
+            ->assertJsonPath('receipts.payment_receipt_counts', ['account' => 1, 'cod' => 1, 'other' => 2]);
     }
 
     public function test_cash_change_and_inconsistent_payments_are_not_reported_as_card_payments(): void
@@ -87,7 +91,8 @@ class FinancePaymentBreakdownTest extends TestCase
 
         $response = $this->getJson('/api/finance/checkbox')->assertOk()
             ->assertJsonPath('receipts.daily_total', 24000)
-            ->assertJsonPath('receipts.payment_breakdown', ['account_cents' => 0, 'cod_cents' => 0, 'other_cents' => 24000]);
+            ->assertJsonPath('receipts.payment_breakdown', ['account_cents' => 0, 'cod_cents' => 0, 'other_cents' => 24000])
+            ->assertJsonPath('receipts.payment_receipt_counts', ['account' => 0, 'cod' => 0, 'other' => 4]);
         $this->assertSame($response->json('receipts.daily_total'), array_sum($response->json('receipts.payment_breakdown')));
     }
 
@@ -98,12 +103,35 @@ class FinancePaymentBreakdownTest extends TestCase
 
         $this->getJson('/api/finance/checkbox')->assertOk()
             ->assertJsonPath('receipts.daily_total', -30000)
-            ->assertJsonPath('receipts.payment_breakdown', ['account_cents' => 10000, 'cod_cents' => -40000, 'other_cents' => 0]);
+            ->assertJsonPath('receipts.payment_breakdown', ['account_cents' => 10000, 'cod_cents' => -40000, 'other_cents' => 0])
+            ->assertJsonPath('receipts.payment_receipt_counts', ['account' => 1, 'cod' => 1, 'other' => 0]);
+    }
+
+    public function test_multiple_payment_lines_in_one_category_count_as_one_receipt(): void
+    {
+        $this->receipt('card', 10000, [
+            ['type' => 'CASHLESS', 'label' => 'Оплата карткою', 'value' => 3000],
+            ['type' => 'CASHLESS', 'label' => 'Банківський переказ', 'value' => 7000],
+        ]);
+
+        $this->getJson('/api/finance/checkbox')->assertOk()
+            ->assertJsonPath('receipts.payment_receipt_counts', ['account' => 1, 'cod' => 0, 'other' => 0]);
+    }
+
+    public function test_sale_and_full_return_keep_two_receipts_when_the_net_amount_is_zero(): void
+    {
+        $payment = [['type' => 'CASHLESS', 'label' => 'Оплата карткою', 'value' => 10000]];
+        $this->receipt('card', 10000, $payment);
+        $this->receipt('card', 10000, $payment, type: 'return');
+
+        $this->getJson('/api/finance/checkbox')->assertOk()
+            ->assertJsonPath('receipts.payment_breakdown.account_cents', 0)
+            ->assertJsonPath('receipts.payment_receipt_counts', ['account' => 2, 'cod' => 0, 'other' => 0]);
     }
 
     private function receipt(?string $method, int $amount, array $payments, string $type = 'sell', string $status = 'success'): FiscalReceipt
     {
-        $order = Order::create(['order_number' => 'breakdown-'.Str::uuid(), 'currency' => 'UAH']);
+        $order = Order::create(['order_number' => 'breakdown-'.Str::random(16), 'currency' => 'UAH']);
         if ($method !== null) {
             $order->payment()->create(['method' => $method, 'currency' => 'UAH']);
         }

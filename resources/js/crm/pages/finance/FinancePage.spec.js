@@ -12,7 +12,8 @@ vi.mock('vue3-apexcharts', () => ({ default: { name: 'ApexChart', props: ['serie
 let wrapper;
 const response = (breakdown = { account_cents: 875000, cod_cents: 660200, other_cents: 0 }) => ({
   settings: {}, shift_status: 'OPENED', queue: { waiting: 0 },
-  receipts: { daily_total: 1535200, hourly_amounts: Array(24).fill(0), items: [], payment_breakdown: breakdown },
+  receipts: { daily_total: 1535200, hourly_amounts: Array(24).fill(0), items: [], payment_breakdown: breakdown,
+    payment_receipt_counts: { account: 16, cod: 13, other: 0 } },
 });
 
 beforeEach(() => { vi.clearAllMocks(); fetchFinanceSettings.mockResolvedValue(response()); });
@@ -26,6 +27,7 @@ describe('Компактний розподіл оплат каси', () => {
     expect(wrapper.findAll('.payment-breakdown')).toHaveLength(1);
     expect(block.element.previousElementSibling.querySelector('[data-chart]')).not.toBeNull();
     expect(block.findAll('.payment-breakdown__item')).toHaveLength(2);
+    expect(block.findAll('.payment-breakdown__count').map(item => item.text())).toEqual(['Чеків: 16', 'Чеків: 13']);
     expect(block.text().replace(/\s/g, '')).toContain('8750,00');
     expect(block.text().replace(/\s/g, '')).toContain('6602,00');
     expect(block.text()).toContain('На рахунок / картку');
@@ -51,10 +53,24 @@ describe('Компактний розподіл оплат каси', () => {
     await wrapper.vm.$nextTick();
     expect(wrapper.get('.payment-breakdown').attributes('aria-busy')).toBe('true');
     expect(wrapper.findAll('.payment-breakdown__amount').every(item => item.text() === '—')).toBe(true);
-    resolve(response(null));
+    expect(wrapper.findAll('.payment-breakdown__count').every(item => item.text() === 'Чеків: —')).toBe(true);
+    const legacy = response(null);
+    delete legacy.receipts.payment_receipt_counts;
+    resolve(legacy);
     await flushPromises();
     expect(wrapper.get('.payment-breakdown').attributes('aria-busy')).toBe('false');
     expect(wrapper.findAll('.payment-breakdown__amount').every(item => item.text() === '—')).toBe(true);
+    expect(wrapper.findAll('.payment-breakdown__count').every(item => item.text() === 'Чеків: —')).toBe(true);
+  });
+
+  it('показує нуль чеків і зберігає кількість інших чеків навіть за нульової суми', async () => {
+    const data = response({ account_cents: 0, cod_cents: 0, other_cents: 0 });
+    data.receipts.payment_receipt_counts = { account: 0, cod: 0, other: 2 };
+    fetchFinanceSettings.mockResolvedValue(data);
+    wrapper = mount(FinancePage);
+    await flushPromises();
+    expect(wrapper.findAll('.payment-breakdown__count').map(item => item.text())).toEqual(['Чеків: 0', 'Чеків: 0']);
+    expect(wrapper.get('.payment-breakdown__other').text()).toContain('Чеків: 2');
   });
 
   it('зберігає текст помилки в toast і дозволяє повторити завантаження сум', async () => {

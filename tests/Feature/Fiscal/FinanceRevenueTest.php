@@ -93,6 +93,7 @@ class FinanceRevenueTest extends TestCase
             ->assertJsonPath('receipts.hourly_amounts.8', -10000)
             ->assertJsonPath('receipts.hourly_amounts.10', 251000)
             ->assertJsonPath('receipts.payment_breakdown.other_cents', 241000)
+            ->assertJsonPath('receipts.payment_receipt_counts.other', 252)
             ->assertJsonCount(200, 'receipts.items');
     }
 
@@ -106,7 +107,7 @@ class FinanceRevenueTest extends TestCase
 
     private function receipt(string $type, string $status, int $amount, string $at): FiscalReceipt
     {
-        $order = Order::create(['order_number' => 'finance-'.Str::uuid(), 'currency' => 'UAH']);
+        $order = Order::create(['order_number' => 'finance-'.Str::random(16), 'currency' => 'UAH']);
         $receipt = $order->fiscalReceipts()->make([
             'type' => $type, 'status' => $status, 'total_amount' => $amount,
             'payload_hash' => (string) Str::uuid(),
