@@ -59,6 +59,7 @@ class CatalogBuilder
                 $sizes !== '' ? "розміри: {$sizes}" : 'НЕМАЄ в наявності',
                 !empty($i['фото']) ? 'фото:[' . implode(',', $i['фото']) . ']' : null,
                 !empty($i['колаж']) ? 'колаж:' . $i['колаж'] : null,
+                !empty($i['пояснення_розміру']) ? 'пояснення_розміру:[' . implode(',', $i['пояснення_розміру']) . ']' : null,
             ], fn ($x) => $x !== null && $x !== '');
 
             return implode(' | ', $parts);
@@ -81,7 +82,7 @@ class CatalogBuilder
             }
 
             $head = '═ ЛІНІЯ: ' . $this->scrub($g->name) . ' ═';
-            $collages = $g->photos->filter(fn (AiPhoto $p) => $p->products->count() >= 2)->pluck('id')->all();
+            $collages = $g->photos->filter(fn (AiPhoto $p) => !$p->isSizeGuide() && $p->products->count() >= 2)->pluck('id')->all();
             if ($collages) {
                 $head .= "\nКолажі лінії: [" . implode(',', $collages) . ']';
             }
@@ -135,12 +136,14 @@ class CatalogBuilder
             'фото' => $info['фото'] ?? null,
             'колаж' => $info['колаж'] ?? null,
             'колажі_групи' => $info['колажі_групи'] ?? null,
+            'пояснення_розміру' => $info['пояснення_розміру'] ?? null,
         ];
     }
 
     /**
      * Мапа товар → його фото з галереї ШІ: «фото» (де він один),
-     * «колаж» (перше спільне фото групи), «група» (назва лінійки).
+     * «колаж» (перше спільне фото групи), «група» (назва лінійки),
+     * «пояснення_розміру» (лише окремі пояснення, прив'язані до цього товару).
      */
     public function photoInfoFor(array $productIds): array
     {
@@ -155,7 +158,7 @@ class CatalogBuilder
 
         $map = [];
         foreach ($groups as $group) {
-            $collages = $group->photos->filter(fn (AiPhoto $p) => $p->products->count() >= 2)->values();
+            $collages = $group->photos->filter(fn (AiPhoto $p) => !$p->isSizeGuide() && $p->products->count() >= 2)->values();
             $collageIds = $collages->pluck('id')->all();
 
             foreach ($group->products as $product) {
@@ -165,7 +168,14 @@ class CatalogBuilder
 
                 // ВСІ фото цього кольору (різні ракурси), по порядку.
                 $own = $group->photos
-                    ->filter(fn (AiPhoto $p) => $p->products->count() === 1 && (int) $p->products->first()->id === (int) $product->id)
+                    ->filter(fn (AiPhoto $p) => !$p->isSizeGuide() && $p->products->count() === 1 && (int) $p->products->first()->id === (int) $product->id)
+                    ->pluck('id')
+                    ->values()
+                    ->all();
+
+                // Пояснення спільне лише для явно позначених товарів, не для всієї групи.
+                $sizeGuides = $group->photos
+                    ->filter(fn (AiPhoto $p) => $p->isSizeGuide() && $p->products->contains('id', $product->id))
                     ->pluck('id')
                     ->values()
                     ->all();
@@ -178,6 +188,7 @@ class CatalogBuilder
                     'фото' => $own ?: null,
                     'колаж' => $ownCollage?->id ?? ($collages->first()?->id),
                     'колажі_групи' => $collageIds ?: null,
+                    'пояснення_розміру' => $sizeGuides ?: null,
                 ];
             }
         }

@@ -1,0 +1,11 @@
+Use case: text-localization.
+Edit target: the supplied existing square product collage. Change ONLY the top headline.
+Replace the current top headline "Домашні капці з декором" with the EXACT Ukrainian headline "Жіночі теплі домашні капці".
+Keep the headline on one line if possible, adjust its font size slightly to fit the existing headline area with proper margins. Keep its existing dark bold sans-serif style.
+CRITICAL INVARIANTS: keep the ENTIRE rest of the image unchanged. Preserve all five product photographs, their panels, their colors, textures, embroidery, poses and backgrounds. Preserve the same five panel locations, spacing, white background and all lower captions exactly:
+"Котики" / "Рожеві"
+"Котики" / "Сірі"
+"Сердечка" / "Білі з червоними сердечками"
+"Ведмедики" / "Коричневі"
+"Ведмедики" / "Рожеві"
+Do not redraw or regenerate products, do not move panels, do not change or add any product, text, icons or decoration. No prices, logos or watermarks. Return ONE revised collage matching the original square aspect ratio. This is a narrowly localized headline replacement, not a redesign.

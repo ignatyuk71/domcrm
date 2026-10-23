@@ -26,7 +26,9 @@ class AiGalleryController extends Controller
             ->orderBy('sort_order')->orderBy('id')
             ->get()
             ->map(function (AiPhotoGroup $g) {
-                $markedIds = $g->photos->flatMap(fn ($p) => $p->products->pluck('id'))->unique();
+                $markedIds = $g->photos
+                    ->reject(fn (AiPhoto $photo) => $photo->isSizeGuide())
+                    ->flatMap(fn ($p) => $p->products->pluck('id'))->unique();
 
                 return [
                     'id' => $g->id,
@@ -41,6 +43,7 @@ class AiGalleryController extends Controller
                     'photos' => $g->photos->map(fn (AiPhoto $p) => [
                         'id' => $p->id,
                         'url' => $p->url(),
+                        'purpose' => $p->purpose,
                         'product_ids' => $p->products->pluck('id')->values(),
                     ])->values(),
                 ];

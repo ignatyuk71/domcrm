@@ -86,6 +86,10 @@ class HistoryBuilder
             }
 
             $blocks = [];
+            // Пояснення з вкладення не губиться, навіть коли фото надіслано з текстом.
+            if ($role === 'assistant' && $text !== '' && ($guideNote = $this->sizeGuideLabel($m)) !== '') {
+                $blocks[] = ['type' => 'text', 'text' => '(система: ти надіслала клієнту ' . $guideNote . ')'];
+            }
             if ($role === 'user' && in_array($m->id, $visionMessageIds, true)) {
                 // Контекст (сторіс/пост) — першим: це «про що мова».
                 $urls = array_slice(array_merge(
@@ -117,7 +121,7 @@ class HistoryBuilder
                         // (кейс Ірини: капучино назвала пудровим) → колір не визначаємо.
                         $blocks[] = [
                             'type' => 'text',
-                            'text' => '(система: точного збігу цього фото з нашою галереєю НЕМАЄ — це може бути скріншот або власний знімок клієнта. КОЛІР із фото НЕ визначай і НЕ називай як факт. Визнач лише тип (домашні/вуличні/дитячі), назви ціну групи, надішли КОЛАЖ через send_photos і запитай, який саме колір цікавить — клієнт сам покаже на колажі.)',
+                            'text' => '(система: точного збігу цього фото з нашою галереєю НЕМАЄ — це може бути скріншот або власний знімок клієнта. КОЛІР із фото НЕ визначай і НЕ називай як факт. Якщо це ілюстрація замірів або заднього бортика — поясни її як приклад одного розміру, для інших розмірів використовуй їхні фактичні заміри; колаж і вибір кольору через таку ілюстрацію НЕ нав’язуй. Наступні дії доречні лише для товарного фото: Визнач лише тип (домашні/вуличні/дитячі), назви ціну групи, надішли КОЛАЖ через send_photos і запитай, який саме колір цікавить — клієнт сам покаже на колажі.)',
                         ];
                     }
                 }
@@ -142,7 +146,12 @@ class HistoryBuilder
                 if (($c['type'] ?? '') === 'reply') {
                     $q = $quoted[$c['mid'] ?? ''] ?? null;
                     $qt = trim((string) ($q?->text ?? ''));
-                    if ($qt !== '') {
+                    if ($q && ($guideNote = $this->sizeGuideLabel($q)) !== '') {
+                        $note = '(у відповідь на наше ' . $guideNote . ')';
+                        if ($qt !== '') {
+                            $note .= "\n" . '(текст повідомлення: «' . mb_substr($qt, 0, 140) . '»)';
+                        }
+                    } elseif ($qt !== '') {
                         $note = '(у відповідь на повідомлення: «' . mb_substr($qt, 0, 140) . '»)';
                     } elseif ($q && ($lbl = $this->photoProductsLabel($q)) !== '') {
                         // Відповідь на наше фото/колаж → бот знає, ЩО саме на ньому.
@@ -253,23 +262,29 @@ class HistoryBuilder
         return $this->galleryPhotosMemo ??= AiPhoto::with('products:products.id,title,sale_price')->get();
     }
 
-    /**
-     * Службова примітка про надіслані клієнту фото: які САМЕ товари він побачив.
-     * Без неї модель не памʼятає, що показувала, і «яка ціна цих?» втрачає сенс.
-     */
-    /** Які товари зображені на фото повідомлення (по нашій галереї). '' якщо не наші фото. */
-    private function photoProductsLabel(InboxMessage $m): string
+    /** Вкладення повідомлення, які точно відповідають нашій галереї. */
+    private function attachmentGalleryPhotos(InboxMessage $m): \Illuminate\Support\Collection
     {
-        $labels = [];
+        $photos = [];
         foreach ($m->attachments ?? [] as $a) {
             $url = (string) ($a['url'] ?? '');
             if ($url === '') {
                 continue;
             }
             $photo = $this->galleryPhotos()->first(fn (AiPhoto $p) => str_contains($url, $p->path));
-            if (!$photo) {
-                continue;
+            if ($photo) {
+                $photos[$photo->id] = $photo;
             }
+        }
+
+        return collect(array_values($photos));
+    }
+
+    /** Товарні фото підтримують звичний контекст кольору й ціни. */
+    private function photoProductsLabel(InboxMessage $m): string
+    {
+        $labels = [];
+        foreach ($this->attachmentGalleryPhotos($m)->reject(fn (AiPhoto $photo) => $photo->isSizeGuide()) as $photo) {
             $list = $photo->products
                 ->map(fn ($p) => '#' . $p->id . ' ' . $this->scrub($p->title) . ' — ' . round((float) $p->sale_price) . ' грн')
                 ->implode('; ');
@@ -279,14 +294,36 @@ class HistoryBuilder
         return implode(' | ', array_unique($labels));
     }
 
+    /** Фото замірів зберігає модельний контекст, але не означає вибір кольору. */
+    private function sizeGuideLabel(InboxMessage $m): string
+    {
+        return $this->attachmentGalleryPhotos($m)
+            ->filter(fn (AiPhoto $photo) => $photo->isSizeGuide())
+            ->map(function (AiPhoto $photo): string {
+                $products = $photo->products
+                    ->map(fn ($product) => '#' . $product->id . ' ' . $this->scrub($product->title))
+                    ->implode('; ');
+
+                return "пояснення розміру — фото №{$photo->id}: це приклад замірів і заднього бортика, а не фото кольору чи пропозиція товарів. "
+                    . ($products !== '' ? "Пояснення стосується товарів: {$products}. " : '')
+                    . 'Розмір і цифри на зображенні є прикладом; для інших розмірів потрібні їхні фактичні заміри. '
+                    . 'Це фото НЕ означає, що клієнт обрав зображену модель, колір або розмір';
+            })
+            ->implode(' | ');
+    }
+
     private function sentPhotosNote(InboxMessage $m): string
     {
         $label = $this->photoProductsLabel($m);
+        $guideLabel = $this->sizeGuideLabel($m);
 
         // СИСТЕМНИЙ голос, а не «мова бота»: коли нотатка звучала від першої особи
         // («надіслала клієнту фото…»), модель бачила її як власний текст і почала
         // КОПІЮВАТИ у відповіді замість реально викликати send_photos (кейс Тані 04.07).
-        return $label !== '' ? "(система: ти надіслала клієнту фото: {$label})" : '';
+        return implode("\n", array_filter([
+            $label !== '' ? "(система: ти надіслала клієнту фото: {$label})" : null,
+            $guideLabel !== '' ? "(система: ти надіслала клієнту {$guideLabel})" : null,
+        ]));
     }
 
     /** Картинка контексту (сторіс/пост, на які відповів клієнт): локальна копія або віддалена. */

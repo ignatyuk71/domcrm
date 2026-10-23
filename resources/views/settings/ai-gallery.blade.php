@@ -4,7 +4,7 @@
             <div>
                 <span class="badge bg-primary-subtle text-primary-emphasis text-uppercase fw-bold mb-2">Налаштування CRM</span>
                 <h1 class="h3 fw-bold mb-1"><i class="bi bi-images me-2 text-primary"></i>Галерея ШІ</h1>
-                <p class="text-secondary mb-0">Колажі та фото кольорів, які агент надсилає клієнтам. Група = модельна лінійка.</p>
+                <p class="text-secondary mb-0">Колажі, фото товарів і пояснення розмірів, які агент надсилає клієнтам.</p>
             </div>
             <button class="btn btn-primary fw-semibold" onclick="createGroup()"><i class="bi bi-plus-lg me-1"></i>Нова група</button>
         </div>
@@ -58,6 +58,7 @@
 
         function photoType(p) {
             if (!p.product_ids.length) return ['не розмічено', 'text-bg-warning'];
+            if (p.purpose === 'size_guide') return ['пояснення розміру', 'text-bg-info'];
             return p.product_ids.length === 1 ? ['колір', 'text-bg-success'] : ['колаж', 'text-bg-primary'];
         }
 
@@ -97,7 +98,7 @@
                 return `
                 <div class="aig-photo ${selPhoto === p.id ? 'sel' : ''}" onclick="selectPhoto(${p.id})">
                     <span class="badge ${cls} tbadge">${label}</span>
-                    <img src="${esc(p.url)}" loading="lazy" alt="">
+                    <img src="${esc(p.url)}" loading="lazy" alt="${p.purpose === 'size_guide' ? 'Пояснення замірів і посадки' : ''}">
                     <div class="ft" onclick="event.stopPropagation()">
                         <span class="small text-secondary">${p.product_ids.length ? p.product_ids.length + ' тов.' : '—'}</span>
                         <span class="d-flex gap-1">
@@ -112,7 +113,7 @@
             const sel = g.photos.find(p => p.id === selPhoto);
             const checksPanel = sel ? `
                 <div class="bg-light rounded-3 p-3 mt-3">
-                    <div class="small text-secondary mb-2">Хто на цьому фото (відміть галочками):</div>
+                    <div class="small text-secondary mb-2">${sel.purpose === 'size_guide' ? 'Для яких товарів це пояснення розміру (відміть галочками):' : 'Хто на цьому фото (відміть галочками):'}</div>
                     <div class="aig-checks">
                         ${g.products.length ? g.products.map(p => `
                             <label><input type="checkbox" class="form-check-input me-1" ${sel.product_ids.includes(p.id) ? 'checked' : ''}
@@ -129,9 +130,9 @@
                         <button class="btn btn-sm btn-primary" id="descr-save-${g.id}" onclick="saveDescription(${g.id}, this)"><i class="bi bi-check-lg me-1"></i>Зберегти опис</button>
                     </div>
                     <textarea id="descr-${g.id}" class="form-control" rows="3"
-                        placeholder="Пиши як для нової продавчині: маломірять чи ні, чим відрізняється від інших ліній, матеріал/підошва, догляд, як впізнати на фото. Ціни й розміри НЕ писати — вони підтягуються з бази самі."
+                        placeholder="Пиши як для нової продавчині: маломірять чи ні, чим відрізняється від інших ліній, матеріал/підошва, догляд, як впізнати на фото. Ціни й розміри в наявності — з бази. Ілюстрацію замірів чітко позначай як приклад конкретного розміру."
                         onclick="event.stopPropagation()">${esc(g.ai_description || '')}</textarea>
-                    <div class="form-text">Це знання агент використовує у відповідях клієнтам. Цифри (ціни, розміри, наявність) він бере з бази товарів автоматично.</div>
+                    <div class="form-text">Це знання агент використовує у відповідях клієнтам. Ціни, розміри в наявності та залишки він бере з товарів. Приклад замірів не замінює розмірну сітку моделі.</div>
                 </div>
                 <div class="small text-secondary fw-semibold mb-2">Товари групи</div>
                 <div class="aig-search mb-2" style="max-width:420px">
@@ -142,7 +143,7 @@
                 <div class="d-flex flex-wrap gap-2 mb-3">${chips || '<span class="small text-secondary">Поки порожньо.</span>'}</div>
 
                 <div class="d-flex align-items-center justify-content-between mb-2">
-                    <span class="small text-secondary fw-semibold">Фото групи <span class="text-muted fw-normal">(№1 — головний колаж, його агент шле першим)</span></span>
+                    <span class="small text-secondary fw-semibold">Фото групи <span class="text-muted fw-normal">(головний колаж — першим; пояснення розміру — окремо)</span></span>
                     <div class="d-flex gap-2">
                         <button class="btn btn-sm btn-outline-primary" onclick="document.getElementById('file-${g.id}').click()"><i class="bi bi-upload me-1"></i>Завантажити фото</button>
                         <button class="btn btn-sm btn-outline-secondary" onclick="renameGroup(${g.id})" title="Перейменувати"><i class="bi bi-pencil"></i></button>

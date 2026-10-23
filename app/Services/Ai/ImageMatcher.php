@@ -27,7 +27,8 @@ class ImageMatcher
         $best = null;
         $bestDist = 11; // поріг: ≤10 з 64 біт — впевнений збіг
 
-        foreach (AiPhoto::with('products.color:id,name')->get() as $photo) {
+        // Приклад замірів не підтверджує конкретний товар чи колір на фото клієнта.
+        foreach (AiPhoto::where('purpose', AiPhoto::PURPOSE_PRODUCT)->with('products.color:id,name')->get() as $photo) {
             if (!$photo->phash) {
                 $file = public_path($photo->path);
                 if (!is_file($file)) {
