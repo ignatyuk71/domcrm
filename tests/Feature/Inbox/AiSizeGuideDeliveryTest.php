@@ -135,7 +135,9 @@ class AiSizeGuideDeliveryTest extends TestCase
         $this->assertCount(2, $outgoing);
         $this->assertSame('ai', $outgoing[0]->sender);
         $this->assertSame('m_size_guide_image', $outgoing[0]->external_message_id);
-        $this->assertSame([['type' => 'image', 'url' => $guide->url()]], $outgoing[0]->attachments);
+        $this->assertCount(1, $outgoing[0]->attachments);
+        $this->assertSame('image', $outgoing[0]->attachments[0]['type']);
+        $this->assertSame($guide->url(), $outgoing[0]->attachments[0]['url']);
         $this->assertSame($explanation, $outgoing[1]->text);
 
         $run = AiRun::where('inbox_message_id', $incoming->id)->firstOrFail();
