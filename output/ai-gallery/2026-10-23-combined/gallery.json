@@ -1,0 +1,140 @@
+{
+  "groups": [
+    {
+      "key": "decor",
+      "name": "Домашні капці з декором",
+      "cover": "collages/domashni-kaptsi-z-dekorom.png",
+      "description": "Домашні капці з декором: три моделі, п’ять поєднань моделі та кольору. «Котики» (Welcome Home) — рожеві із сірими деталями та сірі з рожевими деталями; декор у вигляді котика й лапки, напис «Welcome home!». «Ведмедики» (Teddy Bear) — рожеві та коричневі; фактурний верх і аплікація мордочки ведмедика. «Сердечка» (Love Me / Love Cozy) — білі з червоними сердечками. Розрізняй модель і колір: рожеві є серед «Котиків» і «Ведмедиків». Якщо клієнт просить лише «рожеві», уточни модель або запропонуй обидва варіанти. Для вибраної моделі й кольору надсилай відповідні фото товару."
+    }
+  ],
+  "models": [
+    {
+      "key": "kotyky",
+      "name": "Домашні капці «Котики»",
+      "aliases": [
+        "Welcome Home",
+        "капці з котиками",
+        "капці з лапками"
+      ],
+      "description": "Домашні капці із закритим носком і відкритою п’ятою. Декор: мордочка котика, об’ємна лапка та напис «Welcome home!». Рожевий варіант має сірий декор і сіру внутрішню частину; сірий — рожевий декор і рожеву внутрішню частину. Назва моделі в магазині — Welcome Home. Запити «капці з котиками», «тапочки з котом», «капці з лапками» стосуються цієї моделі."
+    },
+    {
+      "key": "vedmedyky",
+      "name": "Домашні капці «Ведмедики»",
+      "aliases": [
+        "Teddy Bear",
+        "тедді",
+        "капці з ведмедиками"
+      ],
+      "description": "Домашні капці із закритим носком, відкритою п’ятою та фактурним верхом. Спереду — аплікація мордочки ведмедика. Кольори: коричневий і рожевий. Назва моделі в магазині — Teddy Bear, також «тедді». Запити «капці з ведмедиками», «тапочки з ведмедиком», «капці тедді» стосуються цієї моделі."
+    },
+    {
+      "key": "serdechka",
+      "name": "Домашні капці «Сердечка»",
+      "aliases": [
+        "Love Me",
+        "капці із сердечками",
+        "білі капці з червоними сердечками",
+        "Love Cozy"
+      ],
+      "description": "Білі домашні капці з червоними сердечками, закритим носком і відкритою п’ятою. Внутрішня частина — бежевого відтінку. Назва моделі в магазині — Love Me. Запити «капці із сердечками», «тапочки з серцями», «білі капці з червоними сердечками» стосуються цієї моделі."
+    }
+  ],
+  "products": [
+    {
+      "key": "kotyky-pink",
+      "name": "Домашні капці «Котики» — рожеві",
+      "color": "Рожеві",
+      "page": "https://dream-v-doma.com.ua/zinoci-pliusevi-kapci/zinoci-domasni-kapci-welcome-home-rozevi",
+      "photos": [
+        {
+          "url": "https://dream-v-doma.com.ua/storage/uploads/products/gallery/39/597qfnuMKIK15Zwx5SUcddjOCMWovP1mVyDgGDdH.jpg",
+          "file": "originals/kotyky-pink-01.jpg"
+        },
+        {
+          "url": "https://dream-v-doma.com.ua/storage/uploads/products/gallery/39/QgUMPXaos6SH81CRceNpFp2kziocCrJNV3RKISRY.webp",
+          "file": "originals/kotyky-pink-02.webp"
+        }
+      ],
+      "model": "kotyky",
+      "group": "decor",
+      "sku": "5001"
+    },
+    {
+      "key": "kotyky-grey",
+      "name": "Домашні капці «Котики» — сірі",
+      "color": "Сірі",
+      "page": "https://dream-v-doma.com.ua/zinoci-pliusevi-kapci/zinoci-domasni-kapci-welcome-home-siri",
+      "photos": [
+        {
+          "url": "https://dream-v-doma.com.ua/storage/uploads/products/gallery/40/3JkB39qysg00k5o0ClrQZn8X1n0dAb8PRjlHvxMh.webp",
+          "file": "originals/kotyky-grey-01.webp"
+        },
+        {
+          "url": "https://dream-v-doma.com.ua/storage/uploads/products/gallery/40/nLyrjUGsIe2oFGSbSKqEMHgwFdCa2l56ApHLedIr.webp",
+          "file": "originals/kotyky-grey-02.webp"
+        }
+      ],
+      "model": "kotyky",
+      "group": "decor",
+      "sku": "5002"
+    },
+    {
+      "key": "vedmedyky-brown",
+      "name": "Домашні капці «Ведмедики» — коричневі",
+      "color": "Коричневі",
+      "page": "https://dream-v-doma.com.ua/zinoci-pliusevi-kapci/zinoci-domasni-kapci-teddy-bear-koricnevi",
+      "photos": [
+        {
+          "url": "https://dream-v-doma.com.ua/storage/uploads/products/gallery/19/xst8JsRIudfwoEtrd0e24vtx9xQvSgiUUcYPPFBt.png",
+          "file": "originals/vedmedyky-brown-01.png"
+        },
+        {
+          "url": "https://dream-v-doma.com.ua/storage/uploads/products/gallery/19/Km9FK6s0nDsy9vKTDnTUIqFFQhpoz6oWV23kfiz3.webp",
+          "file": "originals/vedmedyky-brown-02.webp"
+        }
+      ],
+      "model": "vedmedyky",
+      "group": "decor",
+      "sku": "3002"
+    },
+    {
+      "key": "vedmedyky-pink",
+      "name": "Домашні капці «Ведмедики» — рожеві",
+      "color": "Рожеві",
+      "page": "https://dream-v-doma.com.ua/zinoci-pliusevi-kapci/zinoci-domasni-kapci-teddy-bear-rozevi",
+      "photos": [
+        {
+          "url": "https://dream-v-doma.com.ua/storage/uploads/products/gallery/18/EIWHsLRGj0bgnRxULtQeU6uHbc7EbfRJ5msEVob4.png",
+          "file": "originals/vedmedyky-pink-01.png"
+        },
+        {
+          "url": "https://dream-v-doma.com.ua/storage/uploads/products/gallery/18/U4RCLHXCrGSGOE5pwClo9bf81m0xLad30F5V4JJK.webp",
+          "file": "originals/vedmedyky-pink-02.webp"
+        }
+      ],
+      "model": "vedmedyky",
+      "group": "decor",
+      "sku": "3001"
+    },
+    {
+      "key": "serdechka-white",
+      "name": "Домашні капці «Сердечка» — білі з червоними сердечками",
+      "color": "Білі з червоними сердечками",
+      "page": "https://dream-v-doma.com.ua/zinoci-pliusevi-kapci/puxnasti-tepli-tapuli-love-me-miaki-zimovi-z-cervonimi-serciami",
+      "photos": [
+        {
+          "url": "https://dream-v-doma.com.ua/storage/uploads/products/gallery/38/tdGEjKXmrrzRsSbVoo2I6RTFIu2R8JfxpK3x5Jc6.webp",
+          "file": "originals/serdechka-white-01.webp"
+        },
+        {
+          "url": "https://dream-v-doma.com.ua/storage/uploads/products/gallery/38/ReTU17pCRVM6eU4qah01eaDg5e3CKuvNchz4l9Ck.webp",
+          "file": "originals/serdechka-white-02.webp"
+        }
+      ],
+      "model": "serdechka",
+      "group": "decor",
+      "sku": "4000"
+    }
+  ]
+}

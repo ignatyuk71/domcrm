@@ -1,0 +1,14 @@
+Use case: compositing.
+Asset type: ONE finished combined product catalogue collage for a Ukrainian CRM sales gallery.
+Primary request: combine these FIVE actual original product photos into ONE clean square 2048x2048 image, showing all five color/model choices together with readable Ukrainian labels.
+Input images are photographic compositing sources, not loose inspiration. Image 1: pink cat slippers. Image 2: grey cat slippers. Image 3: white slippers with red hearts. Image 4: brown teddy bear slippers. Image 5: pink teddy bear slippers.
+Layout: generous warm-white background, single centered charcoal sans-serif title at top. Below it an orderly grid of five equal square photo panels: THREE panels across the top row (images 1, 2, 3), TWO panels centered in the second row (images 4, 5), with matching equal panel dimensions. Keep original photographic backgrounds inside panels. Resize photos proportionally, include entire slippers, do not cut off products. Beneath each photo put TWO distinct centered lines: model name in bold, color below it. Make both lines clearly readable on mobile. Panels aligned and ample spacing. Clean, restrained ecommerce catalogue aesthetic, no promotional ornament.
+Exact Ukrainian text, verbatim:
+Top title: "Домашні капці з декором"
+Panel 1 model: "Котики"; color: "Рожеві"
+Panel 2 model: "Котики"; color: "Сірі"
+Panel 3 model: "Сердечка"; color: "Білі з червоними сердечками"
+Panel 4 model: "Ведмедики"; color: "Коричневі"
+Panel 5 model: "Ведмедики"; color: "Рожеві"
+Preserve the photographed products faithfully: exact original colors, construction, textures, embroidery, cat faces and raised paws, bear face patches, heart placements, soles, shapes, camera angles and relative proportions. Use the supplied photos as intact photographic panels; do not redraw or reinvent the slippers, invent new views, substitute any product or recolor them. Existing "Welcome home!" embroidery on cat slippers stays as photographed.
+Avoid: prices, discounts, sizes, stock, slogans, logos, new props, watermarks, extra products, extra panels, multiple separate output images. Exactly five original product panels in ONE final combined collage.
