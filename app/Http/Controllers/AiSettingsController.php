@@ -4,11 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\AiSetting;
 use App\Models\MetaConnection;
-use App\Services\Ai\OpenAiModels;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Validation\ValidationException;
 
 class AiSettingsController extends Controller
 {
@@ -39,13 +36,8 @@ class AiSettingsController extends Controller
         return response()->json([
             'global' => [
                 'has_key' => (bool) $key,
-                'key_hint' => $key ? ('•••'.substr($key, -4)) : null,
+                'key_hint' => $key ? ('•••' . substr($key, -4)) : null,
                 'model' => $global->model ?: 'claude-sonnet-4-6',
-                'provider' => $global->provider ?: 'claude',
-                'openai_has_key' => (bool) $global->openai_api_key,
-                'openai_key_hint' => $global->openai_api_key ? ('•••'.substr($global->openai_api_key, -4)) : null,
-                'openai_model' => $global->openai_model ?: AiSetting::DEFAULT_OPENAI_MODEL,
-                'openai_models' => OpenAiModels::options(),
                 'debounce_seconds' => $global->debounce_seconds ?? 10,
                 'catalog_mode' => $global->catalog_mode ?: 'all',
                 'operator_pause_minutes' => $global->operator_pause_minutes ?? 3,
@@ -65,11 +57,9 @@ class AiSettingsController extends Controller
     public function save(Request $request)
     {
         $data = $request->validate([
+            'provider' => ['prohibited'],
             'api_key' => ['nullable', 'string', 'max:300'],
             'model' => ['required', 'string', 'max:100'],
-            'provider' => ['sometimes', 'required', 'in:claude,openai'],
-            'openai_api_key' => ['nullable', 'string', 'max:512'],
-            'openai_model' => ['sometimes', 'required', 'string', 'max:100'],
             'debounce_seconds' => ['nullable', 'integer', 'min:0', 'max:60'],
             'catalog_mode' => ['nullable', 'in:all,showcase'],
             'operator_pause_minutes' => ['nullable', 'integer', 'min:0', 'max:1440'],
@@ -90,85 +80,58 @@ class AiSettingsController extends Controller
         ]);
 
         $global = AiSetting::global();
-        $provider = $data['provider'] ?? ($global->provider ?: 'claude');
-        $openaiKey = trim((string) ($data['openai_api_key'] ?? '')) ?: $global->openai_api_key;
-        if ($provider === 'openai' && ! $openaiKey) {
-            throw ValidationException::withMessages(['openai_api_key' => 'Перед увімкненням OpenAI додайте його ключ API. Налаштування не змінено.']);
+        $global->model = $data['model'];
+        $global->debounce_seconds = $data['debounce_seconds'] ?? 10;
+        $global->catalog_mode = $data['catalog_mode'] ?? 'all';
+        $global->operator_pause_minutes = $data['operator_pause_minutes'] ?? 3;
+        $global->follow_up_hours = $data['follow_up_hours'] ?? 3;
+        if (array_key_exists('comment_settings', $data)) {
+            $new = $data['comment_settings'] ?? [];
+            $old = $global->comment_settings ?? [];
+            // Момент увімкнення: бот відповідає лише на коментарі ПІСЛЯ нього.
+            if (($new['enabled'] ?? false) && !($old['enabled'] ?? false)) {
+                $new['enabled_at'] = now()->toDateTimeString();
+            } elseif (($new['enabled'] ?? false) && isset($old['enabled_at'])) {
+                $new['enabled_at'] = $old['enabled_at'];
+            }
+            $global->comment_settings = $new;
         }
-        if (array_key_exists('provider', $data) && $provider === 'claude'
-            && ! (trim((string) ($data['api_key'] ?? '')) ?: $global->api_key)) {
-            throw ValidationException::withMessages(['api_key' => 'Перед увімкненням Claude додайте його ключ API. Налаштування не змінено.']);
+        if (!empty($data['api_key'])) {
+            $global->api_key = trim($data['api_key']);
         }
+        $global->save();
 
-        DB::transaction(function () use ($global, $data) {
-            // Відсутні нові поля не змінюють провайдера при збереженні зі старої форми.
-            foreach (['provider', 'openai_model'] as $field) {
-                if (array_key_exists($field, $data)) {
-                    $global->{$field} = $data[$field];
-                }
-            }
-            if (! empty($data['openai_api_key'])) {
-                $global->openai_api_key = trim($data['openai_api_key']);
-            }
-            $global->model = $data['model'];
-            $global->debounce_seconds = $data['debounce_seconds'] ?? 10;
-            $global->catalog_mode = $data['catalog_mode'] ?? 'all';
-            $global->operator_pause_minutes = $data['operator_pause_minutes'] ?? 3;
-            $global->follow_up_hours = $data['follow_up_hours'] ?? 3;
-            if (array_key_exists('comment_settings', $data)) {
-                $new = $data['comment_settings'] ?? [];
-                $old = $global->comment_settings ?? [];
-                // Момент увімкнення: бот відповідає лише на коментарі ПІСЛЯ нього.
-                if (($new['enabled'] ?? false) && ! ($old['enabled'] ?? false)) {
-                    $new['enabled_at'] = now()->toDateTimeString();
-                } elseif (($new['enabled'] ?? false) && isset($old['enabled_at'])) {
-                    $new['enabled_at'] = $old['enabled_at'];
-                }
-                $global->comment_settings = $new;
-            }
-            if (! empty($data['api_key'])) {
-                $global->api_key = trim($data['api_key']);
-            }
-            $global->save();
-
-            foreach ($data['stores'] ?? [] as $row) {
-                $storeData = [
-                    'enabled' => $row['enabled'],
-                    'system_prompt' => $row['system_prompt'] ?? null,
-                    'schedule' => $row['schedule'] ?? null,
-                ];
-                AiSetting::forConnection($row['meta_connection_id'])->update($storeData);
-            }
-        });
+        foreach ($data['stores'] ?? [] as $row) {
+            AiSetting::forConnection($row['meta_connection_id'])->update([
+                'enabled' => $row['enabled'],
+                'system_prompt' => $row['system_prompt'] ?? null,
+                'schedule' => $row['schedule'] ?? null,
+            ]);
+        }
 
         return response()->json(['ok' => true]);
     }
 
-    /** Перевірка підключення без генерації та без перемикання робочого провайдера. */
+    /** Перевірка ключа: GET /v1/models (безкоштовно, без токенів). */
     public function test(Request $request)
     {
-        $data = $request->validate([
-            'provider' => ['sometimes', 'required', 'in:claude,openai'],
-            'api_key' => ['nullable', 'string', 'max:512'],
-            'model' => ['nullable', 'string', 'max:100'],
+        // Стара відкрита форма не повинна надіслати ключ іншого API до Anthropic.
+        $request->validate(['provider' => ['prohibited']], [
+            'provider.prohibited' => 'Налаштування підключення змінено. Оновіть сторінку та повторіть спробу.',
         ]);
-        $provider = $data['provider'] ?? 'claude';
-        $global = AiSetting::global();
         $key = trim((string) $request->input('api_key', ''));
         if ($key === '') {
-            $key = (string) ($provider === 'openai' ? $global->openai_api_key : $global->api_key);
+            $key = (string) (AiSetting::global()->api_key ?? '');
         }
         if ($key === '') {
             return response()->json(['ok' => false, 'error' => 'Ключ не вказано'], 422);
         }
 
         try {
-            $r = $provider === 'openai'
-                ? Http::timeout(10)->withToken($key)->get('https://api.openai.com/v1/models/'.rawurlencode($data['model'] ?? ($global->openai_model ?: AiSetting::DEFAULT_OPENAI_MODEL)))
-                : Http::timeout(10)->withHeaders([
-                    'x-api-key' => $key,
-                    'anthropic-version' => '2023-06-01',
-                ])->get('https://api.anthropic.com/v1/models');
+            $r = Http::timeout(10)->withHeaders([
+                'x-api-key' => $key,
+                'anthropic-version' => '2023-06-01',
+            ])->get('https://api.anthropic.com/v1/models');
 
             if ($r->successful()) {
                 return response()->json(['ok' => true]);
@@ -176,10 +139,10 @@ class AiSettingsController extends Controller
 
             return response()->json([
                 'ok' => false,
-                'error' => $r->json('error.message') ?? ('HTTP '.$r->status()),
+                'error' => $r->json('error.message') ?? ('HTTP ' . $r->status()),
             ], 422);
         } catch (\Throwable $e) {
-            return response()->json(['ok' => false, 'error' => 'Немає зʼєднання з '.($provider === 'openai' ? 'api.openai.com' : 'api.anthropic.com')], 422);
+            return response()->json(['ok' => false, 'error' => 'Немає зʼєднання з api.anthropic.com'], 422);
         }
     }
 }

@@ -108,120 +108,42 @@ class AiSettingsTest extends TestCase
         $this->assertTrue($conv->fresh()->ai_enabled);
     }
 
-    public function test_openai_credentials_are_separate_encrypted_and_do_not_enable_openai(): void
+    public function test_settings_expose_only_claude_and_keep_its_saved_configuration(): void
     {
-        AiSetting::global()->update(['api_key' => 'sk-ant-existing', 'model' => 'claude-sonnet-4-6']);
-        $this->actingAs($this->owner())->postJson('/settings/ai/save', [
-            'model' => 'claude-sonnet-4-6', 'openai_api_key' => 'sk-openai-private', 'openai_model' => 'gpt-6.1-sol',
-        ])->assertOk();
-        $global = AiSetting::global();
-        $this->assertNull($global->provider);
-        $this->assertSame('sk-ant-existing', $global->api_key);
-        $this->assertSame('sk-openai-private', $global->openai_api_key);
-        $this->assertNotSame('sk-openai-private', DB::table('ai_settings')->where('id', $global->id)->value('openai_api_key'));
-        $this->assertArrayNotHasKey('openai_api_key', $global->toArray());
-        $response = $this->getJson('/settings/ai/data')->assertOk()->assertJsonPath('global.provider', 'claude')->assertJsonPath('global.openai_has_key', true);
-        $this->assertStringNotContainsString('sk-openai-private', $response->getContent());
+        AiSetting::global()->update(['api_key' => 'sk-ant-existing', 'model' => 'claude-opus-4-8']);
+        $response = $this->actingAs($this->owner())->getJson('/settings/ai/data')->assertOk()
+            ->assertJsonPath('global.model', 'claude-opus-4-8')
+            ->assertJsonPath('global.has_key', true);
+        $this->assertArrayNotHasKey('provider', $response->json('global'));
+        $this->assertArrayNotHasKey('openai_model', $response->json('global'));
+        $this->assertArrayNotHasKey('openai_has_key', $response->json('global'));
         $this->assertStringNotContainsString('sk-ant-existing', $response->getContent());
+        $this->get('/settings/ai')->assertOk()->assertSee('Підключення Claude API')
+            ->assertDontSee('ChatGPT')->assertDontSee('Перемикач API');
     }
 
-    public function test_cannot_switch_to_openai_without_its_key_and_does_not_partially_save(): void
+    public function test_removed_provider_from_a_stale_form_is_rejected_without_external_requests(): void
     {
-        $global = AiSetting::global();
-        $global->update(['api_key' => 'sk-ant-existing', 'model' => 'claude-sonnet-4-6']);
-        $connection = $this->connection();
-        $store = AiSetting::forConnection($connection->id);
-        $store->update(['enabled' => true, 'system_prompt' => 'Попередня інструкція']);
-
-        $this->actingAs($this->owner())->postJson('/settings/ai/save', [
-            'provider' => 'openai', 'model' => 'claude-new',
-            'stores' => [['meta_connection_id' => $connection->id, 'enabled' => false, 'system_prompt' => 'Нова інструкція']],
-        ])->assertUnprocessable()->assertJsonValidationErrors('openai_api_key');
-        $this->assertNull($global->fresh()->provider);
-        $this->assertSame('claude-sonnet-4-6', $global->fresh()->model);
-        $this->assertTrue($store->fresh()->enabled);
-        $this->assertSame('Попередня інструкція', $store->fresh()->system_prompt);
-    }
-
-    public function test_explicit_global_switch_preserves_credentials_for_both_apis(): void
-    {
-        AiSetting::global()->update(['api_key' => 'sk-ant-existing', 'openai_api_key' => 'sk-openai-existing']);
-        $this->actingAs($this->owner());
-        $this->postJson('/settings/ai/save', ['provider' => 'openai', 'model' => 'claude-sonnet-4-6'])->assertOk();
-        $this->assertSame('openai', AiSetting::global()->provider);
-        $this->postJson('/settings/ai/save', ['provider' => 'claude', 'model' => 'claude-sonnet-4-6'])->assertOk();
-        $this->assertSame('claude', AiSetting::global()->provider);
-        $this->assertSame('sk-ant-existing', AiSetting::global()->api_key);
-        $this->assertSame('sk-openai-existing', AiSetting::global()->openai_api_key);
-    }
-
-    public function test_cannot_switch_to_claude_without_its_key(): void
-    {
-        AiSetting::global()->update(['provider' => 'openai', 'openai_api_key' => 'sk-openai-existing']);
-        $this->actingAs($this->owner())->postJson('/settings/ai/save', ['provider' => 'claude', 'model' => 'claude-sonnet-4-6'])
-            ->assertUnprocessable()->assertJsonValidationErrors('api_key');
-        $this->assertSame('openai', AiSetting::global()->provider);
-    }
-
-    public function test_legacy_save_preserves_selected_provider_and_both_keys(): void
-    {
-        AiSetting::global()->update(['provider' => 'openai', 'api_key' => 'sk-ant-existing', 'openai_api_key' => 'sk-openai-existing', 'openai_model' => 'gpt-6.1-sol']);
-        $connection = $this->connection();
-        AiSetting::forConnection($connection->id)->update(['enabled' => true, 'provider' => 'claude']);
-        $this->actingAs($this->owner())->postJson('/settings/ai/save', [
-            'model' => 'claude-sonnet-4-6', 'api_key' => null, 'openai_api_key' => null,
-            'stores' => [['meta_connection_id' => $connection->id, 'enabled' => true]],
-        ])->assertOk();
-        $global = AiSetting::global();
-        $this->assertSame('openai', $global->provider);
-        $this->assertSame('sk-ant-existing', $global->api_key);
-        $this->assertSame('sk-openai-existing', $global->openai_api_key);
-        $this->assertSame('gpt-6.1-sol', $global->openai_model);
-        $this->assertSame('claude', AiSetting::forConnection($connection->id)->provider);
-    }
-
-    public function test_openai_key_check_uses_draft_key_and_model_without_switching_provider(): void
-    {
-        AiSetting::global()->update(['api_key' => 'sk-ant-existing']);
-        Http::preventStrayRequests();
-        Http::fake(['api.openai.com/v1/models/gpt-6.1-sol' => Http::response(['id' => 'gpt-6.1-sol'])]);
-        $this->actingAs($this->owner())->postJson('/settings/ai/test', ['provider' => 'openai', 'api_key' => 'sk-openai-draft', 'model' => 'gpt-6.1-sol'])->assertOk();
-        Http::assertSent(fn ($request) => $request->method() === 'GET' && $request->hasHeader('Authorization', 'Bearer sk-openai-draft'));
-        $this->assertNull(AiSetting::global()->provider);
-        $this->assertNull(AiSetting::global()->openai_api_key);
-    }
-
-    public function test_operator_cannot_change_or_inspect_api_credentials(): void
-    {
-        $operator = User::factory()->create(['role' => User::ROLE_OPERATOR, 'is_active' => true]);
         Http::fake();
-        $this->actingAs($operator)->getJson('/settings/ai/data')->assertForbidden();
-        $this->postJson('/settings/ai/save', ['provider' => 'openai', 'model' => 'claude-sonnet-4-6'])->assertForbidden();
-        $this->postJson('/settings/ai/test', ['provider' => 'openai', 'api_key' => 'sk-test'])->assertForbidden();
+        AiSetting::global()->update(['api_key' => 'sk-ant-existing', 'model' => 'claude-opus-4-8']);
+        $this->actingAs($this->owner())->postJson('/settings/ai/test', [
+            'provider' => 'openai', 'api_key' => 'sk-stale-draft',
+        ])->assertUnprocessable()->assertJsonValidationErrors('provider');
+        $this->postJson('/settings/ai/save', [
+            'provider' => 'openai', 'model' => 'claude-changed',
+        ])->assertUnprocessable()->assertJsonValidationErrors('provider');
+        $this->assertSame('claude-opus-4-8', AiSetting::global()->model);
+        $this->assertSame('sk-ant-existing', AiSetting::global()->api_key);
         Http::assertNothingSent();
     }
 
-    public function test_owner_page_renders_one_global_switch_without_sandbox(): void
+    public function test_operator_cannot_inspect_or_change_claude_credentials(): void
     {
-        $this->actingAs($this->owner())->get('/settings/ai')->assertOk()
-            ->assertSee('Перемикач API')->assertSee('Підключення Claude API')->assertSee('Підключення ChatGPT API (OpenAI)')->assertDontSee('Спробувати OpenAI');
-    }
-
-    public function test_model_choices_do_not_replace_the_saved_model_or_provider(): void
-    {
-        AiSetting::global()->update(['provider' => 'claude', 'api_key' => 'sk-ant-existing', 'openai_model' => 'gpt-custom-snapshot']);
-
-        $response = $this->actingAs($this->owner())->getJson('/settings/ai/data')->assertOk()
-            ->assertJsonPath('global.provider', 'claude')
-            ->assertJsonPath('global.openai_model', 'gpt-custom-snapshot');
-        $models = collect($response->json('global.openai_models'))->keyBy('id');
-        $this->assertTrue($models->has(['gpt-6.1-sol', 'gpt-6-luna', 'gpt-6-astra']));
-        $this->assertStringContainsString('рекомендована', $models['gpt-6.1-sol']['label']);
-        $this->assertNotEmpty($models['gpt-6-luna']['description']);
-        $this->assertSame('gpt-custom-snapshot', AiSetting::global()->openai_model);
-        $this->assertSame('claude', AiSetting::global()->provider);
-
-        $this->postJson('/settings/ai/save', ['provider' => 'claude', 'model' => 'claude-sonnet-4-6', 'openai_model' => 'gpt-custom-snapshot'])->assertOk();
-        $this->assertSame('gpt-custom-snapshot', AiSetting::global()->openai_model);
+        Http::fake();
+        $this->actingAs(User::factory()->create(['role' => User::ROLE_OPERATOR, 'is_active' => true]));
+        $this->getJson('/settings/ai/data')->assertForbidden();
+        $this->postJson('/settings/ai/save', ['model' => 'claude-opus-4-8'])->assertForbidden();
+        $this->postJson('/settings/ai/test', ['api_key' => 'sk-ant-test'])->assertForbidden();
+        Http::assertNothingSent();
     }
 }

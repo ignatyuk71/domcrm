@@ -7,17 +7,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AiSetting extends Model
 {
-    public const DEFAULT_OPENAI_MODEL = 'gpt-6.1-sol';
-
     protected $fillable = [
         'meta_connection_id',
         'enabled',
         'model',
         'debounce_seconds',
         'api_key',
-        'provider',
-        'openai_api_key',
-        'openai_model',
         'system_prompt',
         'catalog_mode',
         'operator_pause_hours',
@@ -32,14 +27,13 @@ class AiSetting extends Model
         'schedule' => 'array',
         'comment_settings' => 'array',
         'api_key' => 'encrypted',
-        'openai_api_key' => 'encrypted',
         'debounce_seconds' => 'integer',
         'operator_pause_hours' => 'integer',
         'operator_pause_minutes' => 'integer',
         'follow_up_hours' => 'integer',
     ];
 
-    protected $hidden = ['api_key', 'openai_api_key'];
+    protected $hidden = ['api_key'];
 
     public function connection(): BelongsTo
     {

@@ -73,7 +73,7 @@ class AiAgentService
         private OutgoingMessageWriter $outgoing,
         private HistoryBuilder $history,
         private AgentTools $tools,
-        private AiClient $clients,
+        private ClaudeClient $claude,
     ) {
     }
 
@@ -81,14 +81,11 @@ class AiAgentService
     {
         $t0 = microtime(true);
         $toolsCalled = [];
-        $session = null;
-        $finish = function (string $status, ?string $error = null, int $in = 0, int $out = 0) use ($conversation, $triggerMessageId, $t0, &$toolsCalled, &$session) {
+        $finish = function (string $status, ?string $error = null, int $in = 0, int $out = 0) use ($conversation, $triggerMessageId, $t0, &$toolsCalled) {
             return AiRun::create([
                 'inbox_conversation_id' => $conversation->id,
                 'inbox_message_id' => $triggerMessageId,
                 'status' => $status,
-                'provider' => $session?->provider,
-                'model' => $session?->model,
                 'error' => $error,
                 'tools_called' => $toolsCalled ?: null,
                 'tokens_in' => $in,
@@ -114,13 +111,14 @@ class AiAgentService
             }
 
             $global = AiSetting::global();
+            $apiKey = $global->api_key;
+            if (!$apiKey) {
+                return $finish('skipped_no_key');
+            }
+
             $store = AiSetting::where('meta_connection_id', $conversation->meta_connection_id)->first();
             if (!$store || !$store->enabled) {
                 return $finish('skipped_store_off');
-            }
-            $session = $this->clients->forSettings($global);
-            if (!$session->hasKey()) {
-                return $finish('skipped_no_key');
             }
 
             // Графік: поза вікном роботи агент мовчить. Такий скіп НЕ вважається
@@ -159,7 +157,7 @@ class AiAgentService
 
             $systemBlocks = $this->buildSystemPrompt($conversation, $store);
 
-            $model = $session->model;
+            $model = $global->model ?: 'claude-sonnet-4-6';
             $tokensIn = 0;
             $tokensOut = 0;
             $content = [];
@@ -192,7 +190,7 @@ class AiAgentService
                     $payload['tool_choice'] = ['type' => 'none'];
                 }
 
-                $r = $session->messages($payload, 40);
+                $r = $this->claude->messages($apiKey, $payload, 40);
 
                 // Вхідні = свіжі + записані в кеш + прочитані з кешу (інакше статистика бреше при кешуванні).
                 $tokensIn += (int) $r->json('usage.input_tokens', 0)
@@ -201,8 +199,8 @@ class AiAgentService
                 $tokensOut += (int) $r->json('usage.output_tokens', 0);
 
                 if (!$r->successful()) {
-                    Log::warning('AI: provider API error', ['conv' => $conversation->id, 'provider' => $session->provider, 'body' => mb_substr($r->body(), 0, 300)]);
-                    return $finish('error', ($session->provider === 'openai' ? 'OpenAI' : 'Claude') . ': ' . ($r->json('error.message') ?? ('HTTP ' . $r->status())), $tokensIn, $tokensOut);
+                    Log::warning('AI: Claude API error', ['conv' => $conversation->id, 'body' => mb_substr($r->body(), 0, 300)]);
+                    return $finish('error', 'Claude: ' . ($r->json('error.message') ?? ('HTTP ' . $r->status())), $tokensIn, $tokensOut);
                 }
 
                 $content = $r->json('content') ?? [];
@@ -248,11 +246,7 @@ class AiAgentService
                 }
 
                 // Виконуємо всі запити в базу з цього кроку і віддаємо результати назад.
-                $assistantMessage = ['role' => 'assistant', 'content' => $content];
-                if ($r->json('provider_output')) {
-                    $assistantMessage['provider_output'] = $r->json('provider_output');
-                }
-                $messages[] = $assistantMessage;
+                $messages[] = ['role' => 'assistant', 'content' => $content];
                 $results = [];
                 $photoToolCalled = false;
                 $photoActuallySent = false;
@@ -445,8 +439,8 @@ class AiAgentService
      */
     public function summarizeConversation(InboxConversation $conversation): ?string
     {
-        $session = $this->clients->forSettings(AiSetting::global());
-        if (!$session->hasKey()) {
+        $apiKey = AiSetting::global()->api_key;
+        if (!$apiKey) {
             return null;
         }
 
@@ -469,7 +463,8 @@ class AiAgentService
             . 'що клієнт хоче (модель/колір/розмір) і про що домовились (оплата, статус). '
             . 'Лише суть, без вступів і звертань. Якщо конкретики ще нема — напиши, що саме питав клієнт.';
 
-        $r = $session->messages([
+        $r = $this->claude->messages($apiKey, [
+            'model' => AiSetting::global()->model ?: 'claude-sonnet-4-6',
             'max_tokens' => 200,
             'system' => $system,
             'messages' => [['role' => 'user', 'content' => $transcript]],

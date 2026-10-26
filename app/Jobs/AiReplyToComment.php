@@ -7,10 +7,10 @@ use App\Models\AiPostLine;
 use App\Models\AiSetting;
 use App\Models\InboxComment;
 use App\Services\Ai\AiAgentService;
-use App\Services\Ai\AiClient;
 use App\Services\Meta\MetaSendService;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -139,8 +139,8 @@ class AiReplyToComment
             return [null, true];
         }
 
-        $session = app(AiClient::class)->forSettings(AiSetting::global());
-        if (!$session->hasKey()) {
+        $apiKey = AiSetting::global()->api_key;
+        if (!$apiKey) {
             return [null, false];
         }
 
@@ -158,11 +158,15 @@ class AiReplyToComment
         $content[] = ['type' => 'text', 'text' => "Текст поста: " . mb_substr((string) ($comment->post_excerpt ?: '(немає)'), 0, 400)];
 
         try {
-            $r = $session->messages([
+            $r = Http::timeout(30)->withHeaders([
+                'x-api-key' => $apiKey,
+                'anthropic-version' => '2023-06-01',
+            ])->post('https://api.anthropic.com/v1/messages', [
+                'model' => AiSetting::global()->model ?: 'claude-sonnet-4-6',
                 'max_tokens' => 30,
                 'system' => "Це пост магазину тапочок. Визнач, про яку лінійку йдеться, за текстом і фото.\nЛінійки:\n{$list}\nВідповідай ЛИШЕ точною назвою лінійки зі списку або словом «невідомо». Нічого більше.",
                 'messages' => [['role' => 'user', 'content' => $content]],
-            ], 30);
+            ]);
 
             if (!$r->successful()) {
                 Log::warning('AI post classify error', ['post' => $comment->post_id, 'body' => mb_substr($r->body(), 0, 200)]);

@@ -4,33 +4,6 @@ export function initAiSettings(root, notify) {
     const el = id => root.querySelector('#' + id);
     const csrf = document.querySelector('meta[name="csrf-token"]').content;
     let stores = [];
-    let openaiModels = [];
-
-    function describeOpenaiModel() {
-        const model = openaiModels.find(option => option.id === el('openai-model').value);
-        el('openai-model-description').textContent = model?.description || 'Збережена модель поза добіркою. Перед використанням перевірте її доступність і сумісність із Responses API та інструментами.';
-    }
-
-    function renderOpenaiModels(models, selected) {
-        const select = el('openai-model');
-        openaiModels = models || [];
-        const addOption = (value, label) => {
-            const option = document.createElement('option');
-            option.value = value;
-            option.textContent = label;
-            select.append(option);
-        };
-        select.replaceChildren();
-        openaiModels.forEach(model => addOption(model.id, model.label));
-        // Збережена модель залишається обраною, навіть якщо її немає в добірці.
-        if (!openaiModels.some(model => model.id === selected)) {
-            addOption(selected, selected + ' — збережена модель');
-        }
-        select.value = selected;
-        select.disabled = false;
-        describeOpenaiModel();
-    }
-
     async function request(url, body) {
         const response = await fetch(url, body === undefined
             ? { headers: { Accept: 'application/json' } }
@@ -129,15 +102,11 @@ export function initAiSettings(root, notify) {
                 el('ai-model').append(option);
             }
             el('ai-model').value = model;
-            el('ai-provider').value = global.provider || 'claude';
-            el('ai-current-provider').textContent = global.provider === 'openai' ? 'ChatGPT API (OpenAI)' : 'Claude API';
-            renderOpenaiModels(global.openai_models, global.openai_model || el('openai-model').value);
             el('ai-debounce').value = global.debounce_seconds ?? 10;
             el('ai-catalog-mode').value = global.catalog_mode || 'all';
             el('ai-op-pause').value = global.operator_pause_minutes ?? 3;
             el('ai-followup').value = global.follow_up_hours ?? 3;
             el('key-hint').textContent = global.has_key ? '— збережено ' + global.key_hint : '';
-            el('openai-key-hint').textContent = global.openai_has_key ? '— збережено ' + global.openai_key_hint : '';
             const comments = global.comment_settings || {};
             el('cm-enabled').checked = !!comments.enabled;
             el('cm-fb').checked = comments.facebook !== false;
@@ -156,9 +125,6 @@ export function initAiSettings(root, notify) {
         const payload = {
             api_key: el('ai-key').value.trim() || null,
             model: el('ai-model').value,
-            provider: el('ai-provider').value,
-            openai_api_key: el('openai-key').value.trim() || null,
-            openai_model: el('openai-model').value.trim(),
             debounce_seconds: el('ai-debounce').valueAsNumber,
             catalog_mode: el('ai-catalog-mode').value,
             operator_pause_minutes: el('ai-op-pause').valueAsNumber,
@@ -168,33 +134,28 @@ export function initAiSettings(root, notify) {
         };
         try {
             await request(root.dataset.urlSave, payload);
-            [['ai-key', 'key-hint', payload.api_key], ['openai-key', 'openai-key-hint', payload.openai_api_key]].forEach(([id, hint, key]) => {
-                if (!key) return;
-                el(hint).textContent = '— збережено •••' + key.slice(-4);
-                if (el(id).value.trim() === key) el(id).value = '';
-            });
-            el('ai-current-provider').textContent = payload.provider === 'openai' ? 'ChatGPT API (OpenAI)' : 'Claude API';
-            notify({ context: 'save', type: 'success', title: 'Налаштування збережено', messages: ['Активний API: ' + (payload.provider === 'openai' ? 'ChatGPT API (OpenAI)' : 'Claude API') + '.'] });
+            if (payload.api_key) {
+                el('key-hint').textContent = '— збережено •••' + payload.api_key.slice(-4);
+                if (el('ai-key').value.trim() === payload.api_key) el('ai-key').value = '';
+            }
+            notify({ context: 'save', type: 'success', title: 'Налаштування збережено', messages: ['Налаштування Claude та магазинів оновлено.'] });
         } catch (error) { failure(error, 'save', save); }
         button.disabled = false;
     }
 
     async function test(button) {
-        const provider = button.dataset.testProvider;
-        const isOpenai = provider === 'openai';
         const label = button.innerHTML;
         button.disabled = true;
         button.textContent = 'Перевіряю…';
         try {
-            await request(root.dataset.urlTest, { provider, api_key: el(isOpenai ? 'openai-key' : 'ai-key').value.trim(), model: el(isOpenai ? 'openai-model' : 'ai-model').value });
-            notify({ context: 'test-' + provider, type: 'success', title: 'Підключення працює', messages: [isOpenai ? 'Ключ OpenAI дійсний, модель доступна.' : 'Ключ Claude дійсний.'] });
-        } catch (error) { failure(error, 'test-' + provider, () => test(button), { api_key: isOpenai ? 'openai_api_key' : 'api_key', model: isOpenai ? 'openai_model' : 'model' }); }
+            await request(root.dataset.urlTest, { api_key: el('ai-key').value.trim() });
+            notify({ context: 'test-claude', type: 'success', title: 'Підключення працює', messages: ['Ключ Claude дійсний.'] });
+        } catch (error) { failure(error, 'test-claude', () => test(button)); }
         button.innerHTML = label;
         button.disabled = false;
     }
 
     el('ai-save').addEventListener('click', save);
-    el('openai-model').addEventListener('change', describeOpenaiModel);
-    root.querySelectorAll('[data-test-provider]').forEach(button => button.addEventListener('click', () => test(button)));
+    el('ai-test').addEventListener('click', () => test(el('ai-test')));
     return { ready: load(), save };
 }

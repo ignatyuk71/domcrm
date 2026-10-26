@@ -11,8 +11,6 @@ class AiRun extends Model
         'inbox_conversation_id',
         'inbox_message_id',
         'status',
-        'provider',
-        'model',
         'error',
         'tools_called',
         'tokens_in',
