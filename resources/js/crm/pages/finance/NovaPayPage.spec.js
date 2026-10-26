@@ -10,7 +10,7 @@ const response = () => ({
     accounts: [{ id: 1, connection_id: 1, client_name: 'ФОП Тест', iban: 'UA2935 •••• 0001', currency: 'UAH', timezone: 'Europe/Kyiv', enabled: true, requires_auth: false }],
     connections: [{ id: 1 }], account_id: 1,
     balance: { amount_minor: '2495000', received_at: '2026-10-05T12:00:00+03:00' }, incoming_minor: '995000',
-    coverage_complete: true, operations_verified: true,
+    coverage_complete: true, operations_verified: true, unknown_statuses: [], failed_operation_dates: [],
     refresh_schedule: { times: ['14:30', '20:15', '23:45'], timezone: 'Europe/Kyiv', previous_at: '2026-10-04T20:45:00Z', next_at: '2026-10-05T11:30:00Z', grace_minutes: 10 },
     operations: { data: [{ id: 1, document_number: '000123A0', booked_on: '2026-10-05', direction: 'in', amount_minor: '995000', status: 'posted', counterparty: 'NovaPay', counterparty_iban: 'UA2935 •••• 0002', status_changed_at: '2026-10-05T11:19:50Z', purpose: 'Виплата післяплати',
         sender: { name: 'NovaPay', iban: 'UA 29 358700 •••• 0002', tax_code: '0000000002' },
@@ -31,6 +31,55 @@ beforeEach(() => {
 afterEach(() => { wrapper?.unmount(); wrapper = null; document.body.innerHTML = ''; vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe('Інтерфейс рахунку NovaPay', () => {
+    it('зберігає точний невідомий статус, показує попередження й не позначає всі дані актуальними', async () => {
+        const data = response();
+        data.unknown_statuses = [{ status: 'Unverified', count: 1 }];
+        data.coverage_complete = false;
+        data.incoming_minor = null;
+        data.operations.data[0] = { ...data.operations.data[0], status: 'unknown', source_status: 'Unverified' };
+        http.get.mockResolvedValue({ data });
+        wrapper = mount(NovaPayPage, { attachTo: document.body });
+        await flushPromises();
+        expect(wrapper.get('.payment-status').text()).toContain('Потребує перевірки: Unverified');
+        expect(wrapper.get('.state-pill').text()).toBe('Операції потребують перевірки');
+        expect(wrapper.get('.state-pill').classes()).not.toContain('state-pill--ok');
+        expect(wrapper.get('[data-testid="incoming"]').text()).toBe('—');
+        expect(document.querySelector('.app-toast--warning').textContent).toContain('Unverified');
+        await vi.advanceTimersByTimeAsync(15000);
+        await flushPromises();
+        expect(document.querySelector('.app-toast--warning')).not.toBeNull();
+        document.querySelector('.app-toast-close').click();
+        await vi.advanceTimersByTimeAsync(15000);
+        await flushPromises();
+        expect(document.querySelector('.app-toast')).toBeNull();
+        http.get.mockResolvedValue({ data: response() });
+        await vi.advanceTimersByTimeAsync(15000);
+        await flushPromises();
+        expect(wrapper.get('.state-pill').text()).toBe('Дані актуальні');
+        expect(wrapper.get('[data-testid="incoming"]').text()).toBe('9 950,00 грн');
+        expect(document.querySelector('.app-toast')).toBeNull();
+    });
+    it('не перекриває помилку іншим попередженням і враховує збій дня поза останніми задачами', async () => {
+        const data = { ...response(), failed_operation_dates: ['2026-10-01'],
+            unknown_statuses: [{ status: 'Unverified', count: 1 }],
+            sync: [{ id: 20, source: 'balance', status: 'failed', error_message: 'Баланс не отримано.' }],
+        };
+        http.get.mockResolvedValue({ data });
+        wrapper = mount(NovaPayPage, { attachTo: document.body });
+        await flushPromises();
+        expect(wrapper.get('.state-pill').classes()).not.toContain('state-pill--ok');
+        expect(document.querySelector('.app-toast--error').textContent).toContain('Баланс не отримано.');
+        expect(document.querySelector('.app-toast--warning')).toBeNull();
+    });
+    it('не повертає стару помилку після підтвердженого відновлення дня поза останніми 20 задачами', async () => {
+        http.get.mockResolvedValue({ data: { ...response(), sync: [
+            { id: 2, source: 'operations', date_from: '2026-10-01', date_to: '2026-10-01', status: 'failed', error_message: 'Попередня помилка' },
+        ] } });
+        wrapper = mount(NovaPayPage, { attachTo: document.body });
+        await flushPromises();
+        expect(document.querySelector('.app-toast')).toBeNull();
+        expect(wrapper.get('.state-pill').classes()).toContain('state-pill--ok');
+    });
     it('між трьома сеансами зберігає актуальність балансу й показує чесний розклад', async () => {
         vi.setSystemTime(new Date('2026-10-05T10:00:00Z'));
         http.get.mockResolvedValue({ data: { ...response(), balance: { amount_minor: '2495000', received_at: '2026-10-04T20:46:00Z' } } });

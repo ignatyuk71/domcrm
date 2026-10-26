@@ -11,7 +11,7 @@ return [
     'auth_journal_directory' => storage_path('app/private/novapay/auth'),
     // Увімкнути лише після звірки XML, ID, статусів і повноти виписки на реальному рахунку.
     'operations_verified' => (bool) env('NOVAPAY_OPERATIONS_VERIFIED', false),
-    // Підтверджено на реальних платежах; невідомі статуси зупиняють імпорт періоду.
+    // Лише перевірені зіставлення; решта зберігається як unknown без підтвердження сум.
     'operation_statuses' => ['Conducted' => 'posted'],
     'payouts_verified' => (bool) env('NOVAPAY_PAYOUTS_VERIFIED', false),
     'register_download_host' => 'storage.googleapis.com',

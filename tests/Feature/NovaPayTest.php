@@ -273,12 +273,45 @@ class NovaPayTest extends TestCase
         $this->assertSame(1, NovaPaySyncRun::where('date_from', '2026-10-04')->count());
     }
 
-    public function test_unknown_extract_status_rejects_entire_response(): void
+    public function test_unknown_extract_status_is_preserved_without_confirming_the_payment(): void
     {
         $account = $this->account();
-        $xml = $this->paymentsPayload($account, [['status' => 'unknown']]);
-        $this->expectException(NovaPayException::class);
-        app(ExtractNormalizer::class)->normalize($xml, $account, '2026-10-05', '2026-10-05');
+        $xml = $this->paymentsPayload($account, [['status' => 'Unverified']]);
+        $records = app(ExtractNormalizer::class)->normalize($xml, $account, '2026-10-05', '2026-10-05');
+        $this->assertSame('unknown', $records[0]['status']);
+        $this->assertSame('Unverified', $records[0]['source_status']);
+        $this->assertSame(391331, $records[0]['amount_minor']);
+    }
+
+    public function test_empty_or_oversized_status_still_rejects_the_response(): void
+    {
+        $account = $this->account();
+        foreach (['', str_repeat('X', 65)] as $status) {
+            try {
+                app(ExtractNormalizer::class)->normalize($this->paymentsPayload($account, [['status' => $status]]), $account, '2026-10-05', '2026-10-05');
+                $this->fail('Некоректний статус не повинен імпортуватися.');
+            } catch (NovaPayException $e) {
+                $this->assertSame('extract_contract', $e->reason);
+            }
+        }
+    }
+
+    public function test_configured_pending_and_cancelled_statuses_are_not_counted_as_posted(): void
+    {
+        $this->owner();
+        $account = $this->account();
+        config(['novapay.operations_verified' => true, 'novapay.operation_statuses' => [
+            'Conducted' => 'posted', 'TestPending' => 'pending', 'TestCancelled' => 'cancelled',
+        ]]);
+        $payload = $this->paymentsPayload($account, [
+            ['id' => 'posted'], ['id' => 'pending', 'status' => 'TestPending'], ['id' => 'cancelled', 'status' => 'TestCancelled'],
+        ]);
+        Http::fake(['*' => Http::response($this->soap('GetPaymentsList', '<payments>'.htmlspecialchars($payload, ENT_XML1).'</payments>'))]);
+        (new SyncNovaPay($this->syncRun($account, 'operations', '2026-10-05')->id))->handle(app(SyncService::class));
+        $this->getJson('/finance/novapay/data')->assertOk()->assertJsonPath('coverage_complete', true)
+            ->assertJsonPath('incoming_minor', '391331')->assertJsonCount(0, 'unknown_statuses');
+        $this->assertDatabaseHas('novapay_operations', ['provider_id' => 'pending', 'status' => 'pending']);
+        $this->assertDatabaseHas('novapay_operations', ['provider_id' => 'cancelled', 'status' => 'cancelled']);
     }
 
     public function test_real_payment_contract_imports_both_directions_without_outgoing_pay_date(): void
@@ -320,17 +353,82 @@ class NovaPayTest extends TestCase
         $this->assertDatabaseCount('novapay_operation_revisions', 0);
     }
 
-    public function test_unknown_status_does_not_import_part_of_a_period_or_confirm_coverage(): void
+    public function test_unknown_status_imports_the_period_but_keeps_totals_unconfirmed_until_resolved(): void
     {
+        $this->owner();
         config(['novapay.operations_verified' => true]);
         $account = $this->account();
         $payload = $this->paymentsPayload($account, [['id' => 'valid'], ['id' => 'new-status', 'status' => 'Unverified']]);
-        Http::fake(['*' => Http::response($this->soap('GetPaymentsList', '<payments>'.htmlspecialchars($payload, ENT_XML1).'</payments>'))]);
+        $resolvedPayload = $this->paymentsPayload($account, [['id' => 'valid'], ['id' => 'new-status']]);
+        Http::fake(['*' => Http::sequence()
+            ->push($this->soap('GetPaymentsList', '<payments>'.htmlspecialchars($payload, ENT_XML1).'</payments>'))
+            ->push($this->soap('GetPaymentsList', '<payments>'.htmlspecialchars($resolvedPayload, ENT_XML1).'</payments>'))]);
         $run = $this->syncRun($account, 'operations', '2026-10-05');
         (new SyncNovaPay($run->id))->handle(app(SyncService::class));
-        $this->assertSame('failed', $run->fresh()->status);
-        $this->assertNull($run->fresh()->succeeded_at);
-        $this->assertDatabaseCount('novapay_operations', 0);
+        $this->assertSame('success', $run->fresh()->status);
+        $this->assertNotNull($run->fresh()->succeeded_at);
+        $this->assertDatabaseCount('novapay_operations', 2);
+        $this->assertDatabaseHas('novapay_operations', ['provider_id' => 'new-status', 'status' => 'unknown', 'source_status' => 'Unverified']);
+        $this->getJson('/finance/novapay/data?search=valid&direction=out')->assertOk()
+            ->assertJsonPath('coverage_complete', false)->assertJsonPath('incoming_minor', null)
+            ->assertJsonPath('unknown_statuses.0.status', 'Unverified')->assertJsonPath('unknown_statuses.0.count', 1);
+
+        // Наступне проведення оновлює той самий запис і зберігає попередній статус в історії.
+        (new SyncNovaPay($this->syncRun($account, 'operations', '2026-10-05')->id))->handle(app(SyncService::class));
+        $this->assertDatabaseCount('novapay_operations', 2);
+        $this->assertDatabaseCount('novapay_operation_revisions', 1);
+        $this->getJson('/finance/novapay/data')->assertOk()->assertJsonPath('coverage_complete', true)
+            ->assertJsonPath('incoming_minor', '782662')->assertJsonCount(0, 'unknown_statuses');
+        $snapshot = json_decode(DB::table('novapay_operation_revisions')->value('snapshot'), true);
+        $this->assertSame('Unverified', $snapshot['source_status']);
+    }
+
+    public function test_unknown_status_summary_is_isolated_by_account_and_period(): void
+    {
+        $this->owner();
+        $account = $this->account();
+        $other = $account->replicate();
+        $other->provider_id = 50;
+        $other->save();
+        app(OperationImporter::class)->import($account, [
+            [...$this->operation('old-status', 100, 'in', 'unknown'), 'booked_on' => '2026-10-04', 'source_status' => 'Unverified'],
+        ]);
+        app(OperationImporter::class)->import($other, [
+            [...$this->operation('other-status', 200, 'in', 'unknown'), 'source_status' => 'OtherStatus'],
+        ]);
+        $this->getJson('/finance/novapay/data?account_id='.$account->id)->assertOk()->assertJsonCount(0, 'unknown_statuses');
+        $this->getJson('/finance/novapay/data?account_id='.$account->id.'&from=2026-10-04&to=2026-10-04')->assertOk()
+            ->assertJsonCount(1, 'unknown_statuses')->assertJsonPath('unknown_statuses.0.status', 'Unverified');
+        $this->getJson('/finance/novapay/data?account_id='.$other->id)->assertOk()
+            ->assertJsonCount(1, 'unknown_statuses')->assertJsonPath('unknown_statuses.0.status', 'OtherStatus');
+    }
+
+    public function test_latest_failure_invalidates_earlier_coverage_and_later_success_restores_it(): void
+    {
+        $this->owner();
+        $account = $this->account();
+        $this->syncRun($account, 'operations', '2026-10-05')->update(['status' => 'success', 'succeeded_at' => now()]);
+        $this->syncRun($account, 'operations', '2026-10-05')->update(['status' => 'failed', 'error_code' => 'extract_contract']);
+        $this->getJson('/finance/novapay/data')->assertOk()->assertJsonPath('coverage_complete', false)
+            ->assertJsonPath('incoming_minor', null)->assertJsonPath('failed_operation_dates', ['2026-10-05']);
+        $this->syncRun($account, 'operations', '2026-10-05')->update(['status' => 'success', 'succeeded_at' => now()]);
+        $this->getJson('/finance/novapay/data')->assertOk()->assertJsonPath('coverage_complete', true)
+            ->assertJsonPath('failed_operation_dates', []);
+    }
+
+    public function test_scheduled_refresh_rechecks_unsettled_statuses_from_previous_days_without_duplicates(): void
+    {
+        config(['novapay.operations_verified' => true]);
+        $account = $this->account();
+        app(OperationImporter::class)->import($account, [
+            [...$this->operation('unsettled', 100, 'in', 'unknown'), 'booked_on' => '2026-10-04', 'source_status' => 'Unverified'],
+        ]);
+        $this->syncRun($account, 'operations', '2026-10-04')->update(['status' => 'success', 'succeeded_at' => now()]);
+        $dispatcher = app(SyncDispatcher::class);
+        $this->assertSame(3, $dispatcher->refresh($account));
+        $this->assertSame(0, $dispatcher->refresh($account));
+        $this->assertSame(1, NovaPaySyncRun::where('source', 'operations')->where('date_from', '2026-10-04')->where('status', 'queued')->count());
+        Queue::assertPushed(SyncNovaPay::class, 3);
     }
 
     public function test_duplicate_ids_invalid_dates_and_unexpected_sections_are_not_silent_empty_periods(): void

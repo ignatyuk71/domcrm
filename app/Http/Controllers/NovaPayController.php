@@ -46,14 +46,23 @@ class NovaPayController extends Controller
         $operations = null;
         $incoming = null;
         $coverageComplete = false;
+        $unknownStatuses = collect();
+        $failedOperationDates = collect();
         if ($account) {
             $query = NovaPayOperation::query()->where('account_id', $account->id)
                 ->whereBetween('booked_on', [$filters['from'], $filters['to']]);
             $incoming = (string) (clone $query)->where('direction', 'in')->where('status', 'posted')->sum('amount_minor');
-            $coverage = NovaPaySyncRun::query()->where('account_id', $account->id)->where('source', 'operations')->where('status', 'success')
-                ->whereBetween('date_from', [$filters['from'], $filters['to']])->distinct()->pluck('date_from')
-                ->map(fn ($date) => $date->toDateString())->all();
-            $coverageComplete = true;
+            $unknownStatuses = (clone $query)->where('status', 'unknown')->select('source_status')->selectRaw('COUNT(*) as operations_count')
+                ->groupBy('source_status')->orderBy('source_status')->get()
+                ->map(fn ($item) => ['status' => $item->source_status, 'count' => (int) $item->operations_count]);
+            // Пізніший збій скасовує підтвердження дня, навіть якщо раніше він оновлювався успішно.
+            $latestRuns = NovaPaySyncRun::query()->where('account_id', $account->id)->where('source', 'operations')
+                ->whereIn('status', ['success', 'failed'])->whereBetween('date_from', [$filters['from'], $filters['to']])
+                ->selectRaw('MAX(id)')->groupBy('date_from');
+            $dailyRuns = NovaPaySyncRun::query()->whereIn('id', $latestRuns)->get(['date_from', 'status']);
+            $coverage = $dailyRuns->where('status', 'success')->map(fn ($run) => $run->date_from->toDateString())->all();
+            $failedOperationDates = $dailyRuns->where('status', 'failed')->map(fn ($run) => $run->date_from->toDateString())->values();
+            $coverageComplete = $unknownStatuses->isEmpty();
             for ($day = CarbonImmutable::parse($filters['from']); $day->toDateString() <= $filters['to']; $day = $day->addDay()) {
                 if (! in_array($day->toDateString(), $coverage, true)) {
                     $coverageComplete = false;
@@ -114,6 +123,8 @@ class NovaPayController extends Controller
             ] : null,
             'incoming_minor' => $coverageComplete ? $incoming : null,
             'coverage_complete' => $coverageComplete,
+            'unknown_statuses' => $unknownStatuses,
+            'failed_operation_dates' => $failedOperationDates,
             'operations_verified' => (bool) config('novapay.operations_verified'),
             'operations' => $operations,
             'sync' => $runs->map(fn ($run) => [

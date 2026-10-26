@@ -25,6 +25,7 @@ const connection = reactive({ connection_id: '', login: '', refresh_token: '', p
 const errors = ref({});
 const pendingIds = ref([]);
 const observedFailures = new Set();
+let observedUnknownStatuses = '';
 const account = computed(() => data.value?.accounts.find(item => item.id === data.value.account_id));
 const pending = computed(() => data.value?.sync.some(run => ['queued', 'running', 'retrying'].includes(run.status)) || false);
 const now = ref(Date.now());
@@ -63,10 +64,14 @@ const selectedPeriod = computed(() => periods.find(([key]) => {
     const range = period(key, account.value?.timezone);
     return range.from === filters.from && range.to === filters.to;
 })?.[0] || 'custom');
+const unknownStatuses = computed(() => data.value?.unknown_statuses || []);
+const latestOperationError = computed(() => Array.isArray(data.value?.failed_operation_dates)
+    ? data.value.failed_operation_dates.length > 0 : data.value?.sync.find(run => run.source === 'operations')?.status === 'failed');
+const operationsNeedReview = computed(() => unknownStatuses.value.length > 0 || latestOperationError.value);
 const accountState = computed(() => account.value?.requires_auth ? 'Потрібна авторизація'
     : pending.value ? 'Оновлюється' : !account.value?.enabled ? 'Оновлення на паузі'
-    : !data.value?.balance ? 'Очікуємо дані' : balanceStale.value ? 'Дані не оновлено' : 'Дані актуальні');
-const latestOperationError = computed(() => data.value?.sync.find(run => run.source === 'operations')?.status === 'failed');
+    : !data.value?.balance ? 'Очікуємо дані' : operationsNeedReview.value ? 'Операції потребують перевірки'
+    : balanceStale.value ? 'Дані не оновлено' : 'Дані актуальні');
 const operationAmount = value => money(value).replace(/ грн$/, ' UAH');
 const recordCount = count => {
     const remainder = count % 100;
@@ -105,6 +110,8 @@ function acceptSync() {
     for (const run of data.value.sync) {
         if (run.status === 'failed' && !observedFailures.has(run.id)) {
             observedFailures.add(run.id);
+            if (run.source === 'operations' && Array.isArray(data.value.failed_operation_dates)
+                && !data.value.failed_operation_dates.includes(run.date_from)) continue;
             // Успішний повтор того самого періоду не повинен знову показувати стару помилку.
             if (data.value.sync.some(newer => newer.id > run.id && newer.status === 'success'
                 && newer.source === run.source && newer.date_from === run.date_from && newer.date_to === run.date_to)) continue;
@@ -114,6 +121,22 @@ function acceptSync() {
                 onAction: () => account.value?.requires_auth ? openSettings(account.value.connection_id) : run.source === 'discovery' ? discover() : refresh(),
             });
         }
+    }
+    const unknownKey = unknownStatuses.value.length ? JSON.stringify([data.value.account_id, unknownStatuses.value.map(item => item.status)]) : '';
+    if (!unknownKey) observedUnknownStatuses = '';
+    if (unknownKey && unknownKey !== observedUnknownStatuses && !(toast.show && ['error', 'warning'].includes(toast.type))) {
+        observedUnknownStatuses = unknownKey;
+        showToast({
+            title: 'Операції: невідомий статус NovaPay', type: 'warning',
+            messages: [
+                ...unknownStatuses.value.slice(0, 5).map(item => `Статус «${item.status}»: ${recordCount(item.count)}.`),
+                'Операції збережено для перевірки. Їх не зараховано в підсумок; статуси оновляться під час планової синхронізації.',
+            ],
+            actionLabel: 'Переглянути операції', onAction: () => {
+                tab.value = 'operations';
+                filters.search = ''; filters.direction = 'all'; filters.page = 1;
+            },
+        });
     }
     if (!pendingIds.value.length) return;
     const runs = pendingIds.value.map(id => data.value.sync.find(run => run.id === id));
@@ -324,7 +347,7 @@ onBeforeUnmount(() => { disposed = true; settingsDialog.value?.close(); restoreS
         <template v-if="data">
             <div v-if="data.accounts.length" class="account-bar">
                 <div class="account-identity"><span class="account-bank-icon"><i class="bi bi-building" aria-hidden="true"></i></span><div><label for="np-account" class="account-label">Бізнес-рахунок</label><select id="np-account" :value="filters.account_id || data.account_id || ''" class="form-select account-select" @change="filters.account_id = $event.target.value"><option value="" disabled>Оберіть рахунок</option><option v-for="item in data.accounts" :key="item.id" :value="item.id">{{ item.client_name }} · {{ item.iban }}</option></select></div></div>
-                <div class="account-actions"><span class="state-pill" :class="{ 'state-pill--ok': data.balance && !balanceStale && account?.enabled && !pending, 'state-pill--attention': balanceStale || account?.requires_auth }"><span class="state-dot"></span>{{ accountState }}</span><button v-if="account?.requires_auth" class="text-action text-action--danger" @click="openSettings(account.connection_id)">Відновити доступ<i class="bi bi-arrow-up-right" aria-hidden="true"></i></button><button v-else class="text-action" :disabled="Boolean(busy)" @click="toggleAccount"><i class="bi" :class="account?.enabled ? 'bi-pause-circle' : 'bi-play-circle'" aria-hidden="true"></i>{{ account?.enabled ? 'Призупинити' : 'Увімкнути' }}</button></div>
+                <div class="account-actions"><span class="state-pill" :class="{ 'state-pill--ok': data.balance && !balanceStale && account?.enabled && !pending && !operationsNeedReview, 'state-pill--attention': balanceStale || account?.requires_auth || operationsNeedReview }"><span class="state-dot"></span>{{ accountState }}</span><button v-if="account?.requires_auth" class="text-action text-action--danger" @click="openSettings(account.connection_id)">Відновити доступ<i class="bi bi-arrow-up-right" aria-hidden="true"></i></button><button v-else class="text-action" :disabled="Boolean(busy)" @click="toggleAccount"><i class="bi" :class="account?.enabled ? 'bi-pause-circle' : 'bi-play-circle'" aria-hidden="true"></i>{{ account?.enabled ? 'Призупинити' : 'Увімкнути' }}</button></div>
             </div>
 
             <div class="summary-grid">
@@ -387,7 +410,7 @@ onBeforeUnmount(() => { disposed = true; settingsDialog.value?.close(); restoreS
                                         <span v-if="operation.recipient?.tax_code" class="party-tax" title="РНОКПП / ЄДРПОУ">{{ operation.recipient.tax_code }}</span>
                                     </td>
                                     <td class="payment-status">
-                                        <span class="status-chip" :class="`status-chip--${operation.status}`"><i v-if="operation.status === 'posted'" class="bi bi-check-circle" aria-hidden="true"></i>{{ statusLabels[operation.status] || 'Потрібна перевірка' }}</span>
+                                        <span class="status-chip" :class="`status-chip--${operation.status}`"><i v-if="operation.status === 'posted'" class="bi bi-check-circle" aria-hidden="true"></i>{{ operation.status === 'unknown' ? `Потребує перевірки: ${operation.source_status}` : statusLabels[operation.status] || 'Потрібна перевірка' }}</span>
                                         <time v-if="operation.status_changed_at" :datetime="operation.status_changed_at" title="Час останньої зміни статусу в NovaPay">{{ statusTime(operation.status_changed_at) }}</time>
                                     </td>
                                 </tr>
@@ -574,7 +597,7 @@ onBeforeUnmount(() => { disposed = true; settingsDialog.value?.close(); restoreS
 .payment-status time { display: block; margin-top: 8px; color: #858f9d; font-size: 10px; font-weight: 500; font-variant-numeric: tabular-nums; }
 .status-chip { display: inline-flex; align-items: center; gap: 5px; color: #92909d; background: #f4f4f7; border: 1px solid #eeeef3; padding: 4px 7px; border-radius: 5px; font-size: 10px; white-space: nowrap; }
 .status-chip--posted { background: #f0f8f3; color: #448063; border-color: #e3f0e8; }
-.status-chip--pending { background: #fff8ec; color: #b58c45; border-color: #f7edda; }
+.status-chip--pending, .status-chip--unknown { background: #fff8ec; color: #b58c45; border-color: #f7edda; }
 .status-chip--failed { background: #fff1f1; color: #b45d64; border-color: #f6e1e4; }
 .status-chip .state-dot { width: 4px; height: 4px; }
 .ledger-footer { justify-content: space-between; gap: 12px; padding: 15px 24px; border-top: 1px solid #efeff5; font-size: 10px; color: #a0a0b0; }

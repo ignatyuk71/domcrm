@@ -5,6 +5,7 @@ namespace App\Services\NovaPay;
 use App\Jobs\SyncNovaPay;
 use App\Models\NovaPayAccount;
 use App\Models\NovaPayConnection;
+use App\Models\NovaPayOperation;
 use App\Models\NovaPaySyncRun;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
@@ -68,10 +69,15 @@ class SyncDispatcher
         // Добираємо прогалини навіть після збоїв довших за вікно щоденної звірки.
         $completed = NovaPaySyncRun::query()->where('account_id', $account->id)->where('source', 'operations')
             ->where('status', 'success')->pluck('date_from')->map(fn ($date) => $date->toDateString())->all();
+        // Проміжні й нерозпізнані статуси перечитуємо в наступному штатному сеансі, також за попередні дні.
+        $unsettled = NovaPayOperation::query()->where('account_id', $account->id)->whereIn('status', ['pending', 'unknown'])
+            ->whereBetween('booked_on', [$from, $today->toDateString()])
+            ->distinct()->pluck('booked_on')->map(fn ($date) => $date->toDateString())->all();
         $reconcileFrom = $today->subDays(max(1, config('novapay.reconcile_days')) - 1)->toDateString();
         for ($day = CarbonImmutable::parse($from, $account->timezone); $day <= $today; $day = $day->addDay()) {
             $date = $day->toDateString();
-            if (! in_array($date, $completed, true) || $date === $today->toDateString() || ($reconcile && $date >= $reconcileFrom)) {
+            if (! in_array($date, $completed, true) || in_array($date, $unsettled, true)
+                || $date === $today->toDateString() || ($reconcile && $date >= $reconcileFrom)) {
                 $count += $this->enqueue($connection, 'operations', $account, $date) ? 1 : 0;
             }
         }

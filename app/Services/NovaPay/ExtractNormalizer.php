@@ -23,6 +23,9 @@ class ExtractNormalizer
             }
             $id = Xml::value($node, 'ID');
             $status = Xml::value($node, 'StatusDocument');
+            if ($status === '' || mb_strlen($status) > 64 || preg_match('/[\x00-\x1F\x7F]/u', $status)) {
+                throw new NovaPayException('extract_contract', 'Операція NovaPay має порожній або некоректний статус.');
+            }
             // DayDate є і в надходжень, і у проведених списань із порожньою PayDate.
             $date = Xml::value($node, 'DayDate');
             $credit = strtoupper(Xml::value($node, 'CreditCodeIBAN'));
@@ -44,10 +47,10 @@ class ExtractNormalizer
             if ($amount < 0 || $booked->toDateString() < $from || $booked->toDateString() > $to) {
                 throw new NovaPayException('extract_contract', 'Операція NovaPay має некоректну суму або виходить за запитаний період.');
             }
-            // Невідомий статус блокує весь період, щоб не представити неповну суму як підтверджену.
-            $mapped = config('novapay.operation_statuses', [])[$status] ?? null;
-            if (! in_array($mapped, ['posted', 'pending', 'cancelled'], true)) {
-                throw new NovaPayException('extract_contract', 'Потрібна перевірка нового статусу операції NovaPay.');
+            // Нові статуси зберігаємо дослівно, але не вважаємо підтвердженим рухом коштів.
+            $mapped = config('novapay.operation_statuses', [])[$status] ?? 'unknown';
+            if (! in_array($mapped, ['posted', 'pending', 'cancelled', 'unknown'], true)) {
+                throw new NovaPayException('extract_contract', 'Некоректне зіставлення статусу операції NovaPay.');
             }
             $incoming = $credit === $account->iban;
             $validIban = fn (string $value) => preg_match('/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/D', $value) ? $value : null;
