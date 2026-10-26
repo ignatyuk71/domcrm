@@ -4,6 +4,32 @@ export function initAiSettings(root, notify) {
     const el = id => root.querySelector('#' + id);
     const csrf = document.querySelector('meta[name="csrf-token"]').content;
     let stores = [];
+    let openaiModels = [];
+
+    function describeOpenaiModel() {
+        const model = openaiModels.find(option => option.id === el('openai-model').value);
+        el('openai-model-description').textContent = model?.description || 'Збережена модель поза добіркою. Перед використанням перевірте її доступність і сумісність із Responses API та інструментами.';
+    }
+
+    function renderOpenaiModels(models, selected) {
+        const select = el('openai-model');
+        openaiModels = models || [];
+        const addOption = (value, label) => {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = label;
+            select.append(option);
+        };
+        select.replaceChildren();
+        openaiModels.forEach(model => addOption(model.id, model.label));
+        // Збережена модель залишається обраною, навіть якщо її немає в добірці.
+        if (!openaiModels.some(model => model.id === selected)) {
+            addOption(selected, selected + ' — збережена модель');
+        }
+        select.value = selected;
+        select.disabled = false;
+        describeOpenaiModel();
+    }
 
     async function request(url, body) {
         const response = await fetch(url, body === undefined
@@ -105,7 +131,7 @@ export function initAiSettings(root, notify) {
             el('ai-model').value = model;
             el('ai-provider').value = global.provider || 'claude';
             el('ai-current-provider').textContent = global.provider === 'openai' ? 'ChatGPT API (OpenAI)' : 'Claude API';
-            el('openai-model').value = global.openai_model;
+            renderOpenaiModels(global.openai_models, global.openai_model || el('openai-model').value);
             el('ai-debounce').value = global.debounce_seconds ?? 10;
             el('ai-catalog-mode').value = global.catalog_mode || 'all';
             el('ai-op-pause').value = global.operator_pause_minutes ?? 3;
@@ -168,6 +194,7 @@ export function initAiSettings(root, notify) {
     }
 
     el('ai-save').addEventListener('click', save);
+    el('openai-model').addEventListener('change', describeOpenaiModel);
     root.querySelectorAll('[data-test-provider]').forEach(button => button.addEventListener('click', () => test(button)));
     return { ready: load(), save };
 }

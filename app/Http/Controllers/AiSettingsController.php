@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AiSetting;
 use App\Models\MetaConnection;
+use App\Services\Ai\OpenAiModels;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -44,6 +45,7 @@ class AiSettingsController extends Controller
                 'openai_has_key' => (bool) $global->openai_api_key,
                 'openai_key_hint' => $global->openai_api_key ? ('•••'.substr($global->openai_api_key, -4)) : null,
                 'openai_model' => $global->openai_model ?: AiSetting::DEFAULT_OPENAI_MODEL,
+                'openai_models' => OpenAiModels::options(),
                 'debounce_seconds' => $global->debounce_seconds ?? 10,
                 'catalog_mode' => $global->catalog_mode ?: 'all',
                 'operator_pause_minutes' => $global->operator_pause_minutes ?? 3,

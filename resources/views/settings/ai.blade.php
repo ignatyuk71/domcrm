@@ -103,19 +103,22 @@
         <div class="card border-0 shadow-sm rounded-4 mb-4">
             <div class="card-body p-4">
                 <h2 class="h6 fw-bold mb-3"><i class="bi bi-key me-1 text-primary"></i>Підключення ChatGPT API (OpenAI)</h2>
-                <div class="row g-3 align-items-end">
+                <div class="row g-3 align-items-start">
                     <div class="col-12 col-md-5">
                         <label for="openai-key" class="form-label small text-secondary">Ключ OpenAI <span id="openai-key-hint" class="fw-semibold"></span></label>
                         <input id="openai-key" type="password" class="form-control" placeholder="sk-..." autocomplete="off" data-error-field="openai_api_key">
-                        <div class="form-text">Зберігається зашифрованим окремо від ключа Claude. Порожнє поле зберігає наявний ключ.</div>
+                        <div class="form-text">Вставте секретний API-ключ із <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">кабінету OpenAI</a>. Зберігається зашифрованим. Порожнє поле зберігає наявний ключ.</div>
                     </div>
                     <div class="col-12 col-md-5">
                         <label for="openai-model" class="form-label small text-secondary">Модель OpenAI</label>
-                        <input id="openai-model" class="form-control" value="{{ \App\Models\AiSetting::DEFAULT_OPENAI_MODEL }}" maxlength="100" data-error-field="openai_model">
-                        <div class="form-text">Укажіть ID моделі, доступної вашому API-проєкту. «Перевірити» перевіряє ключ і доступ до цієї моделі.</div>
+                        <select id="openai-model" class="form-select" data-error-field="openai_model" aria-describedby="openai-model-description openai-model-access" disabled>
+                            <option value="{{ \App\Models\AiSetting::DEFAULT_OPENAI_MODEL }}">Завантаження моделей…</option>
+                        </select>
+                        <div id="openai-model-description" class="form-text"></div>
+                        <div id="openai-model-access" class="form-text">«Перевірити» перевіряє ключ і доступ до обраної моделі у вашому API-проєкті.</div>
                     </div>
                     <div class="col-12 col-md-2">
-                        <button class="btn btn-outline-primary" data-test-provider="openai"><i class="bi bi-plug me-1"></i>Перевірити</button>
+                        <button class="btn btn-outline-primary mt-md-4" data-test-provider="openai"><i class="bi bi-plug me-1"></i>Перевірити</button>
                     </div>
                 </div>
             </div>

@@ -206,4 +206,22 @@ class AiSettingsTest extends TestCase
         $this->actingAs($this->owner())->get('/settings/ai')->assertOk()
             ->assertSee('Перемикач API')->assertSee('Підключення Claude API')->assertSee('Підключення ChatGPT API (OpenAI)')->assertDontSee('Спробувати OpenAI');
     }
+
+    public function test_model_choices_do_not_replace_the_saved_model_or_provider(): void
+    {
+        AiSetting::global()->update(['provider' => 'claude', 'api_key' => 'sk-ant-existing', 'openai_model' => 'gpt-custom-snapshot']);
+
+        $response = $this->actingAs($this->owner())->getJson('/settings/ai/data')->assertOk()
+            ->assertJsonPath('global.provider', 'claude')
+            ->assertJsonPath('global.openai_model', 'gpt-custom-snapshot');
+        $models = collect($response->json('global.openai_models'))->keyBy('id');
+        $this->assertTrue($models->has(['gpt-6.1-sol', 'gpt-6-luna', 'gpt-6-astra']));
+        $this->assertStringContainsString('рекомендована', $models['gpt-6.1-sol']['label']);
+        $this->assertNotEmpty($models['gpt-6-luna']['description']);
+        $this->assertSame('gpt-custom-snapshot', AiSetting::global()->openai_model);
+        $this->assertSame('claude', AiSetting::global()->provider);
+
+        $this->postJson('/settings/ai/save', ['provider' => 'claude', 'model' => 'claude-sonnet-4-6', 'openai_model' => 'gpt-custom-snapshot'])->assertOk();
+        $this->assertSame('gpt-custom-snapshot', AiSetting::global()->openai_model);
+    }
 }
