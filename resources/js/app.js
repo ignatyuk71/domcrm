@@ -20,3 +20,11 @@ if (flashToast) {
         createApp(FlashToast, { notification: JSON.parse(flashToast.dataset.notification) }).mount(flashToast);
     });
 }
+
+const aiSettings = document.querySelector('[data-ai-settings]');
+if (aiSettings) {
+    Promise.all([import('vue'), import('./crm/components/ui/PageToast.vue'), import('./aiSettings')]).then(([{ createApp }, { default: PageToast }, { initAiSettings }]) => {
+        const instance = createApp(PageToast).mount(aiSettings.querySelector('[data-page-toast]'));
+        initAiSettings(aiSettings, notification => instance.showNotification(notification));
+    });
+}
