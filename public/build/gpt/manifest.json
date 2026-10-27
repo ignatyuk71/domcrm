@@ -1,0 +1,11 @@
+{
+  "resources/js/gpt-drafts.js": {
+    "file": "assets/gpt-drafts-h_qy9KbJ.js",
+    "name": "gpt-drafts",
+    "src": "resources/js/gpt-drafts.js",
+    "isEntry": true,
+    "css": [
+      "assets/gpt-drafts-CKlOTSzQ.css"
+    ]
+  }
+}

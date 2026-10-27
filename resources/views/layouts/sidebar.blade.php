@@ -703,6 +703,11 @@
                     </div>
                 </div>
 
+                <a href="{{ route('settings.gpt.index') }}" class="sidebar-link-sub {{ request()->routeIs('settings.gpt.*') ? 'active' : '' }}">
+                    <span class="icon-frame"><i class="bi bi-chat-square-text" aria-hidden="true"></i></span>
+                    <span class="item-text-sub">GPT · чернетки</span>
+                </a>
+
                 <div class="settings-group">
                     <button type="button" class="sidebar-link-sub settings-group-toggle {{ request()->routeIs('settings.ai.*', 'settings.aiGallery.*') ? 'active' : '' }}"
                             id="settings-ai-toggle" aria-expanded="false" aria-controls="settings-ai">
