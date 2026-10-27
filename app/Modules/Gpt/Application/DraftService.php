@@ -41,14 +41,14 @@ class DraftService
             $previous = $dialogue->runs()->where('status', 'completed')->where('id', '<', $run->id)
                 ->latest('id')->limit(6)->get()->reverse();
             foreach ($previous as $past) {
-                $input[] = ['role' => 'user', 'content' => $past->input_message];
+                $input[] = ['role' => 'user', 'content' => $this->userContent($past->input_message, $past->input_message)];
                 $input[] = ['role' => 'assistant', 'content' => $past->result['message'] ?? ''];
             }
-            $input[] = ['role' => 'user', 'content' => json_encode([
+            $input[] = ['role' => 'user', 'content' => $this->userContent(json_encode([
                 'store_policies' => $settings->store_policies ?: 'Умови магазину ще не задано; їх потрібно уточнювати.',
                 'confirmed_selection' => $memory,
                 'message' => $run->input_message,
-            ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)];
+            ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR), $run->input_message)];
 
             $groupId = $run->gallery_group_id ?: ($memory['group_id'] ?? null);
             if ($groupId) {
@@ -126,6 +126,20 @@ class DraftService
                 'error_message' => $error instanceof DraftFailure ? $error->getMessage() : 'Не вдалося підготувати чернетку. Повідомлення збережено; повторіть спробу.',
                 'finished_at' => now()]);
         }
+    }
+
+    private function userContent(string $text, string $message): string|array
+    {
+        // Фото передаються моделі за посиланням; сервер сам їх не завантажує.
+        preg_match_all('~(?:^|\n)Фото:\s*(https?://[^\s<>]+)~iu', $message, $matches);
+        $urls = array_slice(array_values(array_unique(array_filter($matches[1] ?? [],
+            fn ($url) => filter_var($url, FILTER_VALIDATE_URL) !== false))), 0, 3);
+        if ($urls === []) {
+            return $text;
+        }
+
+        return array_merge([['type' => 'input_text', 'text' => $text]], array_map(
+            fn ($url) => ['type' => 'input_image', 'image_url' => $url, 'detail' => 'auto'], $urls));
     }
 
     private function settingsFor(GptRun $run): GptSetting

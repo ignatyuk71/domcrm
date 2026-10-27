@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import Toast from '../../components/ui/Toast.vue';
+import GptTestChat from './GptTestChat.vue';
 import { useToast } from '../../composables/useToast';
 import { gptDraftsApi as api } from '../../services/gptDraftsApi';
 
@@ -133,6 +134,9 @@ function newDialogue() {
     clearTimeout(timer);
     dialogueId.value = null;
     runs.value = [];
+    groupId.value = '';
+    message.value = '';
+    draftErrors.value = {};
     submitted = null;
 }
 async function copyDraft(text) {
@@ -148,8 +152,8 @@ onBeforeUnmount(() => { alive = false; clearTimeout(timer); });
     <div>
         <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4">
             <div>
-                <h1 class="h3 mb-1">GPT · тестові чернетки</h1>
-                <p class="text-secondary mb-0">Ручні тести на вашій галереї та каталозі. Відповіді залишаються на цій сторінці.</p>
+                <h1 class="h3 mb-1">GPT · тестовий чат</h1>
+                <p class="text-secondary mb-0">Повідомлення та відповіді в одному діалозі. Фото можна додавати посиланням.</p>
             </div>
             <span class="badge text-bg-secondary">Без підключення до робочих чатів</span>
         </div>
@@ -197,59 +201,9 @@ onBeforeUnmount(() => { alive = false; clearTimeout(timer); });
             </div>
 
             <div class="col-12 col-xl-8">
-                <div class="card border-0 shadow-sm">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center gap-3 mb-3">
-                            <h2 class="h5 mb-0">Перевірка відповіді</h2>
-                            <button class="btn btn-sm btn-outline-secondary" :disabled="busy" @click="newDialogue">Новий тест</button>
-                        </div>
-                        <form @submit.prevent="createDraft()">
-                            <label for="gpt-group" class="form-label">Модель із галереї</label>
-                            <select id="gpt-group" v-model="groupId" class="form-select" :class="{ 'is-invalid': draftErrors.gallery_group_id }" :disabled="busy">
-                                <option value="">GPT визначає за запитом</option>
-                                <option v-for="group in groups" :key="group.id" :value="group.id">{{ group.name }}</option>
-                            </select>
-                            <div v-if="draftErrors.gallery_group_id" class="invalid-feedback">{{ draftErrors.gallery_group_id[0] }}</div>
-                            <label for="gpt-message" class="form-label mt-3">Тестове повідомлення клієнта</label>
-                            <textarea id="gpt-message" v-model="message" class="form-control" :class="{ 'is-invalid': draftErrors.message }" rows="4" maxlength="3000" required placeholder="Наприклад: покажіть цю модель в чорному кольорі, які є розміри?" />
-                            <div v-if="draftErrors.message" class="invalid-feedback">{{ draftErrors.message[0] }}</div>
-                            <div class="d-flex flex-wrap gap-2 mt-3">
-                                <button class="btn btn-primary" :disabled="busy || saving || !settings.enabled || !message.trim()">{{ busy ? 'Підготовка чернетки…' : 'Створити чернетку' }}</button>
-                                <button v-if="activeRun" type="button" class="btn btn-outline-secondary" @click="refreshRun">Оновити статус</button>
-                            </div>
-                        </form>
-
-                        <div class="mt-4" aria-live="polite">
-                            <article v-for="run in runs" :key="run.id" class="border-top pt-3 mt-3">
-                                <div class="d-flex flex-wrap justify-content-between gap-2 mb-2">
-                                    <strong>Тестове повідомлення</strong>
-                                    <span class="badge" :class="run.status === 'failed' ? 'text-bg-danger' : 'text-bg-secondary'">{{ statusName(run.status) }}</span>
-                                </div>
-                                <p class="gpt-draft-text">{{ run.input_message }}</p>
-                                <template v-if="run.result">
-                                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
-                                        <strong>Чернетка GPT</strong>
-                                        <button class="btn btn-sm btn-outline-secondary" @click="copyDraft(run.result.message)">Копіювати чернетку</button>
-                                    </div>
-                                    <p class="gpt-draft-text">{{ run.result.message }}</p>
-                                    <p v-if="run.result.action === 'handoff'" class="small text-secondary">Рекомендація: відповідь менеджера. Робочий чат не перемикався.</p>
-                                    <div v-if="run.result.photos?.length" class="d-flex flex-wrap gap-2 mb-3">
-                                        <figure v-for="photo in run.result.photos" :key="photo.id" class="mb-0">
-                                            <img :src="photo.url" :alt="photo.kind === 'collage' ? 'Колаж моделі' : 'Фото вибраного кольору'" class="gpt-draft-photo rounded" loading="lazy">
-                                            <figcaption class="small text-secondary">{{ photo.kind === 'collage' ? 'Колаж' : 'Фото кольору' }} · №{{ photo.id }}</figcaption>
-                                        </figure>
-                                    </div>
-                                </template>
-                                <button v-if="run.status === 'failed'" class="btn btn-sm btn-outline-danger" @click="runError(run)">Переглянути помилку / повторити</button>
-                                <details v-if="run.evidence?.length" class="mt-2">
-                                    <summary class="small">Джерела та перевірені дані</summary>
-                                    <pre class="small text-break bg-light p-2 rounded mt-2 gpt-evidence">{{ JSON.stringify(run.evidence, null, 2) }}</pre>
-                                </details>
-                                <p v-if="run.usage" class="small text-secondary mt-2 mb-0">{{ run.model }} · {{ run.usage.input_tokens }} вхідних / {{ run.usage.output_tokens }} вихідних токенів · {{ run.usage.elapsed_ms }} мс</p>
-                            </article>
-                        </div>
-                    </div>
-                </div>
+                <GptTestChat v-model="message" v-model:group-id="groupId" :runs="runs" :groups="groups"
+                    :busy="busy" :saving="saving" :enabled="settings.enabled" :errors="draftErrors"
+                    @send="createDraft()" @new="newDialogue" @refresh="refreshRun" @copy="copyDraft" @error="runError" />
             </div>
         </div>
         <Toast v-bind="toast" @close="closeToast" @action="runAction" @secondary="runSecondary" />

@@ -436,4 +436,22 @@ class GptDraftModuleTest extends TestCase
         $group = app(CatalogReader::class)->describe($this->group->id);
         $this->assertContains($late->id, array_column($group['photos'], 'id'));
     }
+
+    public function test_photo_link_is_sent_as_image_input_and_kept_in_chat_history(): void
+    {
+        $this->enable();
+        $message = "Подивіться це фото\nФото: https://example.com/photo.jpg";
+        $run = $this->createRun(['message' => $message, 'gallery_group_id' => null]);
+        Http::fake(['api.openai.com/v1/responses' => Http::response($this->finalResponse([
+            'action' => 'clarify', 'message' => 'Допоможу з вибором.',
+            'group_id' => null, 'product_id' => null, 'size' => null, 'photo_ids' => [],
+        ]))]);
+        $run = $this->generate($run);
+        $this->assertSame('completed', $run->status, $run->error_message ?? '');
+        $this->assertSame($message, $run->input_message);
+        Http::assertSent(fn ($request) => $request['input'][0]['content'][1] === [
+            'type' => 'input_image', 'image_url' => 'https://example.com/photo.jpg', 'detail' => 'auto',
+        ]);
+        Http::assertSentCount(1);
+    }
 }

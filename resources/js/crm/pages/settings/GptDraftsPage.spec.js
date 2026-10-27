@@ -63,7 +63,7 @@ describe('Окрема сторінка чернеток GPT', () => {
         await wrapper.findAll('form')[1].trigger('submit');
         await flushPromises();
         expect(wrapper.text()).toContain('1290.00 UAH');
-        expect(wrapper.text()).toContain('Копіювати чернетку');
+        expect(wrapper.text()).toContain('Копіювати відповідь');
         expect(wrapper.text()).not.toContain('Надіслати клієнту');
         expect(wrapper.get('#gpt-message').element.value).toBe('');
         expect(api.create.mock.calls[0][0]).toMatchObject({ message: 'Покажіть чорні', dialogue_id: null });
@@ -121,5 +121,57 @@ describe('Окрема сторінка чернеток GPT', () => {
         wrapper.unmount(); wrapper = null;
         await vi.advanceTimersByTimeAsync(5000);
         expect(api.run).not.toHaveBeenCalled();
+    });
+
+    it('показує розмову бульбашками та поле введення після історії', async () => {
+        api.create.mockResolvedValue({ run: completed });
+        await open();
+        await wrapper.get('#gpt-message').setValue('Покажіть чорні');
+        await wrapper.findAll('form')[1].trigger('submit');
+        await flushPromises();
+        expect(wrapper.get('[role="log"]').text()).toContain('Покажіть чорні');
+        expect(wrapper.get('.gpt-chat-bubble--user').text()).toContain('Покажіть чорні');
+        expect(wrapper.get('.gpt-chat-bubble--assistant').text()).toContain('1290.00 UAH');
+        expect(wrapper.get('[role="log"]').element.nextElementSibling).toBe(wrapper.get('.gpt-chat-composer').element);
+        expect(wrapper.get('.gpt-chat-composer').find('#gpt-message').exists()).toBe(true);
+        expect(wrapper.text()).not.toContain('Тестове повідомлення клієнта');
+    });
+
+    it('Enter надсилає повідомлення, Shift+Enter залишає новий рядок', async () => {
+        api.create.mockResolvedValue({ run: completed });
+        await open();
+        await wrapper.get('#gpt-message').setValue('Покажіть чорні');
+        await wrapper.get('#gpt-message').trigger('keydown', { key: 'Enter', shiftKey: true });
+        expect(api.create).not.toHaveBeenCalled();
+        await wrapper.get('#gpt-message').trigger('keydown', { key: 'Enter' });
+        await flushPromises();
+        expect(api.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('додає посилання на фото до повідомлення та показує його в чаті', async () => {
+        api.create.mockImplementation(payload => Promise.resolve({ run: { ...completed, input_message: payload.message } }));
+        await open();
+        await wrapper.get('[aria-label="Додати посилання на фото"]').trigger('click');
+        await wrapper.get('#gpt-image-url').setValue('https://example.com/photo.jpg');
+        await wrapper.get('#gpt-image-url').trigger('keydown', { key: 'Enter' });
+        expect(wrapper.get('#gpt-message').element.value).toBe('Фото: https://example.com/photo.jpg');
+        await wrapper.findAll('form')[1].trigger('submit');
+        await flushPromises();
+        expect(api.create.mock.calls[0][0].message).toBe('Фото: https://example.com/photo.jpg');
+        expect(wrapper.get('.gpt-chat-bubble--user a').attributes('href')).toBe('https://example.com/photo.jpg');
+    });
+
+    it('показує фотографії та колажі відповіді з посиланнями для відкриття', async () => {
+        api.create.mockResolvedValue({ run: { ...completed, result: { ...completed.result, photos: [
+            { id: 1, url: '/ai-gallery/collage.jpg', kind: 'collage' },
+            { id: 2, url: '/ai-gallery/black.jpg', kind: 'color' },
+        ] } } });
+        await open();
+        await wrapper.get('#gpt-message').setValue('Покажіть фото');
+        await wrapper.findAll('form')[1].trigger('submit');
+        await flushPromises();
+        expect(wrapper.get('img[alt="Колаж моделі"]').attributes('src')).toBe('/ai-gallery/collage.jpg');
+        expect(wrapper.get('img[alt="Фото кольору"]').attributes('src')).toBe('/ai-gallery/black.jpg');
+        expect(wrapper.findAll('.gpt-chat-photos a')).toHaveLength(2);
     });
 });
