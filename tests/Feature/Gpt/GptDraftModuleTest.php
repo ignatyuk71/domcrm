@@ -69,7 +69,10 @@ class GptDraftModuleTest extends TestCase
 
     private function enable(): void
     {
-        GptSetting::create(['enabled' => true, 'api_key' => 'sk-gpt-fixture-secret', 'model' => 'gpt-test', 'version' => 1]);
+        $settings = new GptSetting(['enabled' => true, 'api_key' => 'sk-gpt-fixture-secret', 'model' => 'gpt-test', 'version' => 1]);
+        // MySQL не відкочує AUTO_INCREMENT; фікстура відтворює ID запису налаштувань.
+        $settings->id = 1;
+        $settings->save();
     }
 
     private function createRun(array $extra = []): GptRun
