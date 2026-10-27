@@ -3,8 +3,7 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "build": "vite build && npm run build:gpt",
-        "build:gpt": "vite build --config vite.gpt.config.js",
+        "build": "vite build",
         "dev": "vite",
         "test": "vitest run"
     },
