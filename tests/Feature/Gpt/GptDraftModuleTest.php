@@ -426,4 +426,14 @@ class GptDraftModuleTest extends TestCase
         $group = app(CatalogReader::class)->describe($this->group->id);
         $this->assertNotContains($guide->id, array_column($group['photos'], 'id'));
     }
+
+    public function test_color_photos_after_first_forty_images_remain_available(): void
+    {
+        for ($i = 0; $i < 45; $i++) {
+            $this->photo('black-angle-'.$i.'.jpg', [$this->black->id]);
+        }
+        $late = $this->photo('beige-late.jpg', [$this->beige->id]);
+        $group = app(CatalogReader::class)->describe($this->group->id);
+        $this->assertContains($late->id, array_column($group['photos'], 'id'));
+    }
 }

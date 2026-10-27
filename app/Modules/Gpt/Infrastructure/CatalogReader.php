@@ -53,7 +53,7 @@ class CatalogReader
         }
         $ids = $products->pluck('id')->all();
         $photos = [];
-        foreach ($group->photos()->with('products:products.id')->limit(40)->get() as $photo) {
+        foreach ($group->photos()->with('products:products.id')->limit(120)->get() as $photo) {
             // Пояснення розміру не видаємо за фото кольору в першій версії модуля.
             if (($photo->purpose ?? 'product') !== 'product') {
                 continue;
