@@ -11,6 +11,7 @@ use App\Modules\Gpt\Models\GptRun;
 use App\Modules\Gpt\Models\GptSetting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -18,6 +19,55 @@ use Throwable;
 
 class DraftController extends Controller
 {
+    public function upload(Request $request)
+    {
+        $request->validate([
+            'files' => 'required|array|min:1|max:3',
+            'files.*' => 'required|file|image|mimes:jpg,jpeg,png,webp|max:5120|dimensions:max_width=12000,max_height=12000',
+        ], [
+            'files.*.max' => 'Фото має бути не більшим за 5 МБ.',
+            'files.*.mimes' => 'Оберіть фото JPG, PNG або WEBP.',
+            'files.*.image' => 'Файл має бути зображенням JPG, PNG або WEBP.',
+            'files.*.dimensions' => 'Максимальний розмір фото — 12000 × 12000 пікселів.',
+            'files.max' => 'За раз можна додати до трьох фото.',
+        ]);
+        $stored = [];
+        $files = [];
+        try {
+            foreach ($request->file('files') as $file) {
+                $extension = match ($file->getMimeType()) {
+                    'image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp',
+                    default => throw ValidationException::withMessages(['files' => ['Оберіть фото JPG, PNG або WEBP.']]),
+                };
+                $name = Str::uuid().'.'.$extension;
+                $path = $file->storeAs('gpt-drafts/uploads/'.$request->user()->id, $name, 'local');
+                if (! $path) {
+                    throw ValidationException::withMessages(['files' => ['Не вдалося зберегти фото. Спробуйте ще раз.']]);
+                }
+                $stored[] = $path;
+                $files[] = ['id' => $name, 'name' => $file->getClientOriginalName(), 'size' => $file->getSize(),
+                    'url' => route('settings.gpt.attachment', ['file' => $name])];
+            }
+        } catch (Throwable $error) {
+            Storage::disk('local')->delete($stored);
+            throw $error;
+        }
+
+        return response()->json(['files' => $files], 201);
+    }
+
+    public function attachment(Request $request, string $file)
+    {
+        // Файли доступні лише власнику, який їх завантажив.
+        $path = 'gpt-drafts/uploads/'.$request->user()->id.'/'.$file;
+        abort_unless(Storage::disk('local')->exists($path), 404);
+
+        return response()->file(Storage::disk('local')->path($path), [
+            'X-Content-Type-Options' => 'nosniff',
+            'Content-Security-Policy' => "default-src 'none'; sandbox",
+        ]);
+    }
+
     public function page()
     {
         return view('settings.gpt');

@@ -2,32 +2,25 @@
 import { computed, nextTick, ref, watch } from 'vue';
 
 const props = defineProps({
-    runs: { type: Array, default: () => [] }, groups: { type: Array, default: () => [] },
+    runs: { type: Array, default: () => [] }, attachments: { type: Array, default: () => [] },
+    uploading: Boolean, uploadProgress: { type: Number, default: 0 },
     busy: Boolean, saving: Boolean, enabled: Boolean, errors: { type: Object, default: () => ({}) },
 });
-const emit = defineEmits(['send', 'new', 'refresh', 'copy', 'error']);
+const emit = defineEmits(['send', 'new', 'refresh', 'copy', 'error', 'upload', 'remove-attachment']);
 const message = defineModel({ type: String, default: '' });
-const groupId = defineModel('groupId', { default: '' });
 const thread = ref(null);
 const composer = ref(null);
-const imageUrl = ref('');
-const showImageLink = ref(false);
+const fileInput = ref(null);
 const following = ref(true);
-const canSend = computed(() => props.enabled && !props.busy && !props.saving && !!message.value.trim());
+const canSend = computed(() => props.enabled && !props.busy && !props.saving && !props.uploading && (!!message.value.trim() || props.attachments.length > 0));
 const pending = run => ['pending', 'running'].includes(run.status);
 function parts(value) {
     return String(value || '').split(/(https?:\/\/[^\s<>]+)/g).filter(Boolean).map(text => ({ text, url: /^https?:\/\//i.test(text) }));
 }
-function addImageLink() {
-    const value = imageUrl.value.trim();
-    try {
-        const url = new URL(value);
-        if (!['https:', 'http:'].includes(url.protocol)) return;
-        message.value = `${message.value.trim()}${message.value.trim() ? '\n' : ''}Фото: ${url.href}`;
-        imageUrl.value = '';
-        showImageLink.value = false;
-        nextTick(() => composer.value?.focus());
-    } catch { /* Невалідне посилання залишається в полі для виправлення. */ }
+function chooseFiles(event) {
+    const files = Array.from(event.target.files || []);
+    if (files.length) emit('upload', files);
+    event.target.value = '';
 }
 function send() {
     if (!canSend.value) return;
@@ -61,28 +54,19 @@ watch(message, async () => {
         <header class="gpt-chat-header">
             <div class="d-flex align-items-center justify-content-between gap-2">
                 <div><h2 class="h5 mb-1">Чат із GPT</h2><span class="small text-secondary">Тестова розмова · без надсилання клієнтам</span></div>
-                <button class="btn btn-sm btn-outline-secondary text-nowrap" :disabled="busy" @click="following = true; emit('new')">Новий чат</button>
+                <button class="btn btn-sm btn-outline-secondary text-nowrap" :disabled="busy || uploading" @click="following = true; emit('new')">Новий чат</button>
             </div>
-            <details class="mt-2">
-                <summary class="small text-secondary">Контекст товару: {{ groups.find(g => g.id === Number(groupId))?.name || 'GPT визначає за запитом' }}</summary>
-                <label for="gpt-group" class="form-label small mt-2">Модель із галереї</label>
-                <select id="gpt-group" v-model="groupId" class="form-select form-select-sm" :class="{ 'is-invalid': errors.gallery_group_id }" :disabled="busy">
-                    <option value="">GPT визначає за запитом</option>
-                    <option v-for="group in groups" :key="group.id" :value="group.id">{{ group.name }}</option>
-                </select>
-                <div v-if="errors.gallery_group_id" class="invalid-feedback">{{ errors.gallery_group_id[0] }}</div>
-            </details>
         </header>
         <div ref="thread" class="gpt-chat-thread" role="log" aria-label="Повідомлення діалогу" aria-live="polite" @scroll="onScroll">
-            <div v-if="!runs.length" class="gpt-chat-empty"><i class="bi bi-chat-dots text-primary" aria-hidden="true"></i><h3 class="h5">Почніть розмову</h3><p class="text-secondary mb-0">Напишіть повідомлення, як це зробив би клієнт. Фото можна додати посиланням.</p></div>
+            <div v-if="!runs.length" class="gpt-chat-empty"><i class="bi bi-chat-dots text-primary" aria-hidden="true"></i><h3 class="h5">Почніть розмову</h3><p class="text-secondary mb-0">Напишіть повідомлення або завантажте фото кнопкою вкладення.</p></div>
             <template v-for="run in runs" :key="run.id">
                 <div class="gpt-chat-row gpt-chat-row--user"><div class="gpt-chat-bubble gpt-chat-bubble--user"><div class="gpt-chat-author">Ви</div><p class="gpt-chat-text mb-0"><template v-for="(part, index) in parts(run.input_message)" :key="index"><a v-if="part.url" :href="part.text" target="_blank" rel="noopener noreferrer">{{ part.text }}</a><template v-else>{{ part.text }}</template></template></p></div></div>
                 <div class="gpt-chat-row gpt-chat-row--assistant"><div class="gpt-chat-bubble gpt-chat-bubble--assistant">
                     <div class="gpt-chat-author">GPT</div>
                     <p v-if="pending(run)" class="text-secondary mb-0" role="status"><span class="spinner-grow spinner-grow-sm me-2" aria-hidden="true"></span>Готує відповідь…</p>
                     <template v-else-if="run.result">
-                        <p class="gpt-chat-text mb-0">{{ run.result.message }}</p>
-                        <div v-if="run.result.photos?.length" class="gpt-chat-photos mt-2"><a v-for="photo in run.result.photos" :key="photo.id" :href="photo.url" target="_blank" rel="noopener noreferrer"><img :src="photo.url" :alt="photo.kind === 'collage' ? 'Колаж моделі' : 'Фото кольору'" loading="lazy"><span class="small">{{ photo.kind === 'collage' ? 'Колаж' : 'Фото кольору' }}</span></a></div>
+                        <p class="gpt-chat-text mb-0"><template v-for="(part, index) in parts(run.result.message)" :key="index"><a v-if="part.url" :href="part.text" target="_blank" rel="noopener noreferrer">{{ part.text }}</a><template v-else>{{ part.text }}</template></template></p>
+                        <div v-if="run.result.photos?.length" class="gpt-chat-photos mt-2"><a v-for="photo in run.result.photos" :key="photo.id" :href="photo.url" target="_blank" rel="noopener noreferrer">{{ photo.kind === 'collage' ? 'Відкрити колаж' : 'Відкрити фото' }} ↗</a></div>
                         <button class="btn btn-sm btn-link p-0 mt-2" @click="emit('copy', run.result.message)">Копіювати відповідь</button>
                         <p v-if="run.result.action === 'handoff'" class="small text-secondary mt-2 mb-0">Рекомендація GPT: допомога менеджера. Робочий чат не перемикається.</p>
                     </template>
@@ -92,9 +76,11 @@ watch(message, async () => {
             </template>
         </div>
         <form class="gpt-chat-composer" aria-label="Надіслати тестове повідомлення" @submit.prevent="send">
-            <div v-if="showImageLink" class="mb-2"><label for="gpt-image-url" class="form-label small">Посилання на фото</label><div class="d-flex gap-2"><input id="gpt-image-url" v-model="imageUrl" type="url" class="form-control" placeholder="https://…" @keydown.enter.prevent="addImageLink"><button type="button" class="btn btn-outline-primary" :disabled="!imageUrl.trim()" @click="addImageLink">Додати</button></div></div>
+            <input id="gpt-files" ref="fileInput" type="file" class="visually-hidden" accept="image/jpeg,image/png,image/webp" multiple tabindex="-1" aria-label="Файли для GPT" @change="chooseFiles">
+            <div v-if="attachments.length" class="d-flex flex-wrap gap-2 mb-2"><span v-for="file in attachments" :key="file.id" class="d-inline-flex align-items-center gap-2 border rounded px-2 py-1 small"><a :href="file.url" target="_blank" rel="noopener noreferrer" class="text-break">{{ file.name }} ↗</a><button type="button" class="btn-close" :disabled="busy || uploading" :aria-label="`Прибрати ${file.name}`" @click="emit('remove-attachment', file.id)"></button></span></div>
+            <div v-if="uploading" class="mb-2" role="status"><span class="small text-secondary">Завантаження файлу… {{ uploadProgress }}%</span><div class="progress mt-1" style="height:4px"><div class="progress-bar" :style="{ width: `${uploadProgress}%` }"></div></div></div>
             <div class="d-flex align-items-end gap-2">
-                <button type="button" class="btn btn-light gpt-chat-icon" aria-label="Додати посилання на фото" :disabled="busy" @click="showImageLink = !showImageLink"><i class="bi bi-image" aria-hidden="true"></i></button>
+                <button type="button" class="btn btn-light gpt-chat-icon" aria-label="Завантажити файл" :disabled="busy || uploading || attachments.length >= 3" @click="fileInput?.click()"><i class="bi bi-paperclip" aria-hidden="true"></i></button>
                 <div class="flex-grow-1 gpt-chat-input-wrap"><label for="gpt-message" class="visually-hidden">Ваше повідомлення</label><textarea id="gpt-message" ref="composer" v-model="message" class="form-control gpt-chat-input" :class="{ 'is-invalid': errors.message }" rows="1" maxlength="3000" placeholder="Напишіть повідомлення…" @keydown="onKeydown" /></div>
                 <button class="btn btn-primary gpt-chat-icon" :disabled="!canSend" aria-label="Надіслати повідомлення"><i class="bi bi-send-fill" aria-hidden="true"></i><span class="d-none d-sm-inline ms-2">Надіслати</span></button>
             </div>
@@ -118,7 +104,6 @@ watch(message, async () => {
 .gpt-chat-bubble--assistant{background:var(--bs-body-bg);color:var(--bs-body-color);border:1px solid var(--bs-border-color);border-bottom-left-radius:.25rem}
 .gpt-chat-author{font-size:.75rem;font-weight:600;opacity:.8;margin-bottom:.35rem}.gpt-chat-text{white-space:pre-wrap;overflow-wrap:anywhere}
 .gpt-chat-photos{display:flex;flex-wrap:wrap;gap:.65rem}.gpt-chat-photos a{display:flex;flex-direction:column;gap:.25rem;max-width:100%}
-.gpt-chat-photos img{width:190px;max-width:100%;max-height:260px;object-fit:contain;border-radius:.5rem}
 .gpt-chat-composer{flex-shrink:0;border-top:1px solid var(--bs-border-color)}
 .gpt-chat-input-wrap{min-width:0}.gpt-chat-input{min-height:46px;max-height:144px;resize:none;padding:.65rem .8rem}.gpt-chat-icon{min-height:46px;min-width:46px}
 .gpt-chat-diagnostics summary,.gpt-chat-header summary{cursor:pointer}.gpt-chat-diagnostics pre{max-height:18rem;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}

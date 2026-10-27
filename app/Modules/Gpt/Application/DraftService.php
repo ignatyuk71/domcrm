@@ -11,6 +11,7 @@ use App\Modules\Gpt\Infrastructure\ResponsesClient;
 use App\Modules\Gpt\Models\GptRun;
 use App\Modules\Gpt\Models\GptSetting;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Throwable;
 
@@ -40,15 +41,19 @@ class DraftService
             $input = [];
             $previous = $dialogue->runs()->where('status', 'completed')->where('id', '<', $run->id)
                 ->latest('id')->limit(6)->get()->reverse();
+            // У контексті зберігаємо останній набір фото, щоб не дублювати великі файли.
+            $lastImageRun = preg_match('~(?:^|\n)Фото:\s*https?://~iu', $run->input_message) ? null
+                : $previous->last(fn ($past) => preg_match('~(?:^|\n)Фото:\s*https?://~iu', $past->input_message))?->id;
             foreach ($previous as $past) {
-                $input[] = ['role' => 'user', 'content' => $this->userContent($past->input_message, $past->input_message)];
+                $input[] = ['role' => 'user', 'content' => $past->id === $lastImageRun
+                    ? $this->userContent($past->input_message, $past->input_message, $run->created_by) : $past->input_message];
                 $input[] = ['role' => 'assistant', 'content' => $past->result['message'] ?? ''];
             }
             $input[] = ['role' => 'user', 'content' => $this->userContent(json_encode([
                 'store_policies' => $settings->store_policies ?: 'Умови магазину ще не задано; їх потрібно уточнювати.',
                 'confirmed_selection' => $memory,
                 'message' => $run->input_message,
-            ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR), $run->input_message)];
+            ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR), $run->input_message, $run->created_by)];
 
             $groupId = $run->gallery_group_id ?: ($memory['group_id'] ?? null);
             if ($groupId) {
@@ -62,7 +67,7 @@ class DraftService
             for ($round = 0; $round < (int) config('gpt-drafts.max_rounds'); $round++) {
                 $settings = $this->settingsFor($run);
                 $remaining = (int) floor((int) config('gpt-drafts.deadline') - (microtime(true) - $started));
-                if ($remaining < 1 || strlen(json_encode($input, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)) > (int) config('gpt-drafts.max_input_chars')) {
+                if ($remaining < 1 || $this->textContextSize($input) > (int) config('gpt-drafts.max_input_chars')) {
                     throw new DraftFailure('budget', 'Досягнуто ліміту часу або контексту. Почніть новий тестовий діалог.');
                 }
                 $response = $this->client->request($settings->key(), [
@@ -128,9 +133,9 @@ class DraftService
         }
     }
 
-    private function userContent(string $text, string $message): string|array
+    private function userContent(string $text, string $message, int $ownerId): string|array
     {
-        // Фото передаються моделі за посиланням; сервер сам їх не завантажує.
+        // Приватні вкладення передаємо як дані; зовнішні посилання сервер не завантажує.
         preg_match_all('~(?:^|\n)Фото:\s*(https?://[^\s<>]+)~iu', $message, $matches);
         $urls = array_slice(array_values(array_unique(array_filter($matches[1] ?? [],
             fn ($url) => filter_var($url, FILTER_VALIDATE_URL) !== false))), 0, 3);
@@ -138,8 +143,39 @@ class DraftService
             return $text;
         }
 
-        return array_merge([['type' => 'input_text', 'text' => $text]], array_map(
-            fn ($url) => ['type' => 'input_image', 'image_url' => $url, 'detail' => 'auto'], $urls));
+        return array_merge([['type' => 'input_text', 'text' => $text]], array_map(function ($url) use ($ownerId) {
+            $path = parse_url($url, PHP_URL_PATH) ?: '';
+            if (parse_url($url, PHP_URL_HOST) === parse_url(config('app.url'), PHP_URL_HOST)
+                && preg_match('~\A/settings/gpt/attachments/([a-f0-9-]{36}\.(jpg|png|webp))\z~', $path, $match)) {
+                $file = 'gpt-drafts/uploads/'.$ownerId.'/'.$match[1];
+                if (! Storage::disk('local')->exists($file)) {
+                    throw new DraftFailure('missing_attachment', 'Фото недоступне. Завантажте його повторно.');
+                }
+                $mime = match ($match[2]) { 'jpg' => 'image/jpeg', 'png' => 'image/png', 'webp' => 'image/webp' };
+                $url = 'data:'.$mime.';base64,'.base64_encode(Storage::disk('local')->get($file));
+            }
+
+            return ['type' => 'input_image', 'image_url' => $url, 'detail' => 'auto'];
+        }, $urls));
+    }
+
+    private function textContextSize(array $input): int
+    {
+        // Бінарні фото мають окремий ліміт завантаження, а не ліміт тексту.
+        foreach ($input as &$item) {
+            if (! is_array($item['content'] ?? null)) {
+                continue;
+            }
+            foreach ($item['content'] as &$part) {
+                if (($part['type'] ?? '') === 'input_image' && str_starts_with($part['image_url'] ?? '', 'data:')) {
+                    $part['image_url'] = '[завантажене фото]';
+                }
+            }
+            unset($part);
+        }
+        unset($item);
+
+        return strlen(json_encode($input, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
     }
 
     private function settingsFor(GptRun $run): GptSetting

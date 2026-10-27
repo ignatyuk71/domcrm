@@ -4,7 +4,7 @@ import GptDraftsPage from './GptDraftsPage.vue';
 import { gptDraftsApi as api } from '../../services/gptDraftsApi';
 
 vi.mock('../../services/gptDraftsApi', () => ({ gptDraftsApi: {
-    data: vi.fn(), saveSettings: vi.fn(), create: vi.fn(), run: vi.fn(), dialogue: vi.fn(),
+    data: vi.fn(), saveSettings: vi.fn(), create: vi.fn(), run: vi.fn(), dialogue: vi.fn(), upload: vi.fn(),
 } }));
 
 const settings = { enabled: true, model: 'gpt-test', has_api_key: true, store_policies: '', version: 1 };
@@ -43,12 +43,10 @@ describe('Окрема сторінка чернеток GPT', () => {
         api.create.mockRejectedValue({ response: { data: { message: 'Тимчасова помилка', errors: { message: ['Перевірте запит'] } } } });
         await open();
         await wrapper.get('#gpt-message').setValue('Покажіть чорні');
-        await wrapper.get('#gpt-group').setValue('7');
         await wrapper.findAll('form')[1].trigger('submit');
         await flushPromises();
         expect(wrapper.get('#gpt-message').element.value).toBe('Покажіть чорні');
         expect(wrapper.get('#gpt-message').classes()).toContain('is-invalid');
-        expect(wrapper.get('#gpt-group').element.value).toBe('7');
         const payload = api.create.mock.calls[0][0];
         document.querySelector('.app-toast-actions button').click();
         await flushPromises();
@@ -148,13 +146,16 @@ describe('Окрема сторінка чернеток GPT', () => {
         expect(api.create).toHaveBeenCalledTimes(1);
     });
 
-    it('додає посилання на фото до повідомлення та показує його в чаті', async () => {
+    it('завантажує вибране фото та показує посилання на нього в чаті', async () => {
+        const file = new File(['photo'], 'photo.jpg', { type: 'image/jpeg' });
+        api.upload.mockResolvedValue({ files: [{ id: 'photo', name: 'photo.jpg', url: 'https://example.com/photo.jpg' }] });
         api.create.mockImplementation(payload => Promise.resolve({ run: { ...completed, input_message: payload.message } }));
         await open();
-        await wrapper.get('[aria-label="Додати посилання на фото"]').trigger('click');
-        await wrapper.get('#gpt-image-url').setValue('https://example.com/photo.jpg');
-        await wrapper.get('#gpt-image-url').trigger('keydown', { key: 'Enter' });
-        expect(wrapper.get('#gpt-message').element.value).toBe('Фото: https://example.com/photo.jpg');
+        Object.defineProperty(wrapper.get('#gpt-files').element, 'files', { value: [file], configurable: true });
+        await wrapper.get('#gpt-files').trigger('change');
+        await flushPromises();
+        expect(api.upload).toHaveBeenCalledWith([file], expect.any(Function));
+        expect(wrapper.get('#gpt-message').element.value).toBe('');
         await wrapper.findAll('form')[1].trigger('submit');
         await flushPromises();
         expect(api.create.mock.calls[0][0].message).toBe('Фото: https://example.com/photo.jpg');
@@ -170,8 +171,10 @@ describe('Окрема сторінка чернеток GPT', () => {
         await wrapper.get('#gpt-message').setValue('Покажіть фото');
         await wrapper.findAll('form')[1].trigger('submit');
         await flushPromises();
-        expect(wrapper.get('img[alt="Колаж моделі"]').attributes('src')).toBe('/ai-gallery/collage.jpg');
-        expect(wrapper.get('img[alt="Фото кольору"]').attributes('src')).toBe('/ai-gallery/black.jpg');
+        expect(wrapper.get('.gpt-chat-photos a').attributes('target')).toBe('_blank');
+        expect(wrapper.findAll('.gpt-chat-photos a').map(link => link.attributes('href'))).toEqual(['/ai-gallery/collage.jpg', '/ai-gallery/black.jpg']);
+        expect(wrapper.find('#gpt-group').exists()).toBe(false);
+        expect(wrapper.find('#gpt-image-url').exists()).toBe(false);
         expect(wrapper.findAll('.gpt-chat-photos a')).toHaveLength(2);
     });
 });

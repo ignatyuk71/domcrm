@@ -8,11 +8,12 @@ import { gptDraftsApi as api } from '../../services/gptDraftsApi';
 const { toast, showToast, closeToast, runAction, runSecondary } = useToast();
 const settings = reactive({ enabled: false, model: '', store_policies: '', has_api_key: false, version: 0 });
 const apiKey = ref('');
-const groups = ref([]);
+const attachments = ref([]);
+const uploading = ref(false);
+const uploadProgress = ref(0);
 const dialogues = ref([]);
 const runs = ref([]);
 const dialogueId = ref(null);
-const groupId = ref('');
 const message = ref('');
 const ready = ref(false);
 const saving = ref(false);
@@ -39,7 +40,6 @@ async function load() {
         const data = await api.data();
         if (!alive) return;
         Object.assign(settings, data.settings);
-        groups.value = data.groups;
         dialogues.value = data.dialogues;
         ready.value = true;
     } catch (error) { failure(error, load); }
@@ -78,7 +78,8 @@ function acceptRun(run) {
     activeRun.value = null;
     if (run.status === 'failed') runError(run);
     if (run.status === 'completed') {
-        if (submitted && message.value === submitted.message) message.value = '';
+        if (submitted && message.value === submitted.typedMessage) message.value = '';
+        if (submitted) attachments.value = attachments.value.filter(file => !submitted.fileIds.includes(file.id));
         submitted = null;
         success('Чернетку підготовлено для перевірки.');
     }
@@ -99,15 +100,19 @@ async function refreshRun() {
     } catch (error) { failure(error, refreshRun); }
 }
 async function createDraft(retry = false) {
+    if (uploading.value) return;
     submitting.value = true;
     draftErrors.value = {};
     // Після мережевої помилки повторюємо той самий запит без подвійної генерації.
     if (!retry || !submitted) submitted = {
-        request_id: crypto.randomUUID(), message: message.value.trim(),
-        dialogue_id: dialogueId.value, gallery_group_id: groupId.value ? Number(groupId.value) : null,
+        request_id: crypto.randomUUID(),
+        message: [message.value.trim(), ...attachments.value.map(file => `Фото: ${file.url}`)].filter(Boolean).join('\n'),
+        dialogue_id: dialogueId.value, gallery_group_id: null,
+        typedMessage: message.value, fileIds: attachments.value.map(file => file.id),
     };
     try {
-        const { run } = await api.create(submitted);
+        const { typedMessage, fileIds, ...payload } = submitted;
+        const { run } = await api.create(payload);
         if (!alive) return;
         pollStarted = Date.now();
         acceptRun(run);
@@ -122,7 +127,6 @@ async function openDialogue(id) {
         if (!alive) return;
         clearTimeout(timer);
         dialogueId.value = data.dialogue.id;
-        groupId.value = data.dialogue.memory?.group_id || '';
         runs.value = data.runs;
         submitted = null;
         const pending = data.runs.find(r => ['pending', 'running'].includes(r.status));
@@ -134,14 +138,28 @@ function newDialogue() {
     clearTimeout(timer);
     dialogueId.value = null;
     runs.value = [];
-    groupId.value = '';
     message.value = '';
+    attachments.value = [];
     draftErrors.value = {};
     submitted = null;
 }
 async function copyDraft(text) {
     try { await navigator.clipboard.writeText(text); success('Чернетку скопійовано.'); }
     catch (error) { failure(error, () => copyDraft(text)); }
+}
+async function uploadFiles(files) {
+    if (uploading.value || busy.value) return;
+    if (files.length + attachments.value.length > 3 || files.some(file => file.size > 5 * 1024 * 1024)) {
+        showToast({ title: 'Перевірте файли', messages: ['Додайте до трьох фото JPG, PNG або WEBP, кожне до 5 МБ.'], type: 'error' });
+        return;
+    }
+    uploading.value = true;
+    uploadProgress.value = 0;
+    try {
+        const data = await api.upload(files, value => { uploadProgress.value = value; });
+        if (alive) attachments.value.push(...data.files);
+    } catch (error) { failure(error, () => uploadFiles(files)); }
+    finally { uploading.value = false; }
 }
 const statusName = status => ({ pending: 'У черзі', running: 'Готується', completed: 'Чернетка', failed: 'Не створено' }[status] || status);
 onMounted(load);
@@ -153,7 +171,7 @@ onBeforeUnmount(() => { alive = false; clearTimeout(timer); });
         <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4">
             <div>
                 <h1 class="h3 mb-1">GPT · тестовий чат</h1>
-                <p class="text-secondary mb-0">Повідомлення та відповіді в одному діалозі. Фото можна додавати посиланням.</p>
+                <p class="text-secondary mb-0">Повідомлення та відповіді в одному діалозі. Фото завантажуються кнопкою вкладення.</p>
             </div>
             <span class="badge text-bg-secondary">Без підключення до робочих чатів</span>
         </div>
@@ -192,7 +210,7 @@ onBeforeUnmount(() => { alive = false; clearTimeout(timer); });
                         <h2 class="h6">Тестові діалоги</h2>
                         <ul class="list-unstyled mb-0">
                             <li v-for="item in dialogues" :key="item.id" class="mt-2">
-                                <button class="btn btn-sm btn-link text-start p-0 text-break" :disabled="busy" @click="openDialogue(item.id)">{{ item.title }}</button>
+                                <button class="btn btn-sm btn-link text-start p-0 text-break" :disabled="busy || uploading" @click="openDialogue(item.id)">{{ item.title }}</button>
                             </li>
                         </ul>
                         <p v-if="!dialogues.length" class="text-secondary small mb-0">Збережені тести з’являться тут.</p>
@@ -201,9 +219,10 @@ onBeforeUnmount(() => { alive = false; clearTimeout(timer); });
             </div>
 
             <div class="col-12 col-xl-8">
-                <GptTestChat v-model="message" v-model:group-id="groupId" :runs="runs" :groups="groups"
+                <GptTestChat v-model="message" :runs="runs" :attachments="attachments" :uploading="uploading" :upload-progress="uploadProgress"
                     :busy="busy" :saving="saving" :enabled="settings.enabled" :errors="draftErrors"
-                    @send="createDraft()" @new="newDialogue" @refresh="refreshRun" @copy="copyDraft" @error="runError" />
+                    @send="createDraft()" @new="newDialogue" @refresh="refreshRun" @copy="copyDraft" @error="runError"
+                    @upload="uploadFiles" @remove-attachment="id => { attachments = attachments.filter(file => file.id !== id); }" />
             </div>
         </div>
         <Toast v-bind="toast" @close="closeToast" @action="runAction" @secondary="runSecondary" />

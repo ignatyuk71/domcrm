@@ -1,11 +1,11 @@
 {
   "resources/js/gpt-drafts.js": {
-    "file": "assets/gpt-drafts-CKfqH-Md.js",
+    "file": "assets/gpt-drafts-DEtgBvaK.js",
     "name": "gpt-drafts",
     "src": "resources/js/gpt-drafts.js",
     "isEntry": true,
     "css": [
-      "assets/gpt-drafts-DeaTistV.css"
+      "assets/gpt-drafts-BF6V09Ta.css"
     ]
   }
 }
