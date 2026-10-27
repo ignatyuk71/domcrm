@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\Log;
 
 class NovaPoshtaService
 {
+    private const ADDRESS_SEARCH_ENDPOINT = 'https://api2.novaposhta.ua/v2.0/json/';
+
     protected string $apiKey;
     protected string $endpoint = 'https://api.novaposhta.ua/v2.0/json/';
     protected ?NovaPoshtaSetting $settings = null;
@@ -41,10 +43,19 @@ class NovaPoshtaService
             return ['success' => false, 'errors' => ['API key is missing']];
         }
 
+        // Перемикаємо лише читання адресних довідників; операції з ТТН мають окремий маршрут.
+        $endpoint = match ([$model, $method]) {
+            ['Address', 'searchSettlements'],
+            ['AddressGeneral', 'getWarehouses'],
+            ['Address', 'searchSettlementStreets'],
+            ['AddressGeneral', 'getStreet'] => self::ADDRESS_SEARCH_ENDPOINT,
+            default => $this->endpoint,
+        };
+
         $attempt = 0;
         while (true) {
         try {
-            $response = Http::timeout(50)->post($this->endpoint, [
+            $response = Http::timeout(50)->post($endpoint, [
                 'apiKey' => $this->apiKey,
                 'modelName' => $model,
                 'calledMethod' => $method,
