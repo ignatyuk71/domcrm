@@ -38,6 +38,8 @@ class DraftService
             $dialogue = $run->dialogue;
             $memory = $dialogue->memory ?? [];
             $groups = $offers = [];
+            $catalogProducts = [];
+            $catalogHasMore = false;
             $input = [];
             $previous = $dialogue->runs()->where('status', 'completed')->where('id', '<', $run->id)
                 ->latest('id')->limit(6)->get()->reverse();
@@ -61,6 +63,33 @@ class DraftService
                 $groups[$data['id']] = $data;
                 $evidence[] = ['tool' => 'describe_model', 'data' => $data];
                 $input[] = ['role' => 'user', 'content' => 'Підтверджені дані вибраної групи: '.json_encode($data, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)];
+            }
+
+            // Ціна та наявність потрапляють у контекст до першої відповіді GPT.
+            if (! $run->gallery_group_id) {
+                $catalogData = $this->catalog->searchProducts($run->input_message);
+                $catalogProducts = array_column($catalogData['products'], 'id');
+                $catalogHasMore = $catalogData['has_more'];
+                foreach ($catalogData['products'] as $offer) {
+                    $offers[$offer['id']] = $offer;
+                }
+                if ($catalogProducts !== []) {
+                    $evidence[] = ['tool' => 'search_products', 'data' => $catalogData];
+                    $input[] = ['role' => 'user', 'content' => 'Актуальні товари CRM за поточним запитом: '.json_encode($catalogData, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)];
+                }
+            }
+            if (! empty($memory['product_id']) && ! isset($offers[$memory['product_id']])) {
+                try {
+                    $offer = $this->catalog->offer((int) $memory['product_id']);
+                    $offers[$offer['id']] = $offer;
+                    $evidence[] = ['tool' => 'get_product_offer', 'data' => $offer];
+                    $input[] = ['role' => 'user', 'content' => 'Актуальні дані раніше вибраного товару: '.json_encode($offer, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)];
+                } catch (DraftFailure $error) {
+                    if ($error->reason !== 'product_unavailable') {
+                        throw $error;
+                    }
+                    $input[] = ['role' => 'user', 'content' => 'Раніше вибраний товар більше недоступний. Запропонуй новий пошук.'];
+                }
             }
 
             $toolCount = 0;
@@ -88,6 +117,10 @@ class DraftService
                             throw new DraftFailure('tool_limit', 'Досягнуто ліміту звернень до каталогу. Уточніть запит.');
                         }
                         $data = $this->executeTool($call, $groups, $offers);
+                        if ($call['name'] === 'search_products') {
+                            $catalogProducts = array_column($data['products'], 'id');
+                            $catalogHasMore = $data['has_more'];
+                        }
                         $evidence[] = ['tool' => $call['name'], 'data' => $data];
                         $input[] = ['type' => 'function_call_output', 'call_id' => $call['call_id'],
                             'output' => json_encode($data, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)];
@@ -109,6 +142,17 @@ class DraftService
                 $draft = json_decode($text, true, 32, JSON_THROW_ON_ERROR);
                 if (! is_array($draft)) {
                     throw new DraftFailure('invalid_draft', 'OpenAI повернув непридатну чернетку.');
+                }
+                // Не приховуємо знайдені ціни, якщо модель повернула загальну відповідь.
+                if (in_array($draft['action'] ?? null, ['reply', 'clarify'], true) && empty($draft['product_id'])
+                    && empty($draft['product_ids']) && $catalogProducts !== []) {
+                    $draft['product_ids'] = $catalogProducts;
+                    $draft['message'] = $catalogHasMore
+                        ? 'Ось частина знайдених товарів. Уточніть назву або колір, щоб звузити пошук.'
+                        : 'Ось товари, знайдені в каталозі. Можу допомогти з вибором.';
+                    $draft['group_id'] = null;
+                    $draft['size'] = null;
+                    $draft['photo_ids'] = [];
                 }
                 $result = $this->validator->prepare($draft, $groups, $offers);
                 $this->settingsFor($run);
@@ -151,7 +195,9 @@ class DraftService
                 if (! Storage::disk('local')->exists($file)) {
                     throw new DraftFailure('missing_attachment', 'Фото недоступне. Завантажте його повторно.');
                 }
-                $mime = match ($match[2]) { 'jpg' => 'image/jpeg', 'png' => 'image/png', 'webp' => 'image/webp' };
+                $mime = match ($match[2]) {
+                    'jpg' => 'image/jpeg', 'png' => 'image/png', 'webp' => 'image/webp'
+                };
                 $url = 'data:'.$mime.';base64,'.base64_encode(Storage::disk('local')->get($file));
             }
 
@@ -194,6 +240,7 @@ class DraftService
     {
         $args = json_decode($call['arguments'] ?? '', true, 16, JSON_THROW_ON_ERROR);
         $rules = match ($call['name'] ?? '') {
+            'search_products' => ['args' => 'required|array:query,size', 'args.query' => 'required|string|max:300', 'args.size' => 'present|nullable|string|max:50'],
             'search_models' => ['args' => 'required|array:query', 'args.query' => 'required|string|max:100'],
             'describe_model' => ['args' => 'required|array:group_id', 'args.group_id' => 'required|integer|min:1'],
             'get_product_offer' => ['args' => 'required|array:product_id,size', 'args.product_id' => 'required|integer|min:1', 'args.size' => 'present|nullable|string|max:50'],
@@ -205,6 +252,14 @@ class DraftService
 
         if ($call['name'] === 'search_models') {
             return $this->catalog->search($args['query']);
+        }
+        if ($call['name'] === 'search_products') {
+            $data = $this->catalog->searchProducts($args['query'], $args['size']);
+            foreach ($data['products'] as $offer) {
+                $offers[$offer['id']] = $offer;
+            }
+
+            return $data;
         }
         if ($call['name'] === 'describe_model') {
             $data = $this->catalog->describe((int) $args['group_id']);

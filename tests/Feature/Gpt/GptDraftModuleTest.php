@@ -39,6 +39,10 @@ class GptDraftModuleTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        if (DB::connection()->getDriverName() === 'sqlite') {
+            // Відтворюємо Unicode LOWER із MySQL для українських назв у тестовій SQLite.
+            DB::connection()->getPdo()->sqliteCreateFunction('lower', fn ($value) => $value === null ? null : mb_strtolower($value), 1);
+        }
         Http::preventStrayRequests();
         Queue::fake();
         $this->owner = User::factory()->create(['role' => 'owner', 'is_active' => true]);
@@ -87,7 +91,7 @@ class GptDraftModuleTest extends TestCase
     private function answer(array $extra = []): array
     {
         return array_replace(['action' => 'reply', 'message' => 'Ось вибраний варіант. Можу допомогти з оформленням.',
-            'group_id' => $this->group->id, 'product_id' => $this->black->id, 'size' => '39', 'photo_ids' => [$this->blackPhoto->id]], $extra);
+            'group_id' => $this->group->id, 'product_id' => $this->black->id, 'product_ids' => [], 'size' => '39', 'photo_ids' => [$this->blackPhoto->id]], $extra);
     }
 
     private function response(array $output): array
@@ -341,7 +345,7 @@ class GptDraftModuleTest extends TestCase
             ->push($this->response([$this->tool()]))->push($this->finalResponse())]);
         $run = $this->generate($run);
         $this->assertSame('completed', $run->status, $run->error_message ?? '');
-        $this->assertSame(['search_models', 'describe_model', 'get_product_offer'], array_column($run->evidence, 'tool'));
+        $this->assertSame(['search_products', 'search_models', 'describe_model', 'get_product_offer'], array_column($run->evidence, 'tool'));
         $this->assertSame(4, $run->usage['requests']);
         $this->assertSame(400, $run->usage['input_tokens']);
     }
@@ -453,5 +457,196 @@ class GptDraftModuleTest extends TestCase
             'type' => 'input_image', 'image_url' => 'https://example.com/photo.jpg', 'detail' => 'auto',
         ]);
         Http::assertSentCount(1);
+    }
+
+    public function test_direct_catalog_search_finds_slipper_names_without_any_gallery_links(): void
+    {
+        $red = Color::create(['name' => 'Червоний']);
+        $product = Product::create(['title' => 'Домашні тапочки', 'color_id' => $red->id,
+            'sku' => 'HOME-RED', 'sale_price' => '850.00', 'currency' => 'UAH', 'cost_price' => '400.00', 'is_active' => true]);
+        $product->variants()->create(['size' => '38', 'stock_qty' => 3, 'is_active' => true]);
+        $catalog = app(CatalogReader::class);
+
+        foreach (['Привіт! Скільки коштують червоні тапки?', 'Покажіть червоні капці', 'Червоні тапочки 38'] as $query) {
+            $found = $catalog->searchProducts($query)['products'];
+            $this->assertSame([$product->id], array_column($found, 'id'), $query);
+            $this->assertSame('850.00', $found[0]['sale_price']);
+            $this->assertSame('Червоний', $found[0]['color']);
+            $this->assertSame(3, $found[0]['stock_qty']);
+            $this->assertSame('38', $found[0]['variants'][0]['size']);
+            $this->assertArrayNotHasKey('cost_price', $found[0]);
+        }
+    }
+
+    public function test_catalog_search_combines_color_and_size_and_ignores_inactive_variants(): void
+    {
+        $catalog = app(CatalogReader::class);
+        $this->assertSame([$this->black->id], array_column($catalog->searchProducts('Покажіть чорні капці 39')['products'], 'id'));
+        $this->assertSame([], $catalog->searchProducts('чорні капці 41')['products']);
+        $this->assertSame([$this->black->id], array_column($catalog->searchProducts('soft-blk-39')['products'], 'id'));
+        $this->assertSame([$this->black->id], array_column($catalog->searchProducts('Ціна за артикулом SOFT-BLK-39')['products'], 'id'));
+        $this->black->update(['is_active' => false]);
+        $this->assertSame([], $catalog->searchProducts('SOFT-BLK-39')['products']);
+        $this->assertSame([], $catalog->searchProducts('Привіт, дякую!')['products']);
+        $this->assertSame([], $catalog->searchProducts('%_\\')['products']);
+    }
+
+    public function test_direct_search_is_bounded_and_returns_prices_without_loading_costs(): void
+    {
+        for ($i = 0; $i < 10; $i++) {
+            Product::create(['title' => 'Сандалі '.$i, 'sale_price' => '500.00', 'currency' => 'UAH', 'is_active' => true]);
+        }
+        $catalog = app(CatalogReader::class);
+        DB::enableQueryLog();
+        $result = $catalog->searchProducts('сандалі');
+        $queries = DB::getQueryLog();
+        DB::disableQueryLog();
+        $this->assertCount(8, $result['products']);
+        $this->assertTrue($result['has_more']);
+        $this->assertLessThanOrEqual(4, count($queries));
+        $this->assertStringNotContainsString('cost_price', json_encode($queries));
+        $this->assertSame('500.00', $result['products'][0]['sale_price']);
+    }
+
+    public function test_first_response_receives_live_prices_before_any_model_tool_call(): void
+    {
+        $this->enable();
+        $run = $this->createRun(['message' => 'Скільки коштують чорні тапки?', 'gallery_group_id' => null]);
+        Http::fake(['api.openai.com/v1/responses' => Http::response($this->finalResponse([
+            'group_id' => null, 'photo_ids' => [],
+        ]))]);
+        $run = $this->generate($run);
+
+        $this->assertSame('completed', $run->status, $run->error_message ?? '');
+        $this->assertStringContainsString('1290.00 UAH', $run->result['message']);
+        $this->assertSame('39', $run->result['offer']['requested_size']);
+        $this->assertSame(['search_products'], array_column($run->evidence, 'tool'));
+        Http::assertSent(fn ($request) => str_contains(json_encode($request['input']), '1290.00')
+            && ! str_contains($request->body(), 'cost_price'));
+        Http::assertSentCount(1);
+    }
+
+    public function test_general_assortment_reply_still_displays_verified_prices_for_found_products(): void
+    {
+        $this->enable();
+        $run = $this->createRun(['message' => 'Які у вас є капці та ціни?', 'gallery_group_id' => null]);
+        Http::fake(['api.openai.com/v1/responses' => Http::response($this->finalResponse([
+            'message' => 'Ціни потрібно уточнити.', 'group_id' => null, 'product_id' => null, 'size' => null, 'photo_ids' => [],
+        ]))]);
+        $run = $this->generate($run);
+
+        $this->assertSame('completed', $run->status, $run->error_message ?? '');
+        $this->assertCount(2, $run->result['offers']);
+        $this->assertStringContainsString('1290.00 UAH', $run->result['message']);
+        $this->assertStringContainsString('1390.00 UAH', $run->result['message']);
+        $this->assertStringNotContainsString('Ціни потрібно уточнити.', $run->result['message']);
+    }
+
+    public function test_product_without_gallery_can_be_selected_and_its_price_is_refreshed(): void
+    {
+        $this->enable();
+        $product = Product::create(['title' => 'Вуличні капці', 'sku' => 'STREET-01', 'sale_price' => '900.00',
+            'currency' => 'UAH', 'stock_qty' => 2, 'is_active' => true]);
+        $run = $this->createRun(['message' => 'Ціна STREET-01?', 'gallery_group_id' => null]);
+        Http::fake(function () use ($product) {
+            $product->update(['sale_price' => '950.00', 'stock_qty' => 1]);
+
+            return Http::response($this->finalResponse(['group_id' => null, 'product_id' => $product->id, 'size' => null, 'photo_ids' => []]));
+        });
+        $run = $this->generate($run);
+
+        $this->assertSame('completed', $run->status, $run->error_message ?? '');
+        $this->assertStringContainsString('950.00 UAH', $run->result['message']);
+        $this->assertSame(1, $run->result['offer']['stock_qty']);
+        $this->assertNull($run->result['group']);
+        $this->assertSame($product->id, $run->dialogue->memory['product_id']);
+    }
+
+    public function test_model_can_search_products_with_prices_in_one_tool_call(): void
+    {
+        $this->enable();
+        $run = $this->createRun(['message' => 'Підкажіть варіанти', 'gallery_group_id' => null]);
+        Http::fake(['api.openai.com/v1/responses' => Http::sequence()
+            ->push($this->response([$this->tool('search_products', ['query' => 'чорні тапки', 'size' => '39'])]))
+            ->push($this->finalResponse(['group_id' => null, 'photo_ids' => []]))]);
+        $run = $this->generate($run);
+
+        $this->assertSame('completed', $run->status, $run->error_message ?? '');
+        $this->assertStringContainsString('1290.00 UAH', $run->result['message']);
+        $this->assertSame(['search_products'], array_column($run->evidence, 'tool'));
+        Http::assertSentCount(2);
+    }
+
+    public function test_ungrouped_product_cannot_be_invented_without_a_current_catalog_source(): void
+    {
+        $this->enable();
+        $product = Product::create(['title' => 'Інший товар', 'sale_price' => '100.00', 'currency' => 'UAH', 'is_active' => true]);
+        $run = $this->createRun(['message' => 'Покажіть капці', 'gallery_group_id' => null]);
+        Http::fake(['api.openai.com/v1/responses' => Http::response($this->finalResponse([
+            'group_id' => null, 'product_id' => $product->id, 'size' => null, 'photo_ids' => [],
+        ]))]);
+        $run = $this->generate($run);
+        $this->assertSame('unknown_reference', $run->error_code);
+        $this->assertNull($run->result);
+    }
+
+    public function test_followup_price_uses_the_selected_product_even_without_a_gallery_group(): void
+    {
+        $this->enable();
+        $first = $this->createRun(['message' => 'Покажіть чорні тапки', 'gallery_group_id' => null]);
+        Http::fake(['api.openai.com/v1/responses' => Http::sequence()
+            ->push($this->finalResponse(['group_id' => null, 'photo_ids' => []]))
+            ->push($this->finalResponse(['group_id' => null, 'photo_ids' => []]))]);
+        $this->generate($first);
+        $this->black->update(['sale_price' => '1500.00']);
+        $next = $this->createRun(['message' => 'А скільки коштують?', 'dialogue_id' => $first->gpt_dialogue_id, 'gallery_group_id' => null]);
+        $next = $this->generate($next);
+        $this->assertSame('completed', $next->status, $next->error_message ?? '');
+        $this->assertStringContainsString('1500.00 UAH', $next->result['message']);
+        $this->assertSame(['get_product_offer'], array_column($next->evidence, 'tool'));
+    }
+
+    public function test_catalog_query_can_be_inspected_without_openai_or_gpt_records(): void
+    {
+        $this->artisan('gpt:inspect-catalog', ['--query' => 'чорні капці'])->expectsOutputToContain('1290.00 UAH')->assertSuccessful();
+        $this->assertDatabaseCount('gpt_runs', 0);
+        Http::assertNothingSent();
+    }
+
+    public function test_clarification_does_not_hide_prices_that_are_already_in_the_catalog(): void
+    {
+        $this->enable();
+        $run = $this->createRun(['message' => 'Ціна чорних капців?', 'gallery_group_id' => null]);
+        Http::fake(['api.openai.com/v1/responses' => Http::response($this->finalResponse([
+            'action' => 'clarify', 'message' => 'Який розмір вас цікавить?', 'group_id' => null,
+            'product_id' => null, 'size' => null, 'photo_ids' => [],
+        ]))]);
+        $run = $this->generate($run);
+        $this->assertSame('completed', $run->status, $run->error_message ?? '');
+        $this->assertStringContainsString('1290.00 UAH', $run->result['message']);
+    }
+
+    public function test_missing_price_is_not_invented_and_inactive_product_is_not_quoted(): void
+    {
+        $this->enable();
+        $this->black->update(['sale_price' => null]);
+        $first = $this->createRun(['message' => 'Ціна чорних тапків?', 'gallery_group_id' => null]);
+        Http::fake(['api.openai.com/v1/responses' => Http::response($this->finalResponse([
+            'group_id' => null, 'photo_ids' => [],
+        ]))]);
+        $first = $this->generate($first);
+        $this->assertSame('completed', $first->status, $first->error_message ?? '');
+        $this->assertStringContainsString('Ціну потрібно уточнити в менеджера.', $first->result['message']);
+        $this->assertStringNotContainsString('1290.00', $first->result['message']);
+
+        $next = $this->createRun(['message' => 'Покажіть чорні капці', 'gallery_group_id' => null]);
+        Http::fake(function () {
+            $this->black->update(['is_active' => false]);
+
+            return Http::response($this->finalResponse(['group_id' => null, 'photo_ids' => []]));
+        });
+        $next = $this->generate($next);
+        $this->assertSame('product_unavailable', $next->error_code);
+        $this->assertNull($next->result);
     }
 }

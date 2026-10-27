@@ -12,11 +12,13 @@ class DraftValidator
     public function prepare(array $draft, array $seenGroups, array $seenOffers): array
     {
         $validation = Validator::make(['draft' => $draft], [
-            'draft' => 'required|array:action,message,group_id,product_id,size,photo_ids',
+            'draft' => 'required|array:action,message,group_id,product_id,product_ids,size,photo_ids',
             'draft.action' => 'required|in:reply,clarify,handoff',
             'draft.message' => 'required|string|max:1600',
             'draft.group_id' => 'present|nullable|integer|min:1',
             'draft.product_id' => 'present|nullable|integer|min:1',
+            'draft.product_ids' => 'sometimes|array|max:8',
+            'draft.product_ids.*' => 'integer|distinct|min:1',
             'draft.size' => 'present|nullable|string|max:50',
             'draft.photo_ids' => 'present|array|max:3',
             'draft.photo_ids.*' => 'integer|distinct|min:1',
@@ -24,10 +26,11 @@ class DraftValidator
         if ($validation->fails() || preg_match('~\p{N}|https?://|www\.~u', $draft['message'] ?? '')) {
             throw new DraftFailure('invalid_draft', 'Формат чернетки не пройшов перевірку. Цифри та посилання має формувати сервер.');
         }
-        $groupId = $draft['group_id'];
-        $productId = $draft['product_id'];
+        $groupId = $draft['group_id'] !== null ? (int) $draft['group_id'] : null;
+        $productId = $draft['product_id'] !== null ? (int) $draft['product_id'] : null;
+        $productIds = array_values(array_unique(array_map('intval', array_merge($draft['product_ids'] ?? [], $productId !== null ? [$productId] : []))));
         if (($groupId !== null && ! isset($seenGroups[$groupId]))
-            || ($productId !== null && (! isset($seenOffers[$productId]) || $groupId === null))
+            || count($productIds) > 8 || array_diff($productIds, array_keys($seenOffers)) !== []
             || ($draft['size'] !== null && $productId === null)) {
             throw new DraftFailure('unknown_reference', 'GPT вибрав товар або модель без підтвердженого джерела.');
         }
@@ -38,16 +41,17 @@ class DraftValidator
 
         // Повторне читання захищає від зміни ціни, залишку чи розмітки під час генерації.
         $group = $groupId !== null ? $this->catalog->describe($groupId) : null;
-        if ($productId !== null && ! in_array($productId, array_column($group['products'], 'id'), true)) {
+        if ($group && array_diff($productIds, array_column($group['products'], 'id')) !== []) {
             throw new DraftFailure('wrong_product', 'Вибраний товар не належить до цієї модельної лінійки.');
         }
-        $offer = $productId !== null ? $this->catalog->offer($productId, $draft['size']) : null;
+        $offers = $this->catalog->offers($productIds, $productId, $draft['size']);
+        $offer = $productId !== null ? $offers[$productId] : null;
         $photos = [];
         $knownPhotos = array_column($seenGroups[$groupId]['photos'] ?? [], 'id');
         $currentPhotos = array_column($group['photos'] ?? [], null, 'id');
         foreach ($draft['photo_ids'] as $id) {
             $photo = $currentPhotos[$id] ?? null;
-            if (! in_array($id, $knownPhotos, true) || ! $photo
+            if ($group === null || ! in_array($id, $knownPhotos, true) || ! $photo
                 || ($productId !== null && ($photo['kind'] !== 'color' || $photo['product_ids'] !== [$productId]))) {
                 throw new DraftFailure('wrong_photo', 'Фото не відповідає підтвердженій моделі або вибраному кольору.');
             }
@@ -58,13 +62,15 @@ class DraftValidator
             if (! $offer['available']) {
                 $text = 'Вибраний варіант зараз недоступний. Можу допомогти підібрати інший.';
             }
-            $text .= "\n\n".$this->offerText($offer);
+        }
+        foreach ($offers as $currentOffer) {
+            $text .= "\n\n".$this->offerText($currentOffer);
         }
 
         return [
             'action' => $draft['action'], 'message' => $text, 'model_text' => trim($draft['message']),
             'group' => $group ? ['id' => $group['id'], 'name' => $group['name']] : null,
-            'offer' => $offer, 'photos' => $photos, 'needs_review' => true, 'mode' => 'drafts',
+            'offer' => $offer, 'offers' => array_values($offers), 'photos' => $photos, 'needs_review' => true, 'mode' => 'drafts',
             'prepared_at' => now()->toIso8601String(),
         ];
     }
