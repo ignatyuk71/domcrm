@@ -29,14 +29,6 @@ if (aiSettings) {
     });
 }
 
-const aiChannels = document.querySelector('[data-ai-channels]');
-if (aiChannels) {
-    Promise.all([import('vue'), import('./crm/components/ui/PageToast.vue'), import('./aiChannels')]).then(([{ createApp }, { default: PageToast }, { initAiChannels }]) => {
-        const instance = createApp(PageToast).mount(aiChannels.querySelector('[data-page-toast]'));
-        initAiChannels(aiChannels, notification => instance.showNotification(notification));
-    });
-}
-
 const inboxToast = document.querySelector('[data-inbox-toast]');
 if (inboxToast) {
     Promise.all([import('vue'), import('./crm/components/ui/PageToast.vue')]).then(([{ createApp }, { default: PageToast }]) => {

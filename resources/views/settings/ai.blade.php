@@ -6,7 +6,7 @@
             <div>
                 <span class="badge bg-primary-subtle text-primary-emphasis text-uppercase fw-bold mb-2">Налаштування CRM</span>
                 <h1 class="h3 fw-bold mb-1"><i class="bi bi-robot me-2 text-primary"></i>AI-агент</h1>
-                <p class="text-secondary mb-0">Налаштування Claude, правил спілкування та роботи агента.</p>
+                <p class="text-secondary mb-0">Підключення, правила спілкування та робота агента.</p>
             </div>
             <button id="ai-save" class="btn btn-primary fw-semibold" disabled><i class="bi bi-check-lg me-1"></i>Зберегти</button>
         </div>
@@ -14,14 +14,24 @@
         <div data-page-toast></div>
         <div class="card border-0 shadow-sm rounded-4 mb-4">
             <div class="card-body p-4">
-                <h2 class="h6 fw-bold mb-3"><i class="bi bi-key me-1 text-primary"></i>Підключення Claude API</h2>
+                <h2 class="h6 fw-bold mb-3"><i class="bi bi-key me-1 text-primary"></i>Підключення</h2>
+                <div class="row g-3 mb-3">
+                    <div class="col-12 col-md-4">
+                        <label class="form-label small text-secondary mb-1" for="ai-agent">API</label>
+                        <select id="ai-agent" data-error-field="agent" class="form-select" disabled>
+                            <option value="claude">Claude</option>
+                            <option value="gpt">GPT</option>
+                            <option value="off">Вимкнено</option>
+                        </select>
+                    </div>
+                </div>
                 <div class="row g-3 align-items-end">
-                    <div class="col-12 col-md-5">
-                        <label class="form-label small text-secondary mb-1">Ключ API <span id="key-hint" class="text-success fw-semibold"></span></label>
+                    <div class="col-12 col-md-5" data-claude-connection hidden>
+                        <label class="form-label small text-secondary mb-1" for="ai-key">Ключ Claude API <span id="key-hint" class="text-secondary"></span></label>
                         <input id="ai-key" data-error-field="api_key" type="password" class="form-control" placeholder="sk-ant-..." autocomplete="off">
                         <div class="form-text">Ключ зберігається зашифрованим. Поле порожнє — ключ не зміниться.</div>
                     </div>
-                    <div class="col-12 col-md-3">
+                    <div class="col-12 col-md-5" data-claude-connection hidden>
                         <label class="form-label small text-secondary mb-1">Модель</label>
                         <select id="ai-model" data-error-field="model" class="form-select">
                             <option value="claude-sonnet-5">Claude Sonnet 5 — новий, швидкий і вигідний</option>
@@ -30,12 +40,21 @@
                             <option value="claude-opus-4-8">Claude Opus 4.8 — найрозумніший</option>
                         </select>
                     </div>
+                    <div class="col-12 col-md-5" data-gpt-connection hidden>
+                        <label class="form-label small text-secondary mb-1" for="ai-gpt-key">Ключ GPT API <span id="gpt-key-hint" class="text-secondary"></span></label>
+                        <input id="ai-gpt-key" data-error-field="gpt_api_key" type="password" class="form-control" placeholder="sk-…" autocomplete="off">
+                        <div class="form-text">Ключ зберігається зашифрованим. Поле порожнє — ключ не зміниться.</div>
+                    </div>
+                    <div class="col-12 col-md-5" data-gpt-connection hidden>
+                        <label class="form-label small text-secondary mb-1" for="ai-gpt-model">Модель</label>
+                        <input id="ai-gpt-model" data-error-field="gpt_model" class="form-control" placeholder="ID моделі з вашого API">
+                    </div>
+                    <div class="col-12 col-md-2" data-claude-connection hidden>
+                        <button class="btn btn-outline-primary" id="ai-test"><i class="bi bi-plug me-1"></i>Перевірити</button>
+                    </div>
                     <div class="col-6 col-md-2">
                         <label class="form-label small text-secondary mb-1">Пауза, сек</label>
                         <input id="ai-debounce" data-error-field="debounce_seconds" type="number" class="form-control" min="0" max="60" value="10" title="Скільки чекати, поки клієнт допише (відповідь одна на всю чергу повідомлень)">
-                    </div>
-                    <div class="col-12 col-md-2 d-flex gap-2">
-                        <button class="btn btn-outline-primary" id="ai-test"><i class="bi bi-plug me-1"></i>Перевірити</button>
                     </div>
                     <div class="col-12 col-md-5">
                         <label class="form-label small text-secondary mb-1">Каталог для агента</label>
@@ -93,5 +112,4 @@
         </div>
     </div>
 
-    @include('settings.ai-channels')
 </x-app-layout>

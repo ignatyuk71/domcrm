@@ -108,7 +108,7 @@ class AiSettingsTest extends TestCase
         $this->assertTrue($conv->fresh()->ai_enabled);
     }
 
-    public function test_settings_expose_only_claude_and_keep_its_saved_configuration(): void
+    public function test_settings_keep_claude_configuration_alongside_one_api_choice(): void
     {
         AiSetting::global()->update(['api_key' => 'sk-ant-existing', 'model' => 'claude-opus-4-8']);
         $response = $this->actingAs($this->owner())->getJson('/settings/ai/data')->assertOk()
@@ -118,7 +118,7 @@ class AiSettingsTest extends TestCase
         $this->assertArrayNotHasKey('openai_model', $response->json('global'));
         $this->assertArrayNotHasKey('openai_has_key', $response->json('global'));
         $this->assertStringNotContainsString('sk-ant-existing', $response->getContent());
-        $this->get('/settings/ai')->assertOk()->assertSee('Підключення Claude API')
+        $this->get('/settings/ai')->assertOk()->assertSee('Ключ Claude API')->assertSee('Ключ GPT API')->assertDontSee('Типовий агент')
             ->assertDontSee('ChatGPT')->assertDontSee('Перемикач API');
     }
 

@@ -2,14 +2,28 @@
 
 namespace Tests\Feature\Inbox;
 
-use App\Jobs\{AiReplyToComment, AiRespondToMessage};
-use App\Models\{AiChannelSetting, AiPhoto, AiPhotoGroup, AiSetting, GptInboxReply, InboxComment, InboxContact, InboxConversation, InboxMessage, MetaConnection, Product, User};
+use App\Jobs\AiReplyToComment;
+use App\Jobs\AiRespondToMessage;
+use App\Models\AiChannelSetting;
+use App\Models\AiPhoto;
+use App\Models\AiPhotoGroup;
+use App\Models\AiSetting;
+use App\Models\InboxComment;
+use App\Models\InboxContact;
+use App\Models\InboxConversation;
+use App\Models\MetaConnection;
+use App\Models\Product;
+use App\Models\User;
+use App\Services\Ai\AiAgentService;
+use App\Services\Ai\Channels\DispatchContext;
+use App\Services\Ai\Channels\Dispatcher;
+use App\Services\Ai\Channels\ProviderUnavailable;
 use App\Services\Ai\Gpt\CatalogReader;
-use App\Services\Ai\{AiAgentService, ClaudeClient};
-use App\Services\Ai\Channels\{DispatchContext, Dispatcher, ProviderUnavailable};
 use App\Services\Meta\MetaSendService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\{DB, Http, Storage};
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class AiChannelsTest extends TestCase
@@ -24,6 +38,7 @@ class AiChannelsTest extends TestCase
         $contact = InboxContact::create(['meta_connection_id' => $connection->id, 'channel' => 'facebook', 'external_id' => 'USER']);
         $conversation = InboxConversation::create(['meta_connection_id' => $connection->id, 'inbox_contact_id' => $contact->id, 'channel' => 'facebook', 'ai_enabled' => true]);
         $message = $conversation->messages()->create(['direction' => 'in', 'sender' => 'contact', 'text' => 'Яка доставка?', 'sent_at' => now()]);
+
         return [$conversation, $message];
     }
 
@@ -56,7 +71,8 @@ class AiChannelsTest extends TestCase
 
     public function test_gpt_chat_and_summary_never_fall_back_to_claude_and_duplicate_job_is_free(): void
     {
-        [$conversation, $message] = $this->conversation(); $this->gpt();
+        [$conversation, $message] = $this->conversation();
+        $this->gpt();
         Http::fake(['api.openai.com/*' => Http::response($this->answer()), 'graph.facebook.com/*' => Http::response(['message_id' => 'gpt-mid'])]);
         $dispatcher = app(Dispatcher::class);
         $this->assertSame('replied', $dispatcher->respond($conversation, $message->id)->status);
@@ -71,7 +87,8 @@ class AiChannelsTest extends TestCase
 
     public function test_meta_failure_retries_saved_reply_without_another_gpt_request(): void
     {
-        [$conversation, $message] = $this->conversation(); $this->gpt();
+        [$conversation, $message] = $this->conversation();
+        $this->gpt();
         Http::fake(['api.openai.com/*' => Http::response($this->answer()), 'graph.facebook.com/*' => Http::sequence()->push(['error' => ['message' => 'Тимчасовий збій']], 500)->push(['message_id' => 'retry-mid'])]);
         $dispatcher = app(Dispatcher::class);
         $this->assertSame('error', $dispatcher->respond($conversation, $message->id)->status);
@@ -83,10 +100,12 @@ class AiChannelsTest extends TestCase
 
     public function test_disabling_gpt_during_generation_stops_delivery_and_no_fallback_runs(): void
     {
-        [$conversation, $message] = $this->conversation(); $this->gpt();
+        [$conversation, $message] = $this->conversation();
+        $this->gpt();
         Http::fake(function ($request) {
             $this->assertStringContainsString('api.openai.com', $request->url());
             AiChannelSetting::current()->update(['gpt_enabled' => false]);
+
             return Http::response($this->answer());
         });
         $this->assertSame('error', app(Dispatcher::class)->respond($conversation, $message->id)->status);
@@ -107,23 +126,26 @@ class AiChannelsTest extends TestCase
     {
         [$conversation] = $this->conversation();
         $this->actingAs(User::factory()->create(['role' => 'owner']));
-        $payload = ['claude_enabled' => false, 'gpt_enabled' => true, 'default_provider' => 'gpt', 'gpt_api_key' => 'sk-live-secret-key', 'gpt_model' => 'gpt-test'];
-        $this->postJson('/settings/ai/channels', $payload)->assertOk()->assertDontSee('sk-live-secret-key');
+        $payload = ['model' => 'claude-sonnet-4-6', 'agent' => 'gpt', 'gpt_api_key' => 'sk-live-secret-key', 'gpt_model' => 'gpt-test'];
+        $this->postJson('/settings/ai/save', $payload)->assertOk()->assertDontSee('sk-live-secret-key');
         $this->assertSame('sk-ant-test', AiSetting::global()->api_key);
         $payload['gpt_api_key'] = null;
-        $this->postJson('/settings/ai/channels', $payload)->assertOk();
+        $this->postJson('/settings/ai/save', $payload)->assertOk();
         $this->assertSame('sk-live-secret-key', AiChannelSetting::current()->gpt_api_key);
         $this->assertStringNotContainsString('sk-live-secret-key', DB::table('ai_channel_settings')->value('gpt_api_key'));
-        $this->actingAs(User::factory()->create(['role' => 'operator']))->postJson('/settings/ai/channels', $payload)->assertForbidden();
-        $this->getJson('/settings/ai/channels')->assertForbidden();
+        $this->actingAs(User::factory()->create(['role' => 'operator']))->postJson('/settings/ai/save', $payload)->assertForbidden();
+        $this->getJson('/settings/ai/data')->assertForbidden();
     }
 
     public function test_disabled_gpt_cannot_be_called_from_models_endpoint(): void
     {
         Http::fake();
-        $this->actingAs(User::factory()->create(['role' => 'owner']))->postJson('/settings/ai/channels/models')->assertStatus(422);
-        try { app(\App\Services\Ai\Gpt\OpenAiClient::class)->models('sk-test'); $this->fail('Вимкнений API викликано.'); }
-        catch (\App\Services\Ai\Gpt\GptFailure) {}
+        $this->actingAs(User::factory()->create(['role' => 'owner']))->postJson('/settings/ai/channels/models')->assertNotFound();
+        try {
+            app(\App\Services\Ai\Gpt\OpenAiClient::class)->models('sk-test');
+            $this->fail('Вимкнений API викликано.');
+        } catch (\App\Services\Ai\Gpt\GptFailure) {
+        }
         Http::assertNothingSent();
     }
 
@@ -131,8 +153,10 @@ class AiChannelsTest extends TestCase
     {
         Storage::fake('local');
         $product = Product::create(['title' => 'Товар із CRM', 'is_active' => true]);
-        $group = AiPhotoGroup::create(['name' => 'Робоча лінійка']); $group->products()->attach($product);
-        $photo = AiPhoto::create(['ai_photo_group_id' => $group->id, 'path' => 'ai-gallery/snapshot-only-test.png']); $photo->products()->attach($product);
+        $group = AiPhotoGroup::create(['name' => 'Робоча лінійка']);
+        $group->products()->attach($product);
+        $photo = AiPhoto::create(['ai_photo_group_id' => $group->id, 'path' => 'ai-gallery/snapshot-only-test.png']);
+        $photo->products()->attach($product);
         Storage::disk('local')->put('gpt-sandbox/catalog-source.json', json_encode(['database' => DB::connection()->getDatabaseName()]));
         Storage::disk('local')->put('gpt-sandbox/catalog-media/'.$photo->path, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aF5kAAAAASUVORK5CYII='));
         $this->assertSame([], (new CatalogReader)->photos([$photo->id]));
@@ -140,7 +164,8 @@ class AiChannelsTest extends TestCase
 
     public function test_live_checkout_is_checked_and_saved_in_existing_manager_panel(): void
     {
-        [$conversation, $message] = $this->conversation(); $this->gpt();
+        [$conversation, $message] = $this->conversation();
+        $this->gpt();
         $product = Product::create(['title' => 'Домашні', 'sale_price' => '399.00', 'stock_qty' => 5, 'is_active' => true, 'currency' => 'UAH']);
         $args = ['items' => [['product_id' => $product->id, 'size' => null, 'qty' => 2]], 'customer_name' => 'Олена',
             'phone' => '+380671234567', 'address' => 'Київ, НП 5', 'payment' => 'cod', 'confirm_total' => false];
@@ -163,7 +188,8 @@ class AiChannelsTest extends TestCase
 
     public function test_gpt_classifies_comments_without_any_claude_request(): void
     {
-        [$conversation] = $this->conversation(); $this->gpt();
+        [$conversation] = $this->conversation();
+        $this->gpt();
         $group = AiPhotoGroup::create(['name' => 'Домашні']);
         AiSetting::global()->update(['comment_settings' => ['enabled' => true, 'facebook' => true]]);
         $comment = InboxComment::create(['meta_connection_id' => $conversation->meta_connection_id, 'channel' => 'facebook',
@@ -175,23 +201,68 @@ class AiChannelsTest extends TestCase
         Http::assertNotSent(fn ($r) => str_contains($r->url(), 'anthropic'));
     }
 
-    public function test_crm_provider_change_is_blocked_until_active_checkout_finishes(): void
+    public function test_one_api_choice_switches_all_chats_without_losing_an_active_checkout(): void
     {
-        [$conversation] = $this->conversation(); $conversation->update(['ai_checkout_active' => true]);
+        [$conversation] = $this->conversation();
+        $draft = ['status' => 'draft', 'items' => [['product_id' => 42, 'qty' => 1]]];
+        $conversation->update(['ai_checkout_active' => true, 'ai_checkout_data' => $draft]);
         DB::table('inbox_conversations')->where('id', $conversation->id)->update(['ai_provider' => 'claude']);
         $this->actingAs(User::factory()->create(['role' => 'owner']));
-        $payload = ['claude_enabled' => true, 'gpt_enabled' => true, 'default_provider' => 'gpt', 'gpt_api_key' => 'sk-test', 'gpt_model' => 'gpt-test'];
-        $this->postJson('/settings/ai/channels', $payload)->assertStatus(422)->assertJsonValidationErrors('default_provider');
-        $conversation->update(['ai_checkout_active' => false]);
-        $this->postJson('/settings/ai/channels', $payload)->assertOk();
+        Http::fake();
+        $this->postJson('/settings/ai/save', ['model' => 'claude-sonnet-4-6', 'agent' => 'gpt', 'gpt_api_key' => 'sk-test', 'gpt_model' => 'gpt-test'])->assertOk();
+        $setting = AiChannelSetting::current();
+        $this->assertTrue($setting->gpt_enabled);
+        $this->assertFalse($setting->claude_enabled);
+        $this->assertSame('gpt', $setting->default_provider);
+        $this->assertSame($draft, $conversation->fresh()->ai_checkout_data);
+        $this->assertTrue($conversation->fresh()->ai_checkout_active);
+        $this->getJson('/settings/ai/data')->assertJsonPath('connection.agent', 'gpt');
+
+        $this->postJson('/settings/ai/save', ['model' => 'claude-sonnet-4-6', 'agent' => 'claude'])->assertOk();
+        $this->assertTrue(AiChannelSetting::current()->claude_enabled);
+        $this->assertFalse(AiChannelSetting::current()->gpt_enabled);
+        $this->assertSame('sk-test', AiChannelSetting::current()->gpt_api_key);
+        $this->assertSame('gpt-test', AiChannelSetting::current()->gpt_model);
+        Http::assertNothingSent();
+    }
+
+    public function test_off_stops_both_apis_and_preserves_credentials(): void
+    {
+        [$conversation, $message] = $this->conversation();
+        $this->gpt();
+        $this->actingAs(User::factory()->create(['role' => 'owner']));
+        Http::fake();
+        $this->postJson('/settings/ai/save', ['model' => 'claude-sonnet-4-6', 'agent' => 'off'])->assertOk();
+        $this->assertFalse(AiChannelSetting::current()->claude_enabled);
+        $this->assertFalse(AiChannelSetting::current()->gpt_enabled);
+        $this->getJson('/settings/ai/data')->assertJsonPath('connection.agent', 'off');
+        $this->assertSame('sk-test-live-key', AiChannelSetting::current()->gpt_api_key);
+        $this->assertSame('sk-ant-test', AiSetting::global()->api_key);
+        $this->assertSame('skipped_api_off', app(Dispatcher::class)->respond($conversation, $message->id)->status);
+        Http::assertNothingSent();
+    }
+
+    public function test_missing_gpt_credentials_rejects_the_whole_save_and_preserves_claude(): void
+    {
+        $this->conversation();
+        $this->actingAs(User::factory()->create(['role' => 'owner']));
+        Http::fake();
+        $this->postJson('/settings/ai/save', ['model' => 'claude-changed', 'agent' => 'gpt'])->assertUnprocessable()
+            ->assertJsonValidationErrors(['gpt_api_key', 'gpt_model']);
+        $this->assertTrue(AiChannelSetting::current()->claude_enabled);
+        $this->assertFalse(AiChannelSetting::current()->gpt_enabled);
+        $this->assertSame('claude-sonnet-4-6', AiSetting::global()->model);
+        Http::assertNothingSent();
     }
 
     public function test_history_keeps_sent_gallery_ids_and_reply_context_without_foreign_tools(): void
     {
         [$conversation] = $this->conversation();
         $product = Product::create(['title' => 'Капці чорні', 'is_active' => true]);
-        $group = AiPhotoGroup::create(['name' => 'Домашні']); $group->products()->attach($product);
-        $photo = AiPhoto::create(['ai_photo_group_id' => $group->id, 'path' => 'ai-gallery/trusted-note.png']); $photo->products()->attach($product);
+        $group = AiPhotoGroup::create(['name' => 'Домашні']);
+        $group->products()->attach($product);
+        $photo = AiPhoto::create(['ai_photo_group_id' => $group->id, 'path' => 'ai-gallery/trusted-note.png']);
+        $photo->products()->attach($product);
         $conversation->messages()->create(['external_message_id' => 'photo-note-mid', 'direction' => 'out', 'sender' => 'ai', 'attachments' => [['type' => 'image', 'url' => $photo->url(), 'ai_photo_id' => $photo->id]]]);
         $conversation->messages()->create(['direction' => 'in', 'sender' => 'contact', 'text' => 'Ці беру', 'context' => ['type' => 'reply', 'mid' => 'photo-note-mid']]);
         $input = app(\App\Services\Ai\Channels\GptHistory::class)->build($conversation);

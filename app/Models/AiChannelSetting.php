@@ -7,7 +7,9 @@ use Illuminate\Database\Eloquent\Model;
 class AiChannelSetting extends Model
 {
     protected $guarded = ['id'];
+
     protected $hidden = ['gpt_api_key'];
+
     protected $casts = ['claude_enabled' => 'boolean', 'gpt_enabled' => 'boolean', 'gpt_api_key' => 'encrypted'];
 
     public static function current(): self
@@ -17,8 +19,9 @@ class AiChannelSetting extends Model
 
     public function present(): array
     {
-        return ['claude_enabled' => $this->claude_enabled, 'gpt_enabled' => $this->gpt_enabled,
-            'default_provider' => $this->default_provider, 'gpt_model' => $this->gpt_model ?? '',
+        $enabled = $this->default_provider === 'gpt' ? $this->gpt_enabled : $this->claude_enabled;
+
+        return ['agent' => $enabled ? $this->default_provider : 'off', 'gpt_model' => $this->gpt_model ?? '',
             'has_gpt_key' => (bool) $this->gpt_api_key, 'gpt_key_hint' => $this->gpt_api_key ? '••••'.substr($this->gpt_api_key, -4) : null];
     }
 }

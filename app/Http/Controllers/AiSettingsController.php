@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AiChannelSetting;
 use App\Models\AiSetting;
 use App\Models\MetaConnection;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Validation\ValidationException;
 
 class AiSettingsController extends Controller
 {
@@ -34,9 +37,10 @@ class AiSettingsController extends Controller
         })->values();
 
         return response()->json([
+            'connection' => AiChannelSetting::current()->present(),
             'global' => [
                 'has_key' => (bool) $key,
-                'key_hint' => $key ? ('•••' . substr($key, -4)) : null,
+                'key_hint' => $key ? ('•••'.substr($key, -4)) : null,
                 'model' => $global->model ?: 'claude-sonnet-4-6',
                 'debounce_seconds' => $global->debounce_seconds ?? 10,
                 'catalog_mode' => $global->catalog_mode ?: 'all',
@@ -58,6 +62,9 @@ class AiSettingsController extends Controller
     {
         $data = $request->validate([
             'provider' => ['prohibited'],
+            'agent' => ['sometimes', 'required', 'in:claude,gpt,off'],
+            'gpt_api_key' => ['exclude_unless:agent,gpt', 'nullable', 'string', 'max:512', 'regex:/^\S+$/'],
+            'gpt_model' => ['exclude_unless:agent,gpt', 'nullable', 'string', 'max:120', 'regex:/^gpt-[a-zA-Z0-9._-]+$/'],
             'api_key' => ['nullable', 'string', 'max:300'],
             'model' => ['required', 'string', 'max:100'],
             'debounce_seconds' => ['nullable', 'integer', 'min:0', 'max:60'],
@@ -79,37 +86,70 @@ class AiSettingsController extends Controller
             'stores.*.schedule.to' => ['nullable', 'date_format:H:i'],
         ]);
 
-        $global = AiSetting::global();
-        $global->model = $data['model'];
-        $global->debounce_seconds = $data['debounce_seconds'] ?? 10;
-        $global->catalog_mode = $data['catalog_mode'] ?? 'all';
-        $global->operator_pause_minutes = $data['operator_pause_minutes'] ?? 3;
-        $global->follow_up_hours = $data['follow_up_hours'] ?? 3;
-        if (array_key_exists('comment_settings', $data)) {
-            $new = $data['comment_settings'] ?? [];
-            $old = $global->comment_settings ?? [];
-            // Момент увімкнення: бот відповідає лише на коментарі ПІСЛЯ нього.
-            if (($new['enabled'] ?? false) && !($old['enabled'] ?? false)) {
-                $new['enabled_at'] = now()->toDateTimeString();
-            } elseif (($new['enabled'] ?? false) && isset($old['enabled_at'])) {
-                $new['enabled_at'] = $old['enabled_at'];
+        AiChannelSetting::current();
+
+        return DB::transaction(function () use ($data) {
+            $connection = AiChannelSetting::query()->lockForUpdate()->findOrFail(1);
+            $global = AiSetting::global();
+            if (isset($data['agent'])) {
+                // Один вибір одночасно вмикає потрібний API та вимикає інший.
+                $connection->claude_enabled = $data['agent'] === 'claude';
+                $connection->gpt_enabled = $data['agent'] === 'gpt';
+                if ($data['agent'] !== 'off') {
+                    $connection->default_provider = $data['agent'];
+                }
+                if (! empty($data['gpt_api_key'])) {
+                    $connection->gpt_api_key = $data['gpt_api_key'];
+                }
+                if (array_key_exists('gpt_model', $data)) {
+                    $connection->gpt_model = $data['gpt_model'];
+                }
+                $errors = [];
+                if ($connection->gpt_enabled && ! $connection->gpt_api_key) {
+                    $errors['gpt_api_key'] = 'Вкажіть ключ GPT API.';
+                }
+                if ($connection->gpt_enabled && ! $connection->gpt_model) {
+                    $errors['gpt_model'] = 'Вкажіть модель GPT.';
+                }
+                if ($connection->claude_enabled && empty($data['api_key']) && ! $global->api_key) {
+                    $errors['api_key'] = 'Вкажіть ключ Claude API.';
+                }
+                if ($errors) {
+                    throw ValidationException::withMessages($errors);
+                }
+                $connection->save();
             }
-            $global->comment_settings = $new;
-        }
-        if (!empty($data['api_key'])) {
-            $global->api_key = trim($data['api_key']);
-        }
-        $global->save();
+            $global->model = $data['model'];
+            $global->debounce_seconds = $data['debounce_seconds'] ?? 10;
+            $global->catalog_mode = $data['catalog_mode'] ?? 'all';
+            $global->operator_pause_minutes = $data['operator_pause_minutes'] ?? 3;
+            $global->follow_up_hours = $data['follow_up_hours'] ?? 3;
+            if (array_key_exists('comment_settings', $data)) {
+                $new = $data['comment_settings'] ?? [];
+                $old = $global->comment_settings ?? [];
+                // Момент увімкнення: бот відповідає лише на коментарі ПІСЛЯ нього.
+                if (($new['enabled'] ?? false) && ! ($old['enabled'] ?? false)) {
+                    $new['enabled_at'] = now()->toDateTimeString();
+                } elseif (($new['enabled'] ?? false) && isset($old['enabled_at'])) {
+                    $new['enabled_at'] = $old['enabled_at'];
+                }
+                $global->comment_settings = $new;
+            }
+            if (! empty($data['api_key'])) {
+                $global->api_key = trim($data['api_key']);
+            }
+            $global->save();
 
-        foreach ($data['stores'] ?? [] as $row) {
-            AiSetting::forConnection($row['meta_connection_id'])->update([
-                'enabled' => $row['enabled'],
-                'system_prompt' => $row['system_prompt'] ?? null,
-                'schedule' => $row['schedule'] ?? null,
-            ]);
-        }
+            foreach ($data['stores'] ?? [] as $row) {
+                AiSetting::forConnection($row['meta_connection_id'])->update([
+                    'enabled' => $row['enabled'],
+                    'system_prompt' => $row['system_prompt'] ?? null,
+                    'schedule' => $row['schedule'] ?? null,
+                ]);
+            }
 
-        return response()->json(['ok' => true]);
+            return response()->json(['ok' => true]);
+        });
     }
 
     /** Перевірка ключа: GET /v1/models (безкоштовно, без токенів). */
@@ -142,7 +182,7 @@ class AiSettingsController extends Controller
 
             return response()->json([
                 'ok' => false,
-                'error' => $r->json('error.message') ?? ('HTTP ' . $r->status()),
+                'error' => $r->json('error.message') ?? ('HTTP '.$r->status()),
             ], 422);
         } catch (\Throwable $e) {
             return response()->json(['ok' => false, 'error' => 'Немає зʼєднання з api.anthropic.com'], 422);

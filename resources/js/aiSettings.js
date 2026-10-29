@@ -4,6 +4,9 @@ export function initAiSettings(root, notify) {
     const el = id => root.querySelector('#' + id);
     const csrf = document.querySelector('meta[name="csrf-token"]').content;
     let stores = [];
+    let busy = false;
+    let revision = 0;
+    let savedRevision = 0;
     async function request(url, body) {
         const response = await fetch(url, body === undefined
             ? { headers: { Accept: 'application/json' } }
@@ -89,10 +92,22 @@ export function initAiSettings(root, notify) {
     el('ai-stores').addEventListener('input', updateStore);
     el('ai-stores').addEventListener('change', updateStore);
 
+    function showConnection() {
+        const agent = el('ai-agent').value;
+        root.querySelectorAll('[data-claude-connection]').forEach(field => { field.hidden = agent !== 'claude'; });
+        root.querySelectorAll('[data-gpt-connection]').forEach(field => { field.hidden = agent !== 'gpt'; });
+    }
+    el('ai-agent').addEventListener('change', showConnection);
+
     async function load() {
         try {
             const data = await request(root.dataset.urlData);
             const global = data.global;
+            const connection = data.connection;
+            el('ai-agent').value = connection.agent;
+            el('ai-gpt-model').value = connection.gpt_model || '';
+            el('gpt-key-hint').textContent = connection.has_gpt_key ? '— ' + connection.gpt_key_hint : '';
+            showConnection();
             const model = global.model || 'claude-sonnet-4-6';
             // Підтримуємо вже збережені моделі, навіть якщо їх немає у списку.
             if (!Array.from(el('ai-model').options).some(option => option.value === model)) {
@@ -114,16 +129,23 @@ export function initAiSettings(root, notify) {
             el('cm-opener').value = comments.opener || '';
             stores = (data.stores || []).map(store => ({ ...store, schedule: { mode: 'always', from: '20:00', to: '09:00', ...store.schedule } }));
             renderStores();
+            el('ai-agent').disabled = false;
             el('ai-save').disabled = false;
         } catch (error) { failure(error, 'load', load); }
     }
 
     async function save() {
+        if (busy) return;
+        busy = true;
+        const submittedRevision = revision;
         const button = el('ai-save');
         button.disabled = true;
         clearErrors();
         const payload = {
-            api_key: el('ai-key').value.trim() || null,
+            agent: el('ai-agent').value,
+            gpt_api_key: el('ai-agent').value === 'gpt' ? el('ai-gpt-key').value.trim() || null : null,
+            gpt_model: el('ai-agent').value === 'gpt' ? el('ai-gpt-model').value.trim() || null : null,
+            api_key: el('ai-agent').value === 'claude' ? el('ai-key').value.trim() || null : null,
             model: el('ai-model').value,
             debounce_seconds: el('ai-debounce').valueAsNumber,
             catalog_mode: el('ai-catalog-mode').value,
@@ -138,8 +160,14 @@ export function initAiSettings(root, notify) {
                 el('key-hint').textContent = '— збережено •••' + payload.api_key.slice(-4);
                 if (el('ai-key').value.trim() === payload.api_key) el('ai-key').value = '';
             }
-            notify({ context: 'save', type: 'success', title: 'Налаштування збережено', messages: ['Налаштування Claude та магазинів оновлено.'] });
+            if (payload.gpt_api_key) {
+                el('gpt-key-hint').textContent = '— ••••' + payload.gpt_api_key.slice(-4);
+                if (el('ai-gpt-key').value.trim() === payload.gpt_api_key) el('ai-gpt-key').value = '';
+            }
+            savedRevision = submittedRevision;
+            notify({ context: 'save', type: 'success', title: 'Налаштування збережено', messages: ['Налаштування агента та магазинів оновлено.'] });
         } catch (error) { failure(error, 'save', save); }
+        busy = false;
         button.disabled = false;
     }
 
@@ -157,5 +185,10 @@ export function initAiSettings(root, notify) {
 
     el('ai-save').addEventListener('click', save);
     el('ai-test').addEventListener('click', () => test(el('ai-test')));
+    root.addEventListener('input', () => { revision++; });
+    root.addEventListener('change', () => { revision++; });
+    window.addEventListener('beforeunload', event => {
+        if (revision !== savedRevision) { event.preventDefault(); event.returnValue = ''; }
+    });
     return { ready: load(), save };
 }
