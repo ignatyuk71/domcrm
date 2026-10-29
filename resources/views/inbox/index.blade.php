@@ -1058,17 +1058,18 @@
 
         async function refreshAiSummary(btn) {
             if (!activeId) return;
+            const summaryId = activeId;
             const orig = btn.innerHTML;
             btn.disabled = true;
             btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>думаю…';
             try {
-                const res = await fetch(`/api/inbox/conversations/${activeId}/ai-summary`, {
+                const res = await fetch(`/api/inbox/conversations/${summaryId}/ai-summary`, {
                     method: 'POST',
                     headers: { 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
                 });
                 const data = await res.json();
-                if (!res.ok || !data.ok) throw new Error();
-                if (currentConv) {
+                if (!res.ok || !data.ok) throw new Error(data.error || 'Не вдалося скласти підсумок.');
+                if (activeId === summaryId && currentConv) {
                     currentConv.ai_summary = data.summary;
                     currentConv.ai_summary_human = data.summary_human;
                     renderInfo(currentConv);
@@ -1076,7 +1077,7 @@
             } catch (e) {
                 btn.disabled = false;
                 btn.innerHTML = orig;
-                aiNotify('error', 'Не вдалося скласти підсумок. Перевірте активний API у налаштуваннях.', 'ai-summary');
+                aiNotify('error', e.message || 'Не вдалося скласти підсумок.', 'ai-summary');
             }
         }
 

@@ -213,6 +213,22 @@ class AiChannelsTest extends TestCase
         $this->assertStringNotContainsString('tool_use', $text);
     }
 
+    public function test_latest_receipt_image_is_kept_when_old_messages_contain_many_images(): void
+    {
+        [$conversation] = $this->conversation();
+        $reader = \Mockery::mock(\App\Services\Ai\Channels\GptHistory::class)->makePartial();
+        $reader->shouldReceive('image')->andReturnUsing(fn ($attachment) => 'data:image/png;base64,'.$attachment['url']);
+        for ($i = 0; $i < 4; $i++) {
+            $conversation->messages()->create(['direction' => 'in', 'sender' => 'contact', 'text' => 'Фото '.$i,
+                'attachments' => array_fill(0, 3, ['type' => 'image', 'url' => 'picture-'.$i])]);
+        }
+        $input = $reader->build($conversation);
+        $images = collect($input)->flatMap(fn ($m) => is_array($m['content']) ? $m['content'] : [])->where('type', 'input_image');
+        $this->assertCount(6, $images);
+        $this->assertStringEndsWith('picture-3', $images->last()['image_url']);
+        $this->assertFalse($images->contains(fn ($image) => str_ends_with($image['image_url'], 'picture-0')));
+    }
+
     public function test_manual_off_invalidates_context_but_own_order_completion_can_send_final(): void
     {
         [$conversation] = $this->conversation();

@@ -13,6 +13,9 @@ class GptHistory
         $rows = $conversation->messages()->when($conversation->ai_context_after_id,
             fn ($q, $id) => $q->where('id', '>', $id))->latest('id')->limit(20)->get()->reverse();
         $input = [['role' => 'user', 'content' => \App\Modules\GptSandbox\Application\ConversationNotes::clockNote()]];
+        // Останнє фото (зокрема квитанція) завжди має пріоритет над давніми зображеннями.
+        $visionIds = $rows->filter(fn ($m) => $m->direction === 'in' && (collect($m->attachments ?? [])->contains('type', 'image')
+            || ! empty($m->context['url']) || ! empty($m->context['local'])))->take(-2)->pluck('id')->all();
         $images = 0;
         foreach ($rows as $message) {
             $incoming = $message->direction === 'in';
@@ -27,7 +30,7 @@ class GptHistory
                 $text .= "\n(Клієнт надіслав відео. Перегляд відео недоступний; попроси фото чи уточнення словами.)";
             }
             if ($text !== '') $content[] = ['type' => 'input_text', 'text' => mb_substr($text, 0, 6000)];
-            if ($incoming) {
+            if ($incoming && in_array($message->id, $visionIds, true)) {
                 $attachments = $message->attachments ?? [];
                 $context = $message->context ?? [];
                 if (! empty($context['local']) || ! empty($context['url'])) $attachments[] = $context + ['type' => 'image'];
@@ -71,7 +74,7 @@ class GptHistory
             $url = (string) ($attachment['url'] ?? '');
             if (str_starts_with($url, rtrim(url('/'), '/').'/')) $relative = substr($url, strlen(rtrim(url('/'), '/')) + 1);
         }
-        if ($relative !== '' && preg_match('~^(inbox-media|ai-gallery)/[a-zA-Z0-9_./-]+$~D', $relative) && ! str_contains($relative, '..')) {
+        if ($relative !== '' && preg_match('~^(inbox-media|inbox-context|inbox-uploads|ai-gallery)/[a-zA-Z0-9_./-]+$~D', $relative) && ! str_contains($relative, '..')) {
             $base = realpath(public_path(explode('/', $relative)[0]));
             $path = realpath(public_path($relative));
             if ($base && $path && str_starts_with($path, $base.DIRECTORY_SEPARATOR) && is_file($path) && filesize($path) <= 4 * 1024 * 1024) {

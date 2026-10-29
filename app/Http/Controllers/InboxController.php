@@ -496,8 +496,11 @@ class InboxController extends Controller
     {
         try {
             $summary = app(\App\Services\Ai\Channels\Dispatcher::class)->summarize($conversation);
+        } catch (\App\Services\Ai\Channels\ProviderUnavailable|\App\Modules\GptSandbox\Application\SandboxFailure $e) {
+            return response()->json(['ok' => false, 'error' => $e->getMessage()], 422);
         } catch (\Throwable $e) {
-            return response()->json(['ok' => false, 'error' => 'Підсумок не створено. Перевірте активний API у налаштуваннях.'], 422);
+            \Illuminate\Support\Facades\Log::warning('AI summary failed', ['conversation' => $conversation->id, 'error' => $e->getMessage()]);
+            return response()->json(['ok' => false, 'error' => 'Підсумок не створено. Повторіть спробу.'], 422);
         }
         if ($summary === null) {
             return response()->json(['ok' => false, 'error' => 'Не вдалося скласти підсумок'], 422);
