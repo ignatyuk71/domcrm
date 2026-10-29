@@ -716,9 +716,6 @@
                             <span class="icon-frame"><i class="bi bi-robot"></i></span>
                             <span class="item-text-sub">AI-агент</span>
                         </a>
-                        <a href="{{ route('gptSandbox.index') }}" class="sidebar-link-sub {{ request()->is('settings/gpt-sandbox*') ? 'active' : '' }}">
-                            <i class="bi bi-chat-square-dots"></i> Тестовий чат GPT
-                        </a>
 
                         <a href="{{ route('settings.aiGallery.index') }}" class="sidebar-link-sub {{ request()->is('settings/ai-gallery') ? 'active' : '' }}">
                             <span class="icon-frame"><i class="bi bi-images"></i></span>

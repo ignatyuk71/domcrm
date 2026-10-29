@@ -12,7 +12,7 @@ class GptHistory
     {
         $rows = $conversation->messages()->when($conversation->ai_context_after_id,
             fn ($q, $id) => $q->where('id', '>', $id))->latest('id')->limit(20)->get()->reverse();
-        $input = [['role' => 'user', 'content' => \App\Modules\GptSandbox\Application\ConversationNotes::clockNote()]];
+        $input = [['role' => 'user', 'content' => \App\Services\Ai\Gpt\ConversationNotes::clockNote()]];
         // Останнє фото (зокрема квитанція) завжди має пріоритет над давніми зображеннями.
         $visionIds = $rows->filter(fn ($m) => $m->direction === 'in' && (collect($m->attachments ?? [])->contains('type', 'image')
             || ! empty($m->context['url']) || ! empty($m->context['local'])))->take(-2)->pluck('id')->all();

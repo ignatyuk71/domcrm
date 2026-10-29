@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\{AiChannelSetting, InboxConversation};
 use App\Services\Ai\Channels\ProviderPolicy;
-use App\Modules\GptSandbox\Infrastructure\OpenAiClient;
+use App\Services\Ai\Gpt\OpenAiClient;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\{Cache, DB};
 use Illuminate\Validation\ValidationException;

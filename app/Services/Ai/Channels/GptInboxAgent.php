@@ -3,7 +3,7 @@
 namespace App\Services\Ai\Channels;
 
 use App\Models\{AiChannelSetting, AiPhoto, AiSetting, ChatStatus, GptInboxReply, InboxConversation};
-use App\Modules\GptSandbox\Application\{CatalogAssistant, OrderTexts};
+use App\Services\Ai\Gpt\{CatalogAssistant, OrderTexts};
 use App\Services\Ai\{AiAgentService, OutgoingMessageWriter};
 use App\Services\Meta\MetaSendService;
 
@@ -51,7 +51,7 @@ class GptInboxAgent
         if ($reply->status === 'sent') return ['status' => 'replied'];
         $result = $reply->payload;
         if (($result['checkout']['status'] ?? '') === 'ready_for_manager') {
-            $pricing = app(\App\Modules\GptSandbox\Application\CheckoutPricing::class);
+            $pricing = app(\App\Services\Ai\Gpt\CheckoutPricing::class);
             $quote = $pricing->quote($pricing->inputItems($result['checkout']['items']));
             if ($quote['items'] !== $result['checkout']['items'] || $quote['total'] !== $result['checkout']['total']) {
                 throw new \RuntimeException('Ціна або товар змінилися перед відправленням. Потрібна перевірка менеджера.');

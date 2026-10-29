@@ -4,7 +4,7 @@ namespace Tests\Feature\Inbox;
 
 use App\Jobs\{AiReplyToComment, AiRespondToMessage};
 use App\Models\{AiChannelSetting, AiPhoto, AiPhotoGroup, AiSetting, GptInboxReply, InboxComment, InboxContact, InboxConversation, InboxMessage, MetaConnection, Product, User};
-use App\Modules\GptSandbox\Infrastructure\CatalogReader;
+use App\Services\Ai\Gpt\CatalogReader;
 use App\Services\Ai\{AiAgentService, ClaudeClient};
 use App\Services\Ai\Channels\{DispatchContext, Dispatcher, ProviderUnavailable};
 use App\Services\Meta\MetaSendService;
@@ -127,12 +127,12 @@ class AiChannelsTest extends TestCase
         $this->getJson('/settings/ai/channels')->assertForbidden();
     }
 
-    public function test_disabled_gpt_cannot_be_called_from_sandbox_or_models_endpoint(): void
+    public function test_disabled_gpt_cannot_be_called_from_models_endpoint(): void
     {
         Http::fake();
         $this->actingAs(User::factory()->create(['role' => 'owner']))->postJson('/settings/ai/channels/models')->assertStatus(422);
-        try { app(\App\Modules\GptSandbox\Infrastructure\OpenAiClient::class)->models('sk-test'); $this->fail('Вимкнений API викликано.'); }
-        catch (\App\Modules\GptSandbox\Application\SandboxFailure) {}
+        try { app(\App\Services\Ai\Gpt\OpenAiClient::class)->models('sk-test'); $this->fail('Вимкнений API викликано.'); }
+        catch (\App\Services\Ai\Gpt\GptFailure) {}
         Http::assertNothingSent();
     }
 
@@ -145,8 +145,6 @@ class AiChannelsTest extends TestCase
         Storage::disk('local')->put('gpt-sandbox/catalog-source.json', json_encode(['database' => DB::connection()->getDatabaseName()]));
         Storage::disk('local')->put('gpt-sandbox/catalog-media/'.$photo->path, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aF5kAAAAASUVORK5CYII='));
         $this->assertSame([], (new CatalogReader)->photos([$photo->id]));
-        $this->assertSame('database', (new CatalogReader)->overview()['source']);
-        $this->assertCount(DB::connection()->getDriverName() === 'sqlite' ? 1 : 0, (new CatalogReader(true))->photos([$photo->id]));
     }
 
     public function test_live_checkout_is_checked_and_saved_in_existing_manager_panel(): void
@@ -227,6 +225,24 @@ class AiChannelsTest extends TestCase
         $this->assertCount(6, $images);
         $this->assertStringEndsWith('picture-3', $images->last()['image_url']);
         $this->assertFalse($images->contains(fn ($image) => str_ends_with($image['image_url'], 'picture-0')));
+    }
+
+    public function test_chat_uses_current_crm_default_until_owner_explicitly_pins_provider(): void
+    {
+        [$conversation] = $this->conversation();
+        $this->assertNull($conversation->fresh()->ai_provider);
+        $policy = app(\App\Services\Ai\Channels\ProviderPolicy::class);
+        $this->assertSame('claude', $policy->selected($conversation));
+        $this->gpt(['claude_enabled' => true]);
+        $this->assertSame('gpt', $policy->selected($conversation->fresh()));
+        $this->actingAs(User::factory()->create(['role' => 'owner']))
+            ->getJson('/api/inbox/conversations/'.$conversation->id.'/messages')->assertOk()
+            ->assertJsonPath('conversation.ai_provider', null)->assertJsonPath('conversation.ai_active_provider', 'gpt');
+        $conversation->update(['ai_provider' => 'claude']);
+        $this->assertSame('claude', $policy->selected($conversation->fresh()));
+        $this->postJson('/api/inbox/conversations/'.$conversation->id.'/ai-provider', ['provider' => null])->assertOk();
+        $this->assertNull($conversation->fresh()->ai_provider);
+        $this->assertSame('gpt', $policy->selected($conversation->fresh()));
     }
 
     public function test_manual_off_invalidates_context_but_own_order_completion_can_send_final(): void

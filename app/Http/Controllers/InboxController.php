@@ -496,7 +496,7 @@ class InboxController extends Controller
     {
         try {
             $summary = app(\App\Services\Ai\Channels\Dispatcher::class)->summarize($conversation);
-        } catch (\App\Services\Ai\Channels\ProviderUnavailable|\App\Modules\GptSandbox\Application\SandboxFailure $e) {
+        } catch (\App\Services\Ai\Channels\ProviderUnavailable|\App\Services\Ai\Gpt\GptFailure $e) {
             return response()->json(['ok' => false, 'error' => $e->getMessage()], 422);
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::warning('AI summary failed', ['conversation' => $conversation->id, 'error' => $e->getMessage()]);

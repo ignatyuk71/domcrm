@@ -3,7 +3,7 @@
 namespace App\Services\Ai\Channels;
 
 use App\Models\{AiChannelSetting, AiRun, InboxConversation};
-use App\Modules\GptSandbox\Infrastructure\OpenAiClient;
+use App\Services\Ai\Gpt\OpenAiClient;
 use App\Services\Ai\AiAgentService;
 use Illuminate\Support\Facades\Cache;
 

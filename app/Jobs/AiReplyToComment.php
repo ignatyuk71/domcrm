@@ -173,7 +173,7 @@ class AiReplyToComment
                     : ['type' => 'input_image', 'image_url' => 'data:'.$part['source']['media_type'].';base64,'.$part['source']['data']], $content);
                 $model = \App\Models\AiChannelSetting::current()->gpt_model;
                 if (! $model) return [null, false];
-                $result = app(\App\Modules\GptSandbox\Infrastructure\OpenAiClient::class)->respond($apiKey, $model,
+                $result = app(\App\Services\Ai\Gpt\OpenAiClient::class)->respond($apiKey, $model,
                     [['role' => 'user', 'content' => $input]], $system, [], false, 30, 1024);
                 $answer = trim($result['text']);
             } else {

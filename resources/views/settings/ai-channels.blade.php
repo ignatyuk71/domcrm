@@ -15,10 +15,10 @@
                         <div class="col-md-4"><label class="form-label" for="gpt-live-key">Ключ GPT API</label><input class="form-control" type="password" autocomplete="off" id="gpt-live-key" name="gpt_api_key" placeholder="sk-…"></div>
                         <div class="col-md-4"><label class="form-label" for="gpt-live-model">Модель GPT</label><input class="form-control" id="gpt-live-model" name="gpt_model" list="gpt-live-models" placeholder="ID моделі з вашого API"><datalist id="gpt-live-models"></datalist></div>
                     </div>
-                    <div class="d-flex flex-wrap gap-2 mt-3"><button class="btn btn-primary" type="submit">Зберегти канали</button><button class="btn btn-outline-secondary" type="button" data-load-models>Перевірити GPT і завантажити моделі</button><a class="btn btn-outline-secondary" href="{{ route('gptSandbox.index') }}">Тестовий чат GPT</a></div>
+                    <div class="d-flex flex-wrap gap-2 mt-3"><button class="btn btn-primary" type="submit">Зберегти канали</button><button class="btn btn-outline-secondary" type="button" data-load-models>Перевірити GPT і завантажити моделі</button></div>
                 </fieldset>
             </form>
-            <p class="small text-secondary mt-3 mb-0">Каталог, лінійки, фото, ціни й залишки GPT бере з цієї CRM. Ключ тестового стенда зберігається окремо.</p>
+            <p class="small text-secondary mt-3 mb-0">Каталог, лінійки, фото, ціни й залишки GPT бере з цієї CRM.</p>
         </div>
     </div>
 </div>
