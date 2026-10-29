@@ -14,6 +14,7 @@ class ClaudeClient
 {
     public function messages(string $apiKey, array $payload, int $timeout = 40): Response
     {
+        app(\App\Services\Ai\Channels\ProviderPolicy::class)->assertEnabled('claude');
         return Http::timeout($timeout)->withHeaders([
             'x-api-key' => $apiKey,
             'anthropic-version' => '2023-06-01',

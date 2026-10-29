@@ -3,9 +3,10 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "build": "vite build",
+        "build": "vite build && npm run build:gpt-sandbox",
         "dev": "vite",
-        "test": "vitest run"
+        "test": "vitest run",
+        "build:gpt-sandbox": "vite build --config vite.gpt-sandbox.config.js"
     },
     "devDependencies": {
         "@tailwindcss/forms": "^0.5.2",

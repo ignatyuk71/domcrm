@@ -10,7 +10,7 @@ class AiRun extends Model
     protected $fillable = [
         'inbox_conversation_id',
         'inbox_message_id',
-        'status',
+        'status', 'provider', 'model',
         'error',
         'tools_called',
         'tokens_in',

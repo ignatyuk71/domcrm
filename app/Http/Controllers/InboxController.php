@@ -172,6 +172,8 @@ class InboxController extends Controller
                 'channel' => $conversation->channel,
                 'chat_status_id' => $conversation->chat_status_id,
                 'ai_enabled' => (bool) $conversation->ai_enabled,
+                'ai_provider' => $conversation->ai_provider,
+                'ai_active_provider' => app(\App\Services\Ai\Channels\ProviderPolicy::class)->selected($conversation),
                 'ai_paused_until_human' => ($conversation->ai_paused_until && now()->lt($conversation->ai_paused_until))
                     ? $conversation->ai_paused_until->format('H:i')
                     : null,
@@ -470,8 +472,9 @@ class InboxController extends Controller
     public function setAi(Request $request, InboxConversation $conversation)
     {
         $data = $request->validate(['enabled' => ['required', 'boolean']]);
-        $conversation->update([
+        InboxConversation::whereKey($conversation->id)->update([
             'ai_enabled' => $data['enabled'],
+            'ai_provider_version' => \Illuminate\Support\Facades\DB::raw('ai_provider_version + 1'),
             'ai_paused_until' => $data['enabled'] ? null : $conversation->ai_paused_until,
         ]);
 
@@ -482,7 +485,8 @@ class InboxController extends Controller
     public function resetAiContext(InboxConversation $conversation)
     {
         $lastId = (int) $conversation->messages()->max('id');
-        $conversation->update(['ai_context_after_id' => $lastId ?: null]);
+        InboxConversation::whereKey($conversation->id)->update(['ai_context_after_id' => $lastId ?: null, 'ai_checkout_data' => null, 'ai_checkout_active' => false,
+            'ai_provider_version' => \Illuminate\Support\Facades\DB::raw('ai_provider_version + 1')]);
 
         return response()->json(['ok' => true]);
     }
@@ -490,7 +494,11 @@ class InboxController extends Controller
     /** Скласти/оновити підсумок розмови для панелі («Про що тут»). */
     public function aiSummary(InboxConversation $conversation, AiAgentService $agent)
     {
-        $summary = $agent->summarizeConversation($conversation);
+        try {
+            $summary = app(\App\Services\Ai\Channels\Dispatcher::class)->summarize($conversation);
+        } catch (\Throwable $e) {
+            return response()->json(['ok' => false, 'error' => 'Підсумок не створено. Перевірте активний API у налаштуваннях.'], 422);
+        }
         if ($summary === null) {
             return response()->json(['ok' => false, 'error' => 'Не вдалося скласти підсумок'], 422);
         }

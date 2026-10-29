@@ -36,7 +36,7 @@ class SweepUnansweredAiMessages extends Command
                 $q->select(DB::raw(1))
                     ->from('ai_runs')
                     ->whereColumn('ai_runs.inbox_message_id', 'inbox_messages.id')
-                    ->whereNotIn('ai_runs.status', ['skipped_schedule', 'error']);
+                    ->whereNotIn('ai_runs.status', ['skipped_schedule', 'skipped_api_off', 'skipped_in_progress', 'error']);
             })
             // але не довбимо вічно: максимум 3 невдалі (error) спроби на повідомлення
             ->whereRaw('(select count(*) from ai_runs r where r.inbox_message_id = inbox_messages.id and r.status = ?) < ?', ['error', 3])
@@ -52,7 +52,7 @@ class SweepUnansweredAiMessages extends Command
             }
 
             Log::info('AI sweep: підбираю пропущене повідомлення', ['conv' => $conversation->id, 'msg' => $msg->id]);
-            $run = $ai->respond($conversation, $msg->id);
+            $run = app(\App\Services\Ai\Channels\Dispatcher::class)->respond($conversation, $msg->id);
             $this->line("msg #{$msg->id} (conv #{$conversation->id}): {$run->status}");
         }
 
@@ -102,7 +102,11 @@ class SweepUnansweredAiMessages extends Command
                     continue;
                 }
 
-                $ai->sendFollowUp($conv);
+                $policy = app(\App\Services\Ai\Channels\ProviderPolicy::class);
+                $provider = $policy->selected($conv);
+                if (! $policy->enabled($provider)) continue;
+                app(\App\Services\Ai\Channels\DispatchContext::class)->run($provider, $conv,
+                    fn () => $ai->sendFollowUp($conv));
                 $followed++;
                 $this->line("follow-up conv #{$conv->id}");
             }

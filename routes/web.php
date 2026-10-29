@@ -172,6 +172,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/inbox/page-avatar/{connection}', [InboxController::class, 'pageAvatar'])->name('inbox.pageAvatar');
         Route::get('/api/chat-statuses', [ChatStatusController::class, 'index'])->name('chatStatuses.list');
         Route::post('/api/inbox/conversations/{conversation}/status', [InboxController::class, 'setStatus'])->name('inbox.setStatus');
+        Route::post('/api/inbox/conversations/{conversation}/ai-provider', [\App\Http\Controllers\AiChannelsController::class, 'select'])->middleware('role:owner');
         Route::post('/api/inbox/conversations/{conversation}/ai', [InboxController::class, 'setAi'])->name('inbox.setAi');
         Route::post('/api/inbox/conversations/{conversation}/ai-reset', [InboxController::class, 'resetAiContext'])->name('inbox.aiReset');
         Route::post('/api/inbox/conversations/{conversation}/ai-summary', [InboxController::class, 'aiSummary'])->name('inbox.aiSummary');
@@ -347,6 +348,9 @@ Route::middleware('auth')->group(function () {
 
         // --- AI-АГЕНТ ---
         Route::get('/ai', [AiSettingsController::class, 'page'])->name('ai.index');
+        Route::get('/ai/channels', [\App\Http\Controllers\AiChannelsController::class, 'data']);
+        Route::post('/ai/channels', [\App\Http\Controllers\AiChannelsController::class, 'save']);
+        Route::post('/ai/channels/models', [\App\Http\Controllers\AiChannelsController::class, 'models']);
         Route::get('/ai/data', [AiSettingsController::class, 'data'])->name('ai.data');
         Route::post('/ai/save', [AiSettingsController::class, 'save'])->name('ai.save');
         Route::post('/ai/test', [AiSettingsController::class, 'test'])->name('ai.test');

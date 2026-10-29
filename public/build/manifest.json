@@ -73,6 +73,12 @@
     "file": "assets/halluci-insole-black-edging-DSu6ZmRr.webp",
     "src": "resources/images/costs/halluci-insole-black-edging.webp"
   },
+  "resources/js/aiChannels.js": {
+    "file": "assets/aiChannels--kJzDrB1.js",
+    "name": "aiChannels",
+    "src": "resources/js/aiChannels.js",
+    "isDynamicEntry": true
+  },
   "resources/js/aiSettings.js": {
     "file": "assets/aiSettings-Dqa6HCff.js",
     "name": "aiSettings",
@@ -80,7 +86,7 @@
     "isDynamicEntry": true
   },
   "resources/js/app.js": {
-    "file": "assets/app-Deb-mo8B.js",
+    "file": "assets/app-D60vavGx.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true,
@@ -93,7 +99,12 @@
       "resources/js/crm/components/ui/FlashToast.vue",
       "../../../Users/ihnatiuk_myhailo/DOM-CRM/domcrm/node_modules/vue/dist/vue.runtime.esm-bundler.js",
       "resources/js/crm/components/ui/PageToast.vue",
-      "resources/js/aiSettings.js"
+      "resources/js/aiSettings.js",
+      "../../../Users/ihnatiuk_myhailo/DOM-CRM/domcrm/node_modules/vue/dist/vue.runtime.esm-bundler.js",
+      "resources/js/crm/components/ui/PageToast.vue",
+      "resources/js/aiChannels.js",
+      "../../../Users/ihnatiuk_myhailo/DOM-CRM/domcrm/node_modules/vue/dist/vue.runtime.esm-bundler.js",
+      "resources/js/crm/components/ui/PageToast.vue"
     ],
     "css": [
       "assets/app-BqmQ52fb.css"

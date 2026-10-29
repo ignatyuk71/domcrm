@@ -23,6 +23,7 @@ class MetaSendService
      */
     public function sendText(MetaConnection $conn, string $recipientId, string $text): array
     {
+        app(\App\Services\Ai\Channels\DispatchContext::class)->assertCurrent();
         $r = Http::asJson()->post($this->graph() . "/{$conn->page_id}/messages", [
             'recipient' => ['id' => $recipientId],
             'messaging_type' => 'RESPONSE',
@@ -37,6 +38,7 @@ class MetaSendService
             return ['ok' => false, 'error' => $r->json('error.message') ?? 'Не вдалося надіслати'];
         }
 
+        app(\App\Services\Ai\Channels\DispatchContext::class)->textSent($text);
         return ['ok' => true, 'message_id' => $r->json('message_id')];
     }
 
@@ -47,6 +49,7 @@ class MetaSendService
      */
     public function sendPrivateReply(MetaConnection $conn, string $commentId, string $text): array
     {
+        app(\App\Services\Ai\Channels\DispatchContext::class)->assertCurrent();
         $r = Http::asJson()->post($this->graph() . "/{$conn->page_id}/messages", [
             'recipient' => ['comment_id' => $commentId],
             'message' => ['text' => $text],
@@ -69,6 +72,7 @@ class MetaSendService
      */
     public function sendAttachment(MetaConnection $conn, string $recipientId, string $type, string $url): array
     {
+        app(\App\Services\Ai\Channels\DispatchContext::class)->assertCurrent();
         $r = Http::asJson()->post($this->graph() . "/{$conn->page_id}/messages", [
             'recipient' => ['id' => $recipientId],
             'messaging_type' => 'RESPONSE',

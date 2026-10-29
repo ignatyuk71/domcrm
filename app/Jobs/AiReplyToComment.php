@@ -10,7 +10,6 @@ use App\Services\Ai\AiAgentService;
 use App\Services\Meta\MetaSendService;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -30,6 +29,14 @@ class AiReplyToComment
     }
 
     public function handle(MetaSendService $send): void
+    {
+        $policy = app(\App\Services\Ai\Channels\ProviderPolicy::class);
+        $provider = $policy->selected();
+        if (! $policy->enabled($provider)) return;
+        app(\App\Services\Ai\Channels\DispatchContext::class)->run($provider, null, fn () => $this->handleSelected($send));
+    }
+
+    private function handleSelected(MetaSendService $send): void
     {
         $comment = InboxComment::with('connection')->find($this->commentId);
         if (!$comment || $comment->status !== 'new' || !$comment->connection) {
@@ -139,7 +146,8 @@ class AiReplyToComment
             return [null, true];
         }
 
-        $apiKey = AiSetting::global()->api_key;
+        $provider = app(\App\Services\Ai\Channels\ProviderPolicy::class)->selected();
+        $apiKey = $provider === 'gpt' ? \App\Models\AiChannelSetting::current()->gpt_api_key : AiSetting::global()->api_key;
         if (!$apiKey) {
             return [null, false];
         }
@@ -158,22 +166,25 @@ class AiReplyToComment
         $content[] = ['type' => 'text', 'text' => "Текст поста: " . mb_substr((string) ($comment->post_excerpt ?: '(немає)'), 0, 400)];
 
         try {
-            $r = Http::timeout(30)->withHeaders([
-                'x-api-key' => $apiKey,
-                'anthropic-version' => '2023-06-01',
-            ])->post('https://api.anthropic.com/v1/messages', [
-                'model' => AiSetting::global()->model ?: 'claude-sonnet-4-6',
-                'max_tokens' => 30,
-                'system' => "Це пост магазину тапочок. Визнач, про яку лінійку йдеться, за текстом і фото.\nЛінійки:\n{$list}\nВідповідай ЛИШЕ точною назвою лінійки зі списку або словом «невідомо». Нічого більше.",
-                'messages' => [['role' => 'user', 'content' => $content]],
-            ]);
-
-            if (!$r->successful()) {
-                Log::warning('AI post classify error', ['post' => $comment->post_id, 'body' => mb_substr($r->body(), 0, 200)]);
-                return [null, false];
+            $system = "Це пост магазину тапочок. Визнач, про яку лінійку йдеться, за текстом і фото.\nЛінійки:\n{$list}\nВідповідай ЛИШЕ точною назвою лінійки зі списку або словом «невідомо». Нічого більше.";
+            if ($provider === 'gpt') {
+                $input = array_map(fn ($part) => $part['type'] === 'text'
+                    ? ['type' => 'input_text', 'text' => $part['text']]
+                    : ['type' => 'input_image', 'image_url' => 'data:'.$part['source']['media_type'].';base64,'.$part['source']['data']], $content);
+                $model = \App\Models\AiChannelSetting::current()->gpt_model;
+                if (! $model) return [null, false];
+                $result = app(\App\Modules\GptSandbox\Infrastructure\OpenAiClient::class)->respond($apiKey, $model,
+                    [['role' => 'user', 'content' => $input]], $system, [], false, 30, 1024);
+                $answer = trim($result['text']);
+            } else {
+                $r = app(\App\Services\Ai\ClaudeClient::class)->messages($apiKey, [
+                    'model' => AiSetting::global()->model ?: 'claude-sonnet-4-6', 'max_tokens' => 30,
+                    'system' => $system, 'messages' => [['role' => 'user', 'content' => $content]],
+                ], 30);
+                if (! $r->successful()) return [null, false];
+                $answer = trim((string) collect($r->json('content') ?? [])->where('type', 'text')->pluck('text')->implode(' '));
             }
 
-            $answer = trim((string) collect($r->json('content') ?? [])->where('type', 'text')->pluck('text')->implode(' '));
             $matched = $groups->first(fn ($g) => $answer !== '' && mb_stripos($answer, $g->name) !== false);
 
             return [$matched, true];

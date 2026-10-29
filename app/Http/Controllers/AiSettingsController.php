@@ -115,6 +115,9 @@ class AiSettingsController extends Controller
     /** Перевірка ключа: GET /v1/models (безкоштовно, без токенів). */
     public function test(Request $request)
     {
+        if (! app(\App\Services\Ai\Channels\ProviderPolicy::class)->enabled('claude')) {
+            return response()->json(['ok' => false, 'error' => 'Claude API вимкнено.'], 422);
+        }
         // Стара відкрита форма не повинна надіслати ключ іншого API до Anthropic.
         $request->validate(['provider' => ['prohibited']], [
             'provider.prohibited' => 'Налаштування підключення змінено. Оновіть сторінку та повторіть спробу.',

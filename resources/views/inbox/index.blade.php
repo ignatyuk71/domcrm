@@ -334,8 +334,13 @@
         </div>
     </div>
 
+    <div data-inbox-toast></div>
     @push('scripts')
     <script>
+        const AI_OWNER = @json(auth()->user()->role === 'owner');
+        function aiNotify(type, message, context = 'ai-channel') {
+            window.dispatchEvent(new CustomEvent('inbox-notification', { detail: { type, context, title: 'AI-агент', messages: [message] } }));
+        }
         const CSRF = document.querySelector('meta[name="csrf-token"]').content;
         let activeId = null, allConvs = [], filter = 'all', search = '', tplItems = [], tplLoaded = false;
 
@@ -690,6 +695,30 @@
                 renderInfo(currentConv);
             } catch (e) { input.checked = !enabled; }
         }
+        async function selectAiProvider(input) {
+            if (!activeId) return;
+            const id = activeId;
+            const provider = input.value || null;
+            const previous = currentConv?.ai_provider || '';
+            input.disabled = true;
+            try {
+                const response = await fetch(`/api/inbox/conversations/${id}/ai-provider`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, Accept: 'application/json' },
+                    body: JSON.stringify({ provider }),
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.message || 'Не вдалося перемкнути агента.');
+                if (activeId === id && currentConv) {
+                    currentConv.ai_provider = data.provider;
+                    currentConv.ai_active_provider = data.active_provider;
+                    renderInfo(currentConv);
+                }
+                aiNotify('success', 'Агента перемкнено.');
+            } catch (error) {
+                input.value = previous;
+                aiNotify('error', error.message);
+            } finally { input.disabled = false; }
+        }
         function setPayMethod(m) { payment.method = m; renderInfo(currentConv); }
 
         async function saveOrderFromChat(btn) {
@@ -963,6 +992,13 @@
                                 <span class="ib-slider"></span>
                             </label>
                         </div>
+                        <div class="small text-muted mt-2">Агент: ${c.ai_active_provider === 'gpt' ? 'GPT' : 'Claude'}</div>
+                        ${AI_OWNER ? `<label class="form-label small mt-2" for="chat-ai-provider">Канал цього чату</label>
+                            <select class="form-select form-select-sm" id="chat-ai-provider" onchange="selectAiProvider(this)">
+                                <option value="" ${!c.ai_provider ? 'selected' : ''}>За налаштуванням CRM</option>
+                                <option value="claude" ${c.ai_provider === 'claude' ? 'selected' : ''}>Claude</option>
+                                <option value="gpt" ${c.ai_provider === 'gpt' ? 'selected' : ''}>GPT</option>
+                            </select>` : ''}
                         ${c.ai_paused_until_human ? `<div class="small mt-2" style="color:#b45309"><i class="bi bi-pause-circle me-1"></i>Бот зачекає до ${esc(c.ai_paused_until_human)} — ти відповів вручну, далі він продовжить сам.</div>` : ''}
 
                         <div class="mt-3">
@@ -1040,7 +1076,7 @@
             } catch (e) {
                 btn.disabled = false;
                 btn.innerHTML = orig;
-                alert('Не вдалося скласти підсумок (перевір баланс ШІ).');
+                aiNotify('error', 'Не вдалося скласти підсумок. Перевірте активний API у налаштуваннях.', 'ai-summary');
             }
         }
 

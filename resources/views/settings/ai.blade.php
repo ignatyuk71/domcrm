@@ -93,4 +93,5 @@
         </div>
     </div>
 
+    @include('settings.ai-channels')
 </x-app-layout>

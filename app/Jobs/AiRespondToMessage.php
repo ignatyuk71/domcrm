@@ -38,7 +38,7 @@ class AiRespondToMessage
         }
 
         try {
-            $ai->respond($conversation, $this->messageId);
+            app(\App\Services\Ai\Channels\Dispatcher::class)->respond($conversation, $this->messageId);
         } catch (\Throwable $e) {
             Log::error('AI job failed', ['conv' => $this->conversationId, 'error' => $e->getMessage()]);
         }
