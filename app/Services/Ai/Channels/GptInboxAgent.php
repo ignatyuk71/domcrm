@@ -4,6 +4,7 @@ namespace App\Services\Ai\Channels;
 
 use App\Models\{AiChannelSetting, AiPhoto, AiSetting, ChatStatus, GptInboxReply, InboxConversation};
 use App\Services\Ai\Gpt\{CatalogAssistant, OrderTexts};
+use App\Services\Ai\Gpt\ConversationOpening;
 use App\Services\Ai\{AiAgentService, OutgoingMessageWriter};
 use App\Services\Meta\MetaSendService;
 
@@ -24,6 +25,13 @@ class GptInboxAgent
         if (! $store?->enabled) return ['status' => 'skipped_store_off'];
         if (! AiAgentService::scheduleAllows($store->schedule)) return ['status' => 'skipped_schedule'];
         if ($conversation->ai_paused_until?->isFuture()) return ['status' => 'skipped_operator_pause'];
+        $checkoutData = $conversation->ai_checkout_data;
+        if (($checkoutData['status'] ?? '') === 'needs_human') {
+            // Після ручного відновлення старий стан передачі не повертає зняту паузу.
+            $checkoutData['status'] = 'draft';
+            $checkoutData['items'] ??= [];
+            unset($checkoutData['paused_until']);
+        }
         $last = $conversation->messages()->where('sender', '!=', 'ai')->latest('id')->first();
         if (! $last || $last->id !== $messageId || $last->direction !== 'in') return ['status' => 'skipped_stale'];
         $reply = GptInboxReply::where('inbox_message_id', $messageId)->first();
@@ -31,7 +39,9 @@ class GptInboxAgent
         if (! $reply) {
             $voice = trim((string) $last->text) === '' && collect($last->attachments ?? [])->contains(fn ($a) => ($a['type'] ?? '') === 'audio');
             if ($voice) {
-                $result = ['text' => OrderTexts::all()['voice_reject'], 'photos' => [], 'checkout_messages' => [], 'checkout' => $conversation->ai_checkout_data];
+                $result = ['text' => OrderTexts::all()['voice_reject'], 'photos' => [], 'checkout_messages' => [], 'checkout' => $checkoutData];
+            } elseif (($opening = ConversationOpening::reply($conversation, $last)) !== null) {
+                $result = ['text' => $opening, 'photos' => [], 'checkout_messages' => [], 'checkout' => $checkoutData];
             } else {
                 $input = $this->history->build($conversation);
                 if (! $input) return ['status' => 'skipped_empty_history'];
@@ -39,7 +49,7 @@ class GptInboxAgent
                     ->filter()->flatten(1)->pluck('ai_photo_id')->filter()->map(fn ($id) => (int) $id)->all();
                 $hasImage = collect($input)->where('role', 'user')->last();
                 $result = $this->assistant->reply($settings->gpt_api_key, $settings->gpt_model, $input,
-                    $conversation->ai_checkout_data, $conversation->meta_connection_id, $recentIds,
+                    $checkoutData, $conversation->meta_connection_id, $recentIds,
                     ['turn_id' => $messageId, 'has_image' => collect($hasImage['content'] ?? [])->contains('type', 'input_image')]);
             }
             app(DispatchContext::class)->assertCurrent();
@@ -93,9 +103,11 @@ class GptInboxAgent
                 'ai_order_payment' => match ($checkout['payment']) { 'deposit' => 'Передоплата 100 грн; при отриманні '.$checkout['pay_on_delivery'].' грн', 'full' => 'Повна оплата', default => 'При отриманні' },
                 'ai_order_handled_at' => null, 'ai_order_needs_iban' => false];
         } elseif (($checkout['status'] ?? '') === 'needs_human') {
-            $data['ai_paused_until'] = $checkout['paused_until'];
-            $status = ChatStatus::where('code', 'needs_human')->first();
-            if ($status) $data['chat_status_id'] = $status->id;
+            // Передача людині діє до ручного відновлення без довільного таймера.
+            $data['ai_enabled'] = false;
+            $data['ai_paused_until'] = null;
+            $status = ChatStatus::firstOrCreate(['code' => 'needs_human'], ['name' => 'Потрібна увага', 'icon' => '🔴', 'color' => '#dc2626', 'sort_order' => 0]);
+            $data['chat_status_id'] = $status->id;
         } elseif ($checkout || $conversation->messages()->where('sender', 'ai')->whereNotNull('attachments')->exists()) {
             if ($status = ChatStatus::where('code', 'in_progress')->first()) $data['chat_status_id'] = $status->id;
         }

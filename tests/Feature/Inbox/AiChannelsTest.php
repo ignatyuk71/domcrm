@@ -69,6 +69,90 @@ class AiChannelsTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_greetings_and_unfinished_phrases_reply_without_gpt_calls_or_handoff(): void
+    {
+        [$conversation, $message] = $this->conversation();
+        $this->gpt();
+        $sent = 0;
+        Http::fake(function ($request) use (&$sent) {
+            $this->assertStringContainsString('graph.facebook.com', $request->url());
+            return Http::response(['message_id' => 'opening-'.(++$sent)]);
+        });
+        foreach (['Привіт', 'А до', 'Ви тут?'] as $index => $text) {
+            if ($index === 0) $message->update(['text' => $text]);
+            else $message = $conversation->messages()->create(['direction' => 'in', 'sender' => 'contact', 'text' => $text, 'sent_at' => now()]);
+            $this->assertSame('replied', app(Dispatcher::class)->respond($conversation->fresh(), $message->id)->status);
+            $conversation->refresh();
+            $reply = $conversation->messages()->where('direction', 'out')->latest('id')->first();
+            $this->assertStringContainsString('цікавить', $reply->text);
+            $this->assertStringNotContainsString('уточню', $reply->text);
+            $this->assertTrue($conversation->ai_enabled);
+            $this->assertNull($conversation->ai_paused_until);
+            $this->assertNotSame('needs_human', $conversation->ai_checkout_data['status'] ?? null);
+            if ($index > 0) $this->assertStringNotContainsString('Доброго', $reply->text);
+        }
+        $this->assertSame(3, $sent);
+        foreach (['Ціна?', '38', 'Так', 'Повернення', 'Покличте людину', 'Привіт, цікавлять тапки'] as $text) {
+            $message->text = $text;
+            $this->assertNull(\App\Services\Ai\Gpt\ConversationOpening::reply($conversation, $message));
+        }
+    }
+
+    public function test_gpt_continues_after_its_first_reply_with_valid_assistant_history(): void
+    {
+        [$conversation, $message] = $this->conversation();
+        $this->gpt();
+        $calls = $sent = 0;
+        Http::fake(function ($request) use (&$calls, &$sent) {
+            if (str_contains($request->url(), 'api.openai.com')) {
+                $calls++;
+                foreach ($request['input'] as $item) {
+                    if (($item['role'] ?? '') === 'assistant') $this->assertIsString($item['content']);
+                }
+                if ($calls === 2) {
+                    $this->assertTrue(collect($request['input'])->contains(fn ($item) => ($item['role'] ?? '') === 'assistant' && $item['content'] === 'Доставка Новою поштою.'));
+                }
+                return Http::response($this->answer());
+            }
+            return Http::response(['message_id' => 'history-'.(++$sent)]);
+        });
+        $this->assertSame('replied', app(Dispatcher::class)->respond($conversation, $message->id)->status);
+        $next = $conversation->messages()->create(['direction' => 'in', 'sender' => 'contact', 'text' => 'Які у вас є?', 'sent_at' => now()]);
+        $this->assertSame('replied', app(Dispatcher::class)->respond($conversation->fresh(), $next->id)->status);
+        $this->assertSame(2, $calls);
+        $this->assertSame(2, $sent);
+    }
+
+    public function test_real_handoff_disables_gpt_until_manual_resume_without_a_timer(): void
+    {
+        [$conversation, $message] = $this->conversation();
+        $message->update(['text' => 'Покличте менеджера']);
+        $this->gpt();
+        $calls = $sent = 0;
+        Http::fake(function ($request) use (&$calls, &$sent) {
+            if (str_contains($request->url(), 'api.openai.com')) {
+                if (++$calls === 1) return Http::response(['status' => 'completed', 'output' => [['type' => 'function_call', 'name' => 'escalate_to_manager', 'call_id' => 'handoff', 'arguments' => '{}']]]);
+                return Http::response($this->answer());
+            }
+            return Http::response(['message_id' => 'handoff-'.(++$sent)]);
+        });
+        $this->assertSame('replied', app(Dispatcher::class)->respond($conversation, $message->id)->status);
+        $conversation->refresh();
+        $this->assertFalse($conversation->ai_enabled);
+        $this->assertNull($conversation->ai_paused_until);
+        $this->assertSame('needs_human', $conversation->ai_checkout_data['status']);
+        $this->assertArrayNotHasKey('paused_until', $conversation->ai_checkout_data);
+        $this->assertSame('needs_human', $conversation->chatStatus->code);
+        $this->actingAs(User::factory()->create(['role' => 'owner']))->postJson('/api/inbox/conversations/'.$conversation->id.'/ai', ['enabled' => true])->assertOk();
+        $next = $conversation->messages()->create(['direction' => 'in', 'sender' => 'contact', 'text' => 'Привіт', 'sent_at' => now()]);
+        $this->assertSame('replied', app(Dispatcher::class)->respond($conversation->fresh(), $next->id)->status);
+        $conversation->refresh();
+        $this->assertTrue($conversation->ai_enabled);
+        $this->assertNull($conversation->ai_paused_until);
+        $this->assertSame('draft', $conversation->ai_checkout_data['status']);
+        $this->assertSame(2, $calls);
+    }
+
     public function test_gpt_chat_and_summary_never_fall_back_to_claude_and_duplicate_job_is_free(): void
     {
         [$conversation, $message] = $this->conversation();

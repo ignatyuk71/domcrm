@@ -42,7 +42,8 @@ class GptHistory
                     }
                 }
             }
-            if ($content) $input[] = ['role' => $incoming ? 'user' : 'assistant', 'content' => $content];
+            // input_text призначений для вхідного тексту; минулу відповідь передаємо рядком.
+            if ($content) $input[] = ['role' => $incoming ? 'user' : 'assistant', 'content' => $incoming ? $content : $text];
         }
         return $input;
     }

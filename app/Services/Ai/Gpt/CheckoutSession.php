@@ -221,7 +221,8 @@ final class CheckoutSession
 
     private function escalate(): array
     {
-        $this->data = array_merge($this->data ?? [], ['status' => 'needs_human', 'paused_until' => now()->addHours(12)->toIso8601String()]);
+        $this->data = array_merge($this->data ?? [], ['status' => 'needs_human']);
+        unset($this->data['paused_until']);
         $this->escalated = true;
 
         return ['далі' => 'Більше нічого не пиши й не вгадуй — систему вже сповіщено, менеджер передивиться чат.'];

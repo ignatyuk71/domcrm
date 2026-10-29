@@ -9,6 +9,7 @@ use App\Models\MetaConnection;
 use App\Models\Product;
 use App\Services\Ai\Gpt\CatalogProtocol;
 use App\Services\Ai\Gpt\ConversationNotes;
+use App\Services\Ai\Gpt\ConversationOpening;
 use App\Services\Ai\Gpt\PromptBuilder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -44,6 +45,8 @@ class GptPromptParityTest extends TestCase
         $working = app(\App\Services\Ai\PromptBuilder::class)->buildSystemPrompt($conversation, $store);
         $before = DB::table('ai_settings')->get()->toArray();
         $actual = app(CatalogProtocol::class)->instructions($store->meta_connection_id);
+        $this->assertStringContainsString(ConversationOpening::RULE, $actual);
+        $actual = str_replace(ConversationOpening::RULE."\n", '', $actual);
         $expected = implode("\n\n", array_column($working, 'text'));
         $this->assertSame(explode('■ ОФОРМЛЕННЯ ЗАМОВЛЕННЯ', $expected)[0], explode('■ ОФОРМЛЕННЯ ЗАМОВЛЕННЯ', $actual)[0]);
         $this->assertSame(explode('■ ДОСТАВКА / ОПЛАТА.', $expected, 2)[1], explode('■ ДОСТАВКА / ОПЛАТА.', $actual, 2)[1]);
@@ -59,9 +62,10 @@ class GptPromptParityTest extends TestCase
         $working = app(\App\Services\Ai\PromptBuilder::class)->toolDefinitions();
         $actual = app(CatalogProtocol::class)->tools();
         $this->assertCount(7, $actual);
-        foreach (['get_product', 'ask_delivery_details', 'escalate_to_manager', 'send_photos'] as $name) {
+        foreach (['get_product', 'ask_delivery_details', 'send_photos'] as $name) {
             $this->assertSame(collect($working)->firstWhere('name', $name)['description'], collect($actual)->firstWhere('name', $name)['description']);
         }
+        $this->assertSame(collect($working)->firstWhere('name', 'escalate_to_manager')['description'].ConversationOpening::TOOL_RULE, collect($actual)->firstWhere('name', 'escalate_to_manager')['description']);
         foreach ($actual as $tool) {
             $this->assertTrue($tool['strict']);
             $this->assertFalse($tool['parameters']['additionalProperties']);
