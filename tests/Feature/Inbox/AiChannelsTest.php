@@ -9,7 +9,7 @@ use App\Services\Ai\{AiAgentService, ClaudeClient};
 use App\Services\Ai\Channels\{DispatchContext, Dispatcher, ProviderUnavailable};
 use App\Services\Meta\MetaSendService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\{Cache, DB, Http, Storage};
+use Illuminate\Support\Facades\{DB, Http, Storage};
 use Tests\TestCase;
 
 class AiChannelsTest extends TestCase
@@ -95,21 +95,12 @@ class AiChannelsTest extends TestCase
         $this->assertDatabaseMissing('inbox_messages', ['sender' => 'ai']);
     }
 
-    public function test_switch_is_owner_only_preserves_history_and_rejects_busy_or_checkout(): void
+    public function test_chat_provider_control_and_old_endpoint_are_removed(): void
     {
-        [$conversation, $message] = $this->conversation(); $this->gpt(['claude_enabled' => true, 'default_provider' => 'claude']);
-        $url = '/api/inbox/conversations/'.$conversation->id.'/ai-provider';
-        $operator = User::factory()->create(['role' => 'operator']);
-        $this->actingAs($operator)->postJson($url, ['provider' => 'gpt'])->assertForbidden();
-        $this->actingAs(User::factory()->create(['role' => 'owner']))->postJson($url, ['provider' => 'gpt'])->assertOk();
-        $this->assertDatabaseHas('inbox_messages', ['id' => $message->id]);
-        $conversation->refresh()->update(['ai_checkout_active' => true]);
-        $this->postJson($url, ['provider' => 'claude'])->assertStatus(409);
-        $conversation->update(['ai_checkout_active' => false]);
-        $lock = Cache::lock('ai-channel-conversation-'.$conversation->id, 300); $lock->get();
-        try { $this->postJson($url, ['provider' => 'claude'])->assertStatus(409); }
-        finally { $lock->release(); }
-        $this->postJson($url, ['provider' => 'claude'])->assertOk();
+        [$conversation] = $this->conversation();
+        $this->actingAs(User::factory()->create(['role' => 'owner']));
+        $this->get('/inbox')->assertOk()->assertDontSee('chat-ai-provider')->assertDontSee('Канал цього чату');
+        $this->postJson('/api/inbox/conversations/'.$conversation->id.'/ai-provider', ['provider' => 'gpt'])->assertNotFound();
     }
 
     public function test_settings_hide_key_and_do_not_overwrite_claude_credentials(): void
@@ -184,15 +175,15 @@ class AiChannelsTest extends TestCase
         Http::assertNotSent(fn ($r) => str_contains($r->url(), 'anthropic'));
     }
 
-    public function test_default_change_is_blocked_until_active_checkout_has_its_own_provider(): void
+    public function test_crm_provider_change_is_blocked_until_active_checkout_finishes(): void
     {
         [$conversation] = $this->conversation(); $conversation->update(['ai_checkout_active' => true]);
+        DB::table('inbox_conversations')->where('id', $conversation->id)->update(['ai_provider' => 'claude']);
         $this->actingAs(User::factory()->create(['role' => 'owner']));
         $payload = ['claude_enabled' => true, 'gpt_enabled' => true, 'default_provider' => 'gpt', 'gpt_api_key' => 'sk-test', 'gpt_model' => 'gpt-test'];
         $this->postJson('/settings/ai/channels', $payload)->assertStatus(422)->assertJsonValidationErrors('default_provider');
-        $this->postJson('/api/inbox/conversations/'.$conversation->id.'/ai-provider', ['provider' => 'claude'])->assertOk();
+        $conversation->update(['ai_checkout_active' => false]);
         $this->postJson('/settings/ai/channels', $payload)->assertOk();
-        $this->assertSame('claude', $conversation->fresh()->ai_provider);
     }
 
     public function test_history_keeps_sent_gallery_ids_and_reply_context_without_foreign_tools(): void
@@ -227,22 +218,19 @@ class AiChannelsTest extends TestCase
         $this->assertFalse($images->contains(fn ($image) => str_ends_with($image['image_url'], 'picture-0')));
     }
 
-    public function test_chat_uses_current_crm_default_until_owner_explicitly_pins_provider(): void
+    public function test_all_chats_follow_crm_provider_including_legacy_chat_overrides(): void
     {
         [$conversation] = $this->conversation();
-        $this->assertNull($conversation->fresh()->ai_provider);
+        DB::table('inbox_conversations')->where('id', $conversation->id)->update(['ai_provider' => 'claude']);
         $policy = app(\App\Services\Ai\Channels\ProviderPolicy::class);
-        $this->assertSame('claude', $policy->selected($conversation));
+        $this->assertSame('claude', $policy->selected());
         $this->gpt(['claude_enabled' => true]);
-        $this->assertSame('gpt', $policy->selected($conversation->fresh()));
+        $this->assertSame('gpt', $policy->selected());
         $this->actingAs(User::factory()->create(['role' => 'owner']))
             ->getJson('/api/inbox/conversations/'.$conversation->id.'/messages')->assertOk()
-            ->assertJsonPath('conversation.ai_provider', null)->assertJsonPath('conversation.ai_active_provider', 'gpt');
-        $conversation->update(['ai_provider' => 'claude']);
-        $this->assertSame('claude', $policy->selected($conversation->fresh()));
-        $this->postJson('/api/inbox/conversations/'.$conversation->id.'/ai-provider', ['provider' => null])->assertOk();
-        $this->assertNull($conversation->fresh()->ai_provider);
-        $this->assertSame('gpt', $policy->selected($conversation->fresh()));
+            ->assertJsonMissingPath('conversation.ai_provider')->assertJsonPath('conversation.ai_active_provider', 'gpt');
+        AiChannelSetting::current()->update(['default_provider' => 'claude']);
+        $this->assertSame('claude', $policy->selected());
     }
 
     public function test_manual_off_invalidates_context_but_own_order_completion_can_send_final(): void

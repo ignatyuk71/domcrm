@@ -19,7 +19,7 @@ class Dispatcher
         try {
             $conversation->refresh();
             if ($previous = AiRun::where('inbox_message_id', $messageId)->whereIn('status', ['replied', 'replied_voice'])->latest('id')->first()) return $previous;
-            $provider = $this->policy->selected($conversation);
+            $provider = $this->policy->selected();
             if (! $this->policy->enabled($provider)) return $this->record($conversation, $messageId, ['status' => 'skipped_api_off']);
             return $this->context->run($provider, $conversation, function () use ($provider, $conversation, $messageId, $start) {
                 if ($provider === 'claude') {
@@ -37,7 +37,7 @@ class Dispatcher
 
     public function summarize(InboxConversation $conversation): ?string
     {
-        $provider = $this->policy->selected($conversation);
+        $provider = $this->policy->selected();
         $this->policy->assertEnabled($provider);
         return $this->context->run($provider, $conversation, function () use ($provider, $conversation) {
             if ($provider === 'claude') return app(AiAgentService::class)->summarizeConversation($conversation);
@@ -58,7 +58,7 @@ class Dispatcher
 
     private function record(InboxConversation $conversation, int $messageId, array $data): AiRun
     {
-        $provider = $this->policy->selected($conversation);
+        $provider = $this->policy->selected();
         return AiRun::create($data + ['inbox_conversation_id' => $conversation->id, 'inbox_message_id' => $messageId,
             'provider' => $provider, 'model' => $provider === 'gpt' ? AiChannelSetting::current()->gpt_model : null,
             'tokens_in' => 0, 'tokens_out' => 0, 'duration_ms' => 0]);

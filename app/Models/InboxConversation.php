@@ -8,9 +8,6 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class InboxConversation extends Model
 {
-    // null означає автоматичне наслідування чинного агента CRM.
-    protected $attributes = ['ai_provider' => null];
-
     protected $fillable = [
         'meta_connection_id',
         'inbox_contact_id',
@@ -24,7 +21,7 @@ class InboxConversation extends Model
         'status',
         'chat_status_id',
         'ai_enabled',
-        'ai_provider', 'ai_provider_version', 'ai_checkout_active', 'ai_checkout_data',
+        'ai_provider_version', 'ai_checkout_active', 'ai_checkout_data',
         'ai_context_after_id',
         'ai_paused_until',
         'ai_summary',

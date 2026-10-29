@@ -28,7 +28,7 @@ class DispatchContext
             throw new ProviderUnavailable('Нове повідомлення змінило контекст розмови.');
         }
         if (($operation['conversation_id'] && (! $conversation || $conversation->ai_provider_version !== $operation['version']))
-            || $policy->selected($conversation) !== $operation['provider']) {
+            || $policy->selected() !== $operation['provider']) {
             throw new ProviderUnavailable('Агента або стан розмови змінено; застаріле відправлення заблоковано.');
         }
     }

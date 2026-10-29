@@ -172,8 +172,7 @@ class InboxController extends Controller
                 'channel' => $conversation->channel,
                 'chat_status_id' => $conversation->chat_status_id,
                 'ai_enabled' => (bool) $conversation->ai_enabled,
-                'ai_provider' => $conversation->ai_provider,
-                'ai_active_provider' => app(\App\Services\Ai\Channels\ProviderPolicy::class)->selected($conversation),
+                'ai_active_provider' => app(\App\Services\Ai\Channels\ProviderPolicy::class)->selected(),
                 'ai_paused_until_human' => ($conversation->ai_paused_until && now()->lt($conversation->ai_paused_until))
                     ? $conversation->ai_paused_until->format('H:i')
                     : null,

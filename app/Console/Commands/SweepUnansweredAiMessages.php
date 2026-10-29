@@ -103,7 +103,7 @@ class SweepUnansweredAiMessages extends Command
                 }
 
                 $policy = app(\App\Services\Ai\Channels\ProviderPolicy::class);
-                $provider = $policy->selected($conv);
+                $provider = $policy->selected();
                 if (! $policy->enabled($provider)) continue;
                 app(\App\Services\Ai\Channels\DispatchContext::class)->run($provider, $conv,
                     fn () => $ai->sendFollowUp($conv));
