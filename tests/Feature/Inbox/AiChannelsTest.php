@@ -285,6 +285,18 @@ class AiChannelsTest extends TestCase
         $this->assertFalse(\App\Services\Ai\Gpt\ConversationOpening::isAdvice($human));
     }
 
+    public function test_quantity_does_not_replace_a_previously_provided_foot_length(): void
+    {
+        [$conversation] = $this->conversation();
+        $conversation->messages()->create(['direction' => 'out', 'sender' => 'ai', 'text' => 'Яка у вас довжина стопи в сантиметрах?']);
+        $conversation->messages()->create(['direction' => 'in', 'sender' => 'contact', 'text' => '24,5']);
+        $conversation->messages()->create(['direction' => 'out', 'sender' => 'ai', 'text' => 'Довжина устілки — 25 см. Скільки пар оформлюємо?']);
+        $quantity = $conversation->messages()->create(['direction' => 'in', 'sender' => 'contact', 'text' => '2']);
+        $this->assertNull(\App\Services\Ai\Gpt\ConversationOpening::footLength($conversation, $quantity));
+        $question = $conversation->messages()->create(['direction' => 'in', 'sender' => 'contact', 'text' => 'Який розмір краще?']);
+        $this->assertSame('24.5', \App\Services\Ai\Gpt\ConversationOpening::footLength($conversation, $question));
+    }
+
     public function test_gpt6_requests_use_low_reasoning_for_messenger_latency(): void
     {
         [$conversation, $message] = $this->conversation();

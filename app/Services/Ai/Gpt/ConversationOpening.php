@@ -33,11 +33,14 @@ final class ConversationOpening
         $currentIsMeasurement = false;
         foreach ($rows as $row) {
             if ($row->direction === 'out') {
-                if (preg_match('/(?:довжин\p{L}*|скільки|який).*(?:стоп|устіл|сантиметр|см)/iu', (string) $row->text)) $asked = true;
+                if (preg_match_all('/[^.!?\n]*\?/u', (string) $row->text, $questions)) {
+                    $asked = (bool) preg_match('/(?:довжин\p{L}*|скільки|який).*(?:стоп|устіл|сантиметр|см)/iu', end($questions[0]));
+                }
                 continue;
             }
             if ($asked && preg_match('/^\s*(?:(?:(?:у|в)\s+мене|у\s+меня|(?:моя\s+)?стопа|довжина\s+стопи)\s*[:—-]?\s*)?(\d{1,2}(?:[.,]\d{1,2})?)\s*(?:см|cm|сантиметр\p{L}*)?\s*[.!]?\s*$/iu', (string) $row->text, $match)) {
                 $known = str_replace(',', '.', $match[1]);
+                $asked = false;
                 if ($row->id === $message->id) $currentIsMeasurement = true;
             }
         }
