@@ -50,10 +50,12 @@ class GptInboxAgent
                 $hasImage = collect($input)->where('role', 'user')->last();
                 $result = $this->assistant->reply($settings->gpt_api_key, $settings->gpt_model, $input,
                     $checkoutData, $conversation->meta_connection_id, $recentIds,
-                    ['turn_id' => $messageId, 'has_image' => collect($hasImage['content'] ?? [])->contains('type', 'input_image')]);
+                    ['turn_id' => $messageId, 'foot_length_cm' => ConversationOpening::footLength($conversation, $last), 'has_image' => collect($hasImage['content'] ?? [])->contains('type', 'input_image')]);
             }
             app(DispatchContext::class)->assertCurrent();
             unset($result['output']);
+            // Порядок фіксуємо у відповіді: старі незавершені відправлення зберігають свій курсор.
+            $result['text_first'] = empty($result['checkout_messages']) && ! in_array($result['checkout']['status'] ?? '', ['ready_for_manager', 'needs_human'], true);
             $reply = GptInboxReply::create(['inbox_conversation_id' => $conversation->id, 'inbox_message_id' => $messageId,
                 'provider_version' => $conversation->ai_provider_version, 'payload' => $result,
                 'tokens_in' => $result['tokens_in'] ?? 0, 'tokens_out' => $result['tokens_out'] ?? 0]);
@@ -68,9 +70,10 @@ class GptInboxAgent
             }
         }
         $messages = [];
+        if (($result['text_first'] ?? false) && $result['text'] !== '') $messages[] = ['text' => $result['text']];
         foreach ($result['photos'] as $photo) $messages[] = ['photo' => $photo['id']];
         foreach ($result['checkout_messages'] as $text) $messages[] = ['text' => $text];
-        if ($result['text'] !== '') $messages[] = ['text' => $result['text']];
+        if (! ($result['text_first'] ?? false) && $result['text'] !== '') $messages[] = ['text' => $result['text']];
         // Повтор після збою Meta продовжує з курсора, без повторного платного запиту GPT.
         foreach ($messages as $index => $message) {
             if ($index < $reply->next_index) continue;

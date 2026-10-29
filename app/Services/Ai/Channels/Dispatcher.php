@@ -13,8 +13,28 @@ class Dispatcher
 
     public function respond(InboxConversation $conversation, int $messageId): AiRun
     {
-        $lock = Cache::lock('ai-channel-conversation-'.$conversation->id, 300);
-        if (! $lock->get()) return $this->record($conversation, $messageId, ['status' => 'skipped_in_progress']);
+        $firstRun = null;
+        while (true) {
+            $lock = Cache::lock('ai-channel-conversation-'.$conversation->id, 300);
+            if (! $lock->get()) return $firstRun ?? $this->record($conversation, $messageId, ['status' => 'skipped_in_progress']);
+            try {
+                $run = $this->respondOnce($conversation, $messageId);
+                $firstRun ??= $run;
+            } finally {
+                $lock->release();
+            }
+            if ($run->provider !== 'gpt' || $this->policy->selected() !== 'gpt' || ! $this->policy->enabled('gpt')) return $firstRun;
+            $conversation->refresh();
+            if (! $conversation->ai_enabled || $conversation->ai_paused_until?->isFuture()) return $firstRun;
+            // Після звільнення замка підхоплюємо найновішу репліку, яку інша задача пропустила.
+            $latest = $conversation->messages()->where('sender', '!=', 'ai')->latest('id')->first(['id', 'direction']);
+            if (! $latest || $latest->direction !== 'in' || $latest->id <= $messageId) return $firstRun;
+            $messageId = $latest->id;
+        }
+    }
+
+    private function respondOnce(InboxConversation $conversation, int $messageId): AiRun
+    {
         $start = microtime(true);
         try {
             $conversation->refresh();
@@ -32,7 +52,7 @@ class Dispatcher
             }, $messageId);
         } catch (\Throwable $e) {
             return $this->record($conversation, $messageId, ['status' => 'error', 'error' => mb_substr($e->getMessage(), 0, 500)]);
-        } finally { $lock->release(); }
+        }
     }
 
     public function summarize(InboxConversation $conversation): ?string

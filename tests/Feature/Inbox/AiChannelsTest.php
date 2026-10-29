@@ -8,6 +8,7 @@ use App\Models\AiChannelSetting;
 use App\Models\AiPhoto;
 use App\Models\AiPhotoGroup;
 use App\Models\AiSetting;
+use App\Models\GptInboxReply;
 use App\Models\InboxComment;
 use App\Models\InboxContact;
 use App\Models\InboxConversation;
@@ -150,6 +151,108 @@ class AiChannelsTest extends TestCase
         $this->assertTrue($conversation->ai_enabled);
         $this->assertNull($conversation->ai_paused_until);
         $this->assertSame('draft', $conversation->ai_checkout_data['status']);
+        $this->assertSame(2, $calls);
+    }
+
+    public function test_new_message_during_generation_is_processed_without_waiting_for_sweep(): void
+    {
+        [$conversation, $message] = $this->conversation(); $this->gpt();
+        $calls = $sent = 0; $next = null;
+        Http::fake(function ($request) use ($conversation, &$calls, &$sent, &$next) {
+            if (str_contains($request->url(), 'api.openai.com')) {
+                if (++$calls === 1) {
+                    $next = $conversation->messages()->create(['direction' => 'in', 'sender' => 'contact', 'text' => 'Які є розміри?', 'sent_at' => now()]);
+                    $this->assertSame('skipped_in_progress', app(Dispatcher::class)->respond($conversation->fresh(), $next->id)->status);
+                    return Http::response($this->answer('Застаріла відповідь.'));
+                }
+                return Http::response($this->answer('Є 36/37, 38/39 та 40/41.'));
+            }
+            return Http::response(['message_id' => 'concurrent-'.(++$sent)]);
+        });
+        $this->assertSame('error', app(Dispatcher::class)->respond($conversation, $message->id)->status);
+        $this->assertSame(2, $calls); $this->assertSame(1, $sent);
+        $this->assertDatabaseHas('ai_runs', ['inbox_message_id' => $next->id, 'status' => 'replied']);
+        $this->assertDatabaseHas('inbox_messages', ['sender' => 'ai', 'text' => 'Є 36/37, 38/39 та 40/41.']);
+        $this->assertDatabaseMissing('inbox_messages', ['sender' => 'ai', 'text' => 'Застаріла відповідь.']);
+    }
+
+    public function test_message_during_photo_delivery_gets_a_reply_without_duplicate_photos(): void
+    {
+        [$conversation, $message] = $this->conversation(); $this->gpt();
+        $group = AiPhotoGroup::create(['name' => 'Ведмедики']);
+        $photo = AiPhoto::create(['ai_photo_group_id' => $group->id, 'path' => 'ai-gallery/concurrent-test.jpg']);
+        $reply = GptInboxReply::create(['inbox_conversation_id' => $conversation->id, 'inbox_message_id' => $message->id, 'provider_version' => 0,
+            'payload' => ['photos' => [['id' => $photo->id]], 'text' => 'Стара ціна.', 'checkout_messages' => [], 'checkout' => null]]);
+        $photos = $calls = $texts = 0; $next = null;
+        Http::fake(function ($request) use ($conversation, &$photos, &$calls, &$texts, &$next) {
+            if (str_contains($request->url(), 'api.openai.com')) {
+                $calls++;
+                return Http::response($this->answer('Для обраних капців є 36/37, 38/39 та 40/41.'));
+            }
+            if (isset($request['message']['attachment'])) {
+                $photos++;
+                $next = $conversation->messages()->create(['direction' => 'in', 'sender' => 'contact', 'text' => 'Які є розміри?', 'sent_at' => now()]);
+                $this->assertSame('skipped_in_progress', app(Dispatcher::class)->respond($conversation->fresh(), $next->id)->status);
+                return Http::response(['message_id' => 'during-photo']);
+            }
+            $texts++;
+            return Http::response(['message_id' => 'after-photo-text']);
+        });
+        $this->assertSame('skipped_stale_late', app(Dispatcher::class)->respond($conversation, $message->id)->status);
+        $this->assertSame(1, $photos); $this->assertSame(1, $calls); $this->assertSame(1, $texts);
+        $this->assertSame(1, $reply->fresh()->next_index);
+        $this->assertDatabaseHas('ai_runs', ['inbox_message_id' => $next->id, 'status' => 'replied']);
+        $this->assertDatabaseHas('inbox_messages', ['sender' => 'ai', 'text' => 'Для обраних капців є 36/37, 38/39 та 40/41.']);
+        $this->assertDatabaseMissing('inbox_messages', ['sender' => 'ai', 'text' => 'Стара ціна.']);
+        app(Dispatcher::class)->respond($conversation->fresh(), $message->id);
+        $this->assertSame(1, $photos); $this->assertSame(1, $calls);
+    }
+
+    public function test_catalog_text_precedes_photos_and_retry_keeps_its_order_without_regeneration(): void
+    {
+        [$conversation, $message] = $this->conversation(); $this->gpt();
+        $group = AiPhotoGroup::create(['name' => 'Ведмедики']);
+        $photo = AiPhoto::create(['ai_photo_group_id' => $group->id, 'path' => 'ai-gallery/text-first-test.jpg']);
+        $assistant = \Mockery::mock(\App\Services\Ai\Gpt\CatalogAssistant::class);
+        $assistant->shouldReceive('reply')->once()->andReturn(['text' => 'Ведмедики — 380 грн.', 'photos' => [['id' => $photo->id]], 'checkout_messages' => [], 'checkout' => null]);
+        $this->app->instance(\App\Services\Ai\Gpt\CatalogAssistant::class, $assistant);
+        $order = []; $photoAttempts = 0;
+        Http::fake(function ($request) use (&$order, &$photoAttempts) {
+            if (isset($request['message']['attachment'])) {
+                $order[] = 'photo';
+                return ++$photoAttempts === 1 ? Http::response(['error' => ['message' => 'Тимчасовий збій']], 500) : Http::response(['message_id' => 'text-first-photo']);
+            }
+            $order[] = 'text';
+            return Http::response(['message_id' => 'text-first-message']);
+        });
+        $this->assertSame('error', app(Dispatcher::class)->respond($conversation, $message->id)->status);
+        $this->assertSame(1, GptInboxReply::first()->next_index);
+        $this->assertSame('replied', app(Dispatcher::class)->respond($conversation->fresh(), $message->id)->status);
+        $this->assertSame(['text', 'photo', 'photo'], $order);
+        $this->assertSame(1, $conversation->messages()->where('text', 'Ведмедики — 380 грн.')->count());
+        $this->assertSame(1, $conversation->messages()->whereNotNull('attachments')->count());
+    }
+
+    public function test_centimetres_answer_cannot_handoff_and_preserves_the_active_dialogue(): void
+    {
+        [$conversation, $message] = $this->conversation(); $this->gpt();
+        $conversation->messages()->create(['direction' => 'out', 'sender' => 'ai', 'text' => 'Яка у вас довжина стопи в сантиметрах?']);
+        $number = $conversation->messages()->create(['direction' => 'in', 'sender' => 'contact', 'text' => '24,6', 'sent_at' => now()]);
+        $calls = 0;
+        Http::fake(function ($request) use (&$calls) {
+            if (str_contains($request->url(), 'api.openai.com')) {
+                $this->assertStringContainsString('24.6 см', $request['instructions']);
+                $this->assertFalse(collect($request['tools'])->contains('name', 'escalate_to_manager'));
+                if (++$calls === 1) return Http::response(['status' => 'completed', 'output' => [['type' => 'function_call', 'name' => 'escalate_to_manager', 'call_id' => 'wrong-handoff', 'arguments' => '{}']]]);
+                return Http::response($this->answer('За сіткою для 24,6 см — 38/39 (25 см).'));
+            }
+            return Http::response(['message_id' => 'centimetres-reply']);
+        });
+        $this->assertSame('replied', app(Dispatcher::class)->respond($conversation, $number->id)->status);
+        $this->assertTrue($conversation->fresh()->ai_enabled);
+        $this->assertNull($conversation->fresh()->ai_paused_until);
+        $this->assertNotSame('needs_human', $conversation->fresh()->ai_checkout_data['status'] ?? null);
+        $this->assertDatabaseHas('inbox_messages', ['sender' => 'ai', 'text' => 'За сіткою для 24,6 см — 38/39 (25 см).']);
         $this->assertSame(2, $calls);
     }
 

@@ -17,6 +17,11 @@ class CatalogAssistant
     {
         $checkout = new CheckoutSession($this->pricing, $checkoutData, $receipt);
         $instructions = $this->protocol->instructions($connectionId);
+        $tools = $this->protocol->tools();
+        if (! empty($receipt['foot_length_cm'])) {
+            $instructions .= "\nОБОВ'ЯЗКОВИЙ КОНТЕКСТ ХОДУ: клієнт відповів на твоє запитання про довжину стопи: ".$receipt['foot_length_cm']." см. Це не незрозуміле питання. Підбери розмір за сіткою обраної лінійки з каталогу, поясни відповідність і продовжуй підбір. Якщо лінійку ще не обрано — уточни її; якщо немає сітки — спитай звичний розмір. Не вигадуй заміри та не передавай цю відповідь менеджеру.";
+            $tools = array_values(array_filter($tools, fn ($tool) => $tool['name'] !== 'escalate_to_manager'));
+        }
         $history = [];
         $photos = [];
         $texts = [];
@@ -30,7 +35,7 @@ class CatalogAssistant
             if ($timeout < 1) {
                 throw new GptFailure('Вичерпано час підготовки відповіді. Повідомлення збережене — можна повторити.');
             }
-            $result = $this->client->respond($key, $model, $input, $instructions.CheckoutProtocol::context($checkout->data), $this->protocol->tools(), $round < 5, $timeout);
+            $result = $this->client->respond($key, $model, $input, $instructions.CheckoutProtocol::context($checkout->data), $tools, $round < 5, $timeout);
             $tokensIn += $result['tokens_in'];
             $tokensOut += $result['tokens_out'];
             array_push($input, ...$result['output']);

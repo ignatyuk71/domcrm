@@ -12,6 +12,17 @@ final class ConversationOpening
 
     public const TOOL_RULE = ' Привітання й незавершена фраза не є підставою для цього виклику. Якщо запит нечіткий — спершу постав одне коротке уточнення й залиш чат активним.';
 
+    /** Число після нашого запитання про стопу — відповідь у сантиметрах. */
+    public static function footLength(InboxConversation $conversation, InboxMessage $message): ?string
+    {
+        if (! preg_match('/^\s*(\d{1,2}(?:[.,]\d{1,2})?)\s*(?:см|cm|сантиметр\p{L}*)?\s*$/iu', (string) $message->text, $match)) return null;
+        $lastText = $conversation->messages()->where('direction', 'out')->whereNotNull('text')->where('text', '!=', '')
+            ->where('text', '!=', OrderTexts::all()['handover'])->latest('id')->value('text');
+        if (! preg_match('/(?:довжин\p{L}*|скільки|який).*(?:стоп|устіл|сантиметр|см)/iu', (string) $lastText)) return null;
+
+        return str_replace(',', '.', $match[1]);
+    }
+
     public static function reply(InboxConversation $conversation, InboxMessage $message): ?string
     {
         if ($message->attachments || $message->context) {

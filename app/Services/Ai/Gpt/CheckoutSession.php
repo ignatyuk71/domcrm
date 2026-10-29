@@ -221,6 +221,9 @@ final class CheckoutSession
 
     private function escalate(): array
     {
+        if (! empty($this->receipt['foot_length_cm'])) {
+            throw new \DomainException('Клієнт надав довжину стопи у сантиметрах у відповідь на твоє запитання. Підбери розмір за каталогом або уточни лінійку; не передавай це повідомлення менеджеру.');
+        }
         $this->data = array_merge($this->data ?? [], ['status' => 'needs_human']);
         unset($this->data['paused_until']);
         $this->escalated = true;
