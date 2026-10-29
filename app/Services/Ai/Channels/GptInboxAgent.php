@@ -50,7 +50,7 @@ class GptInboxAgent
                 $hasImage = collect($input)->where('role', 'user')->last();
                 $result = $this->assistant->reply($settings->gpt_api_key, $settings->gpt_model, $input,
                     $checkoutData, $conversation->meta_connection_id, $recentIds,
-                    ['turn_id' => $messageId, 'foot_length_cm' => ConversationOpening::footLength($conversation, $last), 'has_image' => collect($hasImage['content'] ?? [])->contains('type', 'input_image')]);
+                    ['turn_id' => $messageId, 'foot_length_cm' => ConversationOpening::footLength($conversation, $last), 'consultation_request' => ConversationOpening::isAdvice($last), 'has_image' => collect($hasImage['content'] ?? [])->contains('type', 'input_image')]);
             }
             app(DispatchContext::class)->assertCurrent();
             unset($result['output']);

@@ -11,7 +11,13 @@ final class CheckoutSession
     public bool $completed = false;
     public bool $escalated = false;
 
-    public function __construct(private CheckoutPricing $pricing, public ?array $data = null, private array $receipt = []) {}
+    public function __construct(private CheckoutPricing $pricing, public ?array $data = null, private array $receipt = [])
+    {
+        if (! empty($receipt['foot_length_cm'])) {
+            $this->data ??= ['status' => 'draft', 'items' => []];
+            $this->data['sizing'] = ['foot_length_cm' => $receipt['foot_length_cm']];
+        }
+    }
 
     public function run(string $name, array $args): array
     {
@@ -221,8 +227,8 @@ final class CheckoutSession
 
     private function escalate(): array
     {
-        if (! empty($this->receipt['foot_length_cm'])) {
-            throw new \DomainException('Клієнт надав довжину стопи у сантиметрах у відповідь на твоє запитання. Підбери розмір за каталогом або уточни лінійку; не передавай це повідомлення менеджеру.');
+        if (! empty($this->receipt['foot_length_cm']) || ! empty($this->receipt['consultation_request'])) {
+            throw new \DomainException('Це звичайна консультація про вибір товару або розміру. Використай наявні факти й відомі сантиметри або постав одне уточнення; не передавай підбір менеджеру.');
         }
         $this->data = array_merge($this->data ?? [], ['status' => 'needs_human']);
         unset($this->data['paused_until']);

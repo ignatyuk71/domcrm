@@ -51,7 +51,7 @@ class Dispatcher
                     + ['duration_ms' => (int) ((microtime(true) - $start) * 1000)]);
             }, $messageId);
         } catch (\Throwable $e) {
-            return $this->record($conversation, $messageId, ['status' => 'error', 'error' => mb_substr($e->getMessage(), 0, 500)]);
+            return $this->record($conversation, $messageId, ['status' => 'error', 'error' => mb_substr($e->getMessage(), 0, 500), 'duration_ms' => (int) ((microtime(true) - $start) * 1000)]);
         }
     }
 

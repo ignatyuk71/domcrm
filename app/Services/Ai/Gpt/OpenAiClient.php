@@ -42,6 +42,7 @@ class OpenAiClient
         try {
             $response = $this->request($key, $timeout)->post('/responses', [
                 'model' => $model,
+                ...(str_starts_with($model, 'gpt-6') ? ['reasoning' => ['effort' => 'low']] : []),
                 'store' => false,
                 'include' => ['reasoning.encrypted_content'],
                 'max_output_tokens' => $maxTokens,

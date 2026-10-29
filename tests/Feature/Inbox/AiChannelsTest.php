@@ -256,6 +256,46 @@ class AiChannelsTest extends TestCase
         $this->assertSame(2, $calls);
     }
 
+    public function test_measurement_is_kept_for_followup_advice_and_order_intent(): void
+    {
+        [$conversation] = $this->conversation(); $this->gpt();
+        $conversation->messages()->create(['direction' => 'out', 'sender' => 'ai', 'text' => 'Яка у вас довжина стопи в сантиметрах?']);
+        $conversation->messages()->create(['direction' => 'in', 'sender' => 'contact', 'text' => 'У мене 24,5', 'sent_at' => now()]);
+        $advice = $conversation->messages()->create(['direction' => 'in', 'sender' => 'contact', 'text' => 'Які краще взяти?', 'sent_at' => now()]);
+        $calls = $sent = 0;
+        Http::fake(function ($request) use (&$calls, &$sent) {
+            if (str_contains($request->url(), 'api.openai.com')) {
+                $calls++;
+                $this->assertStringContainsString('24.5 см', $request['instructions']);
+                $this->assertStringContainsString('АКТИВНИЙ ПІДБІР І ОФОРМЛЕННЯ', $request['instructions']);
+                $this->assertFalse(collect($request['tools'])->contains('name', 'escalate_to_manager'));
+                return Http::response($this->answer('Орієнтир за сіткою — 38/39 (25 см). Бажаєте замовити?'));
+            }
+            return Http::response(['message_id' => 'advice-memory-'.(++$sent)]);
+        });
+        $this->assertSame('replied', app(Dispatcher::class)->respond($conversation, $advice->id)->status);
+        $this->assertSame('24.5', $conversation->fresh()->ai_checkout_data['sizing']['foot_length_cm']);
+        $order = $conversation->messages()->create(['direction' => 'in', 'sender' => 'contact', 'text' => 'Хочу замовити 36', 'sent_at' => now()]);
+        $this->assertSame('replied', app(Dispatcher::class)->respond($conversation->fresh(), $order->id)->status);
+        $this->assertSame(2, $calls);
+        $this->assertTrue($conversation->fresh()->ai_enabled);
+        $this->assertNotSame('needs_human', $conversation->fresh()->ai_checkout_data['status']);
+        $human = $conversation->messages()->create(['direction' => 'in', 'sender' => 'contact', 'text' => 'Покличте менеджера', 'sent_at' => now()]);
+        $this->assertNull(\App\Services\Ai\Gpt\ConversationOpening::footLength($conversation->fresh(), $human));
+        $this->assertFalse(\App\Services\Ai\Gpt\ConversationOpening::isAdvice($human));
+    }
+
+    public function test_gpt6_requests_use_low_reasoning_for_messenger_latency(): void
+    {
+        [$conversation, $message] = $this->conversation();
+        $this->gpt(['gpt_model' => 'gpt-6.1-sol']);
+        Http::fake(['api.openai.com/*' => function ($request) {
+            $this->assertSame('low', $request['reasoning']['effort']);
+            return Http::response($this->answer());
+        }, 'graph.facebook.com/*' => Http::response(['message_id' => 'low-reasoning'])]);
+        $this->assertSame('replied', app(Dispatcher::class)->respond($conversation, $message->id)->status);
+    }
+
     public function test_gpt_chat_and_summary_never_fall_back_to_claude_and_duplicate_job_is_free(): void
     {
         [$conversation, $message] = $this->conversation();

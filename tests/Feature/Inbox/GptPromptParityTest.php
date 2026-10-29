@@ -46,7 +46,7 @@ class GptPromptParityTest extends TestCase
         $before = DB::table('ai_settings')->get()->toArray();
         $actual = app(CatalogProtocol::class)->instructions($store->meta_connection_id);
         $this->assertStringContainsString(ConversationOpening::RULE, $actual);
-        $actual = str_replace(ConversationOpening::RULE."\n", '', $actual);
+        $actual = str_replace([ConversationOpening::RULE."\n", ConversationOpening::SALES_RULE."\n"], '', $actual);
         $expected = implode("\n\n", array_column($working, 'text'));
         $this->assertSame(explode('■ ОФОРМЛЕННЯ ЗАМОВЛЕННЯ', $expected)[0], explode('■ ОФОРМЛЕННЯ ЗАМОВЛЕННЯ', $actual)[0]);
         $this->assertSame(explode('■ ДОСТАВКА / ОПЛАТА.', $expected, 2)[1], explode('■ ДОСТАВКА / ОПЛАТА.', $actual, 2)[1]);
