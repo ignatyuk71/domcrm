@@ -42,6 +42,7 @@ class FinanceController extends Controller
 
         $todayReceipts = FiscalReceipt::query()
             ->whereBetween('created_at', [$todayStart, $todayEnd])
+            ->with(['order:id', 'order.payment:id,order_id,method,provider'])
             ->orderByDesc('created_at')
             ->limit(200)
             ->get([
@@ -53,6 +54,7 @@ class FinanceController extends Controller
                 'check_link',
                 'total_amount',
                 'created_at',
+                'meta',
             ]);
 
         $hourlyCounts = array_fill(0, 24, 0);
@@ -142,6 +144,7 @@ class FinanceController extends Controller
                     'check_link' => $receipt->check_link,
                     'total_amount' => (int) $receipt->total_amount,
                     'created_at' => $receipt->created_at,
+                    'payment_methods' => $paymentBreakdown->methods($receipt),
                 ]),
             ],
         ]);
