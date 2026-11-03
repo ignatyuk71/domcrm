@@ -144,7 +144,14 @@
                   <td class="ps-4 fw-medium text-dark">{{ formatReceiptTime(receipt.created_at) }}</td>
                   <td><span class="badge rounded-pill fw-normal" :class="receiptStatusClass(receipt.status)">{{ receiptStatusLabel(receipt.status) }}</span></td>
                   <td class="text-muted small">{{ receiptTypeLabel(receipt.type) }}</td>
-                  <td class="text-end fw-bold text-dark">{{ formatReceiptAmount(receipt.total_amount) }}</td>
+                  <td class="text-end fw-bold text-dark">
+                    {{ formatReceiptAmount(receipt.total_amount) }}
+                    <div v-if="['sell', 'return'].includes(receipt.type)" class="receipt-payment-badges d-flex flex-wrap justify-content-end gap-1 mt-1" aria-label="Спосіб оплати">
+                      <span v-for="badge in receiptPaymentBadges(receipt)" :key="badge.code" class="badge rounded-pill fw-normal" :class="badge.tone" :title="badge.title">
+                        <i class="bi me-1" :class="badge.icon" aria-hidden="true"></i>{{ badge.label }}
+                      </span>
+                    </div>
+                  </td>
                   <td class="pe-4 text-end">
                     <a v-if="receipt.order_id" :href="`/orders/${receipt.order_id}/edit`" target="_blank" class="btn btn-sm btn-light rounded-pill me-1">Замовлення <i class="bi bi-box-arrow-up-right ms-1"></i></a>
                     <a v-if="receipt.check_link" :href="receipt.check_link" target="_blank" class="btn btn-sm btn-light rounded-pill">Чек <i class="bi bi-box-arrow-up-right ms-1"></i></a>
@@ -547,6 +554,19 @@ const receiptStatusLabel = (s) => ({
 const receiptTypeLabel = (t) => ({ sell: 'Продаж', return: 'Повернення', service_in: 'Внесення', service_out: 'Вилучення' }[t] || t);
 const formatReceiptAmount = (a) => formatCurrency(Number(a||0)/100);
 const formatReceiptTime = (v) => v ? formatTime(v) : '-';
+const paymentBadges = {
+  account: { label: 'Рахунок / картка', icon: 'bi-bank', tone: 'bg-primary-subtle text-primary-emphasis', title: 'Оплата на рахунок / картку' },
+  wayforpay: { label: 'WayForPay', icon: 'bi-credit-card', tone: 'bg-info-subtle text-info-emphasis', title: 'Оплата карткою онлайн через WayForPay' },
+  cod: { label: 'NovaPay', icon: 'bi-box-seam', tone: 'bg-light text-indigo', title: 'Післяплата через NovaPay' },
+  cash: { label: 'Готівка', icon: 'bi-cash-coin', tone: 'bg-success-subtle text-success-emphasis', title: 'Оплата готівкою' },
+  unknown: { label: 'Не вказано', icon: 'bi-question-circle', tone: 'bg-light text-secondary', title: 'Спосіб оплати не визначено' },
+};
+const receiptPaymentBadges = (receipt) => {
+  const methods = Array.isArray(receipt.payment_methods) && receipt.payment_methods.length
+    ? receipt.payment_methods : ['unknown'];
+  return [...new Set(methods.map(code => Object.hasOwn(paymentBadges, code) ? code : 'unknown'))]
+    .map(code => ({ code, ...paymentBadges[code] }));
+};
 
 // --- Actions (TOASTS) ---
 const showNotice = (type, message) => {
@@ -783,6 +803,7 @@ onMounted(loadSettings);
 /* TABLE */
 .custom-table th { font-weight: 600; letter-spacing: 0.05em; border-bottom: 1px solid #e2e8f0; }
 .custom-table td { padding: 1rem 0.75rem; border-bottom: 1px solid #f1f5f9; }
+.receipt-payment-badges .badge { font-size: 0.65rem; letter-spacing: normal; }
 
 /* Custom Scrollbar for Table */
 .custom-scrollbar {

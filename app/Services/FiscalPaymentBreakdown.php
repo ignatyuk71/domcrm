@@ -6,6 +6,63 @@ use App\Models\FiscalReceipt;
 
 class FiscalPaymentBreakdown
 {
+    public function methods(FiscalReceipt $receipt): array
+    {
+        if (! in_array($receipt->type, [FiscalReceipt::TYPE_SELL, FiscalReceipt::TYPE_RETURN], true)) {
+            return [];
+        }
+
+        $payment = $receipt->order?->payment;
+        $fallback = $this->orderMethod($payment?->method, $payment?->provider);
+        $payments = $receipt->meta['payments'] ?? [];
+        if (! is_array($payments) || $payments === []) {
+            return [$fallback];
+        }
+
+        $methods = [];
+        foreach ($payments as $item) {
+            if (! is_array($item) || ! is_numeric($item['value'] ?? null) || $item['value'] < 0) {
+                $methods[] = 'unknown';
+                continue;
+            }
+            if ((float) $item['value'] === 0.0) {
+                continue;
+            }
+
+            $type = strtoupper((string) ($item['type'] ?? ''));
+            $label = (string) ($item['label'] ?? '');
+            $category = $this->labelCategory($label, null);
+
+            // Дані чека мають пріоритет; провайдер уточнює старий загальний підпис «Оплата карткою».
+            $methods[] = match (true) {
+                $type === 'CASH' => 'cash',
+                ! in_array($type, ['CASHLESS', 'CARD'], true) => 'unknown',
+                $category === 'cod_cents' => 'cod',
+                (bool) preg_match('/wayforpay/iu', $label) => 'wayforpay',
+                (bool) preg_match('/рахун|переказ|\bbank\b/iu', $label) => 'account',
+                $category === 'account_cents' => $fallback === 'wayforpay' ? 'wayforpay' : 'account',
+                default => $fallback,
+            };
+        }
+
+        return array_values(array_unique($methods ?: ['unknown']));
+    }
+
+    private function orderMethod(?string $method, ?string $provider): string
+    {
+        if ($this->methodCategory($method) === 'cod_cents') {
+            return 'cod';
+        }
+        if (strtolower(trim($provider ?? '')) === 'wayforpay' || strtolower(trim($method ?? '')) === 'wayforpay') {
+            return 'wayforpay';
+        }
+
+        return match ($this->methodCategory($method)) {
+            'account_cents' => 'account',
+            default => strtolower(trim($method ?? '')) === 'cash' ? 'cash' : 'unknown',
+        };
+    }
+
     public function amounts(FiscalReceipt $receipt): array
     {
         $totals = ['account_cents' => 0, 'cod_cents' => 0, 'other_cents' => 0];

@@ -129,6 +129,54 @@ class FinancePaymentBreakdownTest extends TestCase
             ->assertJsonPath('receipts.payment_receipt_counts', ['account' => 2, 'cod' => 0, 'other' => 0]);
     }
 
+    public function test_history_distinguishes_bank_wayforpay_and_novapay_using_receipt_details(): void
+    {
+        $bank = $this->receipt('invoice', 10000, []);
+        $online = $this->receipt('card', 10000, [['type' => 'CASHLESS', 'label' => 'Оплата карткою', 'value' => 10000]]);
+        $online->order->payment->update(['provider' => 'wayforpay']);
+        $cod = $this->receipt('card', 10000, [['type' => 'CASHLESS', 'label' => 'Післяплата через інтегратор NovaPay', 'value' => 10000]], type: 'return');
+        $explicitOnline = $this->receipt('cod', 10000, [['type' => 'CASHLESS', 'label' => 'WayForPay', 'value' => 10000]]);
+        $explicitBank = $this->receipt('card', 10000, [['type' => 'CASHLESS', 'label' => 'Банківський переказ', 'value' => 10000]]);
+        $explicitBank->order->payment->update(['provider' => 'wayforpay']);
+        $legacyCod = $this->receipt('novapay_cod', 10000, []);
+        $unknown = $this->receipt('prepay', 10000, []);
+        $cash = $this->receipt('card', 10000, [['type' => 'CASH', 'label' => 'Готівка', 'value' => 10000]]);
+        $service = $this->receipt('card', 10000, [], type: 'service_in');
+
+        $items = collect($this->getJson('/api/finance/checkbox')->assertOk()->json('receipts.items'))->keyBy('id');
+        foreach ([
+            [$bank, ['account']], [$online, ['wayforpay']], [$cod, ['cod']],
+            [$explicitOnline, ['wayforpay']], [$explicitBank, ['account']],
+            [$legacyCod, ['cod']], [$unknown, ['unknown']], [$cash, ['cash']], [$service, []],
+        ] as [$receipt, $methods]) {
+            $this->assertSame($methods, $items[$receipt->id]['payment_methods']);
+            $this->assertArrayNotHasKey('meta', $items[$receipt->id]);
+        }
+        Http::assertNothingSent();
+    }
+
+    public function test_history_keeps_separate_and_mixed_prepayment_methods_without_duplicate_badges(): void
+    {
+        $prepay = $this->receipt('prepay', 2000, [['type' => 'CASHLESS', 'label' => 'Передоплата (картка)', 'value' => 2000]]);
+        $cod = $prepay->order->fiscalReceipts()->create([
+            'type' => 'sell', 'status' => 'success', 'total_amount' => 8000,
+            'payload_hash' => (string) Str::uuid(),
+            'meta' => ['payments' => [['type' => 'CASHLESS', 'label' => 'Післяплата через інтегратор NovaPay', 'value' => 8000]]],
+        ]);
+        $mixed = $this->receipt('prepay', 10000, [
+            ['type' => 'CASHLESS', 'label' => 'Передоплата (картка)', 'value' => 1000],
+            ['type' => 'CASHLESS', 'label' => 'Оплата карткою', 'value' => 1000],
+            ['type' => 'CASHLESS', 'label' => 'NovaPay', 'value' => 8000],
+            ['type' => 'CASH', 'label' => 'Готівка', 'value' => 0],
+        ]);
+        // Новий спосіб оплати замовлення не змінює збережені підписи чеків.
+        $prepay->order->payment->update(['method' => 'card']);
+        $items = collect($this->getJson('/api/finance/checkbox')->assertOk()->json('receipts.items'))->keyBy('id');
+        $this->assertSame(['account'], $items[$prepay->id]['payment_methods']);
+        $this->assertSame(['cod'], $items[$cod->id]['payment_methods']);
+        $this->assertSame(['account', 'cod'], $items[$mixed->id]['payment_methods']);
+    }
+
     private function receipt(?string $method, int $amount, array $payments, string $type = 'sell', string $status = 'success'): FiscalReceipt
     {
         $order = Order::create(['order_number' => 'breakdown-'.Str::random(16), 'currency' => 'UAH']);
