@@ -152,7 +152,7 @@ class OrderService
     public function update(Order $order, array $data): Order
     {
         DB::transaction(function () use ($data, $order) {
-            // Клієнт: дедуп за нормалізованим номером; порожні поля не затирають наявні
+            // Клієнт: дедуп за нормалізованим номером; порожні ПІБ і телефон не затирають наявні
             // (інакше редагування одного замовлення псувало б спільного клієнта / обнуляло phone).
             $cd = $data['customer'] ?? [];
             $phone = trim((string) ($cd['phone'] ?? ''));
@@ -167,7 +167,10 @@ class OrderService
 
             $customer->first_name = ($cd['first_name'] ?? '') !== '' ? $cd['first_name'] : $customer->first_name;
             $customer->last_name = ($cd['last_name'] ?? '') !== '' ? $cd['last_name'] : $customer->last_name;
-            $customer->email = ($cd['email'] ?? '') !== '' ? $cd['email'] : $customer->email;
+            // Явно переданий порожній або некоректний email має очистити старе значення.
+            if (array_key_exists('email', $cd)) {
+                $customer->email = $cd['email'];
+            }
             if ($phone !== '') {
                 $customer->phone = $phone;
                 $customer->phone_normalized = $normalized;

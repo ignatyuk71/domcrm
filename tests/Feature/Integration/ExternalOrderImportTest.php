@@ -84,6 +84,18 @@ class ExternalOrderImportTest extends TestCase
         $this->assertEquals(1000, (float) $item->total);
     }
 
+    public function test_imports_order_with_invalid_email_cleared(): void
+    {
+        $order = app(ExternalOrderImporter::class)->import($this->makeSource(), $this->canonical([
+            'customer' => ['first_name' => 'Іван', 'phone' => '0991234567', 'email' => 'buyer@gmail.com.ua'],
+            'items' => [['external_id' => 'E', 'sku' => 'X', 'name' => 'Товар', 'qty' => 1, 'price' => 399]],
+        ]));
+
+        $this->assertNull($order->customer->email);
+        $this->assertSame('Іван', $order->customer->first_name);
+        $this->assertEquals(399, $order->items()->sum('total'));
+    }
+
     public function test_unmatched_item_flags_needs_review_but_keeps_order(): void
     {
         $source = $this->makeSource();

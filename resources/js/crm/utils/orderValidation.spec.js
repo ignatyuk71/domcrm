@@ -20,8 +20,8 @@ describe('validateCustomer', () => {
     expect(validateCustomer({ first_name: 'Іван', phone: '0961234567', email: '' }).email).toBeUndefined();
   });
 
-  it('email без «@» — помилка', () => {
-    expect(validateCustomer({ first_name: 'Іван', phone: '0961234567', email: 'bademail' }).email).toBeTruthy();
+  it('некоректний email не блокує збереження замовлення', () => {
+    expect(validateCustomer({ first_name: 'Іван', phone: '0961234567', email: 'bademail' })).toEqual({});
   });
 });
 

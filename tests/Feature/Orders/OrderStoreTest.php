@@ -75,6 +75,31 @@ class OrderStoreTest extends TestCase
         $this->assertSame(\App\Models\OrderDelivery::SERVICE_POSTOMAT, $delivery->service_type);
     }
 
+    public function test_creates_order_with_invalid_email_cleared(): void
+    {
+        $this->actingAs($this->operator())
+            ->postJson('/orders', $this->validPayload(['customer' => ['email' => 'buyer.@gmail.com']]))
+            ->assertCreated();
+
+        $this->assertNull(Order::latest('id')->firstOrFail()->customer->email);
+    }
+
+    public function test_order_update_clears_invalid_email_but_preserves_omitted_email(): void
+    {
+        $this->actingAs($this->operator())
+            ->postJson('/orders', $this->validPayload(['customer' => ['email' => 'buyer@gmail.com']]))
+            ->assertCreated();
+        $order = Order::latest('id')->firstOrFail();
+
+        // Відсутність поля в частковому запиті не повинна стерти коректний контакт.
+        $this->putJson("/orders/{$order->id}", $this->validPayload())->assertOk();
+        $this->assertSame('buyer@gmail.com', $order->customer()->first()->email);
+
+        $this->putJson("/orders/{$order->id}", $this->validPayload(['customer' => ['email' => 'buyer@gmail']]))
+            ->assertOk();
+        $this->assertNull($order->customer()->first()->email);
+    }
+
     public function test_snapshots_product_cost_and_sale_type_for_analytics(): void
     {
         $product = Product::create([

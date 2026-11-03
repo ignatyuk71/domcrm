@@ -37,7 +37,7 @@
         <div>Завантаження даних...</div>
       </div>
 
-      <form v-else @submit.prevent="openConfirm">
+      <form v-else novalidate @submit.prevent="openConfirm">
         <div class="row g-4">
           
           <div class="col-12 col-lg-3">

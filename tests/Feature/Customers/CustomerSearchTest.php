@@ -106,16 +106,25 @@ class CustomerSearchTest extends TestCase
         $this->assertNull($customer->fresh()->email);
     }
 
-    /** Очищення пробілів не має пропускати інші помилки формату чи стирати дані. */
-    public function test_invalid_email_is_rejected_without_overwriting_saved_email(): void
+    /** Некоректна адреса очищається, решта контактів зберігається без помилки. */
+    public function test_invalid_email_is_cleared_without_blocking_contact_update(): void
     {
-        $customer = Customer::create(['email' => 'buyer@example.test']);
+        $customer = Customer::create(['email' => 'buyer@example.test', 'last_name' => 'Петренко']);
 
         $this->actingAs($this->operator())
-            ->putJson("/api/customers/{$customer->id}", ['email' => ' buyer example.test '])
-            ->assertUnprocessable()
-            ->assertJsonValidationErrors('email');
+            ->putJson("/api/customers/{$customer->id}", ['email' => 'buyer.@gmail.com', 'first_name' => 'Іван'])
+            ->assertOk()
+            ->assertJsonPath('data.email', null)
+            ->assertJsonPath('data.first_name', 'Іван');
 
-        $this->assertSame('buyer@example.test', $customer->fresh()->email);
+        $this->assertNull($customer->fresh()->email);
+        $this->assertSame('Петренко', $customer->last_name);
+    }
+
+    public function test_invalid_email_is_cleared_when_customer_is_created(): void
+    {
+        $customer = Customer::create(['email' => 'buyer@gmail.com.ua']);
+
+        $this->assertNull($customer->fresh()->email);
     }
 }

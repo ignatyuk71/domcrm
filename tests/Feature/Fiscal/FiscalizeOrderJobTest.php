@@ -148,6 +148,23 @@ class FiscalizeOrderJobTest extends TestCase
         $this->assertSame($legacyEmail, $customer->fresh()->email);
     }
 
+    /** Старий некоректний email не потрапляє в Checkbox і не блокує чек. */
+    public function test_fiscalization_ignores_invalid_email_from_existing_customer(): void
+    {
+        Http::preventStrayRequests();
+        $customer = Customer::create(['email' => 'buyer@gmail.com']);
+        DB::table('customers')->where('id', $customer->id)->update(['email' => 'buyer.@gmail']);
+        $order = $this->makeOrder(399.00, 1);
+        $order->update(['customer_id' => $customer->id]);
+
+        (new FiscalizeOrderJob($order))->handle(app(CheckboxService::class));
+
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'receipts/sell')
+            && $request['delivery']['email'] === 'no-email@example.com'
+            && $request['payments'][0]['value'] === 39900);
+        $this->assertSame(FiscalReceipt::STATUS_SUCCESS, $order->fiscalReceipts()->first()->status);
+    }
+
     /** Happy-path: успішний чек створюється, замовлення стає оплаченим. */
     public function test_creates_success_receipt_and_marks_order_paid(): void
     {

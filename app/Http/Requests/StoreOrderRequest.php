@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Support\EmailNormalizer;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
 
@@ -14,6 +15,15 @@ class StoreOrderRequest extends FormRequest
     public function authorize(): bool
     {
         return true;
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if (is_string($this->input('customer.email'))) {
+            $customer = $this->input('customer');
+            $customer['email'] = EmailNormalizer::normalize($customer['email']);
+            $this->merge(['customer' => $customer]);
+        }
     }
 
     public function rules(): array

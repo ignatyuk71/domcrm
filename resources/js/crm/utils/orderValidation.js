@@ -2,7 +2,7 @@
 // Підсвічуємо конкретні поля + збираємо повідомлення для toast.
 import { validateDelivery } from './delivery.js';
 
-// Клієнт: імʼя і телефон обовʼязкові; email НЕ обовʼязковий, але якщо введено — має містити «@».
+// Клієнт: імʼя і телефон обовʼязкові; некоректний email сервер збереже порожнім.
 export function validateCustomer(customer) {
   const c = customer || {};
   const errs = {};
@@ -18,11 +18,6 @@ export function validateCustomer(customer) {
     errs.phone = 'Вкажіть номер телефону.';
   } else if (digits.length < 10) {
     errs.phone = 'Невірний формат номера телефону.';
-  }
-
-  const email = String(c.email || '').trim();
-  if (email && !email.includes('@')) {
-    errs.email = 'Email має містити «@» (або залиште поле порожнім).';
   }
 
   return errs;
