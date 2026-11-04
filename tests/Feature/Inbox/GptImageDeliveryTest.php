@@ -115,7 +115,11 @@ class GptImageDeliveryTest extends TestCase
         $this->assertSame('replied', app(Dispatcher::class)->respond($conversation, $message->id)->status);
         $this->assertSame(['photo', 'text'], $order);
         $sent = $conversation->messages()->where('sender', 'ai')->whereNotNull('attachments')->firstOrFail();
-        $this->assertSame([['type' => 'image', 'url' => $optimizedUrl, 'ai_photo_id' => $originalId]], $sent->attachments);
+        $this->assertCount(1, $sent->attachments);
+        // MySQL нормалізує порядок ключів JSON; значення та їхні типи залишаються важливими.
+        $attachment = $sent->attachments[0];
+        ksort($attachment);
+        $this->assertSame(['ai_photo_id' => $originalId, 'type' => 'image', 'url' => $optimizedUrl], $attachment);
         $this->assertNotSame(AiPhoto::findOrFail($originalId)->url(), $sent->attachments[0]['url']);
         $this->assertSame($photos, GptInboxReply::firstOrFail()->payload['photos']);
     }
