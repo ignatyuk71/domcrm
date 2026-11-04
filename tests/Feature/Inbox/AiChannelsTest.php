@@ -208,14 +208,17 @@ class AiChannelsTest extends TestCase
         $this->assertSame(1, $photos); $this->assertSame(1, $calls);
     }
 
-    public function test_catalog_text_precedes_photos_and_retry_keeps_its_order_without_regeneration(): void
+    public function test_legacy_text_first_reply_keeps_its_order_and_retry_without_regeneration(): void
     {
         [$conversation, $message] = $this->conversation(); $this->gpt();
         $group = AiPhotoGroup::create(['name' => 'Ведмедики']);
         $photo = AiPhoto::create(['ai_photo_group_id' => $group->id, 'path' => 'ai-gallery/text-first-test.jpg']);
         $assistant = \Mockery::mock(\App\Services\Ai\Gpt\CatalogAssistant::class);
-        $assistant->shouldReceive('reply')->once()->andReturn(['text' => 'Ведмедики — 380 грн.', 'photos' => [['id' => $photo->id]], 'checkout_messages' => [], 'checkout' => null]);
+        $assistant->shouldNotReceive('reply');
         $this->app->instance(\App\Services\Ai\Gpt\CatalogAssistant::class, $assistant);
+        GptInboxReply::create(['inbox_conversation_id' => $conversation->id, 'inbox_message_id' => $message->id,
+            'provider_version' => (int) $conversation->ai_provider_version,
+            'payload' => ['text' => 'Ведмедики — 380 грн.', 'photos' => [['id' => $photo->id]], 'checkout_messages' => [], 'checkout' => null, 'text_first' => true]]);
         $order = []; $photoAttempts = 0;
         Http::fake(function ($request) use (&$order, &$photoAttempts) {
             if (isset($request['message']['attachment'])) {

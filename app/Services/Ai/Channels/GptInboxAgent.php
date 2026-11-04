@@ -3,7 +3,7 @@
 namespace App\Services\Ai\Channels;
 
 use App\Models\{AiChannelSetting, AiPhoto, AiSetting, ChatStatus, GptInboxReply, InboxConversation};
-use App\Services\Ai\Gpt\{CatalogAssistant, OrderTexts};
+use App\Services\Ai\Gpt\{CatalogAssistant, DeliveryImage, OrderTexts};
 use App\Services\Ai\Gpt\ConversationOpening;
 use App\Services\Ai\{AiAgentService, OutgoingMessageWriter};
 use App\Services\Meta\MetaSendService;
@@ -12,7 +12,7 @@ use App\Services\Meta\MetaSendService;
 class GptInboxAgent
 {
     public function __construct(private CatalogAssistant $assistant, private GptHistory $history,
-        private OutgoingMessageWriter $writer, private MetaSendService $send) {}
+        private OutgoingMessageWriter $writer, private MetaSendService $send, private DeliveryImage $images) {}
 
     public function respond(InboxConversation $conversation, int $messageId): array
     {
@@ -54,8 +54,8 @@ class GptInboxAgent
             }
             app(DispatchContext::class)->assertCurrent();
             unset($result['output']);
-            // Порядок фіксуємо у відповіді: старі незавершені відправлення зберігають свій курсор.
-            $result['text_first'] = empty($result['checkout_messages']) && ! in_array($result['checkout']['status'] ?? '', ['ready_for_manager', 'needs_human'], true);
+            // Нові відповіді: спочатку фото, потім текст; старі черги зберігають порядок і курсор.
+            $result['text_first'] = false;
             $reply = GptInboxReply::create(['inbox_conversation_id' => $conversation->id, 'inbox_message_id' => $messageId,
                 'provider_version' => $conversation->ai_provider_version, 'payload' => $result,
                 'tokens_in' => $result['tokens_in'] ?? 0, 'tokens_out' => $result['tokens_out'] ?? 0]);
@@ -81,10 +81,11 @@ class GptInboxAgent
             app(DispatchContext::class)->assertCurrent();
             if (isset($message['photo'])) {
                 $photo = AiPhoto::findOrFail($message['photo']);
-                $sent = $this->send->sendAttachment($conversation->connection, $conversation->contact->external_id, 'image', $photo->url());
+                $url = $this->images->url($photo);
+                $sent = $this->send->sendAttachment($conversation->connection, $conversation->contact->external_id, 'image', $url);
                 if (! ($sent['ok'] ?? false)) throw new \RuntimeException('Meta не надіслала фото; повтор продовжить відправлення.');
                 $this->writer->persistOutgoing(['inbox_conversation_id' => $conversation->id, 'direction' => 'out', 'sender' => 'ai',
-                    'external_message_id' => $sent['message_id'] ?? null, 'attachments' => [['type' => 'image', 'url' => $photo->url(), 'ai_photo_id' => $photo->id]], 'sent_at' => now()]);
+                    'external_message_id' => $sent['message_id'] ?? null, 'attachments' => [['type' => 'image', 'url' => $url, 'ai_photo_id' => $photo->id]], 'sent_at' => now()]);
             } elseif (! $this->writer->sendBotMessage($conversation, $message['text'])) {
                 throw new \RuntimeException('Meta не надіслала текст; повтор продовжить відправлення.');
             }
