@@ -99,4 +99,39 @@ describe('Компактний розподіл оплат каси', () => {
     await flushPromises();
     expect(wrapper.getComponent({ name: 'ApexChart' }).props('series')[0].data.reduce((a, b) => a + b, 0)).toBe(300);
   });
+
+  it('показує спосіб оплати під сумою, включно з двома способами в одному чеку', async () => {
+    const data = response();
+    data.receipts.items = [
+      { id: 1, type: 'sell', status: 'success', total_amount: 79800, order_id: 10, check_link: 'https://check.checkbox.ua/1', payment_methods: ['account'] },
+      { id: 2, type: 'sell', status: 'success', total_amount: 39900, payment_methods: ['wayforpay'] },
+      { id: 3, type: 'return', status: 'success', total_amount: 38000, payment_methods: ['cod'] },
+      { id: 4, type: 'sell', status: 'success', total_amount: 10000, payment_methods: ['account', 'cod'] },
+    ];
+    fetchFinanceSettings.mockResolvedValue(data);
+    wrapper = mount(FinancePage);
+    await flushPromises();
+    const rows = wrapper.findAll('tbody tr');
+    expect(rows.map(row => row.get('.receipt-payment-badges').text())).toEqual([
+      'Рахунок / картка', 'WayForPay', 'NovaPay', 'Рахунок / карткаNovaPay',
+    ]);
+    expect(rows[0].get('.receipt-payment-badges').element.parentElement.textContent).toContain('798');
+    expect(rows[0].get('a').attributes('href')).toBe('/orders/10/edit');
+    expect(rows[0].findAll('a')[1].attributes('href')).toBe('https://check.checkbox.ua/1');
+    expect(rows[2].get('.receipt-payment-badges i').attributes('aria-hidden')).toBe('true');
+  });
+
+  it('позначає невідомий спосіб без припущень і не додає оплату до службових операцій', async () => {
+    const data = response();
+    data.receipts.items = [
+      { id: 1, type: 'sell', status: 'success', total_amount: 10000 },
+      { id: 2, type: 'sell', status: 'error', total_amount: 10000, payment_methods: ['new_provider'] },
+      { id: 3, type: 'service_in', status: 'success', total_amount: 10000, payment_methods: [] },
+    ];
+    fetchFinanceSettings.mockResolvedValue(data);
+    wrapper = mount(FinancePage);
+    await flushPromises();
+    expect(wrapper.findAll('.receipt-payment-badges').map(badge => badge.text())).toEqual(['Не вказано', 'Не вказано']);
+    expect(wrapper.findAll('tbody tr')[2].find('.receipt-payment-badges').exists()).toBe(false);
+  });
 });
