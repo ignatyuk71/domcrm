@@ -31,6 +31,7 @@ use App\Http\Controllers\MessageTemplateController;
 use App\Http\Controllers\IntegrationSettingsController;
 use App\Http\Controllers\IntegrationMappingController;
 use App\Http\Controllers\MetaConnectionController;
+use App\Http\Controllers\MarketResearchController;
 use App\Http\Controllers\InboxController;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -83,6 +84,10 @@ Route::middleware('auth')->group(function () {
 
     // --- АНАЛІТИКА ПРОДАЖІВ (фінансові дані — лише власник) ---
     Route::middleware('role:owner')->group(function () {
+        Route::get('/market-research', [MarketResearchController::class, 'index'])->name('market-research.index');
+        Route::post('/api/market-research/check', [MarketResearchController::class, 'check'])
+            ->middleware('throttle:6,1')->name('market-research.check');
+
         Route::get('/analytics', [SalesAnalyticsController::class, 'index'])->name('analytics.sales');
         Route::get('/api/analytics/sales', [SalesAnalyticsController::class, 'data'])->name('analytics.sales.data');
         Route::get('/analytics/export', [SalesAnalyticsController::class, 'export'])->name('analytics.sales.export');

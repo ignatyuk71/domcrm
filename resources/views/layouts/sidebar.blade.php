@@ -611,6 +611,14 @@
                 <span class="item-text">Шаблони</span>
             </a>
         @endif
+        @if($isOwner)
+            <div class="nav-divider">Маркетинг</div>
+            <a href="{{ route('market-research.index') }}" class="sidebar-link {{ request()->routeIs('market-research.*') ? 'active' : '' }}"
+               @if(request()->routeIs('market-research.*')) aria-current="page" @endif>
+                <span class="icon-frame"><i class="bi bi-search-heart"></i></span>
+                <span class="item-text">Аналіз ринку</span>
+            </a>
+        @endif
     </nav>
 
     <div class="sidebar-footer mt-auto" id="settings-footer">

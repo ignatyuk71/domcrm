@@ -242,7 +242,15 @@ async function mountNovaPay() {
     createApp(page).mount(el);
 }
 
+async function mountMarketResearch() {
+    const el = document.querySelector('#crm-market-research');
+    if (!el) return;
+    const { default: page } = await import('./pages/marketing/MarketResearchPage.vue');
+    createApp(page, { initial: JSON.parse(el.dataset.initial) }).mount(el);
+}
+
 function autoMount() {
+    mountMarketResearch();
     mountNovaPay();
     mountExpenses();
     mountWorkPayrollSettings();
