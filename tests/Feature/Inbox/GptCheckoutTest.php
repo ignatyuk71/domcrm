@@ -210,4 +210,220 @@ class GptCheckoutTest extends TestCase
         $this->assertSame('provided_unverified', $receipt->data['receipt']['status']);
     }
 
+    public function test_delivery_form_is_queued_once_and_its_checkpoint_confirms_only_that_message(): void
+    {
+        $session = $this->checkoutSession();
+        $session->run('ask_delivery_details', []);
+        $session->run('ask_delivery_details', []);
+        $this->assertCount(1, $session->messages);
+        $this->assertSame([
+            'before' => ['delivery_requested' => null, 'payment_request' => null],
+            'checkpoints' => [0 => ['delivery_requested' => true]],
+            'invalidated_payment_request' => false,
+        ], $session->deliveryState());
+
+        $next = $this->checkoutSession($session->data, 'turn-2');
+        $next->run('ask_delivery_details', []);
+        $this->assertSame([], $next->messages);
+        $this->assertSame([], $next->messageCheckpoints);
+        $this->assertTrue($next->deliveryState()['before']['delivery_requested']);
+    }
+
+    public function test_payment_details_resume_after_each_successfully_delivered_part_without_duplicates(): void
+    {
+        $product = $this->product();
+        $first = $this->checkoutSession();
+        $first->run('update_order', $this->args($product, 'deposit'));
+        $first->run('send_payment_details', []);
+        $this->assertNull($first->deliveryState()['before']['payment_request']);
+        $this->assertCount(4, $first->messageCheckpoints);
+
+        foreach ([1, 2, 3] as $delivered) {
+            $partial = $first->data;
+            $partial['payment_request'] = $first->messageCheckpoints[$delivered - 1]['payment_request'];
+            $this->assertFalse($partial['payment_request']['sent']);
+            $this->assertSame($delivered, $partial['payment_request']['messages_sent']);
+
+            $next = $this->checkoutSession($partial, 'turn-2');
+            $next->run('send_payment_details', []);
+            $this->assertSame(array_slice($first->messages, $delivered), $next->messages);
+            $this->assertSame($partial['payment_request'], $next->deliveryState()['before']['payment_request']);
+            $this->assertSame('turn-1', $next->data['payment_request']['turn_id']);
+            foreach ($next->messageCheckpoints as $index => $checkpoint) {
+                $request = $checkpoint['payment_request'];
+                $this->assertSame($delivered + $index + 1, $request['messages_sent']);
+                $this->assertSame(4, $request['message_count']);
+                $this->assertSame($request['messages_sent'] === 4, $request['sent']);
+            }
+            $this->assertTrue($next->data['payment_request']['sent']);
+            $this->assertSame(4, $next->data['payment_request']['messages_sent']);
+            $next->run('send_payment_details', []);
+            $this->assertCount(4 - $delivered, $next->messages);
+        }
+    }
+
+    public function test_payment_checkpoints_use_the_common_message_indexes_after_delivery_form(): void
+    {
+        $session = $this->checkoutSession();
+        $session->run('update_order', $this->args($this->product(), 'full'));
+        $session->run('ask_delivery_details', []);
+        $session->run('send_payment_details', []);
+        $this->assertCount(5, $session->messages);
+        $this->assertSame(['delivery_requested' => true], $session->messageCheckpoints[0]);
+        $this->assertSame(1, $session->messageCheckpoints[1]['payment_request']['messages_sent']);
+        $this->assertFalse($session->messageCheckpoints[1]['payment_request']['sent']);
+        $this->assertSame(4, $session->messageCheckpoints[4]['payment_request']['messages_sent']);
+        $this->assertTrue($session->messageCheckpoints[4]['payment_request']['sent']);
+    }
+
+    public function test_partial_payment_delivery_cannot_complete_an_order_even_with_a_new_receipt(): void
+    {
+        $first = $this->checkoutSession();
+        $first->run('update_order', $this->args($this->product(), 'full'));
+        $first->run('send_payment_details', []);
+        $partial = $first->data;
+        $partial['payment_request'] = $first->messageCheckpoints[1]['payment_request'];
+        $receipt = $this->checkoutSession($partial, 'turn-2', true);
+        $result = $receipt->run('complete_order', []);
+        $this->assertArrayHasKey('помилка', $result);
+        $this->assertStringContainsString('не повністю', $result['помилка']);
+        $this->assertFalse($receipt->completed);
+        $this->assertSame('draft', $receipt->data['status']);
+        $this->assertArrayNotHasKey('receipt', $receipt->data);
+    }
+
+    public function test_changed_payment_signature_starts_all_details_again_with_a_new_turn(): void
+    {
+        $product = $this->product();
+        $first = $this->checkoutSession();
+        $first->run('update_order', $this->args($product, 'full'));
+        $first->run('send_payment_details', []);
+        $partial = $first->data;
+        $partial['payment_request'] = $first->messageCheckpoints[1]['payment_request'];
+        $next = $this->checkoutSession($partial, 'turn-2');
+        $next->run('update_order', $this->args($product, 'deposit'));
+        $this->assertArrayNotHasKey('payment_request', $next->data);
+        $this->assertTrue($next->deliveryState()['invalidated_payment_request']);
+        $next->run('send_payment_details', []);
+        $this->assertCount(4, $next->messages);
+        $this->assertNotSame($partial['payment_request']['signature'], $next->data['payment_request']['signature']);
+        $this->assertSame('turn-2', $next->data['payment_request']['turn_id']);
+        $this->assertSame(1, $next->messageCheckpoints[0]['payment_request']['messages_sent']);
+        $this->assertStringContainsString('Передоплата — 100 грн', $next->messages[0]);
+    }
+
+    public function test_legacy_payment_request_is_not_resent_and_completed_order_clears_pending_flag(): void
+    {
+        $first = $this->checkoutSession();
+        $first->run('update_order', $this->args($this->product(), 'full'));
+        $first->run('send_payment_details', []);
+        $legacy = $first->data;
+        unset($legacy['payment_request']['sent'], $legacy['payment_request']['messages_sent'], $legacy['payment_request']['message_count']);
+        $legacy['completion_pending'] = true;
+        $receipt = $this->checkoutSession($legacy, 'turn-2', true);
+        $receipt->run('send_payment_details', []);
+        $this->assertSame([], $receipt->messages);
+        $this->assertSame([], $receipt->messageCheckpoints);
+        $this->assertArrayNotHasKey('помилка', $receipt->run('complete_order', []));
+        $this->assertTrue($receipt->completed);
+        $this->assertArrayNotHasKey('completion_pending', $receipt->data);
+    }
+
+    public function test_price_refresh_invalidates_partial_details_without_restoring_old_request(): void
+    {
+        $product = $this->product();
+        $first = $this->checkoutSession();
+        $first->run('update_order', $this->args($product, 'full'));
+        $first->run('send_payment_details', []);
+        $partial = $first->data;
+        $partial['payment_request'] = $first->messageCheckpoints[0]['payment_request'];
+        $product->update(['sale_price' => '600.25']);
+
+        $next = $this->checkoutSession($partial, 'turn-2');
+        $this->assertArrayHasKey('помилка', $next->run('send_payment_details', []));
+        $this->assertTrue($next->deliveryState()['invalidated_payment_request']);
+        $this->assertSame($partial['payment_request'], $next->deliveryState()['before']['payment_request']);
+        $this->assertArrayNotHasKey('payment_request', $next->data);
+        $this->assertSame([], $next->messages);
+        $this->assertSame([], $next->messageCheckpoints);
+        $this->assertSame('600.25', $next->data['total']);
+    }
+
+    public function test_unfinished_request_with_invalid_cursor_requires_a_final_delivery_checkpoint(): void
+    {
+        $first = $this->checkoutSession();
+        $first->run('update_order', $this->args($this->product(), 'full'));
+        $first->run('send_payment_details', []);
+        $partial = $first->data;
+        $partial['payment_request']['sent'] = false;
+        $partial['payment_request']['messages_sent'] = 99;
+
+        $next = $this->checkoutSession($partial, 'turn-2');
+        $next->run('send_payment_details', []);
+        $this->assertSame([OrderTexts::all()['iban_number']], $next->messages);
+        $this->assertCount(1, $next->messageCheckpoints);
+        $this->assertTrue($next->messageCheckpoints[0]['payment_request']['sent']);
+        $this->assertSame(4, $next->messageCheckpoints[0]['payment_request']['messages_sent']);
+    }
+
+    public function test_interrupted_prepaid_completion_accepts_a_text_followup_without_requiring_receipt_again(): void
+    {
+        foreach (['full', 'deposit'] as $payment) {
+            $first = $this->checkoutSession();
+            $first->run('update_order', $this->args($this->product(), $payment));
+            $first->run('send_payment_details', []);
+            $receipt = $this->checkoutSession($first->data, 'turn-2', true);
+            $receipt->run('complete_order', []);
+            $draft = $receipt->data;
+            $draft['status'] = 'draft';
+            $draft['completion_pending'] = true;
+            unset($draft['finished_at']);
+
+            $followup = $this->checkoutSession($draft, 'turn-3');
+            $this->assertArrayNotHasKey('помилка', $followup->run('complete_order', []));
+            $this->assertTrue($followup->completed);
+            $this->assertSame('ready_for_manager', $followup->data['status']);
+            $this->assertSame($draft['receipt'], $followup->data['receipt']);
+            $this->assertSame('turn-2', $followup->data['receipt']['turn_id']);
+            $this->assertArrayNotHasKey('completion_pending', $followup->data);
+            $this->assertSame([], $followup->messages);
+        }
+    }
+
+    public function test_interrupted_completion_cannot_reuse_receipt_after_selection_price_or_payment_changes(): void
+    {
+        foreach (['selection', 'price', 'payment'] as $change) {
+            $product = $this->product();
+            $first = $this->checkoutSession();
+            $first->run('update_order', $this->args($product, 'full'));
+            $first->run('send_payment_details', []);
+            $receipt = $this->checkoutSession($first->data, 'turn-2', true);
+            $receipt->run('complete_order', []);
+            $draft = $receipt->data;
+            $draft['status'] = 'draft';
+            $draft['completion_pending'] = true;
+            unset($draft['finished_at']);
+
+            $followup = $this->checkoutSession($draft, 'turn-3');
+            $args = $this->args($product, $change === 'payment' ? 'deposit' : 'full');
+            if ($change === 'selection') $args['items'][0]['qty'] = 2;
+            if ($change === 'price') $product->update(['sale_price' => '600.25']);
+            $followup->run('update_order', $args);
+            $this->assertArrayNotHasKey('receipt', $followup->data);
+            $this->assertArrayNotHasKey('payment_request', $followup->data);
+            $this->assertArrayHasKey('помилка', $followup->run('complete_order', []));
+
+            if ($change === 'price') {
+                $followup = $this->checkoutSession($followup->data, 'turn-4');
+                $args['confirm_total'] = true;
+                $followup->run('update_order', $args);
+            }
+            $this->assertArrayNotHasKey('помилка', $followup->run('send_payment_details', []));
+            $this->assertArrayHasKey('помилка', $followup->run('complete_order', []));
+            $this->assertFalse($followup->completed);
+            $this->assertSame('draft', $followup->data['status']);
+            $this->assertArrayNotHasKey('receipt', $followup->data);
+        }
+    }
+
 }

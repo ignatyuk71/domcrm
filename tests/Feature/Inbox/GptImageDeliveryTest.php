@@ -4,7 +4,7 @@ namespace Tests\Feature\Inbox;
 
 use App\Models\{AiChannelSetting, AiPhoto, AiPhotoGroup, AiSetting, GptInboxReply, InboxContact, InboxConversation, InboxMessage, MetaConnection};
 use App\Services\Ai\Channels\Dispatcher;
-use App\Services\Ai\Gpt\{CatalogAssistant, DeliveryImage};
+use App\Services\Ai\Gpt\{CatalogAssistant, DeliveryImage, MessageBuffer};
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
@@ -19,6 +19,11 @@ class GptImageDeliveryTest extends TestCase
         parent::setUp();
         Carbon::setTestNow('2026-11-04 12:00:00.250000');
         Http::preventStrayRequests();
+        $buffer = \Mockery::mock(MessageBuffer::class)->makePartial()->shouldAllowMockingProtectedMethods();
+        $buffer->shouldReceive('pause')->andReturnUsing(function (float $seconds): void {
+            Carbon::setTestNow(now()->addMicroseconds((int) ceil($seconds * 1_000_000)));
+        });
+        $this->app->instance(MessageBuffer::class, $buffer);
         AiChannelSetting::current()->update(['default_provider' => 'gpt', 'gpt_enabled' => true, 'claude_enabled' => false,
             'gpt_api_key' => 'sk-test-image-delivery', 'gpt_model' => 'gpt-test']);
     }

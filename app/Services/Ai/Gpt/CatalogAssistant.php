@@ -17,11 +17,14 @@ class CatalogAssistant
     {
         $checkout = new CheckoutSession($this->pricing, $checkoutData, $receipt);
         $instructions = $this->protocol->instructions($connectionId);
+        if (! empty($checkoutData['completion_pending'])) {
+            $instructions .= "\nПопереднє завершення було перерване новим повідомленням покупця. Усі зібрані дані нижче збережені як чернетка. Врахуй нові уточнення; якщо покупець лише дякує або дані залишаються повними й чинними, заверши заявку через complete_order. Зміни вибору спочатку збережи через update_order. Не повторюй уже доставлені форму чи реквізити.";
+        }
         $tools = $this->protocol->tools();
         if (! empty($receipt['foot_length_cm'])) {
             $instructions .= "\nКОНТЕКСТ ПІДБОРУ: клієнт уже надав довжину стопи ".$receipt['foot_length_cm']." см. Використовуй її й для наступних питань про те, який розмір краще взяти; не запитуй сантиметри повторно. Орієнтир давай за сіткою обраної лінійки, без вигаданих замірів та гарантій. Якщо клієнт уже сам обрав розмір і погодився замовляти — прийми вибір, один раз коротко попередивши про конкретну невідповідність сітці, та переходь до оформлення.";
         }
-        if (! empty($receipt['foot_length_cm']) || ! empty($receipt['consultation_request'])) {
+        if (empty($receipt['handoff_requested']) && (! empty($receipt['foot_length_cm']) || ! empty($receipt['consultation_request']))) {
             $instructions .= "\nЦЕ ЗВИЧАЙНИЙ ПІДБІР: дай рекомендацію за наявними фактами або одне уточнення. Не передавай консультацію менеджеру і не обіцяй «уточню й повернусь». Після підбору запропонуй оформлення; уже надану згоду прийми без повторного питання.";
             $tools = array_values(array_filter($tools, fn ($tool) => $tool['name'] !== 'escalate_to_manager'));
         }
@@ -34,11 +37,14 @@ class CatalogAssistant
         $repaired = false;
         $deadline = microtime(true) + 70;
         for ($round = 0; $round <= 5; $round++) {
+            app(\App\Services\Ai\Channels\DispatchContext::class)->assertCurrent();
             $timeout = min(40, (int) ($deadline - microtime(true)));
             if ($timeout < 1) {
                 throw new GptFailure('Вичерпано час підготовки відповіді. Повідомлення збережене — можна повторити.');
             }
             $result = $this->client->respond($key, $model, $input, $instructions.CheckoutProtocol::context($checkout->data), $tools, $round < 5, $timeout);
+            // Не виконуємо інструменти й наступні платні раунди для вже застарілого запиту.
+            app(\App\Services\Ai\Channels\DispatchContext::class)->assertCurrent();
             $tokensIn += $result['tokens_in'];
             $tokensOut += $result['tokens_out'];
             array_push($input, ...$result['output']);
@@ -74,13 +80,15 @@ class CatalogAssistant
                 }
 
                 return ['text' => mb_substr($text, 0, 1900), 'output' => $history, 'photos' => array_values($photos),
-                    'checkout' => $checkout->data, 'checkout_messages' => $checkout->messages, 'tokens_in' => $tokensIn, 'tokens_out' => $tokensOut];
+                    'checkout' => $checkout->data, 'checkout_messages' => $checkout->messages, 'checkout_delivery' => $checkout->deliveryState(),
+                    'tokens_in' => $tokensIn, 'tokens_out' => $tokensOut];
             }
             if ($round === 5) {
                 throw new GptFailure('Модель не завершила пошук у каталозі. Уточніть запит або повторіть.');
             }
 
             foreach ($result['calls'] as $call) {
+                app(\App\Services\Ai\Channels\DispatchContext::class)->assertCurrent();
                 $output = $this->execute($call, $photos, $recentPhotoIds, $checkout);
                 if ($call['name'] === 'send_photos') {
                     $photoToolCalled = true;

@@ -32,7 +32,9 @@ class AiRespondToMessage
         // Пауза, щоб клієнт встиг дописати думку кількома повідомленнями.
         // Якщо за цей час прийшло нове — ця джоба змовчить (staleness-перевірка
         // в сервісі), а відповість джоба останнього повідомлення.
-        $wait = (int) (\App\Models\AiSetting::global()->debounce_seconds ?? 10);
+        // GPT має власне рухоме вікно тиші; таймер іншого агента зберігаємо.
+        $wait = app(\App\Services\Ai\Channels\ProviderPolicy::class)->selected() === 'gpt'
+            ? 0 : (int) (\App\Models\AiSetting::global()->debounce_seconds ?? 10);
         if ($wait > 0 && !app()->runningUnitTests()) {
             sleep(min($wait, 60));
         }

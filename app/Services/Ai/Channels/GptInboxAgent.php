@@ -25,6 +25,7 @@ class GptInboxAgent
         if (! $store?->enabled) return ['status' => 'skipped_store_off'];
         if (! AiAgentService::scheduleAllows($store->schedule)) return ['status' => 'skipped_schedule'];
         if ($conversation->ai_paused_until?->isFuture()) return ['status' => 'skipped_operator_pause'];
+        $this->recoverInterruptedDraft($conversation, $messageId);
         $checkoutData = $conversation->ai_checkout_data;
         if (($checkoutData['status'] ?? '') === 'needs_human') {
             // Після ручного відновлення старий стан передачі не повертає зняту паузу.
@@ -37,20 +38,21 @@ class GptInboxAgent
         $reply = GptInboxReply::where('inbox_message_id', $messageId)->first();
         if ($reply && $reply->provider_version !== $conversation->ai_provider_version) return ['status' => 'skipped_stale'];
         if (! $reply) {
-            $voice = trim((string) $last->text) === '' && collect($last->attachments ?? [])->contains(fn ($a) => ($a['type'] ?? '') === 'audio');
+            $hasBatch = $this->history->hasPendingBatch($conversation);
+            $hasCommentContext = $this->history->hasCommentContext($conversation);
+            $voice = ! $hasCommentContext && ! $hasBatch && trim((string) $last->text) === '' && collect($last->attachments ?? [])->contains(fn ($a) => ($a['type'] ?? '') === 'audio');
             if ($voice) {
                 $result = ['text' => OrderTexts::all()['voice_reject'], 'photos' => [], 'checkout_messages' => [], 'checkout' => $checkoutData];
-            } elseif (($opening = ConversationOpening::reply($conversation, $last)) !== null) {
+            } elseif (! $hasCommentContext && ! $hasBatch && ($opening = ConversationOpening::reply($conversation, $last)) !== null) {
                 $result = ['text' => $opening, 'photos' => [], 'checkout_messages' => [], 'checkout' => $checkoutData];
             } else {
                 $input = $this->history->build($conversation);
                 if (! $input) return ['status' => 'skipped_empty_history'];
                 $recentIds = $conversation->messages()->where('direction', 'out')->latest('id')->limit(10)->pluck('attachments')
                     ->filter()->flatten(1)->pluck('ai_photo_id')->filter()->map(fn ($id) => (int) $id)->all();
-                $hasImage = collect($input)->where('role', 'user')->last();
                 $result = $this->assistant->reply($settings->gpt_api_key, $settings->gpt_model, $input,
                     $checkoutData, $conversation->meta_connection_id, $recentIds,
-                    ['turn_id' => $messageId, 'foot_length_cm' => ConversationOpening::footLength($conversation, $last), 'consultation_request' => ConversationOpening::isAdvice($last), 'has_image' => collect($hasImage['content'] ?? [])->contains('type', 'input_image')]);
+                    ['turn_id' => $messageId, 'handoff_requested' => $this->history->hasPendingHandoffRequest($conversation), 'foot_length_cm' => ConversationOpening::footLength($conversation, $last), 'consultation_request' => ConversationOpening::isAdvice($last), 'has_image' => $this->history->hasCurrentImage()]);
             }
             app(DispatchContext::class)->assertCurrent();
             unset($result['output']);
@@ -69,15 +71,15 @@ class GptInboxAgent
                 throw new \RuntimeException('Ціна або товар змінилися перед відправленням. Потрібна перевірка менеджера.');
             }
         }
-        $messages = [];
-        if (($result['text_first'] ?? false) && $result['text'] !== '') $messages[] = ['text' => $result['text']];
-        foreach ($result['photos'] as $photo) $messages[] = ['photo' => $photo['id']];
-        foreach ($result['checkout_messages'] as $text) $messages[] = ['text' => $text];
-        if (! ($result['text_first'] ?? false) && $result['text'] !== '') $messages[] = ['text' => $result['text']];
+        $messages = $this->deliveryMessages($result);
+        $this->saveDraft($conversation, $reply, $messages);
         // Повтор після збою Meta продовжує з курсора, без повторного платного запиту GPT.
         foreach ($messages as $index => $message) {
             if ($index < $reply->next_index) continue;
-            if ($conversation->messages()->where('id', '>', $messageId)->where('sender', '!=', 'ai')->exists()) return ['status' => 'skipped_stale_late'];
+            if ($this->hasNewerMessage($conversation, $messageId)) {
+                $reply->update(['status' => 'superseded']);
+                return ['status' => 'skipped_stale_late'];
+            }
             app(DispatchContext::class)->assertCurrent();
             if (isset($message['photo'])) {
                 $photo = AiPhoto::findOrFail($message['photo']);
@@ -90,10 +92,103 @@ class GptInboxAgent
                 throw new \RuntimeException('Meta не надіслала текст; повтор продовжить відправлення.');
             }
             $reply->update(['next_index' => $index + 1]);
+            $this->saveDraft($conversation, $reply, $messages);
         }
+        if ($this->hasNewerMessage($conversation, $messageId)) {
+            if (($result['checkout']['status'] ?? '') === 'needs_human') {
+                // Доповнення до запиту людини залишаємо людині разом із контекстом.
+                $this->saveCheckout($conversation, $result['checkout']);
+                $reply->update(['status' => 'sent']);
+                return ['status' => 'superseded_handoff'];
+            }
+            $reply->update(['status' => 'superseded']);
+            return ['status' => 'skipped_stale_late'];
+        }
+        app(DispatchContext::class)->assertCurrent();
         $this->saveCheckout($conversation, $result['checkout']);
         $reply->update(['status' => 'sent']);
         return ['status' => 'replied', 'tokens_in' => $reply->tokens_in, 'tokens_out' => $reply->tokens_out];
+    }
+
+    private function hasNewerMessage(InboxConversation $conversation, int $messageId): bool
+    {
+        return $conversation->messages()->where('id', '>', $messageId)->where('sender', '!=', 'ai')->exists();
+    }
+
+    private function deliveryMessages(array $result): array
+    {
+        $messages = [];
+        if (($result['text_first'] ?? false) && $result['text'] !== '') $messages[] = ['text' => $result['text']];
+        foreach ($result['photos'] as $photo) $messages[] = ['photo' => $photo['id']];
+        foreach ($result['checkout_messages'] as $index => $text) {
+            $request = $result['checkout_delivery']['checkpoints'][$index]['payment_request'] ?? null;
+            if ($request && ($request['signature'] ?? null) !== ($result['checkout']['payment_request']['signature'] ?? null)) continue;
+            $messages[] = ['text' => $text, 'checkout_index' => $index];
+        }
+        if (! ($result['text_first'] ?? false) && $result['text'] !== '') $messages[] = ['text' => $result['text']];
+
+        return $messages;
+    }
+
+    /** Відновлюємо курсор доставки також після аварії між курсором і збереженням чернетки. */
+    private function recoverInterruptedDraft(InboxConversation $conversation, int $messageId): void
+    {
+        $previous = GptInboxReply::where('inbox_conversation_id', $conversation->id)
+            ->where('provider_version', $conversation->ai_provider_version)->latest('inbox_message_id')->first();
+        if (! $previous || $previous->inbox_message_id >= $messageId || $previous->status !== 'prepared' || $previous->next_index < 1) return;
+        $this->saveDraft($conversation, $previous, $this->deliveryMessages($previous->payload));
+        $previous->update(['status' => 'superseded']);
+    }
+
+    /** Доставлені кроки підтверджуємо окремо; підготовка реквізитів не означає надсилання. */
+    private function saveDraft(InboxConversation $conversation, GptInboxReply $reply, array $messages): void
+    {
+        $result = $reply->payload;
+        $draft = $result['checkout'];
+        if (! $draft) return;
+        $delivery = $result['checkout_delivery'] ?? null;
+        if ($delivery) {
+            foreach (['delivery_requested', 'payment_request'] as $field) {
+                unset($draft[$field]);
+                if ($field === 'payment_request' && ($delivery['invalidated_payment_request'] ?? false)) continue;
+                if (($delivery['before'][$field] ?? null) !== null) $draft[$field] = $delivery['before'][$field];
+            }
+            $preparedRequest = $result['checkout']['payment_request'] ?? null;
+            foreach ($delivery['checkpoints'] as $checkpoint) {
+                $request = $checkpoint['payment_request'] ?? null;
+                if ($request && ($request['signature'] ?? null) === ($preparedRequest['signature'] ?? null)) {
+                    // Нова послідовність існує, але ще жодна її частина не підтверджена.
+                    if (($draft['payment_request']['signature'] ?? null) !== $request['signature']) {
+                        $draft['payment_request'] = $request + ['message_count' => 4];
+                        $draft['payment_request']['messages_sent'] = 0;
+                        $draft['payment_request']['sent'] = false;
+                    }
+                    break;
+                }
+            }
+            foreach ($messages as $index => $message) {
+                if ($index >= $reply->next_index || ! isset($message['checkout_index'])) continue;
+                $checkpoint = $delivery['checkpoints'][$message['checkout_index']] ?? [];
+                if (isset($checkpoint['payment_request'])
+                    && ($checkpoint['payment_request']['signature'] ?? null) !== ($preparedRequest['signature'] ?? null)) unset($checkpoint['payment_request']);
+                $draft = array_replace($draft, $checkpoint);
+            }
+        } elseif ($reply->next_index < count($messages)) {
+            // Старі підготовлені відповіді не мають контрольних точок доставки.
+            unset($draft['payment_request']);
+            $formSent = collect($messages)->take($reply->next_index)->contains(function ($message): bool {
+                $template = OrderTexts::all()['delivery_template'];
+                $short = str_replace(', повністю на картку/ФОП або 100 грн передоплати, решта при отриманні',
+                    ' або повністю на картку/ФОП', $template);
+                return in_array($message['text'] ?? null, [$template, $short], true);
+            });
+            $draft['delivery_requested'] = $formSent || ! empty($conversation->ai_checkout_data['delivery_requested']);
+        }
+        if (($draft['status'] ?? '') === 'ready_for_manager') $draft['completion_pending'] = true;
+        $draft['status'] = 'draft';
+        unset($draft['finished_at']);
+        $conversation->update(['ai_checkout_data' => $draft,
+            'ai_checkout_active' => ! empty($draft['items']) || ! empty($draft['delivery_requested'])]);
     }
 
     private function saveCheckout(InboxConversation $conversation, ?array $checkout): void

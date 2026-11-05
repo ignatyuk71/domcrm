@@ -37,6 +37,52 @@
         .ib-cm .dm-form { display: flex; gap: 6px; margin-top: 7px; }
         .ib-cm .dm-form input { flex: 1; border: 1px solid #dde0e6; border-radius: 9px; padding: 5px 10px; font-size: .82rem; outline: none; }
         .ib-cm-sent { font-size: .72rem; color: #16a34a; font-weight: 600; }
+        .ib-source-row { margin: 7px 0 5px; }
+        .ib-source-card { width: min(100%, 440px); min-width: 0; background: #f8fafc; border: 1px solid #e3e8ef; border-radius: 12px; color: #334155; font-size: .76rem; line-height: 1.4; overflow-wrap: anywhere; }
+        .ib-source-toggle { display: flex; align-items: center; gap: 8px; min-height: 38px; padding: 9px 10px; border-radius: inherit; list-style: none; cursor: pointer; color: #64748b; font-size: .73rem; }
+        .ib-source-toggle::-webkit-details-marker { display: none; }
+        .ib-source-toggle:hover { background: #f0f3f8; }
+        .ib-source-toggle:focus-visible { outline: 2px solid #6366f1; outline-offset: -2px; }
+        .ib-source-toggle strong { color: #475569; font-weight: 600; white-space: nowrap; }
+        .ib-source-snippet { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ib-source-chevron { flex-shrink: 0; font-size: .65rem; }
+        .ib-source-card[open] > .ib-source-toggle .ib-source-chevron { transform: rotate(90deg); }
+        .ib-source-content { padding: 0 10px 10px; }
+        .ib-source-attention { flex-shrink: 0; padding: 2px 6px; border-radius: 5px; background: #fbeceb; color: #9e3d37; font-size: .65rem; white-space: nowrap; }
+        .ib-source-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-bottom: 8px; color: #64748b; font-size: .68rem; }
+        .ib-source-head strong { color: #475569; font-weight: 600; }
+        .ib-source-main { display: flex; gap: 10px; align-items: flex-start; }
+        .ib-source-image { position: relative; display: flex; align-items: center; justify-content: center; width: 72px; height: 72px; flex: 0 0 72px; border-radius: 9px; background: #e9eef4; color: #94a3b8; overflow: hidden; }
+        .ib-source-image img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+        .ib-source-body { min-width: 0; flex: 1; }
+        .ib-source-comment { margin: 0; color: #1e293b; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-wrap; }
+        .ib-source-products { margin: 7px 0 0; padding: 0; list-style: none; font-size: .72rem; }
+        .ib-source-products li + li { margin-top: 3px; }
+        .ib-source-price { font-weight: 650; white-space: nowrap; }
+        .ib-source-uncertain { margin-top: 7px; color: #8b651c; font-size: .71rem; }
+        .ib-source-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 9px; margin-top: 9px; font-size: .68rem; }
+        .ib-source-foot a { color: #4f46e5; text-decoration: none; }
+        .ib-source-foot a:hover { text-decoration: underline; }
+        .ib-source-status { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: 6px; background: #e9eef5; color: #536277; font-weight: 600; }
+        .ib-source-status.is-sent { background: #e5f2ec; color: #28674d; }
+        .ib-source-status.is-failed, .ib-source-status.is-handoff { background: #fbeceb; color: #9e3d37; }
+        .ib-source-error { margin-top: 7px; color: #a43e38; font-size: .71rem; }
+        .ib-source-note { margin-top: 6px; color: #64748b; font-size: .7rem; }
+        .ib-source-details { margin-top: 7px; color: #64748b; font-size: .7rem; }
+        .ib-source-details summary { cursor: pointer; color: #5969a5; }
+        .ib-source-details p { margin: 6px 0 0; white-space: pre-wrap; }
+        .ib-source-details b { color: #475569; font-weight: 600; }
+        .ib-source-pinned { flex-shrink: 0; padding: 0 14px 8px; background: #fff; border-bottom: 1px solid #ecedf1; }
+        .ib-source-pinned .ib-source-row { margin: 0; }
+        .ib-source-pinned .ib-source-card { width: 100%; }
+        .ib-source-pinned .ib-source-content { padding-bottom: 8px; }
+        .ib-source-pinned .ib-source-head { margin-bottom: 5px; }
+        .ib-source-pinned .ib-source-image { width: 64px; height: 64px; flex-basis: 64px; }
+        .ib-cm .actions { flex-wrap: wrap; }
+        .ib-cm .dm-form { width: 100%; min-width: 0; }
+        .ib-cm .dm-form input { min-width: 0; }
+        .ib-cm-template { max-width: 110px; }
+        @media (max-width: 1100px) { .ib-source-image { width: 64px; height: 64px; flex-basis: 64px; } }
         .ib-chip { font-size: .76rem; padding: 4px 11px; border-radius: 18px; background: #f1f2f6; color: #64748b; border: none; cursor: pointer; transition: .15s; font-weight: 500; }
         .ib-chip:hover { background: #e9eaf0; }
         .ib-chip.active { background: #4f46e5; color: #fff; }
@@ -304,6 +350,7 @@
             <div id="thread-empty" class="ib-empty m-auto"><i class="bi bi-chat-left-text d-block mb-2"></i>Обери діалог зліва</div>
             <div id="thread" class="d-none ib-col h-100">
                 <div id="thread-header" class="ib-thead"></div>
+                <div id="thread-source" class="ib-source-pinned d-none"></div>
                 <div id="thread-messages" class="ib-msgs"></div>
                 <div class="ib-composer">
                     <div id="emoji-pop" class="ib-pop d-none"><div class="ib-emoji-grid"></div></div>
@@ -487,10 +534,12 @@
 
         async function openConversation(id) {
             if (id !== activeId && !sendingNow) { staged = []; renderStaged(); }
+            if (id !== activeId) renderPinnedSource(null);
             activeId = id;
             if (!chatStatuses.length) await loadChatStatuses();
             const res = await fetch(`/api/inbox/conversations/${id}/messages`, { headers: { 'Accept': 'application/json' } });
             const data = await res.json();
+            if (id !== activeId) return;
             const c = data.conversation;
             document.getElementById('thread-empty').classList.add('d-none');
             const t = document.getElementById('thread');
@@ -530,7 +579,7 @@
                 img.onload = () => { av.innerHTML = ''; av.appendChild(img); };
                 img.src = '/inbox/page-avatar/' + c.conn_id;
             }
-            renderMessages(data.messages, { forceBottom: true, lastOutId: c.last_out_id, lastOutRead: c.last_out_read });
+            renderMessages(data.messages, { forceBottom: true, lastOutId: c.last_out_id, lastOutRead: c.last_out_read, sourceContext: c.source_context ?? null });
             if (panelConvId !== id) { resetOrderPanel(c); panelConvId = id; }
             renderInfo(c);
             loadPanel();
@@ -1217,8 +1266,97 @@
             renderInfo(currentConv);
         }
 
-        function ctxHtml(c, out) {
+        function sourceAttr(value) {
+            return esc(String(value ?? '')).replaceAll('"', '&quot;').replaceAll("'", '&#39;');
+        }
+
+        function sourceUrl(value, kind = 'post') {
+            if (typeof value !== 'string' || !value.trim()) return null;
+            try {
+                const url = new URL(value, location.href);
+                if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return null;
+                const host = url.hostname.toLowerCase();
+                const matches = roots => roots.some(root => host === root || host.endsWith('.' + root));
+                if (kind === 'image') {
+                    const local = url.origin === location.origin && /^\/(?:inbox-media|inbox-context|inbox-uploads|ai-gallery|storage)\//.test(url.pathname);
+                    return local || (!url.port && matches(['fbcdn.net', 'cdninstagram.com', 'fbsbx.com'])) ? url.href : null;
+                }
+                return !url.port && matches(['facebook.com', 'instagram.com', 'fb.com', 'fb.watch']) ? url.href : null;
+            } catch (e) { return null; }
+        }
+
+        function sourcePrice(value) {
+            const raw = String(value ?? '');
+            if (/^\d{1,12}(?:[.,]\d{1,2})?\sгрн$/.test(raw)) return raw;
+            if (!/^\d{1,12}(?:\.\d{1,2})?$/.test(raw)) return '';
+            const [whole, fraction = ''] = raw.split('.');
+            const cents = fraction.padEnd(2, '0');
+            return whole + (cents === '00' ? '' : ',' + cents) + ' грн';
+        }
+
+        function sourceCardHtml(c, out = false, identity = null) {
+            if (!c || typeof c !== 'object') return '';
+            const states = { prepared: 'Підготовлено', sent: 'Надіслано в директ', failed: 'Не надіслано', skipped: 'Без авто-DM', handoff: 'Потрібна увага менеджера' };
+            const state = Object.hasOwn(states, c.status) ? c.status : 'prepared';
+            const image = sourceUrl(c.image, 'image');
+            const post = sourceUrl(c.post_url);
+            const comment = String(c.comment_text ?? '');
+            const products = c.confidence === 'clear' && Array.isArray(c.products)
+                ? c.products.filter(p => p && typeof p.title === 'string' && p.title.trim()).slice(0, 5) : [];
+            const productHtml = products.length ? `<ul class="ib-source-products">${products.map(p => {
+                const price = sourcePrice(p.price);
+                return `<li>${esc(p.title)}${p.color ? ' · ' + esc(p.color) : ''}${price ? ` · <span class="ib-source-price" title="Ціна на момент відповіді">${esc(price)}</span>` : ''}</li>`;
+            }).join('')}</ul>` : (!['complaint', 'praise'].includes(c.intent)
+                ? '<div class="ib-source-uncertain"><i class="bi bi-question-circle me-1" aria-hidden="true"></i>Модель потребує уточнення</div>' : '');
+            const details = [];
+            if (comment.length > 100) details.push(`<p><b>Повний коментар</b><br>${esc(comment)}</p>`);
+            if (c.post_text) details.push(`<p><b>Текст допису</b><br>${esc(c.post_text)}</p>`);
+            if (c.dm_text) details.push(`<p><b>Відповідь у директ</b><br>${esc(c.dm_text)}</p>`);
+            // Доставка та товар можуть оновитися, не змінюючи стан розкриття цього джерела.
+            const detailKey = sourceAttr(JSON.stringify(identity ?? [c.conversation_id ?? null, c.channel ?? '', c.store ?? '', comment, c.at ?? '']));
+            const attention = state === 'failed' ? 'Помилка DM' : (state === 'handoff' || c.intent === 'complaint' ? 'Потрібна увага' : '');
+            const skipped = { praise: 'Подяка без запиту купівлі', contact_cooldown: 'Нещодавно вже надсилали приватну відповідь', state_changed: 'Налаштування або стан звернення змінилися' };
+            return `<div class="ib-row ib-source-row${out ? ' out' : ''}"><details class="ib-source-card" data-source-detail="card:${detailKey}">
+                <summary class="ib-source-toggle"><i class="bi bi-chat-left-text" aria-hidden="true"></i><strong>Коментар</strong><span class="ib-source-snippet">${esc(comment || 'До допису магазину')}</span>${attention ? `<span class="ib-source-attention">${esc(attention)}</span>` : ''}<i class="bi bi-chevron-right ib-source-chevron" aria-hidden="true"></i></summary>
+                <div class="ib-source-content">
+                <div class="ib-source-head"><strong>${esc(c.label || 'Коментар до допису')}</strong><span>${esc(chLabel(c.channel))}${c.store ? ' · ' + esc(c.store) : ''}</span></div>
+                <div class="ib-source-main"><div class="ib-source-image" aria-hidden="true"><i class="bi bi-image"></i>${image ? `<img src="${sourceAttr(image)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}</div>
+                    <div class="ib-source-body"><p class="ib-source-comment">${esc(comment || 'Коментар без тексту')}</p>${productHtml}</div></div>
+                <div class="ib-source-foot"><span class="ib-source-status is-${state}">${esc(c.status_label || states[state])}</span>${post ? `<a href="${sourceAttr(post)}" target="_blank" rel="noopener noreferrer">Відкрити допис <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i></a>` : ''}${c.at ? `<span>${esc(c.at)}</span>` : ''}</div>
+                ${c.error ? `<div class="ib-source-error">${esc(c.error)}</div>` : ''}
+                ${skipped[c.skip_reason] ? `<div class="ib-source-note">${esc(skipped[c.skip_reason])}</div>` : ''}
+                ${details.length ? `<details class="ib-source-details" data-source-detail="body:${detailKey}"><summary>Деталі звернення</summary>${details.join('')}</details>` : ''}
+                </div>
+            </details></div>`;
+        }
+
+        function sourceExpanded(box) {
+            return new Set([...box.querySelectorAll('details[data-source-detail][open]')].map(el => el.dataset.sourceDetail));
+        }
+
+        function restoreSourceExpanded(box, expanded) {
+            box.querySelectorAll('details[data-source-detail]').forEach(el => { el.open = expanded.has(el.dataset.sourceDetail); });
+        }
+
+        function renderPinnedSource(source) {
+            const box = document.getElementById('thread-source');
+            if (!box) return;
+            const signature = JSON.stringify(source ?? null);
+            if (box.dataset.sourceSignature === signature) return;
+            const expanded = sourceExpanded(box);
+            box.dataset.sourceSignature = signature;
+            box.classList.toggle('d-none', !source);
+            box.innerHTML = source ? sourceCardHtml(source) : '';
+            restoreSourceExpanded(box, expanded);
+        }
+
+        document.addEventListener('error', event => {
+            if (event.target instanceof HTMLImageElement && event.target.matches('.ib-source-image img')) event.target.remove();
+        }, true);
+
+        function ctxHtml(c, out, identity = null) {
             if (!c) return '';
+            if (c.type === 'gpt_comment') return sourceCardHtml(c, out, identity);
             const img = c.image ? `<img src="${esc(c.image)}" loading="lazy" onerror="this.remove()">` : '';
             if (c.type === 'reply') {
                 return `<div class="ib-row ${out ? 'out' : ''}"><div class="ib-ctx">${img}<span><i class="bi bi-reply-fill me-1"></i>У відповідь на: ${esc(c.text || '')}</span></div></div>`;
@@ -1228,6 +1366,8 @@
 
         function renderMessages(messages, opts = {}) {
             const box = document.getElementById('thread-messages');
+            if (Object.hasOwn(opts, 'sourceContext')) renderPinnedSource(opts.sourceContext);
+            const expanded = sourceExpanded(box);
             // Чи був користувач унизу ПЕРЕД оновленням (міряємо до зміни вмісту).
             const wasAtBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
             box.innerHTML = messages.map((m, i) => {
@@ -1248,8 +1388,9 @@
                 const showTime = !next || next.direction !== m.direction || isLastOut;
                 const time = showTime ? `<div class="ib-time-mini ${out ? 'out' : ''}">${esc(m.sent_at_human || '')}${ticks}</div>` : '';
                 const aiMark = m.sender === 'ai' ? '<i class="bi bi-stars me-1" style="font-size:.72rem;opacity:.85" title="Відповів AI-агент"></i>' : '';
-                return `${ctxHtml(m.context, out)}<div class="ib-row ${out ? 'out' : ''}"><div class="ib-bub ${out ? 'out' : 'in'}${media}">${aiMark}${m.text ? esc(m.text) : ''}${atts}</div></div>${time}`;
+                return `${ctxHtml(m.context, out, 'message-' + m.id)}<div class="ib-row ${out ? 'out' : ''}"><div class="ib-bub ${out ? 'out' : 'in'}${media}">${aiMark}${m.text ? esc(m.text) : ''}${atts}</div></div>${time}`;
             }).join('');
+            restoreSourceExpanded(box, expanded);
             appendPending();
             // Скролимо вниз лише при відкритті чату / після відправки, або якщо користувач і так був унизу.
             if (opts.forceBottom || wasAtBottom) {
@@ -1576,6 +1717,16 @@
 
         // --- Вкладка «Коментарі» ---
         let ibTab = 'msgs', cmFilter = 'all', cmItems = [], cmOpenDm = null, cmOnlyNew = false;
+        const cmDraftForms = new Map(), cmSending = new Set();
+
+        function commentNotify(type, message, context) {
+            window.dispatchEvent(new CustomEvent('inbox-notification', { detail: { type, context: 'comment-' + context, title: 'Коментарі', messages: [message] } }));
+        }
+
+        function commentId(value) {
+            const id = Number(value);
+            return Number.isSafeInteger(id) && id > 0 ? id : null;
+        }
 
         async function ensureTpl() {
             if (tplLoaded) return;
@@ -1590,17 +1741,22 @@
             return '<option value="">шаблон…</option>' + tplItems.map((t, i) => `<option value="${i}">${esc(t.title)}</option>`).join('');
         }
 
-        async function openCommentConversation(id) {
+        async function openCommentConversation(id, knownConversationId = null) {
             try {
-                const res = await fetch(`/api/inbox/comments/${id}/conversation`, { headers: { 'Accept': 'application/json' } });
-                const data = await res.json();
-                if (data.conversation_id) {
-                    setTab('msgs');
-                    openConversation(data.conversation_id);
-                } else {
-                    alert('Діалог ще створюється (відповідь у дорозі) — спробуй за хвилинку.');
+                let conversationId = commentId(knownConversationId);
+                if (!conversationId) {
+                    const res = await fetch(`/api/inbox/comments/${id}/conversation`, { headers: { 'Accept': 'application/json' } });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || data.message || 'Не вдалося знайти діалог.');
+                    conversationId = commentId(data.conversation_id);
                 }
-            } catch (e) {}
+                if (conversationId) {
+                    setTab('msgs');
+                    await openConversation(conversationId);
+                } else {
+                    commentNotify('info', 'Діалог ще створюється. Спробуйте відкрити його трохи пізніше.', 'open-' + id);
+                }
+            } catch (e) { commentNotify('error', e.message || 'Не вдалося відкрити діалог. Повторіть спробу.', 'open-' + id); }
             return false;
         }
 
@@ -1635,72 +1791,121 @@
 
         function renderComments() {
             const box = document.getElementById('comments-list');
-            // Пол перемальовує список кожні 6с — не губимо текст, який людина набирає
+            // Повторно використовуємо форму: опитування не стирає чернетку та стан відправлення.
             const prevEl = cmOpenDm !== null ? document.getElementById('dm-input-' + cmOpenDm) : null;
-            const prevVal = prevEl ? prevEl.value : null;
             const prevFocus = prevEl && document.activeElement === prevEl;
+            const selection = prevEl ? [prevEl.selectionStart, prevEl.selectionEnd, prevEl.selectionDirection] : null;
+            if (prevEl) cmDraftForms.set(cmOpenDm, prevEl.closest('.dm-form'));
+            const expanded = sourceExpanded(box);
+            const scrollTop = box.scrollTop;
             if (!cmItems.length) {
                 box.innerHTML = '<div class="ib-empty"><i class="bi bi-chat-square-quote d-block mb-2"></i>Коментарів поки немає</div>';
                 return;
             }
-            const list = cmOnlyNew ? cmItems.filter(c => c.status !== 'dm_sent') : cmItems;
+            const list = cmOnlyNew ? cmItems.filter(c => c.status !== 'dm_sent' || commentId(c.id) === cmOpenDm) : cmItems;
             box.innerHTML = list.map(c => {
-                const post = (c.post_image || c.post_excerpt)
-                    ? `<div class="post">${c.post_image ? `<img src="${esc(c.post_image)}" loading="lazy">` : ''}<span>${esc(c.post_excerpt || 'Пост')}</span></div>`
+                const id = commentId(c.id);
+                if (!id) return '';
+                const source = c.source_context;
+                const conversationId = commentId(source?.conversation_id);
+                const legacyImage = sourceUrl(c.post_image, 'image');
+                const post = source ? sourceCardHtml(source, false, 'comment-' + id) : (legacyImage || c.post_excerpt)
+                    ? `<div class="post">${legacyImage ? `<img src="${sourceAttr(legacyImage)}" loading="lazy">` : ''}<span>${esc(c.post_excerpt || 'Пост')}</span></div>`
                     : '';
-                const dmForm = `<form class="dm-form" onsubmit="return sendCmDm(event, ${c.id})">
-                               <input id="dm-input-${c.id}" placeholder="Доброго дня! …" autocomplete="off">
-                               <select class="form-select form-select-sm" style="max-width:110px" onchange="if(this.value!==''){document.getElementById('dm-input-${c.id}').value=tplItems[this.value].content;this.value='';}">${cmTplOptions()}</select>
-                               <button class="btn btn-sm btn-primary" type="submit"><i class="bi bi-send"></i></button>
+                const dmForm = `<form class="dm-form" data-comment-id="${id}">
+                               <input id="dm-input-${id}" aria-label="Приватна відповідь на коментар" placeholder="Доброго дня! …" autocomplete="off">
+                               <select class="form-select form-select-sm ib-cm-template" data-comment-template="${id}" aria-label="Шаблон відповіді">${cmTplOptions()}</select>
+                               <button class="btn btn-sm btn-primary" type="submit" aria-label="Надіслати приватну відповідь"><i class="bi bi-send"></i></button>
                            </form>`;
                 let action;
-                if (c.status === 'dm_sent') {
-                    action = `<a href="#" class="ib-cm-sent" onclick="return openCommentConversation(${c.id})" title="Відкрити діалог з цією людиною">
-                        <i class="bi bi-check2-all me-1"></i>Надіслано в директ${c.matched_group ? ' · ШІ: ' + esc(c.matched_group) : ''} <i class="bi bi-box-arrow-up-right"></i></a>`;
-                } else if (cmOpenDm === c.id) {
+                const open = `<button type="button" class="btn btn-sm btn-outline-secondary" data-comment-action="open" data-comment-id="${id}"${conversationId ? ` data-conversation-id="${conversationId}"` : ''}><i class="bi bi-chat-dots me-1"></i>Відкрити чат</button>`;
+                if (cmOpenDm === id) {
                     action = dmForm;
+                    if (conversationId || c.status === 'dm_sent') action += open;
+                } else if (c.status === 'dm_sent') {
+                    action = open;
                 } else {
-                    const failed = c.status === 'dm_failed' ? '<span class="text-danger small me-2">не надіслалось</span>' : '';
-                    const skipped = c.status === 'dm_skipped' ? '<span class="text-muted small me-2" title="Цій людині нещодавно вже писали в директ — бот не дублює">без авто-DM</span>' : '';
-                    action = `${failed}${skipped}<button class="btn btn-sm btn-outline-primary" onclick="cmOpenDm=${c.id};ensureTpl().then(renderComments);setTimeout(()=>document.getElementById('dm-input-${c.id}')?.focus(),80)"><i class="bi bi-send me-1"></i>Написати в директ</button>`;
+                    const failed = !source && c.status === 'dm_failed' ? '<span class="text-danger small me-2">не надіслалось</span>' : '';
+                    const skipped = !source && c.status === 'dm_skipped' ? '<span class="text-muted small me-2" title="Цій людині нещодавно вже писали в директ — бот не дублює">без авто-DM</span>' : '';
+                    action = `${failed}${skipped}<button type="button" class="btn btn-sm btn-outline-primary" data-comment-action="write" data-comment-id="${id}"><i class="bi bi-send me-1"></i>Написати в директ</button>${conversationId ? open : ''}`;
                 }
                 return `<div class="ib-cm">
                     <div class="hd">${chIcon(c.channel)}<span class="nm">${esc(c.from_name)}</span><span class="tm">${esc(c.at_human || '')}</span>
-                        <button class="del" title="Видалити коментар з CRM" onclick="deleteComment(${c.id})"><i class="bi bi-trash"></i></button>
+                        <button type="button" class="del" title="Видалити коментар з CRM" data-comment-action="delete" data-comment-id="${id}"><i class="bi bi-trash"></i></button>
                     </div>
-                    <div class="tx">${esc(c.text || '')}</div>
+                    ${source ? '' : `<div class="tx">${esc(c.text || '')}</div>`}
                     ${post}
                     <div class="actions">${action}</div>
                 </div>`;
             }).join('');
 
-            // Відновлюємо набраний текст і курсор після перемальовки
-            if (cmOpenDm !== null && prevVal !== null) {
+            if (cmOpenDm !== null) {
                 const el = document.getElementById('dm-input-' + cmOpenDm);
-                if (el) {
-                    el.value = prevVal;
-                    if (prevFocus) { el.focus(); el.setSelectionRange(prevVal.length, prevVal.length); }
+                const form = cmDraftForms.get(cmOpenDm);
+                if (el && form) {
+                    el.closest('.dm-form').replaceWith(form);
+                    const restored = form.querySelector('input');
+                    if (prevFocus) { restored.focus({ preventScroll: true }); restored.setSelectionRange(...selection); }
                 }
             }
+            restoreSourceExpanded(box, expanded);
+            box.scrollTop = scrollTop;
         }
+
+        document.getElementById('comments-list').addEventListener('click', async event => {
+            const button = event.target.closest('[data-comment-action]');
+            if (!button) return;
+            const id = commentId(button.dataset.commentId);
+            if (!id) return;
+            if (button.dataset.commentAction === 'open') openCommentConversation(id, button.dataset.conversationId);
+            else if (button.dataset.commentAction === 'delete') deleteComment(id);
+            else if (button.dataset.commentAction === 'write') {
+                cmOpenDm = id;
+                await ensureTpl();
+                renderComments();
+                document.getElementById('dm-input-' + id)?.focus();
+            }
+        });
+        document.getElementById('comments-list').addEventListener('submit', event => {
+            const id = commentId(event.target.dataset.commentId);
+            if (id) sendCmDm(event, id);
+        });
+        document.getElementById('comments-list').addEventListener('change', event => {
+            if (!event.target.matches('[data-comment-template]') || event.target.value === '') return;
+            const id = commentId(event.target.dataset.commentTemplate);
+            const template = tplItems[Number(event.target.value)];
+            const input = document.getElementById('dm-input-' + id);
+            if (input && template && typeof template.content === 'string') input.value = template.content;
+            event.target.value = '';
+        });
 
         async function deleteComment(id) {
             if (!confirm('Видалити цей коментар з CRM? (В Instagram/Facebook він залишиться, якщо там не видалений)')) return;
             try {
-                await fetch(`/api/inbox/comments/${id}`, {
+                const res = await fetch(`/api/inbox/comments/${id}`, {
                     method: 'DELETE',
                     headers: { 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' },
                 });
+                if (!res.ok) {
+                    const error = await res.json().catch(() => ({}));
+                    throw new Error(error.error || error.message || 'Не вдалося видалити коментар. Повторіть спробу.');
+                }
+                cmDraftForms.delete(id);
+                if (cmOpenDm === id) cmOpenDm = null;
                 loadComments();
-            } catch (e) { alert('Не вдалося видалити'); }
+                commentNotify('success', 'Коментар видалено з CRM.', 'delete-' + id);
+            } catch (e) { commentNotify('error', e.message || 'Не вдалося видалити коментар.', 'delete-' + id); }
         }
 
         async function sendCmDm(e, id) {
             e.preventDefault();
             const input = document.getElementById('dm-input-' + id);
             const text = (input?.value || '').trim();
-            if (!text) return false;
+            if (!text || cmSending.has(id)) return false;
+            cmSending.add(id);
             input.disabled = true;
+            const button = input.form?.querySelector('button[type="submit"]');
+            if (button) button.disabled = true;
             try {
                 const res = await fetch(`/api/inbox/comments/${id}/dm`, {
                     method: 'POST',
@@ -1708,12 +1913,19 @@
                     body: JSON.stringify({ text }),
                 });
                 const data = await res.json();
-                if (!data.ok) { alert(data.error || 'Не вдалося надіслати'); input.disabled = false; return false; }
-                cmOpenDm = null;
+                if (!res.ok || !data.ok) throw new Error(data.error || data.message || 'Не вдалося надіслати. Перевірте відповідь і повторіть спробу.');
+                cmDraftForms.delete(id);
+                if (cmOpenDm === id) cmOpenDm = null;
                 loadComments();
+                commentNotify('success', 'Відповідь надіслано в директ.', 'send-' + id);
             } catch (err) {
-                alert('Помилка відправки');
+                input.classList.add('is-invalid');
+                input.setAttribute('aria-invalid', 'true');
+                commentNotify('error', err.message || 'Помилка відправки. Повторіть спробу.', 'send-' + id);
+            } finally {
+                cmSending.delete(id);
                 input.disabled = false;
+                if (button) button.disabled = false;
             }
             return false;
         }
@@ -1727,8 +1939,11 @@
             loadConversations();
             loadComments();
             if (activeId) {
-                fetch(`/api/inbox/conversations/${activeId}/messages`, { headers: { 'Accept': 'application/json' } })
-                    .then(r => r.json()).then(d => renderMessages(d.messages, { lastOutId: d.conversation?.last_out_id, lastOutRead: d.conversation?.last_out_read })).catch(() => {});
+                const forId = activeId;
+                fetch(`/api/inbox/conversations/${forId}/messages`, { headers: { 'Accept': 'application/json' } })
+                    .then(r => r.json()).then(d => {
+                        if (forId === activeId) renderMessages(d.messages, { lastOutId: d.conversation?.last_out_id, lastOutRead: d.conversation?.last_out_read, sourceContext: d.conversation?.source_context ?? null });
+                    }).catch(() => {});
             }
         }, 6000);
     </script>

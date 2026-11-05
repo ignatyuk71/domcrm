@@ -33,6 +33,11 @@ class AiReplyToComment
         $policy = app(\App\Services\Ai\Channels\ProviderPolicy::class);
         $provider = $policy->selected();
         if (! $policy->enabled($provider)) return;
+        if ($provider === 'gpt') {
+            app(\App\Services\Ai\Channels\DispatchContext::class)->run('gpt', null,
+                fn () => app(\App\Services\Ai\Gpt\CommentResponder::class)->handle($this->commentId, $send));
+            return;
+        }
         app(\App\Services\Ai\Channels\DispatchContext::class)->run($provider, null, fn () => $this->handleSelected($send));
     }
 

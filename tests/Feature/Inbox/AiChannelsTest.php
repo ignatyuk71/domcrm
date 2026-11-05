@@ -20,8 +20,10 @@ use App\Services\Ai\Channels\DispatchContext;
 use App\Services\Ai\Channels\Dispatcher;
 use App\Services\Ai\Channels\ProviderUnavailable;
 use App\Services\Ai\Gpt\CatalogReader;
+use App\Services\Ai\Gpt\MessageBuffer;
 use App\Services\Meta\MetaSendService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -30,6 +32,23 @@ use Tests\TestCase;
 class AiChannelsTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Carbon::setTestNow(now());
+        $buffer = \Mockery::mock(MessageBuffer::class)->makePartial()->shouldAllowMockingProtectedMethods();
+        $buffer->shouldReceive('pause')->andReturnUsing(function (float $seconds): void {
+            Carbon::setTestNow(now()->addMicroseconds((int) ceil($seconds * 1_000_000)));
+        });
+        $this->app->instance(MessageBuffer::class, $buffer);
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+        parent::tearDown();
+    }
 
     private function conversation(): array
     {
@@ -68,6 +87,35 @@ class AiChannelsTest extends TestCase
         $comment = InboxComment::create(['meta_connection_id' => $conversation->meta_connection_id, 'channel' => 'facebook', 'comment_id' => 'c1', 'post_id' => 'p1', 'from_id' => 'U', 'text' => 'Ціна?', 'status' => 'new']);
         (new AiReplyToComment($comment->id))->handle(app(MetaSendService::class));
         Http::assertNothingSent();
+    }
+
+    public function test_old_prepared_form_is_not_marked_delivered_when_meta_fails(): void
+    {
+        [$conversation, $message] = $this->conversation();
+        $this->gpt();
+        $template = \App\Services\Ai\Gpt\OrderTexts::all()['delivery_template'];
+        GptInboxReply::create(['inbox_conversation_id' => $conversation->id, 'inbox_message_id' => $message->id,
+            'provider_version' => 0, 'payload' => ['photos' => [], 'text' => '', 'checkout_messages' => [$template],
+                'checkout' => ['status' => 'draft', 'items' => [], 'delivery_requested' => true]]]);
+        $attempts = $calls = 0;
+        Http::fake(function ($request) use (&$attempts, &$calls) {
+            if (str_contains($request->url(), 'api.openai.com')) {
+                if (++$calls === 1) return Http::response(['status' => 'completed', 'output' => [
+                    ['type' => 'function_call', 'name' => 'ask_delivery_details', 'call_id' => 'retry-form', 'arguments' => '{}'],
+                ]]);
+                return Http::response($this->answer(''));
+            }
+            if (++$attempts === 1) return Http::response(['error' => ['message' => 'Тимчасова помилка доставки']], 400);
+            return Http::response(['message_id' => 'retried-form']);
+        });
+
+        $this->assertSame('error', app(Dispatcher::class)->respond($conversation, $message->id)->status);
+        $this->assertFalse($conversation->fresh()->ai_checkout_data['delivery_requested']);
+        $next = $conversation->messages()->create(['direction' => 'in', 'sender' => 'contact', 'text' => 'Надішліть форму ще раз', 'sent_at' => now()]);
+        $this->assertSame('replied', app(Dispatcher::class)->respond($conversation->fresh(), $next->id)->status);
+        $this->assertTrue($conversation->fresh()->ai_checkout_data['delivery_requested']);
+        $this->assertSame(2, $attempts);
+        $this->assertSame(1, $conversation->messages()->where('direction', 'out')->where('text', $template)->count());
     }
 
     public function test_greetings_and_unfinished_phrases_reply_without_gpt_calls_or_handoff(): void
@@ -270,7 +318,7 @@ class AiChannelsTest extends TestCase
             if (str_contains($request->url(), 'api.openai.com')) {
                 $calls++;
                 $this->assertStringContainsString('24.5 см', $request['instructions']);
-                $this->assertStringContainsString('АКТИВНИЙ ПІДБІР І ОФОРМЛЕННЯ', $request['instructions']);
+                $this->assertStringContainsString(\App\Services\Ai\Gpt\ConsultantPrompt::VERSION, $request['instructions']);
                 $this->assertFalse(collect($request['tools'])->contains('name', 'escalate_to_manager'));
                 return Http::response($this->answer('Орієнтир за сіткою — 38/39 (25 см). Бажаєте замовити?'));
             }
@@ -433,10 +481,19 @@ class AiChannelsTest extends TestCase
         [$conversation] = $this->conversation();
         $this->gpt();
         $group = AiPhotoGroup::create(['name' => 'Домашні']);
+        $product = Product::create(['title' => 'Домашні капці', 'sale_price' => '399.00', 'is_active' => true, 'stock_qty' => 2]);
+        $group->products()->attach($product);
         AiSetting::global()->update(['comment_settings' => ['enabled' => true, 'facebook' => true]]);
         $comment = InboxComment::create(['meta_connection_id' => $conversation->meta_connection_id, 'channel' => 'facebook',
             'comment_id' => 'gpt-comment', 'post_id' => 'gpt-post', 'from_id' => 'U', 'text' => 'Ціна?', 'post_excerpt' => 'Домашні', 'status' => 'new']);
-        Http::fake(['api.openai.com/*' => Http::response($this->answer('Домашні')), 'graph.facebook.com/*' => Http::response(['message_id' => 'comment-mid'])]);
+        Http::fake(function ($request) use ($product) {
+            if (str_contains($request->url(), 'api.openai.com')) return Http::response(['status' => 'completed', 'output' => [
+                ['type' => 'function_call', 'name' => 'comment_decision', 'call_id' => 'decision', 'arguments' => json_encode([
+                    'intent' => 'price', 'product_ids' => [$product->id], 'confidence' => 'clear', 'has_color' => false, 'has_size' => false,
+                ])],
+            ]]);
+            return Http::response(['message_id' => 'comment-mid']);
+        });
         (new AiReplyToComment($comment->id))->handle(app(MetaSendService::class));
         $this->assertSame('dm_sent', $comment->fresh()->status);
         $this->assertSame('Домашні', $comment->fresh()->matched_group_name);
@@ -522,13 +579,13 @@ class AiChannelsTest extends TestCase
         $reader->shouldReceive('image')->andReturnUsing(fn ($attachment) => 'data:image/png;base64,'.$attachment['url']);
         for ($i = 0; $i < 4; $i++) {
             $conversation->messages()->create(['direction' => 'in', 'sender' => 'contact', 'text' => 'Фото '.$i,
-                'attachments' => array_fill(0, 3, ['type' => 'image', 'url' => 'picture-'.$i])]);
+                'attachments' => array_map(fn ($number) => ['type' => 'image', 'url' => 'picture-'.$i.'-'.$number], range(1, 3))]);
         }
         $input = $reader->build($conversation);
         $images = collect($input)->flatMap(fn ($m) => is_array($m['content']) ? $m['content'] : [])->where('type', 'input_image');
         $this->assertCount(6, $images);
-        $this->assertStringEndsWith('picture-3', $images->last()['image_url']);
-        $this->assertFalse($images->contains(fn ($image) => str_ends_with($image['image_url'], 'picture-0')));
+        $this->assertStringEndsWith('picture-3-3', $images->last()['image_url']);
+        $this->assertFalse($images->contains(fn ($image) => str_contains($image['image_url'], 'picture-0-')));
     }
 
     public function test_all_chats_follow_crm_provider_including_legacy_chat_overrides(): void

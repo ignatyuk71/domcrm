@@ -107,7 +107,7 @@ class InboxController extends Controller
     /** Повідомлення діалогу + позначити прочитаним. */
     public function messages(InboxConversation $conversation)
     {
-        $conversation->loadMissing(['connection:id,page_name', 'contact:id,name,external_id,profile_pic']);
+        $conversation->loadMissing(['connection:id,page_name,page_id', 'contact:id,name,external_id,profile_pic,meta_connection_id,channel']);
 
         $items = $conversation->messages()
             ->orderBy('sent_at')
@@ -121,10 +121,18 @@ class InboxController extends Controller
             ? collect()
             : $conversation->messages()->whereIn('external_message_id', $quotedMids)->get()->keyBy('external_message_id');
 
-        $messages = $items->map(function (InboxMessage $m) use ($quoted) {
+        $presenter = app(\App\Services\Ai\Gpt\CommentContextPresenter::class);
+        $sourceCards = $presenter->forMessages($items, $conversation);
+        $activeSource = app(\App\Services\Ai\Gpt\CommentContextStore::class)->source($conversation);
+        $activeSourceCard = $activeSource ? $presenter->forSource($activeSource, $conversation) : null;
+        if ($activeSourceCard && isset($activeSource['_message_id'])) $sourceCards[$activeSource['_message_id']] ??= $activeSourceCard;
+
+        $messages = $items->map(function (InboxMessage $m) use ($quoted, $sourceCards) {
             $ctx = null;
             $c = $m->context;
-            if ($c) {
+            if (isset($sourceCards[$m->id])) {
+                $ctx = $sourceCards[$m->id];
+            } elseif ($c && ($c['type'] ?? '') !== 'gpt_comment') {
                 if (($c['type'] ?? '') === 'reply') {
                     $q = $quoted[$c['mid'] ?? ''] ?? null;
                     $qImage = $q ? collect($q->attachments ?? [])->map(fn ($a) => $this->attachmentUrl($a))->first(fn ($u) => $u) : null;
@@ -173,6 +181,7 @@ class InboxController extends Controller
                 'chat_status_id' => $conversation->chat_status_id,
                 'ai_enabled' => (bool) $conversation->ai_enabled,
                 'ai_active_provider' => app(\App\Services\Ai\Channels\ProviderPolicy::class)->selected(),
+                'source_context' => $activeSourceCard,
                 'ai_paused_until_human' => ($conversation->ai_paused_until && now()->lt($conversation->ai_paused_until))
                     ? $conversation->ai_paused_until->format('H:i')
                     : null,
@@ -647,14 +656,15 @@ class InboxController extends Controller
     {
         $channel = $request->query('channel');
 
-        $items = \App\Models\InboxComment::query()
+        $comments = \App\Models\InboxComment::query()
             ->with('connection:id,page_name')
             ->when(in_array($channel, ['facebook', 'instagram'], true), fn ($q) => $q->where('channel', $channel))
             ->orderByDesc('commented_at')
             ->orderByDesc('id')
             ->limit(200)
-            ->get()
-            ->map(fn (\App\Models\InboxComment $c) => [
+            ->get();
+        $sourceCards = app(\App\Services\Ai\Gpt\CommentContextPresenter::class)->forComments($comments);
+        $items = $comments->map(fn (\App\Models\InboxComment $c) => [
                 'id' => $c->id,
                 'channel' => $c->channel,
                 'store' => $c->connection?->page_name ?? '—',
@@ -664,6 +674,8 @@ class InboxController extends Controller
                 'post_image' => $c->post_image ? url($c->post_image) : null,
                 'status' => $c->status,
                 'matched_group' => $c->matched_group_name,
+                'source_context' => $sourceCards[$c->id] ?? null,
+                'conversation_id' => $sourceCards[$c->id]['conversation_id'] ?? null,
                 'at_human' => ($c->commented_at ?? $c->created_at)?->diffForHumans(),
             ]);
 
@@ -708,9 +720,8 @@ class InboxController extends Controller
     /** Розмова, де лежить наша приватна відповідь на цей коментар (по mid з еха). */
     public function commentConversation(\App\Models\InboxComment $comment)
     {
-        $conversationId = $comment->dm_message_id
-            ? InboxMessage::where('external_message_id', $comment->dm_message_id)->value('inbox_conversation_id')
-            : null;
+        $card = app(\App\Services\Ai\Gpt\CommentContextPresenter::class)->forComments(collect([$comment]));
+        $conversationId = $card[$comment->id]['conversation_id'] ?? null;
 
         return response()->json(['conversation_id' => $conversationId]);
     }

@@ -15,9 +15,29 @@ class Dispatcher
     {
         $firstRun = null;
         while (true) {
+            $gptVersion = null;
+            if ($this->policy->selected() === 'gpt' && $this->policy->enabled('gpt')) {
+                $gptVersion = (int) $conversation->ai_provider_version;
+                $readyId = app(\App\Services\Ai\Gpt\MessageBuffer::class)->waitForQuiet($conversation, $messageId);
+                if ($this->policy->selected() !== 'gpt' || ! $this->policy->enabled('gpt')
+                    || (int) $conversation->ai_provider_version !== $gptVersion) {
+                    return $firstRun ?? $this->record($conversation, $messageId, ['status' => 'skipped_stale']);
+                }
+                if ($readyId === null) return $firstRun ?? $this->record($conversation, $messageId, ['status' => 'skipped_in_progress']);
+                $messageId = $readyId;
+            }
             $lock = Cache::lock('ai-channel-conversation-'.$conversation->id, 300);
             if (! $lock->get()) return $firstRun ?? $this->record($conversation, $messageId, ['status' => 'skipped_in_progress']);
             try {
+                if ($gptVersion !== null && ($this->policy->selected() !== 'gpt' || ! $this->policy->enabled('gpt'))) {
+                    return $firstRun ?? $this->record($conversation, $messageId, ['status' => 'skipped_stale']);
+                }
+                if ($this->policy->selected() === 'gpt' && $this->policy->enabled('gpt')) {
+                    // Повідомлення могло надійти між завершенням паузи та захопленням замка.
+                    $latest = $conversation->messages()->where('sender', '!=', 'ai')->latest('id')->first();
+                    if ($latest && $latest->direction === 'in' && ($latest->id !== $messageId
+                        || app(\App\Services\Ai\Gpt\MessageBuffer::class)->remaining($latest) > 0)) continue;
+                }
                 $run = $this->respondOnce($conversation, $messageId);
                 $firstRun ??= $run;
             } finally {
@@ -26,7 +46,7 @@ class Dispatcher
             if ($run->provider !== 'gpt' || $this->policy->selected() !== 'gpt' || ! $this->policy->enabled('gpt')) return $firstRun;
             $conversation->refresh();
             if (! $conversation->ai_enabled || $conversation->ai_paused_until?->isFuture()) return $firstRun;
-            // Після звільнення замка підхоплюємо найновішу репліку, яку інша задача пропустила.
+            // Нову репліку також проводимо через повне вікно тиші на початку циклу.
             $latest = $conversation->messages()->where('sender', '!=', 'ai')->latest('id')->first(['id', 'direction']);
             if (! $latest || $latest->direction !== 'in' || $latest->id <= $messageId) return $firstRun;
             $messageId = $latest->id;

@@ -8,15 +8,29 @@ use Illuminate\Support\Facades\Validator;
 final class CheckoutSession
 {
     public array $messages = [];
+    public array $messageCheckpoints = [];
     public bool $completed = false;
     public bool $escalated = false;
+    private array $deliveryBefore;
+    private bool $paymentRequestInvalidated = false;
 
     public function __construct(private CheckoutPricing $pricing, public ?array $data = null, private array $receipt = [])
     {
+        $this->deliveryBefore = [
+            'delivery_requested' => $data['delivery_requested'] ?? null,
+            'payment_request' => $data['payment_request'] ?? null,
+        ];
         if (! empty($receipt['foot_length_cm'])) {
             $this->data ??= ['status' => 'draft', 'items' => []];
             $this->data['sizing'] = ['foot_length_cm' => $receipt['foot_length_cm']];
         }
+    }
+
+    /** Підготовка тексту ще не підтверджує його фактичне надсилання. */
+    public function deliveryState(): array
+    {
+        return ['before' => $this->deliveryBefore, 'checkpoints' => $this->messageCheckpoints,
+            'invalidated_payment_request' => $this->paymentRequestInvalidated];
     }
 
     public function run(string $name, array $args): array
@@ -79,6 +93,7 @@ final class CheckoutSession
             unset($candidate['needs_confirmation'], $candidate['quote_updated_turn_id']);
         }
         if (! $this->data || $this->signature($candidate) !== $this->signature($this->data)) {
+            if (isset($candidate['payment_request'])) $this->paymentRequestInvalidated = true;
             unset($candidate['payment_request'], $candidate['receipt']);
         }
         $candidate['status'] = 'draft';
@@ -92,6 +107,9 @@ final class CheckoutSession
     private function deliveryForm(): array
     {
         $this->data ??= ['status' => 'draft', 'items' => []];
+        if (! empty($this->data['delivery_requested'])) {
+            return ['готово' => 'Форму доставки вже надіслано. Збережи отримані дані через update_order; запитуй лише відсутнє.'];
+        }
         $this->data['delivery_requested'] = true;
         $template = OrderTexts::all()['delivery_template'];
         if (isset($this->data['total']) && Money::cents($this->data['total']) <= 10000) {
@@ -99,6 +117,7 @@ final class CheckoutSession
                 ' або повністю на картку/ФОП', $template);
         }
         $this->messages[] = $template;
+        $this->messageCheckpoints[array_key_last($this->messages)] = ['delivery_requested' => true];
 
         return ['готово' => 'Форму доставки надіслано. Збережи отримані дані через update_order. Запитуй лише відсутнє; надану адресу приймай без зайвих уточнень.'];
     }
@@ -111,7 +130,10 @@ final class CheckoutSession
             throw new \DomainException('Уточни спосіб оплати: повна оплата чи 100 грн передоплати. Для cod переказ не потрібний.');
         }
         $signature = $this->signature($this->data);
-        if (($this->data['payment_request']['signature'] ?? null) === $signature) {
+        $previous = $this->data['payment_request'] ?? null;
+        $sameRequest = ($previous['signature'] ?? null) === $signature;
+        // Старі записи без sent уже вважаються повністю доставленими.
+        if ($sameRequest && ($previous['sent'] ?? true) === true) {
             return ['готово' => 'Актуальні реквізити вже надіслані. Очікуй квитанцію, не дублюй повідомлення.', 'order' => $this->data];
         }
         $texts = OrderTexts::all();
@@ -119,9 +141,21 @@ final class CheckoutSession
         $condition = $this->data['payment'] === 'deposit'
             ? 'Передоплата — '.Money::display($payNow).' грн. Решта '.Money::display(Money::cents($this->data['pay_on_delivery'])).' грн — при отриманні.'
             : 'Повна оплата — '.Money::display($payNow).' грн.';
-        array_push($this->messages, $condition."\n\n".$texts['card_intro'], $texts['card_number'],
-            sprintf($texts['iban_intro'], Money::display($payNow)), $texts['iban_number']);
-        $this->data['payment_request'] = ['signature' => $signature, 'turn_id' => $this->receipt['turn_id'] ?? null];
+        $messages = [$condition."\n\n".$texts['card_intro'], $texts['card_number'],
+            sprintf($texts['iban_intro'], Money::display($payNow)), $texts['iban_number']];
+        $count = count($messages);
+        // Незавершений некоректний курсор не може сам підтвердити доставку.
+        $sent = $sameRequest ? max(0, min($count - 1, (int) ($previous['messages_sent'] ?? 0))) : 0;
+        $request = ['signature' => $signature,
+            'turn_id' => $sameRequest ? ($previous['turn_id'] ?? null) : ($this->receipt['turn_id'] ?? null),
+            'sent' => false, 'messages_sent' => $sent, 'message_count' => $count];
+        for ($index = $sent; $index < $count; $index++) {
+            $this->messages[] = $messages[$index];
+            $request['messages_sent'] = $index + 1;
+            $request['sent'] = $index + 1 === $count;
+            $this->messageCheckpoints[array_key_last($this->messages)] = ['payment_request' => $request];
+        }
+        $this->data['payment_request'] = $request;
 
         return ['готово' => 'Картку й IBAN надіслано окремими повідомленнями з точною сумою. Не дублюй реквізити; очікуй квитанцію.', 'order' => $this->data];
     }
@@ -138,12 +172,22 @@ final class CheckoutSession
             if (! $request || $request['signature'] !== $this->signature($this->data)) {
                 throw new \DomainException('Спочатку надішли актуальні реквізити через send_payment_details й отримай квитанцію.');
             }
-            if (empty($this->receipt['has_image']) || ! isset($this->receipt['turn_id']) || $request['turn_id'] === $this->receipt['turn_id']) {
-                throw new \DomainException('Очікуй фото квитанції в новому повідомленні після надсилання реквізитів. Текстове «оплатив» не замінює квитанцію.');
+            if (($request['sent'] ?? true) !== true) {
+                throw new \DomainException('Реквізити надіслано не повністю. Продовж надсилання через send_payment_details й отримай квитанцію.');
             }
-            $this->data['receipt'] = ['turn_id' => $this->receipt['turn_id'], 'status' => 'provided_unverified'];
+            $savedReceipt = $this->data['receipt'] ?? null;
+            $resumeCompletion = ! empty($this->data['completion_pending'])
+                && ($savedReceipt['status'] ?? null) === 'provided_unverified'
+                && isset($savedReceipt['turn_id']) && $savedReceipt['turn_id'] !== $request['turn_id'];
+            if (! $resumeCompletion) {
+                if (empty($this->receipt['has_image']) || ! isset($this->receipt['turn_id']) || $request['turn_id'] === $this->receipt['turn_id']) {
+                    throw new \DomainException('Очікуй фото квитанції в новому повідомленні після надсилання реквізитів. Текстове «оплатив» не замінює квитанцію.');
+                }
+                $this->data['receipt'] = ['turn_id' => $this->receipt['turn_id'], 'status' => 'provided_unverified'];
+            }
         }
         $this->data['status'] = 'ready_for_manager';
+        unset($this->data['completion_pending']);
         $this->data['finished_at'] = now()->toIso8601String();
         $this->completed = true;
 
@@ -173,6 +217,7 @@ final class CheckoutSession
         $this->calculate($candidate);
         $this->data = $candidate;
         if ($changed) {
+            if (isset($this->data['payment_request'])) $this->paymentRequestInvalidated = true;
             $this->data['needs_confirmation'] = true;
             $this->data['quote_updated_turn_id'] = $this->receipt['turn_id'] ?? null;
             $this->data['status'] = 'draft';
@@ -227,7 +272,7 @@ final class CheckoutSession
 
     private function escalate(): array
     {
-        if (! empty($this->receipt['foot_length_cm']) || ! empty($this->receipt['consultation_request'])) {
+        if (empty($this->receipt['handoff_requested']) && (! empty($this->receipt['foot_length_cm']) || ! empty($this->receipt['consultation_request']))) {
             throw new \DomainException('Це звичайна консультація про вибір товару або розміру. Використай наявні факти й відомі сантиметри або постав одне уточнення; не передавай підбір менеджеру.');
         }
         $this->data = array_merge($this->data ?? [], ['status' => 'needs_human']);

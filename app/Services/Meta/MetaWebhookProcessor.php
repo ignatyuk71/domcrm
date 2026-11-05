@@ -353,6 +353,12 @@ class MetaWebhookProcessor
         if (!$isEcho) {
             $conversation->increment('unread_count');
 
+            if (app(\App\Services\Ai\Channels\ProviderPolicy::class)->selected() === 'gpt') {
+                app(\App\Services\Ai\Gpt\MessageBuffer::class)->received($msg);
+                // Поки оброблявся вебхук, попередній хід міг завершити заявку.
+                $conversation->refresh();
+            }
+
             // AI-агент: думає вже ПІСЛЯ того, як вебхук віддав фейсбуку 200.
             if ($conversation->ai_enabled) {
                 AiRespondToMessage::dispatchAfterResponse($conversation->id, $msg->id);
