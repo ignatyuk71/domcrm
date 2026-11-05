@@ -47,7 +47,14 @@
                     </div>
                     <div class="col-12 col-md-5" data-gpt-connection hidden>
                         <label class="form-label small text-secondary mb-1" for="ai-gpt-model">Модель</label>
-                        <input id="ai-gpt-model" data-error-field="gpt_model" class="form-control" placeholder="ID моделі з вашого API">
+                        <select id="ai-gpt-model" data-error-field="gpt_model" class="form-select">
+                            <option value="">Виберіть модель GPT</option>
+                            <option value="gpt-5.4-mini">GPT-5.4 Mini</option>
+                            <option value="gpt-6-luna">GPT-6 Luna</option>
+                            <option value="gpt-6.1-terra">GPT-6.1 Terra</option>
+                            <option value="gpt-6.1-sol">GPT-6.1 Sol</option>
+                            <option value="gpt-6-astra">GPT-6 Astra</option>
+                        </select>
                     </div>
                     <div class="col-12 col-md-2" data-claude-connection hidden>
                         <button class="btn btn-outline-primary" id="ai-test"><i class="bi bi-plug me-1"></i>Перевірити</button>

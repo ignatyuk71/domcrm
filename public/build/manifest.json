@@ -1,21 +1,4 @@
 {
-  "../../../Users/ihnatiuk_myhailo/DOM-CRM/domcrm/node_modules/bootstrap-icons/font/fonts/bootstrap-icons.woff": {
-    "file": "assets/bootstrap-icons-BeopsB42.woff",
-    "src": "../../../Users/ihnatiuk_myhailo/DOM-CRM/domcrm/node_modules/bootstrap-icons/font/fonts/bootstrap-icons.woff"
-  },
-  "../../../Users/ihnatiuk_myhailo/DOM-CRM/domcrm/node_modules/bootstrap-icons/font/fonts/bootstrap-icons.woff2": {
-    "file": "assets/bootstrap-icons-mSm7cUeB.woff2",
-    "src": "../../../Users/ihnatiuk_myhailo/DOM-CRM/domcrm/node_modules/bootstrap-icons/font/fonts/bootstrap-icons.woff2"
-  },
-  "../../../Users/ihnatiuk_myhailo/DOM-CRM/domcrm/node_modules/vue/dist/vue.runtime.esm-bundler.js": {
-    "file": "assets/vue.runtime.esm-bundler-qLI4OVDr.js",
-    "name": "vue.runtime.esm-bundler",
-    "src": "../../../Users/ihnatiuk_myhailo/DOM-CRM/domcrm/node_modules/vue/dist/vue.runtime.esm-bundler.js",
-    "isDynamicEntry": true,
-    "imports": [
-      "_runtime-dom.esm-bundler-C3NQeTcc.js"
-    ]
-  },
   "_DateRangePicker-CkxYiwDO.js": {
     "file": "assets/DateRangePicker-CkxYiwDO.js",
     "name": "DateRangePicker",
@@ -60,6 +43,23 @@
       "resources/js/crm/index.js"
     ]
   },
+  "node_modules/bootstrap-icons/font/fonts/bootstrap-icons.woff": {
+    "file": "assets/bootstrap-icons-BeopsB42.woff",
+    "src": "node_modules/bootstrap-icons/font/fonts/bootstrap-icons.woff"
+  },
+  "node_modules/bootstrap-icons/font/fonts/bootstrap-icons.woff2": {
+    "file": "assets/bootstrap-icons-mSm7cUeB.woff2",
+    "src": "node_modules/bootstrap-icons/font/fonts/bootstrap-icons.woff2"
+  },
+  "node_modules/vue/dist/vue.runtime.esm-bundler.js": {
+    "file": "assets/vue.runtime.esm-bundler-qLI4OVDr.js",
+    "name": "vue.runtime.esm-bundler",
+    "src": "node_modules/vue/dist/vue.runtime.esm-bundler.js",
+    "isDynamicEntry": true,
+    "imports": [
+      "_runtime-dom.esm-bundler-C3NQeTcc.js"
+    ]
+  },
   "resources/css/app.css": {
     "file": "assets/app-tn0RQdqM.css",
     "src": "resources/css/app.css",
@@ -74,13 +74,13 @@
     "src": "resources/images/costs/halluci-insole-black-edging.webp"
   },
   "resources/js/aiSettings.js": {
-    "file": "assets/aiSettings-DZ4ZBHYW.js",
+    "file": "assets/aiSettings-XBIC4e0y.js",
     "name": "aiSettings",
     "src": "resources/js/aiSettings.js",
     "isDynamicEntry": true
   },
   "resources/js/app.js": {
-    "file": "assets/app-C7z0QIXD.js",
+    "file": "assets/app-Cc262p5A.js",
     "name": "app",
     "src": "resources/js/app.js",
     "isEntry": true,
@@ -89,12 +89,12 @@
     ],
     "dynamicImports": [
       "resources/js/team.js",
-      "../../../Users/ihnatiuk_myhailo/DOM-CRM/domcrm/node_modules/vue/dist/vue.runtime.esm-bundler.js",
+      "node_modules/vue/dist/vue.runtime.esm-bundler.js",
       "resources/js/crm/components/ui/FlashToast.vue",
-      "../../../Users/ihnatiuk_myhailo/DOM-CRM/domcrm/node_modules/vue/dist/vue.runtime.esm-bundler.js",
+      "node_modules/vue/dist/vue.runtime.esm-bundler.js",
       "resources/js/crm/components/ui/PageToast.vue",
       "resources/js/aiSettings.js",
-      "../../../Users/ihnatiuk_myhailo/DOM-CRM/domcrm/node_modules/vue/dist/vue.runtime.esm-bundler.js",
+      "node_modules/vue/dist/vue.runtime.esm-bundler.js",
       "resources/js/crm/components/ui/PageToast.vue"
     ],
     "css": [

@@ -105,7 +105,15 @@ export function initAiSettings(root, notify) {
             const global = data.global;
             const connection = data.connection;
             el('ai-agent').value = connection.agent;
-            el('ai-gpt-model').value = connection.gpt_model || '';
+            const gptModel = connection.gpt_model || '';
+            // Зберігаємо вибір раніше налаштованої моделі, навіть якщо її немає у списку.
+            if (gptModel && !Array.from(el('ai-gpt-model').options).some(option => option.value === gptModel)) {
+                const option = document.createElement('option');
+                option.value = gptModel;
+                option.textContent = gptModel;
+                el('ai-gpt-model').append(option);
+            }
+            el('ai-gpt-model').value = gptModel;
             el('gpt-key-hint').textContent = connection.has_gpt_key ? '— ' + connection.gpt_key_hint : '';
             showConnection();
             const model = global.model || 'claude-sonnet-4-6';

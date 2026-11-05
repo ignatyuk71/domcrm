@@ -80,11 +80,15 @@ it('saves GPT through the same action without calling an external API on selecti
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(root.querySelector('[data-claude-connection]').hidden).toBe(true);
     expect(root.querySelector('[data-gpt-connection]').hidden).toBe(false);
+    expect(el('ai-gpt-model').tagName).toBe('SELECT');
     expect(el('ai-gpt-model').value).toBe('gpt-test');
+    el('ai-gpt-model').value = 'gpt-6-luna';
+    el('ai-gpt-model').dispatchEvent(new Event('change', { bubbles: true }));
+    expect(fetch).toHaveBeenCalledTimes(1);
     el('ai-gpt-key').value = 'sk-gpt-new';
     fetch.mockImplementationOnce(() => response({ ok: true }));
     await controller.save();
-    expect(JSON.parse(fetch.mock.calls.at(-1)[1].body)).toMatchObject({ agent: 'gpt', gpt_api_key: 'sk-gpt-new', gpt_model: 'gpt-test', api_key: null });
+    expect(JSON.parse(fetch.mock.calls.at(-1)[1].body)).toMatchObject({ agent: 'gpt', gpt_api_key: 'sk-gpt-new', gpt_model: 'gpt-6-luna', api_key: null });
     expect(el('ai-gpt-key').value).toBe('');
 });
 
@@ -92,11 +96,11 @@ it('keeps the GPT draft and field error after a failed unified save', async () =
     el('ai-agent').value = 'gpt';
     el('ai-agent').dispatchEvent(new Event('change', { bubbles: true }));
     el('ai-gpt-key').value = 'sk-gpt-draft';
-    el('ai-gpt-model').value = 'draft-model';
+    el('ai-gpt-model').value = 'gpt-5.4-mini';
     fetch.mockImplementationOnce(() => response({ message: 'Помилка', errors: { gpt_model: ['Невідома модель.'] } }, false));
     await controller.save();
     expect(el('ai-gpt-key').value).toBe('sk-gpt-draft');
-    expect(el('ai-gpt-model').value).toBe('draft-model');
+    expect(el('ai-gpt-model').value).toBe('gpt-5.4-mini');
     expect(el('ai-gpt-model').getAttribute('aria-invalid')).toBe('true');
     expect(notify).toHaveBeenCalledWith(expect.objectContaining({ type: 'error', actionLabel: 'Повторити' }));
 });
