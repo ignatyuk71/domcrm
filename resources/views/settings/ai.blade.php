@@ -15,8 +15,8 @@
         <div class="card border-0 shadow-sm rounded-4 mb-4">
             <div class="card-body p-4">
                 <h2 class="h6 fw-bold mb-3"><i class="bi bi-key me-1 text-primary"></i>Підключення</h2>
-                <div class="row g-3 mb-3">
-                    <div class="col-12 col-md-4">
+                <div class="row g-3 align-items-start">
+                    <div class="col-12 col-lg-2">
                         <label class="form-label small text-secondary mb-1" for="ai-agent">API</label>
                         <select id="ai-agent" data-error-field="agent" class="form-select" disabled>
                             <option value="claude">Claude</option>
@@ -24,15 +24,16 @@
                             <option value="off">Вимкнено</option>
                         </select>
                     </div>
-                </div>
-                <div class="row g-3 align-items-end">
-                    <div class="col-12 col-md-5" data-claude-connection hidden>
+                    <div class="col-12 col-lg-5" data-claude-connection hidden>
                         <label class="form-label small text-secondary mb-1" for="ai-key">Ключ Claude API <span id="key-hint" class="text-secondary"></span></label>
-                        <input id="ai-key" data-error-field="api_key" type="password" class="form-control" placeholder="sk-ant-..." autocomplete="off">
+                        <div class="input-group">
+                            <input id="ai-key" data-error-field="api_key" type="password" class="form-control" placeholder="sk-ant-..." autocomplete="off">
+                            <button type="button" class="btn btn-outline-primary" id="ai-test"><i class="bi bi-plug me-1"></i>Перевірити</button>
+                        </div>
                         <div class="form-text">Ключ зберігається зашифрованим. Поле порожнє — ключ не зміниться.</div>
                     </div>
-                    <div class="col-12 col-md-5" data-claude-connection hidden>
-                        <label class="form-label small text-secondary mb-1">Модель</label>
+                    <div class="col-12 col-lg-5" data-claude-connection hidden>
+                        <label class="form-label small text-secondary mb-1" for="ai-model">Модель</label>
                         <select id="ai-model" data-error-field="model" class="form-select">
                             <option value="claude-sonnet-5">Claude Sonnet 5 — новий, швидкий і вигідний</option>
                             <option value="claude-sonnet-4-6">Claude Sonnet 4.6 — баланс</option>
@@ -40,12 +41,12 @@
                             <option value="claude-opus-4-8">Claude Opus 4.8 — найрозумніший</option>
                         </select>
                     </div>
-                    <div class="col-12 col-md-5" data-gpt-connection hidden>
+                    <div class="col-12 col-lg-5" data-gpt-connection hidden>
                         <label class="form-label small text-secondary mb-1" for="ai-gpt-key">Ключ GPT API <span id="gpt-key-hint" class="text-secondary"></span></label>
                         <input id="ai-gpt-key" data-error-field="gpt_api_key" type="password" class="form-control" placeholder="sk-…" autocomplete="off">
                         <div class="form-text">Ключ зберігається зашифрованим. Поле порожнє — ключ не зміниться.</div>
                     </div>
-                    <div class="col-12 col-md-5" data-gpt-connection hidden>
+                    <div class="col-12 col-lg-5" data-gpt-connection hidden>
                         <label class="form-label small text-secondary mb-1" for="ai-gpt-model">Модель</label>
                         <select id="ai-gpt-model" data-error-field="gpt_model" class="form-select">
                             <option value="">Виберіть модель GPT</option>
@@ -56,30 +57,34 @@
                             <option value="gpt-6-astra">GPT-6 Astra</option>
                         </select>
                     </div>
-                    <div class="col-12 col-md-2" data-claude-connection hidden>
-                        <button class="btn btn-outline-primary" id="ai-test"><i class="bi bi-plug me-1"></i>Перевірити</button>
-                    </div>
-                    <div class="col-6 col-md-2">
-                        <label class="form-label small text-secondary mb-1">Пауза, сек</label>
-                        <input id="ai-debounce" data-error-field="debounce_seconds" type="number" class="form-control" min="0" max="60" value="10" title="Скільки чекати, поки клієнт допише (відповідь одна на всю чергу повідомлень)">
-                    </div>
-                    <div class="col-12 col-md-5">
-                        <label class="form-label small text-secondary mb-1">Каталог для агента</label>
-                        <select id="ai-catalog-mode" data-error-field="catalog_mode" class="form-select">
-                            <option value="all">Вся база товарів (вітрина + інші товари)</option>
-                            <option value="showcase">Лише вітрина — продає тільки те, що в Галереї ШІ</option>
-                        </select>
-                        <div class="form-text">«Лише вітрина»: чого нема в групах Галереї ШІ — того для агента не існує.</div>
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <label class="form-label small text-secondary mb-1">Пауза після оператора, хв</label>
-                        <input id="ai-op-pause" data-error-field="operator_pause_minutes" type="number" class="form-control" min="0" max="1440" value="3">
-                        <div class="form-text">Людина написала в розмову → ШІ мовчить у ній стільки хвилин і продовжує сам. 0 — вимкнено.</div>
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <label class="form-label small text-secondary mb-1">Нагадування мовчазним, год</label>
-                        <input id="ai-followup" data-error-field="follow_up_hours" type="number" class="form-control" min="0" max="48" value="3">
-                        <div class="form-text">Клієнт написав, але замовк → через стільки годин ШІ шле ОДИН теплий пінг. 0 — вимкнено.</div>
+                </div>
+
+                <div class="border-top pt-4 mt-4">
+                    <h3 class="h6 fw-bold mb-3"><i class="bi bi-sliders me-1 text-primary"></i>Робота агента</h3>
+                    <div class="row g-3 align-items-start">
+                        <div class="col-12 col-sm-6 col-xl-3">
+                            <label class="form-label small text-secondary mb-1" for="ai-catalog-mode">Каталог для агента</label>
+                            <select id="ai-catalog-mode" data-error-field="catalog_mode" class="form-select" aria-describedby="ai-catalog-help">
+                                <option value="all">Вся база товарів</option>
+                                <option value="showcase">Лише Галерея ШІ</option>
+                            </select>
+                            <div id="ai-catalog-help" class="form-text">«Лише Галерея ШІ»: агент бачить тільки товари з її груп.</div>
+                        </div>
+                        <div class="col-12 col-sm-6 col-xl-3">
+                            <label class="form-label small text-secondary mb-1" for="ai-debounce">Пауза відповіді, сек</label>
+                            <input id="ai-debounce" data-error-field="debounce_seconds" type="number" class="form-control" min="0" max="60" value="10" aria-describedby="ai-debounce-help">
+                            <div id="ai-debounce-help" class="form-text">Час тиші після останнього повідомлення клієнта, щоб відповісти на всі разом.</div>
+                        </div>
+                        <div class="col-12 col-sm-6 col-xl-3">
+                            <label class="form-label small text-secondary mb-1" for="ai-op-pause">Після оператора, хв</label>
+                            <input id="ai-op-pause" data-error-field="operator_pause_minutes" type="number" class="form-control" min="0" max="1440" value="3" aria-describedby="ai-op-pause-help">
+                            <div id="ai-op-pause-help" class="form-text">Пауза ШІ після повідомлення оператора. 0 — без паузи.</div>
+                        </div>
+                        <div class="col-12 col-sm-6 col-xl-3">
+                            <label class="form-label small text-secondary mb-1" for="ai-followup">Нагадування, год</label>
+                            <input id="ai-followup" data-error-field="follow_up_hours" type="number" class="form-control" min="0" max="48" value="3" aria-describedby="ai-followup-help">
+                            <div id="ai-followup-help" class="form-text">Одне нагадування клієнту, який замовк. 0 — вимкнено.</div>
+                        </div>
                     </div>
                 </div>
             </div>
