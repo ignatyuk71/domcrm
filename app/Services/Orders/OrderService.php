@@ -5,7 +5,6 @@ namespace App\Services\Orders;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderDelivery;
-use App\Models\OrderItem;
 use App\Models\OrderPayment;
 use App\Models\OrderSource;
 use App\Models\Status;
@@ -16,10 +15,14 @@ use Illuminate\Support\Facades\DB;
 /**
  * Запис замовлення (створення/оновлення) з усіма повʼязаними сутностями.
  * Винесено з OrderController — валідація лишається в контролері, тут лише
- * доменна логіка в одній транзакції. Поведінка 1:1.
+ * доменна логіка в одній транзакції зі збереженням історичних даних позицій.
  */
 class OrderService
 {
+    public function __construct(private OrderItemSynchronizer $items)
+    {
+    }
+
     /** Створити замовлення з товарами, оплатою, доставкою. */
     public function create(array $data, ?int $managerId = null): Order
     {
@@ -87,23 +90,7 @@ class OrderService
             }
 
             // Товари
-            $productCosts = $this->productCosts($data['items']);
-            foreach ($data['items'] as $item) {
-                $productId = isset($item['product_id']) ? (int) $item['product_id'] : null;
-                OrderItem::create([
-                    'order_id' => $order->id,
-                    'product_id' => $item['product_id'] ?? null,
-                    'product_variant_id' => $item['product_variant_id'] ?? null,
-                    'product_title' => $item['title'] ?? null,
-                    'sku' => $item['sku'] ?? null,
-                    'size' => $item['size'] ?? null,
-                    'color' => $item['color'] ?? null,
-                    'price' => $item['price'] ?? 0,
-                    'cost_price' => $productId ? ($productCosts[$productId] ?? null) : null,
-                    'qty' => $item['qty'] ?? 1,
-                    'total' => ($item['price'] ?? 0) * ($item['qty'] ?? 1),
-                ]);
-            }
+            $this->items->sync($order, $data['items'], $data['deleted_item_ids'] ?? null);
 
             // Оплата
             OrderPayment::create([
@@ -151,7 +138,8 @@ class OrderService
     /** Оновити замовлення та повʼязані сутності. */
     public function update(Order $order, array $data): Order
     {
-        DB::transaction(function () use ($data, $order) {
+        return DB::transaction(function () use ($data, $order) {
+            $order = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
             // Клієнт: дедуп за нормалізованим номером; порожні поля не затирають наявні
             // (інакше редагування одного замовлення псувало б спільного клієнта / обнуляло phone).
             $cd = $data['customer'] ?? [];
@@ -196,24 +184,7 @@ class OrderService
             // Теги
             $order->tags()->sync($this->resolveTagIds($data['tag_ids'] ?? []));
 
-            // Позиції: простий варіант — видалити старі і створити нові
-            $order->items()->delete();
-            $productCosts = $this->productCosts($data['items']);
-            foreach ($data['items'] as $item) {
-                $productId = isset($item['product_id']) ? (int) $item['product_id'] : null;
-                $order->items()->create([
-                    'product_id' => $item['product_id'] ?? null,
-                    'product_variant_id' => $item['product_variant_id'] ?? null,
-                    'product_title' => $item['title'] ?? null,
-                    'sku' => $item['sku'] ?? null,
-                    'size' => $item['size'] ?? null,
-                    'color' => $item['color'] ?? null,
-                    'price' => $item['price'] ?? 0,
-                    'cost_price' => $productId ? ($productCosts[$productId] ?? null) : null,
-                    'qty' => $item['qty'] ?? 1,
-                    'total' => ($item['price'] ?? 0) * ($item['qty'] ?? 1),
-                ]);
-            }
+            $this->items->sync($order, $data['items'], $data['deleted_item_ids'] ?? null);
 
             // Ручне зіставлення товарів має прибрати замовлення з черги інтеграцій.
             if ($order->needs_review) {
@@ -269,9 +240,8 @@ class OrderService
                     'recipient_phone' => $data['delivery']['recipient_phone'] ?? null,
                 ]
             );
+            return $order;
         });
-
-        return $order;
     }
 
     protected function generateOrderNumber(): string
@@ -340,24 +310,5 @@ class OrderService
         }
 
         return OrderSource::where('code', $code)->value('id');
-    }
-
-    /** Закупівельні ціни одним запитом, без N+1 під час збереження позицій. */
-    private function productCosts(array $items): array
-    {
-        $productIds = array_values(array_unique(array_filter(array_map(
-            fn (array $item) => isset($item['product_id']) ? (int) $item['product_id'] : null,
-            $items
-        ))));
-
-        if ($productIds === []) {
-            return [];
-        }
-
-        return DB::table('products')
-            ->whereIn('id', $productIds)
-            ->pluck('cost_price', 'id')
-            ->map(fn ($cost) => $cost !== null ? (float) $cost : null)
-            ->all();
     }
 }

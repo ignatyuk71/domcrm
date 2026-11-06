@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Order;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 /**
@@ -18,6 +20,9 @@ class StoreOrderRequest extends FormRequest
 
     public function rules(): array
     {
+        $order = $this->route('order');
+        $orderId = $order instanceof Order ? $order->id : null;
+
         return [
             'customer.first_name' => ['nullable', 'string', 'max:255'],
             'customer.last_name' => ['nullable', 'string', 'max:255'],
@@ -33,14 +38,22 @@ class StoreOrderRequest extends FormRequest
             'order.sale_type' => ['nullable', 'in:retail,wholesale'],
             'order.comment_internal' => ['nullable', 'string'],
 
-            'items' => ['required', 'array', 'min:1'],
+            'items' => ['required', 'array', 'list', 'min:1'],
+            'items.*' => ['required', 'array'],
+            'items.*.id' => $orderId
+                ? ['nullable', 'integer', 'distinct', Rule::exists('order_items', 'id')->where('order_id', $orderId)]
+                : ['prohibited'],
             'items.*.sku' => ['nullable', 'string', 'max:64'],
             'items.*.title' => ['nullable', 'string', 'max:255'],
             'items.*.size' => ['nullable', 'string', 'max:64'],
+            'items.*.color' => ['nullable', 'string', 'max:64'],
+            'items.*.external_id' => ['nullable', 'string', 'max:255'],
             'items.*.qty' => ['required', 'integer', 'min:1'],
             'items.*.price' => ['required', 'numeric', 'min:0'],
             'items.*.product_id' => ['nullable', 'integer', 'exists:products,id'],
             'items.*.product_variant_id' => ['nullable', 'integer', 'exists:product_variants,id'],
+            'deleted_item_ids' => [$orderId ? 'sometimes' : 'prohibited', 'array', 'list'],
+            'deleted_item_ids.*' => ['required', 'integer', 'distinct', Rule::exists('order_items', 'id')->where('order_id', $orderId ?? 0)],
 
             'payment.method' => ['required', 'string', 'max:32'],
             'payment.prepay_amount' => ['nullable', 'numeric', 'min:0'],
@@ -66,6 +79,21 @@ class StoreOrderRequest extends FormRequest
 
             'tag_ids' => ['array'],
             'tag_ids.*' => ['nullable'],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'items.list' => 'Передайте позиції замовлення списком.',
+            'items.*.array' => 'Кожна позиція замовлення має містити коректні дані товару.',
+            'items.*.id.exists' => 'Позиція вже видалена або належить іншому замовленню. Оновіть сторінку.',
+            'items.*.id.distinct' => 'Одну позицію не можна передавати кілька разів.',
+            'items.*.id.prohibited' => 'Нові позиції потрібно створювати без ID.',
+            'deleted_item_ids.array' => 'Передайте список позицій для видалення масивом.',
+            'deleted_item_ids.list' => 'Передайте ідентифікатори позицій для видалення списком.',
+            'deleted_item_ids.*.exists' => 'Позиція для видалення вже відсутня або належить іншому замовленню. Оновіть сторінку.',
+            'deleted_item_ids.*.distinct' => 'Позицію для видалення вказано кілька разів.',
         ];
     }
 

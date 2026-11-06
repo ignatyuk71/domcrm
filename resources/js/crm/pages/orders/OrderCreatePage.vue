@@ -1,6 +1,6 @@
 <template>
   <div class="container-fluid p-0 p-md-4">
-    <Toast :show="toast.show" :messages="toast.messages" @close="closeToast" />
+    <Toast v-bind="toast" @close="closeToast" @action="runAction" />
     <div class="mx-auto" style="max-width: 1600px;">
       
       <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 gap-3">
@@ -79,6 +79,8 @@
               <div class="pt-3">
                 <ItemsTable
                   v-model="form.items"
+                  :class="{ 'border-danger': itemsError }"
+                  :aria-invalid="Boolean(itemsError)"
                   :currency="form.meta.currency"
                   :prepay-amount="prepayAmount"
                   :prepay-enabled="form.payment.method === 'prepay'"
@@ -113,7 +115,9 @@
                 </div>
                 <h5 class="mb-2 fw-bold">Зберегти замовлення?</h5>
                 <p class="text-muted small mb-4">
-                  Перевірте дані. Після збереження ви будете перенаправлені до списку.
+                  {{ deletedItemIds.length
+                    ? `Після збереження вибрані позиції буде остаточно видалено. Кількість: ${deletedItemIds.length}.`
+                    : 'Перевірте дані. Після збереження ви будете перенаправлені до списку.' }}
                 </p>
                 <div class="d-grid gap-2">
                   <button 
@@ -123,7 +127,7 @@
                     @click="confirmOrder"
                   >
                     <span v-if="loading" class="spinner-border spinner-border-sm me-1"></span>
-                    {{ loading ? 'Обробка...' : 'Так, зберегти' }}
+                    {{ loading ? 'Обробка...' : deletedItemIds.length ? 'Зберегти й видалити' : 'Так, зберегти' }}
                   </button>
                   <button type="button" class="btn btn-light text-muted fw-medium" @click="closeConfirm">
                     Скасувати
@@ -144,6 +148,7 @@ import { computed, reactive, ref, watch } from 'vue';
 import { createOrder, getOrder, updateOrder } from '@/crm/api/orders';
 import { mapServerDeliveryErrors } from '@/crm/utils/delivery';
 import { validateOrder } from '@/crm/utils/orderValidation';
+import { useToast } from '@/crm/composables/useToast';
 
 import Toast from '@/crm/components/ui/Toast.vue';
 import CustomerBlock from '@/crm/components/orders/CustomerBlock.vue';
@@ -189,31 +194,42 @@ const form = reactive({
   comment_internal: '',
 });
 
+const initialItemIds = ref([]);
+// Чужі позиції, додані після відкриття форми, не потрапляють до списку видалення.
+const deletedItemIds = computed(() => {
+  const currentIds = new Set(form.items.map(item => item.id));
+  return initialItemIds.value.filter(id => !currentIds.has(id));
+});
+
 // Помилки валідації (підсвічування полів) + toast зі списком причин.
 const deliveryErrors = ref({});
 const customerErrors = ref({});
 const itemsError = ref('');
 const validated = ref(false); // після першої невдалої спроби — оновлюємо помилки наживо
-const toast = reactive({ show: false, messages: [] });
-let toastTimer = null;
+const { toast, showToast, closeToast, runAction } = useToast();
 
-function showToast(messages) {
-  toast.messages = messages;
-  toast.show = true;
-  if (toastTimer) clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { toast.show = false; }, 7000);
-}
-
-function closeToast() {
-  toast.show = false;
-  if (toastTimer) clearTimeout(toastTimer);
+function showErrors(messages) {
+  showToast({ type: 'error', title: 'Перевірте форму замовлення', messages,
+    duration: 0, actionLabel: 'Повторити', onAction: openConfirm });
 }
 
 // Формуємо payload для відправки (враховуємо модель)
 const payload = computed(() => ({
   customer: form.customer,
   order: { ...form.meta, comment_internal: form.comment_internal },
-  items: form.items,
+  items: form.items.map(item => ({
+    ...(props.initialOrderId && item.id != null ? { id: item.id } : {}),
+    product_id: item.product_id ?? null,
+    product_variant_id: item.product_variant_id ?? null,
+    sku: item.sku,
+    title: item.title,
+    size: item.size,
+    color: item.color ?? null,
+    external_id: item.external_id ?? null,
+    qty: item.qty,
+    price: item.price,
+  })),
+  ...(props.initialOrderId ? { deleted_item_ids: deletedItemIds.value } : {}),
   payment: form.payment.method === 'prepay' ? form.payment : { ...form.payment, prepay_amount: 0 },
   
   // Мапимо payer -> delivery_payer
@@ -258,11 +274,17 @@ async function submit() {
       // Бекенд-валідація: підсвічуємо поля доставки + показуємо причини у toast.
       const errs = error.response.data?.errors || {};
       deliveryErrors.value = mapServerDeliveryErrors(errs);
+      customerErrors.value = Object.fromEntries(Object.entries(errs)
+        .filter(([field]) => field.startsWith('customer.'))
+        .map(([field, messages]) => [field.slice(9), Array.isArray(messages) ? messages[0] : messages]));
+      itemsError.value = Object.entries(errs)
+        .filter(([field]) => field === 'items' || field.startsWith('items.') || field.startsWith('deleted_item_ids'))
+        .flatMap(([, messages]) => messages).find(Boolean) || '';
       const messages = Object.values(errs).flat();
-      showToast(messages.length ? messages : ['Перевірте заповнення полів.']);
+      showErrors(messages.length ? messages : [error.response.data?.message || 'Перевірте заповнення полів.']);
     } else {
       console.error('Помилка при збереженні:', error);
-      showToast(['Не вдалося зберегти замовлення. Спробуйте ще раз.']);
+      showErrors([error.response?.data?.message || 'Не вдалося зберегти замовлення. Спробуйте ще раз.']);
     }
   } finally {
     loading.value = false;
@@ -285,7 +307,7 @@ function openConfirm() {
 
   if (messages.length) {
     validated.value = true; // вмикаємо живу перевірку — виправлені поля одразу «очищаються»
-    showToast(messages);
+    showErrors(messages);
     return;
   }
   confirmOpen.value = true;
@@ -338,13 +360,16 @@ async function loadOrder() {
       product_id: i.product_id,
       product_variant_id: i.product_variant_id || null,
       sku: i.sku,
-      title: i.product_title || i.title,
-      size: i.size,
+      title: i.product_title ?? i.title ?? i.product?.title ?? '',
+      size: i.size ?? i.variant?.size ?? '',
+      color: i.color ?? null,
+      external_id: i.external_id ?? null,
       qty: i.qty,
       price: i.price,
       total: i.total,
       imageUrl: i.product?.main_photo_path ? `/storage/${i.product.main_photo_path}` : '',
     }));
+    initialItemIds.value = form.items.map(item => item.id).filter(id => id != null);
     
     // Оплата
     const pay = order.payment || {};

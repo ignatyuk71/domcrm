@@ -225,14 +225,16 @@ class OrderStoreTest extends TestCase
             'order_number' => 'EXT-1', 'status' => 'new', 'payment_status' => 'unpaid',
             'currency' => 'UAH', 'needs_review' => true,
         ]);
-        $order->items()->create([
+        $item = $order->items()->create([
             'product_title' => 'Нерозпізнані капці', 'sku' => 'EXT-K1', 'price' => 399, 'qty' => 1, 'total' => 399,
         ]);
 
         $payload = $this->validPayload();
         $payload['items'] = [[
+            'id' => $item->id,
             'product_id' => $product->id, 'title' => $product->title, 'sku' => $product->sku, 'qty' => 1, 'price' => 399,
         ]];
+        $payload['deleted_item_ids'] = [];
 
         $this->actingAs($this->operator())
             ->putJson("/orders/{$order->id}", $payload)

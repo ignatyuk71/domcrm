@@ -197,7 +197,7 @@ class OrderController extends Controller
 
     public function update(StoreOrderRequest $request, Order $order): JsonResponse
     {
-        $this->orders->update($order, $request->validated());
+        $order = $this->orders->update($order, $request->validated());
 
         return response()->json([
             'data' => $order->load([
