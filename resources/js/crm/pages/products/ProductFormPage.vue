@@ -177,7 +177,7 @@
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="(v, idx) in form.variants" :key="v.local_id">
+                    <tr v-for="(v, idx) in form.variants" :key="v.local_id" :class="{ 'table-danger': variantHasError(idx) }">
                       <td>
                         <input v-model.trim="v.size" type="text" class="form-control form-control-modern form-control-sm" placeholder="38-39">
                       </td>
@@ -333,26 +333,35 @@
               <i class="bi bi-check-lg fs-2"></i>
             </div>
             <h5 class="mb-2 fw-bold">Зберегти товар?</h5>
-            <p class="text-muted small mb-4">Перевірте правильність введених даних перед збереженням.</p>
+            <p class="text-muted small mb-4">{{ deletedVariantIds.length
+              ? `Після збереження вибрані варіанти буде остаточно видалено. Кількість: ${deletedVariantIds.length}.`
+              : 'Перевірте правильність введених даних перед збереженням.' }}</p>
             <div class="d-grid gap-2">
-              <button type="button" class="btn btn-primary-gradient shadow-sm" @click="performSave">Зберегти</button>
+              <button type="button" class="btn btn-primary-gradient shadow-sm" @click="performSave">{{ deletedVariantIds.length ? 'Зберегти й видалити' : 'Зберегти' }}</button>
               <button type="button" class="btn btn-light text-muted" @click="showConfirmModal = false">Скасувати</button>
             </div>
           </div>
         </div>
       </div>
     </div>
+    <Toast v-bind="toast" @close="closeToast" @action="runAction" />
   </div>
 </template>
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import http from '@/crm/api/http'
+import Toast from '@/crm/components/ui/Toast.vue'
+import { useToast } from '@/crm/composables/useToast'
 
 const props = defineProps({
   initialProduct: { type: Object, default: null },
 })
 
+const { toast, showToast, closeToast, runAction } = useToast()
+const initialVariantIds = Array.isArray(props.initialProduct?.variants)
+  ? props.initialProduct.variants.map((v) => v.id).filter((id) => id != null)
+  : []
 const loading = ref(false)
 const fileInput = ref(null)
 const imageFile = ref(null)
@@ -395,7 +404,15 @@ const form = reactive({
     : [],
 })
 
+// Видаляємо лише варіанти, вилучені користувачем із початкової форми.
+const deletedVariantIds = computed(() => {
+  const currentVariantIds = new Set(form.variants.map((v) => v.id))
+  return initialVariantIds.filter((id) => !currentVariantIds.has(id))
+})
+
 const errors = reactive({ title: '' })
+const variantHasError = (index) => Object.keys(errors).some((field) => errors[field]
+  && (field === 'variants' || field.startsWith(`variants.${index}.`)))
 
 const dimensions = [
   { key: 'weight_g', label: 'Вага', unit: 'г', step: 1 },
@@ -538,11 +555,13 @@ async function performSave() {
     })
     if (imageFile.value) fd.append('main_photo', imageFile.value)
     fd.append('variants', JSON.stringify(form.variants.map((v) => ({
+      ...(v.id != null ? { id: v.id } : {}),
       size: v.size,
       sku: v.sku,
       stock_qty: v.stock_qty,
       is_active: v.is_active,
     }))))
+    fd.append('deleted_variant_ids', JSON.stringify(deletedVariantIds.value))
     if (form.variants.length) {
       syncStockFromVariants();
       fd.set('stock_qty', form.stock_qty || 0);
@@ -558,7 +577,20 @@ async function performSave() {
     window.location.href = '/products'
   } catch (e) {
     console.error('Save error', e)
-    alert('Помилка при збереженні')
+    const serverErrors = e.response?.data?.errors || {}
+    Object.keys(errors).forEach((field) => delete errors[field])
+    Object.entries(serverErrors).forEach(([field, messages]) => {
+      errors[field] = Array.isArray(messages) ? messages[0] : messages
+    })
+    const messages = Object.values(serverErrors).flat().filter(Boolean)
+    showToast({
+      type: 'error',
+      title: 'Не вдалося зберегти товар',
+      messages: messages.length ? messages : [e.response?.data?.message || 'Перевірте зʼєднання та повторіть спробу.'],
+      duration: 0,
+      actionLabel: 'Повторити',
+      onAction: handleSubmit,
+    })
   } finally {
     loading.value = false
   }

@@ -26,8 +26,8 @@ class ProductCatalogIntegrityTest extends TestCase
 
     public function test_deleting_product_keeps_photo_used_by_another_product(): void
     {
-        $path = 'products/shared_' . uniqid() . '.jpg';
-        $fullPath = public_path('storage/' . $path);
+        $path = 'products/shared_'.uniqid().'.jpg';
+        $fullPath = public_path('storage/'.$path);
         File::ensureDirectoryExists(dirname($fullPath));
 
         $image = imagecreatetruecolor(100, 100);
@@ -49,7 +49,7 @@ class ProductCatalogIntegrityTest extends TestCase
     public function test_removing_last_variant_resets_parent_stock_to_zero(): void
     {
         $product = Product::create(['title' => 'Товар з варіантом', 'stock_qty' => 6]);
-        ProductVariant::create([
+        $variant = ProductVariant::create([
             'product_id' => $product->id,
             'size' => '38',
             'stock_qty' => 6,
@@ -61,6 +61,7 @@ class ProductCatalogIntegrityTest extends TestCase
                 'title' => $product->title,
                 'stock_qty' => 6,
                 'variants' => [],
+                'deleted_variant_ids' => [$variant->id],
             ])
             ->assertOk();
 

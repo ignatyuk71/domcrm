@@ -53,8 +53,8 @@
       "assets/useToast-BQ7RB5sd.css"
     ]
   },
-  "_workTimeApi-8Y27L5wR.js": {
-    "file": "assets/workTimeApi-8Y27L5wR.js",
+  "_workTimeApi-CX0sU1_J.js": {
+    "file": "assets/workTimeApi-CX0sU1_J.js",
     "name": "workTimeApi",
     "imports": [
       "resources/js/crm/index.js"
@@ -126,7 +126,7 @@
     ]
   },
   "resources/js/crm/index.js": {
-    "file": "assets/index-DxhJHkvB.js",
+    "file": "assets/index-B08GUixC.js",
     "name": "index",
     "src": "resources/js/crm/index.js",
     "isEntry": true,
@@ -147,11 +147,11 @@
       "resources/js/crm/pages/marketing/MarketResearchPage.vue"
     ],
     "css": [
-      "assets/index-BgT1GIvL.css"
+      "assets/index-Clqif5N0.css"
     ]
   },
   "resources/js/crm/pages/analytics/SalesAnalyticsPage.vue": {
-    "file": "assets/SalesAnalyticsPage-BbK0dxcz.js",
+    "file": "assets/SalesAnalyticsPage-gAZY0mNA.js",
     "name": "SalesAnalyticsPage",
     "src": "resources/js/crm/pages/analytics/SalesAnalyticsPage.vue",
     "isDynamicEntry": true,
@@ -167,7 +167,7 @@
     ]
   },
   "resources/js/crm/pages/costs/ProductionCostPage.vue": {
-    "file": "assets/ProductionCostPage-CrbKmlQd.js",
+    "file": "assets/ProductionCostPage-E5eB5kBZ.js",
     "name": "ProductionCostPage",
     "src": "resources/js/crm/pages/costs/ProductionCostPage.vue",
     "isDynamicEntry": true,
@@ -185,7 +185,7 @@
     ]
   },
   "resources/js/crm/pages/expenses/ExpensesPage.vue": {
-    "file": "assets/ExpensesPage-CdA59_fr.js",
+    "file": "assets/ExpensesPage-CBjqmXHo.js",
     "name": "ExpensesPage",
     "src": "resources/js/crm/pages/expenses/ExpensesPage.vue",
     "isDynamicEntry": true,
@@ -201,7 +201,7 @@
     ]
   },
   "resources/js/crm/pages/finance/NovaPayPage.vue": {
-    "file": "assets/NovaPayPage-GnFfQ_fo.js",
+    "file": "assets/NovaPayPage-iLLLz4sN.js",
     "name": "NovaPayPage",
     "src": "resources/js/crm/pages/finance/NovaPayPage.vue",
     "isDynamicEntry": true,
@@ -216,7 +216,7 @@
     ]
   },
   "resources/js/crm/pages/inventory/SoleInventoryPage.vue": {
-    "file": "assets/SoleInventoryPage-Cd6RJck6.js",
+    "file": "assets/SoleInventoryPage-CFlfcdbB.js",
     "name": "SoleInventoryPage",
     "src": "resources/js/crm/pages/inventory/SoleInventoryPage.vue",
     "isDynamicEntry": true,
@@ -231,7 +231,7 @@
     ]
   },
   "resources/js/crm/pages/marketing/MarketResearchPage.vue": {
-    "file": "assets/MarketResearchPage-CPhtXFMI.js",
+    "file": "assets/MarketResearchPage-BFaA4e9v.js",
     "name": "MarketResearchPage",
     "src": "resources/js/crm/pages/marketing/MarketResearchPage.vue",
     "isDynamicEntry": true,
@@ -246,7 +246,7 @@
     ]
   },
   "resources/js/crm/pages/settings/SettingsTelegramPage.vue": {
-    "file": "assets/SettingsTelegramPage-v6ZSOGxA.js",
+    "file": "assets/SettingsTelegramPage-Ba_SxLFn.js",
     "name": "SettingsTelegramPage",
     "src": "resources/js/crm/pages/settings/SettingsTelegramPage.vue",
     "isDynamicEntry": true,
@@ -261,7 +261,7 @@
     ]
   },
   "resources/js/crm/pages/settings/SettingsWorkPayrollPage.vue": {
-    "file": "assets/SettingsWorkPayrollPage-0tr0_7N6.js",
+    "file": "assets/SettingsWorkPayrollPage-CwcnLGnG.js",
     "name": "SettingsWorkPayrollPage",
     "src": "resources/js/crm/pages/settings/SettingsWorkPayrollPage.vue",
     "isDynamicEntry": true,
@@ -269,7 +269,7 @@
       "_runtime-dom.esm-bundler-C3NQeTcc.js",
       "_useToast-Cxfc6k_C.js",
       "resources/js/crm/index.js",
-      "_workTimeApi-8Y27L5wR.js",
+      "_workTimeApi-CX0sU1_J.js",
       "_index-BXicX9F6.js"
     ],
     "css": [
@@ -277,13 +277,13 @@
     ]
   },
   "resources/js/crm/pages/work-time/WorkTimePage.vue": {
-    "file": "assets/WorkTimePage-BE-e7j6y.js",
+    "file": "assets/WorkTimePage-C7Izj5VN.js",
     "name": "WorkTimePage",
     "src": "resources/js/crm/pages/work-time/WorkTimePage.vue",
     "isDynamicEntry": true,
     "imports": [
       "_runtime-dom.esm-bundler-C3NQeTcc.js",
-      "_workTimeApi-8Y27L5wR.js",
+      "_workTimeApi-CX0sU1_J.js",
       "_useToast-Cxfc6k_C.js",
       "resources/js/crm/index.js",
       "_index-BXicX9F6.js"
