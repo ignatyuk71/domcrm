@@ -372,8 +372,17 @@ class NovaPoshtaService
         $finalCost = ($calculatedTotal > 0) ? (string)round($calculatedTotal) : '200';
         
         $afterpayment = 0;
-        if ($payment && in_array($payment->method, ['cod', 'prepay'])) {
-            $afterpayment = $calculatedTotal - ($payment->prepay_amount ?: 0);
+        if ($payment && in_array($payment->method, ['cod', 'prepay'], true)
+            && $order->payment_status !== 'paid') {
+            $paidAmount = max(0, (float) ($payment->prepay_amount ?? 0));
+
+            // Беремо більшу зафіксовану суму без подвійного врахування ручного авансу.
+            // Після повернення paid_amount лишається історичним записом.
+            if ($order->payment_status !== 'refund') {
+                $paidAmount = max($paidAmount, (float) ($payment->paid_amount ?? 0));
+            }
+
+            $afterpayment = $calculatedTotal - $paidAmount;
         }
         $afterpayment = ($afterpayment > 0) ? (string)round($afterpayment) : 0;
 
