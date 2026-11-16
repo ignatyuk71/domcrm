@@ -13,6 +13,7 @@ use App\Models\Status;
 use App\Models\OrderSource;
 use App\Services\Orders\OrderSearch;
 use App\Services\Orders\OrderService;
+use App\Services\Orders\OrderTtnEligibility;
 use App\Support\DeliveryStatusMapper;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,8 +24,11 @@ use Illuminate\Validation\ValidationException;
 
 class OrderController extends Controller
 {
-    public function __construct(private OrderService $orders, private OrderSearch $orderSearch)
-    {
+    public function __construct(
+        private OrderService $orders,
+        private OrderSearch $orderSearch,
+        private OrderTtnEligibility $ttnEligibility,
+    ) {
     }
 
     /** Список замовлень (для перегляду збережених записів). */
@@ -325,6 +329,7 @@ class OrderController extends Controller
     {
         // Примусово оновлюємо дані з бази, щоб побачити найсвіжіші зміни
         $order->refresh();
+        $this->ttnEligibility->ensureCanCreate($order);
         $order->load(['delivery', 'customer', 'items.product']);
 
         // 1. Перевіряємо, чи заповнені дані для доставки
@@ -402,6 +407,7 @@ class OrderController extends Controller
     public function generateTTNCourier(\App\Models\Order $order, \App\Services\NovaPoshtaService $np): JsonResponse
     {
         $order->refresh();
+        $this->ttnEligibility->ensureCanCreate($order);
         $order->load(['delivery', 'customer', 'items.product']);
 
         $delivery = $order->delivery;

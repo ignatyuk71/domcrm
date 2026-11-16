@@ -1,6 +1,7 @@
 <script setup>
   import { ref, computed, watch } from 'vue';
   import { paymentSummary } from '@/crm/utils/orderPayment';
+  import { canCreateTtn, ttnStatusWarning } from '@/crm/utils/orderTtn';
   import {
     formatCurrency,
     formatDate,
@@ -24,6 +25,7 @@
   const emit = defineEmits([
     'copy-ttn',
     'generate-ttn',
+    'ttn-blocked',
     'print-ttn',
     'cancel-ttn',
     'refresh-delivery',
@@ -31,6 +33,11 @@
   ]);
 
   const paymentTotals = computed(() => paymentSummary(props.order));
+
+  const requestTtn = () => {
+    if (props.order.loadingTtn || props.order.ttn) return;
+    emit(canCreateTtn(props.order) ? 'generate-ttn' : 'ttn-blocked');
+  };
 
   const localComment = ref(props.order.comment || '');
   const isCommentDirty = computed(() => {
@@ -342,7 +349,10 @@
                 <template v-else>
                   <button
                     class="btn-create-ttn"
-                    @click.stop="$emit('generate-ttn')"
+                    :class="{ 'ttn-unavailable': !canCreateTtn(order) }"
+                    :aria-disabled="!canCreateTtn(order) || order.loadingTtn ? 'true' : 'false'"
+                    :title="canCreateTtn(order) ? 'Створити ТТН' : ttnStatusWarning(order)"
+                    @click.stop="requestTtn"
                     :disabled="order.loadingTtn"
                   >
                     <span
@@ -667,6 +677,8 @@
   .btn-action-light:hover { background: #f8fafc; border-color: #cbd5e1; }
   .btn-create-ttn { width: 100%; background: #3b82f6; color: #ffffff; border: none; padding: 8px; border-radius: 8px; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: background 0.15s, transform 0.1s; }
   .btn-create-ttn:hover { background: #2563eb; transform: translateY(-1px); }
+  .btn-create-ttn.ttn-unavailable { background: #e2e8f0; color: #64748b; cursor: not-allowed; }
+  .btn-create-ttn.ttn-unavailable:hover { background: #e2e8f0; transform: none; }
   
   /* PRODUCTS */
   .products-header { padding: 10px 12px; background: #f9fafb; }

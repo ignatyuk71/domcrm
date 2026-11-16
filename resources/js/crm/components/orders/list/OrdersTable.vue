@@ -5,6 +5,7 @@
   import { useFiscalAvailability } from '@/crm/composables/useFiscalAvailability';
   import OrderDetails from '@/crm/components/orders/list/OrderDetails.vue';
   import DeliveryStatusLabel from '@/crm/components/orders/list/DeliveryStatusLabel.vue';
+  import { canCreateTtn, ttnStatusWarning } from '@/crm/utils/orderTtn';
   import {
     formatCurrency,
     formatDate,
@@ -30,6 +31,7 @@
     delete: null,
     'copy-ttn': null,
     'generate-ttn': null,
+    'ttn-blocked': null,
     'print-ttn': null,
     'cancel-ttn': null,
     'refresh-delivery': null,
@@ -128,6 +130,11 @@
   };
 
   const openTtnConfirm = (order) => {
+    if (order.loadingTtn || order.ttn) return;
+    if (!canCreateTtn(order)) {
+      emit('ttn-blocked', order);
+      return;
+    }
     ttnConfirmOrder.value = order;
     ttnConfirmOpen.value = true;
   };
@@ -139,7 +146,14 @@
 
   const confirmGenerateTtn = () => {
     if (!ttnConfirmOrder.value) return;
-    emit('generate-ttn', ttnConfirmOrder.value);
+    // За час відкритої модалки статус міг оновитися або замовлення могло бути замінене.
+    const order = props.orders.find((item) => String(item.id) === String(ttnConfirmOrder.value.id));
+    if (!order || !canCreateTtn(order)) {
+      emit('ttn-blocked', order);
+      closeTtnConfirm();
+      return;
+    }
+    if (!order.loadingTtn && !order.ttn) emit('generate-ttn', order);
     closeTtnConfirm();
   };
 
@@ -459,9 +473,14 @@
                 <div
                   v-else
                   class="delivery-widget delivery-empty"
+                  :class="{ 'ttn-unavailable': !canCreateTtn(order) }"
                   role="button"
+                  tabindex="0"
+                  :aria-disabled="!canCreateTtn(order) || order.loadingTtn ? 'true' : 'false'"
                   @click.stop="openTtnConfirm(order)"
-                  title="Створити ТТН"
+                  @keydown.enter.stop.prevent="openTtnConfirm(order)"
+                  @keydown.space.stop.prevent="openTtnConfirm(order)"
+                  :title="canCreateTtn(order) ? 'Створити ТТН' : ttnStatusWarning(order)"
                 >
                   <div class="d-flex align-items-center justify-content-center gap-2 text-muted">
                     <i class="bi bi-box-seam"></i>
@@ -537,6 +556,7 @@
                     :status-editor="statusEditor"
                     @copy-ttn="$emit('copy-ttn', order.ttn)"
                     @generate-ttn="$emit('generate-ttn', order)"
+                    @ttn-blocked="$emit('ttn-blocked', order)"
                     @print-ttn="$emit('print-ttn', order)"
                     @cancel-ttn="$emit('cancel-ttn', order)"
                     @refresh-delivery="$emit('refresh-delivery', order)"
@@ -614,6 +634,10 @@
 .delivery-empty:hover { background: #f1f5f9; border-color: #3b82f6; color: #3b82f6 !important; }
 .delivery-empty .text-muted { transition: color 0.2s; font-size: 0.8rem; font-weight: 600; }
 .delivery-empty:hover .text-muted { color: #3b82f6 !important; }
+.delivery-empty.ttn-unavailable { opacity: 0.65; cursor: not-allowed; }
+.delivery-empty.ttn-unavailable:hover { background: #f8fafc; border-color: #cbd5e1; box-shadow: none; }
+.delivery-empty.ttn-unavailable:hover .text-muted { color: #6c757d !important; }
+.delivery-empty:focus-visible { outline: 2px solid #3b82f6; outline-offset: 3px; }
 .client-name { font-weight: 700; font-size: 0.85rem; color: #1e293b; cursor: pointer; transition: color 0.2s; max-width: 200px; white-space: normal; word-break: break-word; line-height: 1.25; }
 .client-name:hover { color: #3b82f6; }
 .loyalty-pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; line-height: 1; letter-spacing: 0.02em; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); cursor: help; transition: transform 0.2s; }

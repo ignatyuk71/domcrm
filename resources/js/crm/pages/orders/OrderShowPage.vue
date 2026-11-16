@@ -1,5 +1,6 @@
 <template>
   <section class="order-show-page">
+    <Toast v-bind="toast" @close="closeToast" @action="runAction" />
     <div class="toast-container position-fixed top-50 start-50 translate-middle p-3" style="z-index: 1080;">
       <div
         v-if="notice.message"
@@ -128,6 +129,7 @@
               :status-editor="statusEditor"
               @copy-ttn="copyTtn(order.ttn)"
               @generate-ttn="generateTtn(order)"
+              @ttn-blocked="showTtnStatusWarning(order)"
               @print-ttn="printTtn(order)"
               @cancel-ttn="cancelTtn(order)"
               @refresh-delivery="refreshDeliveryStatus(order)"
@@ -149,6 +151,9 @@ import { getOrder, updateOrderComment } from '@/crm/api/orders';
 import { useOrderTags } from '@/crm/composables/useOrderTags';
 import { useOrderStatuses } from '@/crm/composables/useOrderStatuses';
 import { useTtnCopy } from '@/crm/composables/useTtnCopy';
+import { useToast } from '@/crm/composables/useToast';
+import { canCreateTtn, ttnErrorMessages, ttnStatusWarning } from '@/crm/utils/orderTtn';
+import Toast from '@/crm/components/ui/Toast.vue';
 import OrderDetails from '@/crm/components/orders/list/OrderDetails.vue';
 import { buildPhotoUrl, formatCurrency, formatDate, getStatusStyle, paymentLabels, statusLabels } from '@/crm/utils/orderDisplay';
 
@@ -163,6 +168,7 @@ const order = ref(null);
 const statusEditor = useOrderStatuses((id) => String(order.value?.id) === String(id) ? order.value : null);
 const tagEditor = useOrderTags((id) => String(order.value?.id) === String(id) ? order.value : null);
 const { copiedTtn, copyTtn } = useTtnCopy();
+const { toast, showToast, closeToast, runAction } = useToast();
 
 
 const notice = reactive({ type: 'success', message: '' });
@@ -332,8 +338,32 @@ async function saveComment(comment) {
   }
 }
 
+function showTtnStatusWarning(targetOrder) {
+  showToast({ title: 'Створення ТТН недоступне', messages: [ttnStatusWarning(targetOrder)], type: 'warning', duration: 0 });
+}
+
+function showTtnError(targetOrder, payload, fallback) {
+  const messages = ttnErrorMessages(payload, fallback);
+  const orderId = targetOrder.id;
+  showToast({
+    title: 'Не вдалося створити ТТН', messages, type: 'error', duration: 0,
+    actionLabel: 'Повторити', onAction: () => {
+      // Картка могла отримати новий об’єкт замовлення після оновлення.
+      if (String(order.value?.id) === String(orderId)) return generateTtn(order.value);
+      showToast({
+        title: 'Повторне створення ТТН недоступне', type: 'error', duration: 0,
+        messages: [...messages, 'Актуальні дані замовлення недоступні. Оновіть або повторно відкрийте картку замовлення.'],
+      });
+    },
+  });
+}
+
 async function generateTtn(targetOrder) {
-  if (!targetOrder?.id || targetOrder.loadingTtn) return;
+  if (!targetOrder?.id || targetOrder.loadingTtn || targetOrder.ttn) return;
+  if (!canCreateTtn(targetOrder)) {
+    showTtnStatusWarning(targetOrder);
+    return;
+  }
   targetOrder.loadingTtn = true;
 
   try {
@@ -352,17 +382,16 @@ async function generateTtn(targetOrder) {
     });
 
     const result = await response.json();
-    if (result.success || result.ttn) {
+    if (response.ok !== false && (result.success || result.ttn)) {
       targetOrder.ttn = result.ttn || result.data?.[0]?.IntDocNumber || '';
       targetOrder.ttn_ref = result.ref || result.data?.[0]?.Ref || '';
-      showNotice(`ТТН ${targetOrder.ttn} створена`);
+      showToast({ title: 'ТТН створено', messages: [`ТТН ${targetOrder.ttn} створена`], type: 'success' });
     } else {
-      const message = result.message || 'Помилка API Нової Пошти';
-      showNotice(message, 'danger');
+      showTtnError(targetOrder, result);
     }
   } catch (e) {
     console.error('Помилка при створенні ТТН', e);
-    showNotice('Не вдалося створити ТТН', 'danger');
+    showTtnError(targetOrder, e.response?.data, e.message || 'Не вдалося створити ТТН');
   } finally {
     targetOrder.loadingTtn = false;
   }

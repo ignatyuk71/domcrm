@@ -54,6 +54,7 @@
         :status-editor="statusEditor"
         @copy-ttn="copyTtn"
         @generate-ttn="generateTtn"
+        @ttn-blocked="showTtnStatusWarning"
         @print-ttn="printTtn"
         @cancel-ttn="handleCancelTtn"
         @refresh-delivery="refreshDeliveryStatus"
@@ -96,6 +97,7 @@ import { applyOrderStatus, useOrderStatuses } from '@/crm/composables/useOrderSt
 import { getCustomer } from '@/crm/api/customers';
 import { useTtnCopy } from '@/crm/composables/useTtnCopy';
 import { useToast } from '@/crm/composables/useToast';
+import { canCreateTtn, ttnErrorMessages, ttnStatusWarning } from '@/crm/utils/orderTtn';
 import {
   buildPhotoUrl,
   paymentLabels,
@@ -158,8 +160,33 @@ function buildStatusChips() {
 }
 
 /** ГЕНЕРАЦІЯ ТТН */
+function showTtnStatusWarning(order) {
+  showToast({ title: 'Створення ТТН недоступне', messages: [ttnStatusWarning(order)], type: 'warning', duration: 0 });
+}
+
+function showTtnError(order, payload, fallback) {
+  const messages = ttnErrorMessages(payload, fallback);
+  const orderId = order.id;
+  showToast({
+    title: 'Не вдалося створити ТТН', messages, type: 'error', duration: 0,
+    actionLabel: 'Повторити', onAction: () => {
+      // Повтор використовує актуальні дані після перезавантаження списку.
+      const current = orders.value.find((item) => String(item.id) === String(orderId));
+      if (current) return generateTtn(current);
+      showToast({
+        title: 'Повторне створення ТТН недоступне', type: 'error', duration: 0,
+        messages: [...messages, 'Замовлення більше не відображається у списку. Оновіть список або відкрийте картку замовлення.'],
+      });
+    },
+  });
+}
+
 async function generateTtn(order) {
-  if (order.loadingTtn) return;
+  if (!order?.id || order.loadingTtn || order.ttn) return;
+  if (!canCreateTtn(order)) {
+    showTtnStatusWarning(order);
+    return;
+  }
 
   order.loadingTtn = true;
   try {
@@ -178,21 +205,20 @@ async function generateTtn(order) {
 
     const result = await response.json();
 
-    if (result.success || result.ttn) {
-      const ttn = result.ttn || result.data[0].IntDocNumber;
-      const ref = result.ref || result.data[0].Ref;
+    if (response.ok !== false && (result.success || result.ttn)) {
+      const ttn = result.ttn || result.data?.[0]?.IntDocNumber;
+      const ref = result.ref || result.data?.[0]?.Ref;
 
       order.ttn = ttn;
       order.ttn_ref = ref;
 
-      alert(`ТТН ${ttn} створена успішно!`);
+      showToast({ title: 'ТТН створено', messages: [`ТТН ${ttn} створена успішно!`], type: 'success' });
     } else {
-      const errorMsg = result.errors ? JSON.stringify(result.errors) : result.message || 'Помилка API';
-      alert('Не вдалося створити ТТН: ' + errorMsg);
+      showTtnError(order, result);
     }
   } catch (error) {
     console.error(error);
-    alert('Помилка сервера при створенні ТТН');
+    showTtnError(order, error.response?.data, error.message || 'Помилка сервера при створенні ТТН');
   } finally {
     order.loadingTtn = false;
   }

@@ -146,7 +146,7 @@ class WaybillPaymentTest extends TestCase
         $order = Order::create([
             'order_number' => 'WAYBILL-PAYMENT-TEST',
             'customer_id' => $customer->id,
-            'status' => 'new',
+            'status' => 'confirmed',
             'payment_status' => $case['payment_status'],
             'currency' => 'UAH',
         ]);

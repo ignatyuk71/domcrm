@@ -223,6 +223,121 @@ describe('універсальний пошук замовлень', () => {
   });
 });
 
+describe('створення ТТН у списку', () => {
+  const prepareOrder = (code = 'confirmed', name = 'Підтверджено', deliveryType = 'warehouse') => {
+    listOrders.mockResolvedValue({ data: { data: [{
+      id: 5980, status: code, status_ref: { id: 3, code, name },
+      items: [], delivery: { delivery_type: deliveryType },
+    }] } });
+  };
+
+  it.each([['new', 'Новий'], ['in_process', 'В обробці']])('показує warning при натисканні %s без модалки та запиту', async (code, name) => {
+    prepareOrder(code, name);
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    wrapper = shallowMount(OrderListPage, { global: { stubs: { OrdersTable: false } } });
+    await flushPromises();
+    await wrapper.get('.delivery-empty').trigger('click');
+    expect(wrapper.findComponent(Toast).props()).toMatchObject({
+      show: true, type: 'warning',
+      messages: [`Неможливо створити ТТН у статусі «${name}». Спочатку змініть статус замовлення на «Підтверджено».`],
+    });
+    expect(wrapper.find('.modal-card').exists()).toBe(false);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('повторно перевіряє статус у handler перед запитом', async () => {
+    prepareOrder('cancelled', 'Скасовано');
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    wrapper = shallowMount(OrderListPage);
+    await flushPromises();
+    const table = wrapper.findComponent(OrdersTable);
+    table.vm.$emit('generate-ttn', table.props('orders')[0]);
+    await flushPromises();
+    expect(fetch).not.toHaveBeenCalled();
+    expect(wrapper.findComponent(Toast).props('type')).toBe('warning');
+  });
+
+  it.each([['warehouse', '/orders/5980/generate-ttn'], ['courier', '/orders/5980/generate-ttn-courier']])('дозволяє підтверджене замовлення для %s', async (deliveryType, endpoint) => {
+    prepareOrder('confirmed', 'Підтверджено', deliveryType);
+    const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ success: true, ttn: '20450000000002', ref: 'ref-2' }) });
+    vi.stubGlobal('fetch', fetch);
+    wrapper = shallowMount(OrderListPage);
+    await flushPromises();
+    const table = wrapper.findComponent(OrdersTable);
+    table.vm.$emit('generate-ttn', table.props('orders')[0]);
+    await flushPromises();
+    expect(fetch).toHaveBeenCalledWith(endpoint, expect.objectContaining({ method: 'POST' }));
+    expect(table.props('orders')[0]).toMatchObject({ ttn: '20450000000002', ttn_ref: 'ref-2', loadingTtn: false });
+    expect(wrapper.findComponent(Toast).props('type')).toBe('success');
+  });
+
+  it.each(['warehouse', 'courier'])('зберігає дослівну серверну помилку %s і дію повтору', async (deliveryType) => {
+    vi.useFakeTimers();
+    prepareOrder('confirmed', 'Підтверджено', deliveryType);
+    const message = 'Неможливо створити ТТН у статусі «В обробці». Спочатку змініть статус замовлення на «Підтверджено».';
+    const fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: false, json: async () => ({ message, errors: { recipient: ['Телефон одержувача має неправильний формат.'] } }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true, ttn: '20450000000002' }) });
+    vi.stubGlobal('fetch', fetch);
+    wrapper = shallowMount(OrderListPage);
+    await flushPromises();
+    const table = wrapper.findComponent(OrdersTable);
+    table.vm.$emit('generate-ttn', table.props('orders')[0]);
+    await flushPromises();
+    const toast = wrapper.findComponent(Toast);
+    expect(toast.props()).toMatchObject({ show: true, type: 'error', actionLabel: 'Повторити', messages: [message, 'Телефон одержувача має неправильний формат.'] });
+    expect(table.props('orders')[0]).toMatchObject({ ttn: '', loadingTtn: false });
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(toast.props('show')).toBe(true);
+    toast.vm.$emit('action');
+    await flushPromises();
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(table.props('orders')[0].ttn).toBe('20450000000002');
+  });
+
+  it('зберігає message із response при відхиленому запиті', async () => {
+    prepareOrder();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue({ response: { data: { message: 'Точна серверна помилка.' } } }));
+    wrapper = shallowMount(OrderListPage);
+    await flushPromises();
+    const table = wrapper.findComponent(OrdersTable);
+    table.vm.$emit('generate-ttn', table.props('orders')[0]);
+    await flushPromises();
+    expect(wrapper.findComponent(Toast).props('messages')).toEqual(['Точна серверна помилка.']);
+    expect(table.props('orders')[0].loadingTtn).toBe(false);
+  });
+
+  it.each(['status', 'ttn', 'missing'])('повтор після заміни даних перевіряє актуальне замовлення: %s', async (change) => {
+    prepareOrder();
+    const fetch = vi.fn().mockResolvedValue({ ok: false, json: async () => ({ message: 'Точна серверна помилка.' }) });
+    vi.stubGlobal('fetch', fetch);
+    wrapper = shallowMount(OrderListPage);
+    await flushPromises();
+    const table = wrapper.findComponent(OrdersTable);
+    const previous = table.props('orders')[0];
+    table.vm.$emit('generate-ttn', previous);
+    await flushPromises();
+    if (change === 'status') prepareOrder('in_process', 'В обробці');
+    else listOrders.mockResolvedValue({ data: { data: change === 'missing' ? [] : [{
+      id: 5980, status: 'confirmed', items: [], delivery: { ttn: '20450000000003' },
+    }] } });
+    wrapper.findComponent(OrdersPagination).vm.$emit('change-page', 1);
+    await flushPromises();
+    wrapper.findComponent(Toast).vm.$emit('action');
+    await flushPromises();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(previous.ttn).toBe('');
+    if (change === 'status') expect(wrapper.findComponent(Toast).props('messages')[0]).toContain('«В обробці»');
+    if (change === 'ttn') expect(table.props('orders')[0].ttn).toBe('20450000000003');
+    if (change === 'missing') expect(wrapper.findComponent(Toast).props('messages')).toEqual([
+      'Точна серверна помилка.', 'Замовлення більше не відображається у списку. Оновіть список або відкрийте картку замовлення.',
+    ]);
+  });
+});
+
 describe('оновлення доставки у списку замовлень', () => {
   it('плитка бронювання показує лише бронювання та скидає несумісний контроль зберігання', async () => {
     fetchStatuses.mockResolvedValue({ data: { data: [

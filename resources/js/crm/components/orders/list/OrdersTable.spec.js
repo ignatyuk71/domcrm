@@ -24,6 +24,43 @@ vi.mock('@/crm/composables/useFiscalAvailability', () => ({
 
 let wrapper;
 
+describe('доступ до створення ТТН у таблиці', () => {
+  it.each(['new', 'in_process', 'returned', 'cancelled', 'unknown', undefined])('блокує %s без модалки', async (code) => {
+    const current = order({ status_key: code, status: 'Новий' });
+    wrapper = shallowMount(OrdersTable, { props: { orders: [current], expandedRows: new Set() } });
+    const button = wrapper.get('.delivery-empty');
+    expect(button.attributes('aria-disabled')).toBe('true');
+    expect(button.classes()).toContain('ttn-unavailable');
+    expect(button.attributes('title')).toBe('Неможливо створити ТТН у статусі «Новий». Спочатку змініть статус замовлення на «Підтверджено».');
+    await button.trigger('click');
+    expect(wrapper.emitted('ttn-blocked')[0]).toEqual([current]);
+    expect(wrapper.emitted('generate-ttn')).toBeUndefined();
+    expect(wrapper.find('.modal-card').exists()).toBe(false);
+  });
+
+  it.each(['confirmed', 'reserved', 'packing', 'packed', 'shipped', 'delivered', 'delivered_paid'])('дозволяє %s після підтвердження', async (code) => {
+    const current = order({ status_key: code });
+    wrapper = shallowMount(OrdersTable, { props: { orders: [current], expandedRows: new Set() } });
+    expect(wrapper.get('.delivery-empty').attributes('aria-disabled')).toBe('false');
+    await wrapper.get('.delivery-empty').trigger('keydown.enter');
+    expect(wrapper.find('.modal-card').exists()).toBe(true);
+    await wrapper.get('.modal-card .btn-primary').trigger('click');
+    expect(wrapper.emitted('generate-ttn')[0]).toEqual([current]);
+    expect(wrapper.emitted('ttn-blocked')).toBeUndefined();
+  });
+
+  it('перевіряє актуальний статус повторно перед підтвердженням модалки', async () => {
+    wrapper = shallowMount(OrdersTable, { props: { orders: [order()], expandedRows: new Set() } });
+    await wrapper.get('.delivery-empty').trigger('click');
+    const updated = order({ status_key: 'in_process', status: 'В обробці' });
+    await wrapper.setProps({ orders: [updated] });
+    await wrapper.get('.modal-card .btn-primary').trigger('click');
+    expect(wrapper.emitted('generate-ttn')).toBeUndefined();
+    expect(wrapper.emitted('ttn-blocked')[0]).toEqual([updated]);
+    expect(wrapper.find('.modal-card').exists()).toBe(false);
+  });
+});
+
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(now);
