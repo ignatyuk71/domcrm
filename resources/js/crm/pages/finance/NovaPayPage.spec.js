@@ -174,6 +174,74 @@ describe('Інтерфейс рахунку NovaPay', () => {
         await flushPromises();
         expect(document.querySelector('.app-toast')).toBeNull();
     });
+    describe('Попередження реєстру післяплати', () => {
+        const failedRun = {
+            id: 2, source: 'payouts', date_from: '2026-11-23', date_to: '2026-11-25',
+            status: 'failed', error_message: 'NovaPay не відповів у відведений час.',
+        };
+        const completedRun = (id, from, to, source = 'payouts') => ({
+            id, source, date_from: from, date_to: to, status: 'success',
+        });
+        const widerRun = completedRun(3, '2026-11-19', '2026-11-25');
+        const loadHistory = sync => http.get.mockResolvedValue({ data: { ...response(), sync: [...sync, failedRun] } });
+
+        it.each([
+            { range: 'ширшому періоді', runs: [widerRun] },
+            { range: 'кількох суміжних періодах', runs: [
+                completedRun(4, '2026-11-25', '2026-11-25'), completedRun(3, '2026-11-22', '2026-11-24'),
+            ] },
+        ])('не показує старий збій після імпорту в $range', async ({ runs }) => {
+            loadHistory(runs);
+            wrapper = mount(NovaPayPage, { attachTo: document.body });
+            await flushPromises();
+            expect(document.querySelector('.app-toast')).toBeNull();
+            await wrapper.get('#np-tab-sync').trigger('click');
+            expect(wrapper.get('#np-panel-sync').text()).toContain(failedRun.error_message);
+        });
+
+        it.each([
+            { reason: 'між імпортами є пропущений день', runs: [
+                completedRun(4, '2026-11-25', '2026-11-25'), completedRun(3, '2026-11-23', '2026-11-23'),
+            ] },
+            { reason: 'імпорт відбувся до збою', runs: [completedRun(1, '2026-11-19', '2026-11-25')] },
+            { reason: 'успішно оновилося інше джерело', runs: [completedRun(3, '2026-11-19', '2026-11-25', 'operations')] },
+        ])('показує збій, якщо $reason', async ({ runs }) => {
+            loadHistory(runs);
+            wrapper = mount(NovaPayPage, { attachTo: document.body });
+            await flushPromises();
+            expect(document.querySelector('.app-toast')?.textContent).toContain(failedRun.error_message);
+        });
+
+        it('закриває відкрите попередження після підтвердження всіх днів фоновим запитом', async () => {
+            loadHistory([]);
+            wrapper = mount(NovaPayPage, { attachTo: document.body });
+            await flushPromises();
+            expect(document.querySelector('.app-toast')?.textContent).toContain(failedRun.error_message);
+
+            loadHistory([widerRun]);
+            await vi.advanceTimersByTimeAsync(15000);
+            await flushPromises();
+            expect(document.querySelector('.app-toast')).toBeNull();
+        });
+
+        it('зберігає іншу помилку після фонового підтвердження імпорту', async () => {
+            loadHistory([]);
+            wrapper = mount(NovaPayPage, { attachTo: document.body });
+            await flushPromises();
+            expect(document.querySelector('.app-toast')?.textContent).toContain(failedRun.error_message);
+
+            http.get.mockRejectedValueOnce({ response: { data: { message: 'Помилка завантаження CRM' } } });
+            await vi.advanceTimersByTimeAsync(15000);
+            await flushPromises();
+            expect(document.querySelector('.app-toast')?.textContent).toContain('Помилка завантаження CRM');
+
+            loadHistory([widerRun]);
+            await vi.advanceTimersByTimeAsync(15000);
+            await flushPromises();
+            expect(document.querySelector('.app-toast')?.textContent).toContain('Помилка завантаження CRM');
+        });
+    });
+
     it('показує доступний залишок і вибраний рахунок без повідомлення про збереження', async () => {
         wrapper = mount(NovaPayPage, { attachTo: document.body });
         await flushPromises();

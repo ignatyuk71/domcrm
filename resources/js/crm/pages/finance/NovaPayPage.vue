@@ -5,7 +5,7 @@ import Toast from '@/crm/components/ui/Toast.vue';
 import { useToast } from '@/crm/composables/useToast';
 import { money, period } from './novapayUtils';
 
-const { toast, showToast, closeToast, runAction, runSecondary } = useToast();
+const { toast, showToast: displayToast, closeToast, runAction, runSecondary } = useToast();
 const query = new URLSearchParams(window.location.search);
 const initial = period('month');
 const filters = reactive({
@@ -25,6 +25,7 @@ const connection = reactive({ connection_id: '', login: '', refresh_token: '', p
 const errors = ref({});
 const pendingIds = ref([]);
 const observedFailures = new Set();
+let displayedPayoutFailure = null;
 let observedUnknownStatuses = '';
 const account = computed(() => data.value?.accounts.find(item => item.id === data.value.account_id));
 const pending = computed(() => data.value?.sync.some(run => ['queued', 'running', 'retrying'].includes(run.status)) || false);
@@ -91,6 +92,11 @@ function navigateTab(event, current) {
 }
 let interval, searchTimer, requestId = 0, controller, disposed = false;
 
+function showToast(options, payoutFailure = null) {
+    displayedPayoutFailure = payoutFailure;
+    displayToast(options);
+}
+
 function success(message) {
     // Фоновий успіх не перекриває невиправлену помилку.
     if (toast.show && ['error', 'warning'].includes(toast.type)) return;
@@ -106,20 +112,48 @@ function fail(error, retry = load) {
     });
 }
 
+function payoutFailureRecovered(failure, sync) {
+    let nextDay = Date.parse(failure.date_from);
+    const lastDay = Date.parse(failure.date_to);
+    if (!(nextDay <= lastDay)) return false;
+
+    const recoveredPeriods = sync
+        .filter(run => run.source === 'payouts' && run.status === 'success' && run.id > failure.id)
+        .map(run => ({ from: Date.parse(run.date_from), to: Date.parse(run.date_to) }))
+        .filter(({ from, to }) => from <= to)
+        .sort((left, right) => left.from - right.from);
+
+    // Рахуємо календарні дні в UTC, щоб перехід на літній час не створював прогалин.
+    const dayMilliseconds = 24 * 60 * 60 * 1000;
+    for (const { from, to } of recoveredPeriods) {
+        if (from > nextDay) return false;
+        nextDay = Math.max(nextDay, to + dayMilliseconds);
+        if (nextDay > lastDay) return true;
+    }
+    return false;
+}
+
 function acceptSync() {
-    for (const run of data.value.sync) {
+    const { sync, account_id: accountId } = data.value;
+    if (toast.show && displayedPayoutFailure && displayedPayoutFailure.accountId === accountId
+        && payoutFailureRecovered(displayedPayoutFailure.run, sync)) {
+        displayedPayoutFailure = null;
+        closeToast();
+    }
+
+    for (const run of sync) {
         if (run.status === 'failed' && !observedFailures.has(run.id)) {
             observedFailures.add(run.id);
             if (run.source === 'operations' && Array.isArray(data.value.failed_operation_dates)
                 && !data.value.failed_operation_dates.includes(run.date_from)) continue;
-            // Успішний повтор того самого періоду не повинен знову показувати стару помилку.
-            if (data.value.sync.some(newer => newer.id > run.id && newer.status === 'success'
-                && newer.source === run.source && newer.date_from === run.date_from && newer.date_to === run.date_to)) continue;
+            if (run.source === 'payouts' ? payoutFailureRecovered(run, sync)
+                : sync.some(newer => newer.id > run.id && newer.status === 'success'
+                    && newer.source === run.source && newer.date_from === run.date_from && newer.date_to === run.date_to)) continue;
             showToast({ title: `${sourceLabels[run.source]}: дані не оновлено`, type: 'error',
                 messages: [run.error_message || 'Перевірте підключення та повторіть оновлення.'],
                 actionLabel: account.value?.requires_auth ? 'Відновити доступ' : 'Повторити',
                 onAction: () => account.value?.requires_auth ? openSettings(account.value.connection_id) : run.source === 'discovery' ? discover() : refresh(),
-            });
+            }, run.source === 'payouts' ? { run, accountId } : null);
         }
     }
     const unknownKey = unknownStatuses.value.length ? JSON.stringify([data.value.account_id, unknownStatuses.value.map(item => item.status)]) : '';
