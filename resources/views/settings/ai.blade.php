@@ -55,6 +55,8 @@
                             <option value="gpt-6.1-terra">GPT-6.1 Terra</option>
                             <option value="gpt-6.1-sol">GPT-6.1 Sol</option>
                             <option value="gpt-6-astra">GPT-6 Astra</option>
+                            <option value="gpt-6.2-sol">GPT-6.2 Sol</option>
+                            <option value="gpt-6.2-astra">GPT-6.2 Astra</option>
                         </select>
                     </div>
                 </div>
